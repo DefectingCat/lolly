@@ -286,35 +286,62 @@ type VHostManager struct {
 
 **原因**：调试 Phase 2-4 功能需要日志支持，将日志系统基础版本提前实现。
 
+**选型**：使用 [zerolog](https://github.com/rs/zerolog) 作为日志库。
+
+**选择理由**：
+- **零分配**：高并发场景 GC 压力最小，性能最优
+- **JSON 输出**：便于日志采集系统（ELK、Loki）解析
+- **API 简洁**：链式调用风格，开发体验好
+- **灵活输出**：支持 stdout/stderr/文件，开发模式可选 ConsoleWriter 美化
+
+**性能对比**（10 条日志，禁用输出）：
+
+| 库 | ns/op | allocs/op |
+|----|-------|-----------|
+| zerolog | ~40ns | **0** |
+| zap (structured) | ~50ns | 0 |
+| slog (Go 1.21+) | ~200ns | 5+ |
+| logrus | ~2000ns | 23 |
+
 **实现**：
 
 ```go
 // internal/logging/logging.go
 
-// Logger 日志管理器
-type Logger struct {
-    level    LogLevel
-    output   io.Writer
+import "github.com/rs/zerolog"
+
+// 全局日志实例
+var log zerolog.Logger
+
+// Init 初始化日志系统
+func Init(level string, pretty bool) {
+    l := parseLevel(level)
+    if pretty {
+        // 开发模式：带颜色和格式化（性能较差，仅开发用）
+        log = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout})
+    } else {
+        // 生产模式：JSON 输出
+        log = zerolog.New(os.Stdout).Level(l).With().Timestamp().Logger()
+    }
 }
 
-// LogLevel 日志级别
-type LogLevel int
-const (
-    LogLevelDebug LogLevel = iota
-    LogLevelInfo
-    LogLevelWarn
-    LogLevelError
-)
-
 // AccessLogger 访问日志（基础版）
-func LogAccess(r *http.Request, status int, size int64, duration time.Duration)
+func LogAccess(r *http.Request, status int, size int64, duration time.Duration) {
+    log.Info().
+        Str("method", r.Method).
+        Str("path", r.URL.Path).
+        Int("status", status).
+        Int64("size", size).
+        Dur("duration", duration).
+        Msg("request")
+}
 ```
 
 **Phase 2 实现范围**：
 
 - 基础请求日志：记录请求方法、路径、状态码
-- 控制台输出：开发阶段便于调试
-- Phase 5 将扩展为完整日志系统（文件输出、自定义格式）
+- 控制台输出：开发阶段便于调试（ConsoleWriter 美化）
+- Phase 5 将扩展为完整日志系统（文件输出、自定义格式、访问/错误日志分离）
 
 ### 验证方法
 
@@ -906,42 +933,76 @@ cache:
 
 #### 5.4 日志系统
 
+**扩展 Phase 2 的 zerolog 实现**，增加文件输出和访问/错误日志分离。
+
 **实现**：
 
 ```go
 // internal/logging/logging.go
 
+import (
+    "io"
+    "github.com/rs/zerolog"
+)
+
 // Logger 日志管理器
 type Logger struct {
-    accessLog *AccessLogger
-    errorLog  *ErrorLogger
-    level     LogLevel
+    accessLog zerolog.Logger  // 访问日志
+    errorLog  zerolog.Logger  // 错误日志
 }
 
-// AccessLogger 访问日志
-type AccessLogger struct {
-    format string  // 日志格式
-    output io.Writer
+// New 创建日志管理器
+func New(cfg *LoggingConfig) *Logger {
+    // 访问日志：stdout 或文件
+    accessOut := getOutput(cfg.Access.Path)
+    accessLog := zerolog.New(accessOut).With().Timestamp().Logger()
+
+    // 错误日志：stderr 或文件
+    errorOut := getOutput(cfg.Error.Path)
+    errorLevel := parseLevel(cfg.Error.Level)
+    errorLog := zerolog.New(errorOut).Level(errorLevel).With().Timestamp().Logger()
+
+    return &Logger{accessLog: accessLog, errorLog: errorLog}
 }
 
-// LogFormat 日志格式变量
-// $remote_addr - 客户端 IP
-// $request - 请求行
-// $status - 响应状态码
-// $body_bytes_sent - 响应体大小
-// $request_time - 请求耗时
+// LogAccess 记录访问日志（nginx 格式变量）
+func (l *Logger) LogAccess(r *http.Request, status int, size int64, duration time.Duration) {
+    l.accessLog.Info().
+        Str("remote_addr", r.RemoteAddr).
+        Str("request", fmt.Sprintf("%s %s", r.Method, r.URL.Path)).
+        Int("status", status).
+        Int64("body_bytes_sent", size).
+        Dur("request_time", duration).
+        Msg("")
+}
+
+// getOutput 获取输出目标（stdout/stderr/文件）
+func getOutput(path string) io.Writer {
+    if path == "" {
+        return os.Stdout
+    }
+    f, _ := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    return f
+}
 ```
+
+**日志格式变量**（支持 nginx 风格配置）：
+- `$remote_addr` - 客户端 IP
+- `$request` - 请求行（方法 + 路径）
+- `$status` - 响应状态码
+- `$body_bytes_sent` - 响应体大小
+- `$request_time` - 请求耗时
 
 **配置示例**：
 
 ```yaml
 logging:
   access:
-    path: /var/log/lolly/access.log
-    format: "$remote_addr - $request - $status - $body_bytes_sent"
+    path: /var/log/lolly/access.log  # 留空则输出到 stdout
+    format: json                     # json 或 text（Phase 2 ConsoleWriter）
   error:
-    path: /var/log/lolly/error.log
-    level: info # debug/info/warn/error
+    path: /var/log/lolly/error.log   # 留空则输出到 stderr
+    level: info                      # debug/info/warn/error
 ```
 
 #### 5.5 状态监控端点
