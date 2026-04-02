@@ -47,6 +47,7 @@ func (s *Server) Start() error {
 
 	// 创建 fasthttp 服务器
 	s.fastServer = &fasthttp.Server{
+		Name:               "lolly",
 		Handler:            s.handler,
 		ReadTimeout:        30 * time.Second,
 		WriteTimeout:       30 * time.Second,
