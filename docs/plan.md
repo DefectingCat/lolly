@@ -139,6 +139,33 @@ make build
 
 实现基础 HTTP 服务器、静态文件服务、请求路由、基础日志系统。
 
+### 技术选型
+
+**HTTP 库**：使用 [fasthttp](https://github.com/valyala/fasthttp) 替代 `net/http`。
+
+**选择理由**：
+- **高性能**：比 net/http 快 6 倍
+- **零分配**：热点路径无内存分配，GC 压力最小
+- **原生支持高性能场景**：无需额外优化
+
+**路由库**：使用 [fasthttp/router](https://github.com/fasthttp/router)。
+
+**性能对比**：
+
+| 库 | 特点 | 性能 |
+|----|------|------|
+| fasthttp | 零分配，高性能 | ⭐⭐⭐⭐⭐ |
+| net/http | 标准库，通用 | ⭐⭐⭐ |
+
+**关键差异**：
+
+| net/http | fasthttp |
+|----------|----------|
+| `http.Handler` 接口 | `RequestHandler` 函数 |
+| `ServeMux` 内置路由 | 无，需 router 库 |
+| `http.Request` 对象 | `*fasthttp.RequestCtx` |
+| `http.ResponseWriter` | `ctx` 同时处理读写 |
+
 ### 任务列表
 
 #### 2.0 中间件框架（前置依赖）
@@ -148,10 +175,12 @@ make build
 ```go
 // internal/middleware/middleware.go
 
+import "github.com/valyala/fasthttp"
+
 // Middleware 中间件接口
 type Middleware interface {
     Name() string
-    Process(next http.Handler) http.Handler
+    Process(next fasthttp.RequestHandler) fasthttp.RequestHandler
 }
 
 // Chain 中间件链
@@ -160,14 +189,20 @@ type Chain struct {
 }
 
 // Apply 应用中间件链
-func (c *Chain) Apply(final http.Handler) http.Handler
+func (c *Chain) Apply(final fasthttp.RequestHandler) fasthttp.RequestHandler {
+    handler := final
+    for i := len(c.middlewares) - 1; i >= 0; i-- {
+        handler = c.middlewares[i].Process(handler)
+    }
+    return handler
+}
 ```
 
 **设计要点**：
 
-- 定义统一的中间件接口，所有中间件（security、compression、logging 等）实现此接口
-- 支持链式组合，按注册顺序执行
-- Phase 1 建立框架，后续阶段填充具体中间件实现
+- 定义统一的中间件接口，所有中间件实现 `RequestHandler` 函数签名
+- 支持链式组合，按注册顺序逆序包装（从后往前）
+- Phase 2 建立框架，后续阶段填充具体中间件实现
 
 #### 2.1 基础 HTTP 服务器
 
@@ -176,31 +211,46 @@ func (c *Chain) Apply(final http.Handler) http.Handler
 ```go
 // internal/server/server.go
 
+import "github.com/valyala/fasthttp"
+
 // Server HTTP 服务器
 type Server struct {
-    config    *config.Config
-    handler   *handler.Handler
-    listeners map[string]*net.Listener
-    running   bool
-    stopChan  chan struct{}
+    config     *config.Config
+    fastServer *fasthttp.Server
+    handler    fasthttp.RequestHandler
+    running    bool
 }
 
 // Start 启动服务器
-func (s *Server) Start() error
+func (s *Server) Start() error {
+    s.fastServer = &fasthttp.Server{
+        Handler:            s.handler,
+        ReadTimeout:        s.config.Server.ReadTimeout,
+        WriteTimeout:       s.config.Server.WriteTimeout,
+        IdleTimeout:        s.config.Server.IdleTimeout,
+        MaxConnsPerIP:      s.config.Server.MaxConnsPerIP,
+        MaxRequestsPerConn: s.config.Server.MaxRequestsPerConn,
+    }
+    return s.fastServer.ListenAndServe(s.config.Server.Listen)
+}
 
-// Stop 停止服务器
-func (s *Server) Stop() error
+// Stop 快速停止服务器
+func (s *Server) Stop() error {
+    return s.fastServer.Shutdown()
+}
 
 // GracefulStop 优雅停止（等待请求完成）
-func (s *Server) GracefulStop(timeout time.Duration) error
+func (s *Server) GracefulStop(timeout time.Duration) error {
+    // fasthttp 的 Shutdown 本身就是优雅关闭
+    return s.fastServer.Shutdown()
+}
 ```
 
 **实现要点**：
 
-- 使用 `net/http` 标准库为基础
-- 支持 multiple listeners（多端口/多虚拟主机）
-- 优雅关闭：`Shutdown()` 方法
-- keep-alive 配置：`ReadTimeout`、`WriteTimeout`、`IdleTimeout`
+- 使用 `fasthttp.Server` 配置超时和连接限制
+- 优雅关闭：`Shutdown()` 方法自动等待请求完成
+- 配置项：`ReadTimeout`、`WriteTimeout`、`IdleTimeout`、`MaxConnsPerIP`
 
 #### 2.2 静态文件服务
 
@@ -209,59 +259,106 @@ func (s *Server) GracefulStop(timeout time.Duration) error
 ```go
 // internal/handler/static.go
 
+import "github.com/valyala/fasthttp"
+
 // StaticHandler 静态文件处理器
 type StaticHandler struct {
     root  string
     index []string
 }
 
-// ServeHTTP 处理静态文件请求
-func (h *StaticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
+// Handle 处理静态文件请求
+func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
+    path := string(ctx.Path())
+
+    // 安全检查：防止目录遍历
+    if strings.Contains(path, "..") {
+        ctx.Error("Forbidden", fasthttp.StatusForbidden)
+        return
+    }
+
+    // 拼接文件路径
+    filePath := filepath.Join(h.root, path)
+
+    // 尝试索引文件
+    if info, err := os.Stat(filePath); err == nil && info.IsDir() {
+        for _, idx := range h.index {
+            idxPath := filepath.Join(filePath, idx)
+            if fasthttp.ServeFile(ctx, idxPath) == nil {
+                return
+            }
+        }
+    }
+
+    // 直接返回文件
+    fasthttp.ServeFile(ctx, filePath)
+}
 ```
 
 **功能清单**：
 
 - 文件路径安全检查（防止目录遍历）
-- MIME 类型自动识别（`mime.TypeByExtension`）
+- MIME 类型自动识别（fasthttp 内置）
 - 索引文件支持（index.html、index.htm）
-- 目录列表（可选，默认禁用）
-- Range 请求支持（部分下载）
+- Range 请求支持（fasthttp 内置）
 - 文件缓存优化（可选）
 
-#### 2.3 请求路由（Location 匹配）
+#### 2.3 请求路由
 
-**路由设计**：
+**路由库**：使用 [fasthttp/router](https://github.com/fasthttp/router)，基于 radix tree 高效匹配。
+
+**实现**：
 
 ```go
 // internal/handler/router.go
 
+import (
+    "github.com/valyala/fasthttp"
+    "github.com/fasthttp/router"
+)
+
 // Router 请求路由器
 type Router struct {
-    routes []*Route
+    router *router.Router
 }
 
-// Route 路由规则
-type Route struct {
-    Path     string      // 路径模式
-    Type     MatchType   // 匹配类型：精确/前缀/正则
-    Handler  http.Handler
+// NewRouter 创建路由器
+func NewRouter() *Router {
+    return &Router{
+        router: router.New(),
+    }
 }
 
-// 匹配类型
-type MatchType int
-const (
-    MatchExact  MatchType = iota  // 精确匹配 (=)
-    MatchPrefix                    // 前缀匹配 (^~)
-    MatchRegex                     // 正则匹配 (~)
-)
+// Register 注册路由
+func (r *Router) Register(path string, handler fasthttp.RequestHandler) {
+    r.router.GET(path, handler)
+    r.router.POST(path, handler)
+    r.router.PUT(path, handler)
+    r.router.DELETE(path, handler)
+}
+
+// Handler 返回路由处理器
+func (r *Router) Handler() fasthttp.RequestHandler {
+    return r.router.Handler
+}
 ```
 
-**匹配优先级**（同 nginx）：
+**fasthttp/router 匹配类型**：
 
-1. 精确匹配 `=`
-2. 前缀匹配（优先）`^~`
-3. 正则匹配 `~`（按顺序）
-4. 最长前缀匹配
+| 类型 | 语法 | 示例 |
+|------|------|------|
+| Named | `{name}` | `/user/{id}` |
+| Optional | `{name?}` | `/search/{q?}` |
+| Regex | `{name:regex}` | `/user/{id:[0-9]+}` |
+| Catch-All | `{filepath:*}` | `/files/{filepath:*}` |
+
+**参数提取**：
+
+```go
+func handler(ctx *fasthttp.RequestCtx) {
+    id := ctx.UserValue("id")  // 获取路由参数
+}
+```
 
 #### 2.4 多虚拟主机支持
 
@@ -270,17 +367,40 @@ const (
 ```go
 // internal/server/vhost.go
 
+import "github.com/valyala/fasthttp"
+
 // VHostManager 虚拟主机管理器
 type VHostManager struct {
-    hosts map[string]*VirtualHost  // 按 server_name 索引
+    hosts       map[string]*VirtualHost  // 按 server_name 索引
+    defaultHost *VirtualHost             // 默认主机
+}
+
+// VirtualHost 虚拟主机
+type VirtualHost struct {
+    name    string
+    handler fasthttp.RequestHandler
+}
+
+// Handler 返回虚拟主机选择器
+func (v *VHostManager) Handler() fasthttp.RequestHandler {
+    return func(ctx *fasthttp.RequestCtx) {
+        host := string(ctx.Host())
+        if vhost, ok := v.hosts[host]; ok {
+            vhost.handler(ctx)
+        } else if v.defaultHost != nil {
+            v.defaultHost.handler(ctx)
+        } else {
+            ctx.Error("Host not found", fasthttp.StatusNotFound)
+        }
+    }
 }
 ```
 
 **功能**：
 
 - 按 `Host` 头选择虚拟主机
-- 默认主机fallback
-- SNI 支持（SSL）
+- 默认主机 fallback
+- SNI 支持（SSL，Phase 4）
 
 #### 2.5 基础日志系统（Phase 2 必需）
 
