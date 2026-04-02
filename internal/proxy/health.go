@@ -1,8 +1,8 @@
 // Package proxy provides reverse proxy functionality for the Lolly HTTP server.
 //
-// This file implements health checking for backend targets, supporting both
-// active health checks (periodic HTTP probes) and passive health checks
-// (marking targets unhealthy based on observed failures).
+// 此文件实现了针对后端目标的健康检查功能，支持
+// 主动健康检查（定期 HTTP 探测）和被动健康检查
+//（基于观察到的失败标记目标为不健康）。
 //
 //go:generate go test -v ./...
 package proxy
@@ -18,14 +18,14 @@ import (
 	"rua.plus/lolly/internal/loadbalance"
 )
 
-// HealthChecker performs health checks on backend targets.
-// It supports both active (periodic HTTP probes) and passive (failure-based)
-// health checking modes.
+// HealthChecker 对后端目标执行健康检查。
+// 它支持主动（定期 HTTP 探测）和被动（基于失败的）
+// 两种健康检查模式。
 //
-// The checker runs in a background goroutine when started, periodically
-// sending HTTP GET requests to each target's health check endpoint.
-// Targets responding with 2xx status codes are marked as healthy;
-// timeouts, connection failures, or non-2xx responses mark them as unhealthy.
+// 当启动后，检查器在后台 goroutine 中运行，定期
+// 向每个目标的健康检查端点发送 HTTP GET 请求。
+// 返回 2xx 状态码的目标被标记为健康；
+// 超时、连接失败或非 2xx 响应将其标记为不健康。
 //
 // Example usage:
 //
@@ -54,15 +54,15 @@ type HealthChecker struct {
 	mu       sync.RWMutex
 }
 
-// NewHealthChecker creates a new HealthChecker with the specified targets and configuration.
-// The configuration defines the check interval, timeout, and health check path.
+// NewHealthChecker 使用指定的目标和配置创建一个新的 HealthChecker。
+// 配置定义了检查间隔、超时和健康检查路径。
 //
-// Default values are applied if not specified in the config:
-//   - Interval: 10 seconds
-//   - Timeout: 5 seconds
+// 如果配置中未指定，将应用默认值：
+//   - Interval: 10 秒
+//   - Timeout: 5 秒
 //   - Path: "/health"
 //
-// The returned HealthChecker is not started; call Start() to begin health checks.
+// 返回的 HealthChecker 尚未启动；调用 Start() 开始健康检查。
 func NewHealthChecker(targets []*loadbalance.Target, cfg *config.HealthCheckConfig) *HealthChecker {
 	interval := cfg.Interval
 	if interval <= 0 {
@@ -92,11 +92,11 @@ func NewHealthChecker(targets []*loadbalance.Target, cfg *config.HealthCheckConf
 	}
 }
 
-// Start begins the background health check process.
-// It launches a goroutine that periodically checks all targets at the configured interval.
-// Start is idempotent; calling it on an already running checker has no effect.
+// Start 启动后台健康检查进程。
+// 它启动一个 goroutine，按照配置的间隔定期检查所有目标。
+// Start 是幂等的；在已运行的检查器上调用它不会产生任何效果。
 //
-// The health check process continues until Stop() is called.
+// 健康检查进程将持续运行，直到调用 Stop()。
 func (h *HealthChecker) Start() {
 	if h.running.Load() {
 		return
@@ -106,9 +106,9 @@ func (h *HealthChecker) Start() {
 	go h.run()
 }
 
-// Stop halts the background health check process.
-// It signals the background goroutine to stop and waits for it to complete.
-// Stop is idempotent; calling it on a stopped checker has no effect.
+// Stop 停止后台健康检查进程。
+// 它向后台 goroutine 发送停止信号并等待其完成。
+// Stop 是幂等的；在已停止的检查器上调用它不会产生任何效果。
 func (h *HealthChecker) Stop() {
 	if !h.running.Load() {
 		return
@@ -118,11 +118,11 @@ func (h *HealthChecker) Stop() {
 	close(h.stopCh)
 }
 
-// run is the main health check loop running in a background goroutine.
-// It performs an initial check on all targets, then enters a loop that
-// checks targets at regular intervals until stopped.
+// run 是在后台 goroutine 中运行的主要健康检查循环。
+// 它对所有目标执行初始检查，然后进入循环，
+// 以固定间隔检查目标，直到被停止。
 func (h *HealthChecker) run() {
-	// Perform initial health check
+	// 执行初始健康检查
 	h.checkAll()
 
 	ticker := time.NewTicker(h.interval)
@@ -138,8 +138,8 @@ func (h *HealthChecker) run() {
 	}
 }
 
-// checkAll performs health checks on all configured targets.
-// It checks each target concurrently using goroutines to minimize latency.
+// checkAll 对所有配置的目标执行健康检查。
+// 它使用 goroutines 并发检查每个目标以最小化延迟。
 func (h *HealthChecker) checkAll() {
 	var wg sync.WaitGroup
 
@@ -154,23 +154,23 @@ func (h *HealthChecker) checkAll() {
 	wg.Wait()
 }
 
-// checkTarget performs a health check on a single target.
-// It sends an HTTP GET request to the target's health check endpoint
-// and updates the target's Healthy status based on the response.
+// checkTarget 对单个目标执行健康检查。
+// 它向目标的健康检查端点发送 HTTP GET 请求
+// 并根据响应更新目标的 Healthy 状态。
 //
-// A target is considered healthy if:
-//   - The HTTP request succeeds
-//   - The response status code is between 200 and 299
+// 目标被认为健康，如果满足以下条件：
+//   - HTTP 请求成功
+//   - 响应状态码在 200 到 299 之间
 //
-// A target is marked unhealthy if:
-//   - The connection fails
-//   - The request times out
-//   - The response status code is not 2xx
+// 目标被标记为不健康，如果满足以下条件：
+//   - 连接失败
+//   - 请求超时
+//   - 响应状态码不是 2xx
 func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
-	// Build health check URL
+	// 构建健康检查 URL
 	url := target.URL + h.path
 
-	// Prepare request and response
+	// 准备请求和响应
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseRequest(req)
@@ -180,16 +180,16 @@ func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 	req.Header.SetMethod(fasthttp.MethodGet)
 	req.Header.Set("User-Agent", "Lolly-HealthChecker/1.0")
 
-	// Perform health check with timeout
+	// 执行带超时的健康检查
 	err := h.client.DoTimeout(req, resp, h.timeout)
 
 	if err != nil {
-		// Connection failed or timeout - mark as unhealthy
+		// 连接失败或超时 - 标记为不健康
 		loadbalance.SetHealthy(target, false)
 		return
 	}
 
-	// Check status code - 2xx is healthy
+	// 检查状态码 - 2xx 为健康
 	statusCode := resp.StatusCode()
 	if statusCode >= 200 && statusCode < 300 {
 		loadbalance.SetHealthy(target, true)
@@ -198,44 +198,44 @@ func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 	}
 }
 
-// MarkUnhealthy marks a target as unhealthy.
-// This method is intended for passive health checking, where the proxy
-// marks targets as unhealthy based on observed failures during request handling.
+// MarkUnhealthy 将目标标记为不健康。
+// 此方法用于被动健康检查，代理根据请求处理过程中
+// 观察到的失败将目标标记为不健康。
 //
-// Example usage in proxy error handling:
+// 在代理错误处理中的使用示例：
 //
 //	if err := forwardRequest(target, req, resp); err != nil {
 //	    healthChecker.MarkUnhealthy(target)
-//	    // Try another target or return error
+//	    // 尝试其他目标或返回错误
 //	}
 //
-// Note: To mark a target as healthy again, the active health check
-// must succeed. There is no MarkHealthy method - health status can only
-// be positively restored through successful health checks.
+// 注意：要再次将目标标记为健康，主动健康检查
+// 必须成功。没有 MarkHealthy 方法 - 健康状态只能通过
+// 成功的健康检查积极恢复。
 func (h *HealthChecker) MarkUnhealthy(target *loadbalance.Target) {
 	loadbalance.SetHealthy(target, false)
 }
 
-// IsRunning returns true if the health checker is currently running.
+// IsRunning 如果健康检查器当前正在运行，则返回 true。
 func (h *HealthChecker) IsRunning() bool {
 	return h.running.Load()
 }
 
-// GetInterval returns the configured check interval.
+// GetInterval 返回配置的检查间隔。
 func (h *HealthChecker) GetInterval() time.Duration {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.interval
 }
 
-// GetTimeout returns the configured check timeout.
+// GetTimeout 返回配置的检查超时时间。
 func (h *HealthChecker) GetTimeout() time.Duration {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.timeout
 }
 
-// GetPath returns the configured health check path.
+// GetPath 返回配置的健康检查路径。
 func (h *HealthChecker) GetPath() string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

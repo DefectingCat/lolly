@@ -1,10 +1,9 @@
-// Package proxy provides reverse proxy functionality for the Lolly HTTP server.
+// Package proxy 反向代理包，为 Lolly HTTP 服务器提供反向代理功能。
 //
-// This package implements a high-performance reverse proxy using fasthttp.HostClient
-// for connection pooling and automatic keep-alive management. It supports load balancing,
-// WebSocket forwarding, custom headers, and comprehensive timeout configurations.
+// 该包使用 fasthttp.HostClient 实现高性能反向代理，支持连接池和自动 keep-alive 管理。
+// 支持负载均衡、WebSocket 转发、自定义请求头/响应头和全面的超时配置。
 //
-// Example usage:
+// 使用示例：
 //
 //	targets := []*loadbalance.Target{
 //	    {URL: "http://backend1:8080", Weight: 1, Healthy: true},
@@ -26,7 +25,7 @@
 //	    log.Fatal(err)
 //	}
 //
-//	// Use p.ServeHTTP as fasthttp request handler
+//	// 使用 p.ServeHTTP 作为 fasthttp 请求处理器
 //
 //go:generate go test -v ./...
 package proxy
@@ -43,8 +42,8 @@ import (
 	"rua.plus/lolly/internal/loadbalance"
 )
 
-// Proxy represents a reverse proxy instance that forwards HTTP requests to backend targets.
-// It manages connection pools for each target and provides load balancing capabilities.
+// Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
+// 它为每个后端目标管理连接池，并提供负载均衡功能。
 type Proxy struct {
 	targets  []*loadbalance.Target
 	clients  map[string]*fasthttp.HostClient // key: target URL
@@ -53,16 +52,16 @@ type Proxy struct {
 	mu       sync.RWMutex
 }
 
-// NewProxy creates a new reverse proxy instance with the given configuration and targets.
-// It initializes the load balancer based on the config and creates HostClients for each target.
+// NewProxy 使用给定的配置和后台目标创建一个新的反向代理实例。
+// 它根据配置初始化负载均衡器，并为每个后端目标创建 HostClient。
 //
-// Parameters:
-//   - cfg: Proxy configuration including timeouts, headers, and load balancing strategy
-//   - targets: List of backend targets to proxy requests to
+// 参数：
+//   - cfg: 代理配置，包括超时时间、请求头和负载均衡策略
+//   - targets: 要代理请求的后端目标列表
 //
-// Returns:
-//   - *Proxy: Configured proxy instance ready to serve requests
-//   - error: Non-nil if initialization fails (invalid config, no healthy targets, etc.)
+// 返回值：
+//   - *Proxy: 配置完成并可处理请求的代理实例
+//   - error: 初始化失败时非空（无效配置、没有健康目标等）
 func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target) (*Proxy, error) {
 	if cfg == nil {
 		return nil, errors.New("proxy config is nil")
@@ -72,7 +71,7 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target) (*Proxy, e
 		return nil, errors.New("no proxy targets provided")
 	}
 
-	// Create balancer based on configuration
+	// 根据配置创建负载均衡器
 	balancer, err := createBalancer(cfg.LoadBalance)
 	if err != nil {
 		return nil, err
@@ -85,7 +84,7 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target) (*Proxy, e
 		config:   cfg,
 	}
 
-	// Initialize HostClient for each target
+	// 为每个后端目标初始化 HostClient
 	for _, target := range targets {
 		if target.URL == "" {
 			continue
@@ -98,7 +97,7 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target) (*Proxy, e
 	return p, nil
 }
 
-// createBalancer creates a load balancer based on the configured algorithm.
+// createBalancer 根据配置的算法创建负载均衡器。
 func createBalancer(algorithm string) (loadbalance.Balancer, error) {
 	switch algorithm {
 	case "round_robin", "":
@@ -114,9 +113,9 @@ func createBalancer(algorithm string) (loadbalance.Balancer, error) {
 	}
 }
 
-// createHostClient creates a fasthttp.HostClient for a target URL.
+// createHostClient 为后台目标 URL 创建 fasthttp.HostClient。
 func createHostClient(targetURL string, timeout config.ProxyTimeout) *fasthttp.HostClient {
-	// Parse host and scheme from target URL
+	// 从目标 URL 解析主机和协议
 	addr := targetURL
 	isTLS := false
 
@@ -127,7 +126,7 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout) *fasthttp.H
 		isTLS = true
 	}
 
-	// Remove path if present, keep only host:port
+	// 如果存在路径则移除，只保留 host:port
 	if idx := strings.Index(addr, "/"); idx != -1 {
 		addr = addr[:idx]
 	}
@@ -148,52 +147,52 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout) *fasthttp.H
 	return client
 }
 
-// ServeHTTP handles the incoming HTTP request by forwarding it to a selected backend target.
-// It implements the fasthttp request handler interface.
+// ServeHTTP 通过将传入的 HTTP 请求转发到选定的后端目标来处理请求。
+// 实现了 fasthttp 请求处理器接口。
 //
-// The method:
-// 1. Selects a target using load balancing
-// 2. Prepares the request (modifies headers)
-// 3. Forwards the request to the backend
-// 4. Copies the response back to the client
+// 处理流程：
+// 1. 使用负载均衡选择目标
+// 2. 准备请求（修改请求头）
+// 3. 将请求转发到后端
+// 4. 将响应复制回客户端
 //
-// If no healthy targets are available, returns 502 Bad Gateway.
-// If the backend request fails, returns appropriate error response.
+// 如果没有可用的健康目标，返回 502 Bad Gateway。
+// 如果后端请求失败，返回相应的错误响应。
 func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
-	// Select target using load balancer
+	// 使用负载均衡器选择目标
 	target := p.selectTarget(ctx)
 	if target == nil {
 		ctx.Error("Bad Gateway: no healthy upstream", fasthttp.StatusBadGateway)
 		return
 	}
 
-	// Get the client for selected target
+	// 获取所选目标的客户端
 	client := p.getClient(target.URL)
 	if client == nil {
 		ctx.Error("Bad Gateway: upstream client unavailable", fasthttp.StatusBadGateway)
 		return
 	}
 
-	// Increment connection count for least_connections tracking
+	// 增加连接计数（用于最少连接数负载均衡）
 	loadbalance.IncrementConnections(target)
 	defer loadbalance.DecrementConnections(target)
 
-	// Check if this is a WebSocket upgrade request
+	// 检查是否为 WebSocket 升级请求
 	if isWebSocketRequest(ctx) {
 		p.handleWebSocket(ctx, target, client)
 		return
 	}
 
-	// Prepare request
+	// 准备请求
 	req := &ctx.Request
 
-	// Modify request headers
+	// 修改请求头
 	p.modifyRequestHeaders(ctx, target)
 
-	// Perform the proxy request
+	// 执行代理请求
 	err := client.Do(req, &ctx.Response)
 	if err != nil {
-		// Handle different error types
+		// 处理不同类型的错误
 		if errors.Is(err, fasthttp.ErrTimeout) {
 			ctx.Error("Gateway Timeout", fasthttp.StatusGatewayTimeout)
 		} else if errors.Is(err, fasthttp.ErrConnectionClosed) {
@@ -204,13 +203,13 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	// Modify response headers
+	// 修改响应头
 	p.modifyResponseHeaders(ctx)
 }
 
-// selectTarget selects a backend target using the configured load balancer.
-// It extracts the client IP from the request for IP hash balancing.
-// Returns nil if no healthy targets are available.
+// selectTarget 使用配置的负载均衡器选择后端目标。
+// 对于 IP 哈希负载均衡，从请求中提取客户端 IP。
+// 如果没有可用的健康目标则返回 nil。
 func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 	p.mu.RLock()
 	balancer := p.balancer
@@ -221,7 +220,7 @@ func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 		return nil
 	}
 
-	// For IPHash balancer, extract client IP
+	// 对于 IPHash 负载均衡器，提取客户端 IP
 	if ipHash, ok := balancer.(*loadbalance.IPHash); ok {
 		clientIP := getClientIP(ctx)
 		return ipHash.SelectByIP(targets, clientIP)
@@ -230,9 +229,9 @@ func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 	return balancer.Select(targets)
 }
 
-// getClientIP extracts the client IP address from the request context.
+// getClientIP 从请求上下文中提取客户端 IP 地址。
 func getClientIP(ctx *fasthttp.RequestCtx) string {
-	// Check X-Forwarded-For header first
+	// 首先检查 X-Forwarded-For 请求头
 	if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
 		ips := strings.Split(string(xff), ",")
 		if len(ips) > 0 {
@@ -240,12 +239,12 @@ func getClientIP(ctx *fasthttp.RequestCtx) string {
 		}
 	}
 
-	// Check X-Real-IP header
+	// 检查 X-Real-IP 请求头
 	if xri := ctx.Request.Header.Peek("X-Real-IP"); len(xri) > 0 {
 		return string(xri)
 	}
 
-	// Fall back to RemoteAddr
+	// 回退到 RemoteAddr
 	if addr := ctx.RemoteAddr(); addr != nil {
 		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
 			return tcpAddr.IP.String()
@@ -256,7 +255,7 @@ func getClientIP(ctx *fasthttp.RequestCtx) string {
 	return ""
 }
 
-// getClient returns the HostClient for a given target URL.
+// getClient 返回给定目标 URL 对应的 HostClient。
 func (p *Proxy) getClient(targetURL string) *fasthttp.HostClient {
 	p.mu.RLock()
 	client := p.clients[targetURL]
@@ -264,18 +263,18 @@ func (p *Proxy) getClient(targetURL string) *fasthttp.HostClient {
 	return client
 }
 
-// modifyRequestHeaders modifies the request headers before forwarding to backend.
-// It adds standard proxy headers and applies custom header configurations.
+// modifyRequestHeaders 在转发到后端之前修改请求头。
+// 添加标准代理请求头并应用自定义请求头配置。
 func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalance.Target) {
 	headers := &ctx.Request.Header
 
-	// Add X-Real-IP header
+	// 添加 X-Real-IP 请求头
 	clientIP := getClientIP(ctx)
 	if clientIP != "" {
 		headers.Set("X-Real-IP", clientIP)
 	}
 
-	// Add/Append X-Forwarded-For header
+	// 添加/追加 X-Forwarded-For 请求头
 	existingXFF := headers.Peek("X-Forwarded-For")
 	if len(existingXFF) > 0 {
 		headers.Set("X-Forwarded-For", string(existingXFF)+", "+clientIP)
@@ -283,27 +282,27 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 		headers.Set("X-Forwarded-For", clientIP)
 	}
 
-	// Add X-Forwarded-Host header
+	// 添加 X-Forwarded-Host 请求头
 	host := string(ctx.Host())
 	if host != "" {
 		headers.Set("X-Forwarded-Host", host)
 	}
 
-	// Add X-Forwarded-Proto header
+	// 添加 X-Forwarded-Proto 请求头
 	proto := "http"
 	if ctx.IsTLS() {
 		proto = "https"
 	}
 	headers.Set("X-Forwarded-Proto", proto)
 
-	// Set custom request headers from config
+	// 从配置设置自定义请求头
 	if p.config.Headers.SetRequest != nil {
 		for key, value := range p.config.Headers.SetRequest {
 			headers.Set(key, value)
 		}
 	}
 
-	// Remove configured headers
+	// 移除配置的请求头
 	if len(p.config.Headers.Remove) > 0 {
 		for _, key := range p.config.Headers.Remove {
 			headers.Del(key)
@@ -311,9 +310,9 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 	}
 }
 
-// modifyResponseHeaders modifies the response headers before sending to client.
+// modifyResponseHeaders 在发送给客户端之前修改响应头。
 func (p *Proxy) modifyResponseHeaders(ctx *fasthttp.RequestCtx) {
-	// Set custom response headers from config
+	// 从配置设置自定义响应头
 	if p.config.Headers.SetResponse != nil {
 		for key, value := range p.config.Headers.SetResponse {
 			ctx.Response.Header.Set(key, value)
@@ -321,34 +320,34 @@ func (p *Proxy) modifyResponseHeaders(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-// isWebSocketRequest checks if the request is a WebSocket upgrade request.
+// isWebSocketRequest 检查请求是否为 WebSocket 升级请求。
 func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
-	// Check Connection header
+	// 检查 Connection 请求头
 	connection := ctx.Request.Header.Peek("Connection")
 	if !strings.EqualFold(string(connection), "upgrade") {
-		// Also check for "Upgrade" substring (e.g., "keep-alive, Upgrade")
+		// 也检查 "Upgrade" 子串（例如 "keep-alive, Upgrade"）
 		if !strings.Contains(strings.ToLower(string(connection)), "upgrade") {
 			return false
 		}
 	}
 
-	// Check Upgrade header
+	// 检查 Upgrade 请求头
 	upgrade := ctx.Request.Header.Peek("Upgrade")
 	return strings.EqualFold(string(upgrade), "websocket")
 }
 
-// handleWebSocket handles WebSocket upgrade requests.
-// For now, it returns 501 Not Implemented as WebSocket proxying
-// requires special handling beyond HTTP.
+// handleWebSocket 处理 WebSocket 升级请求。
+// 目前返回 501 Not Implemented，因为 WebSocket 代理需要
+// HTTP 之外的特殊处理。
 func (p *Proxy) handleWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, client *fasthttp.HostClient) {
-	// WebSocket proxying requires raw TCP connection handling
-	// which is beyond the scope of basic HTTP proxying
-	// This can be implemented later using a TCP bridge
+	// WebSocket 代理需要原始 TCP 连接处理，
+	// 这超出了基本 HTTP 代理的范围。
+	// 后续可以使用 TCP 桥接实现
 	ctx.Error("WebSocket proxying not implemented", fasthttp.StatusNotImplemented)
 }
 
-// UpdateTargets updates the proxy targets and reinitializes clients.
-// This is useful for dynamic configuration updates.
+// UpdateTargets 更新代理目标并重新初始化客户端。
+// 适用于动态配置更新。
 func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
 	if len(targets) == 0 {
 		return errors.New("no targets provided")
@@ -357,10 +356,10 @@ func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Clear old clients
+	// 清除旧客户端
 	p.clients = make(map[string]*fasthttp.HostClient)
 
-	// Initialize new clients
+	// 初始化新客户端
 	for _, target := range targets {
 		if target.URL == "" {
 			continue
@@ -374,14 +373,14 @@ func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
 	return nil
 }
 
-// GetTargets returns the current list of targets.
+// GetTargets 返回当前的目标列表。
 func (p *Proxy) GetTargets() []*loadbalance.Target {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.targets
 }
 
-// GetConfig returns the proxy configuration.
+// GetConfig 返回代理配置。
 func (p *Proxy) GetConfig() *config.ProxyConfig {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
