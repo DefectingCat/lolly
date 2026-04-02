@@ -127,10 +127,6 @@ lolly -v                 # 显示版本
 # 构建测试
 make build
 
-# 配置解析测试
-./lolly -t -c configs/lolly.yaml
-# 输出：配置有效
-
 # 版本显示
 ./lolly -v
 ```
@@ -324,7 +320,7 @@ func LogAccess(r *http.Request, status int, size int64, duration time.Duration)
 
 ```bash
 # 启动服务器
-./lolly -c configs/lolly.yaml
+./lolly -c lolly.yaml
 
 # 静态文件测试
 curl http://localhost:8080/index.html
