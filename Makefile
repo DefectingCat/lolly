@@ -12,12 +12,12 @@ BUILD_DIR := bin
 
 # 生产构建标志
 LDFLAGS := -ldflags "-s -w \
-	-X 'main.version=$(VERSION)' \
-	-X 'main.gitCommit=$(GIT_COMMIT)' \
-	-X 'main.gitBranch=$(GIT_BRANCH)' \
-	-X 'main.buildTime=$(BUILD_TIME)' \
-	-X 'main.goVersion=$(GO_VERSION)' \
-	-X 'main.buildPlatform=$(BUILD_PLATFORM)'"
+	-X 'rua.plus/lolly/internal/app.Version=$(VERSION)' \
+	-X 'rua.plus/lolly/internal/app.GitCommit=$(GIT_COMMIT)' \
+	-X 'rua.plus/lolly/internal/app.GitBranch=$(GIT_BRANCH)' \
+	-X 'rua.plus/lolly/internal/app.BuildTime=$(BUILD_TIME)' \
+	-X 'rua.plus/lolly/internal/app.GoVersion=$(GO_VERSION)' \
+	-X 'rua.plus/lolly/internal/app.BuildPlatform=$(BUILD_PLATFORM)'"
 
 # Go 文件
 MAIN_PATH := main.go
