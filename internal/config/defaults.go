@@ -20,7 +20,8 @@ func DefaultConfig() *Config {
 				Index: []string{"index.html", "index.htm"},
 			},
 			SSL: SSLConfig{
-				Protocols: []string{"TLSv1.2", "TLSv1.3"},
+				Protocols:    []string{"TLSv1.2", "TLSv1.3"},
+				OCSPStapling: false,
 				HSTS: HSTSConfig{
 					MaxAge:            31536000,
 					IncludeSubDomains: true,
@@ -28,15 +29,27 @@ func DefaultConfig() *Config {
 				},
 			},
 			Security: SecurityConfig{
+				Access: AccessConfig{
+					Allow:   []string{},
+					Deny:    []string{},
+					Default: "allow",
+				},
+				RateLimit: RateLimitConfig{
+					RequestRate: 0,
+					Burst:       0,
+					ConnLimit:   0,
+					Key:         "ip",
+				},
+				Auth: AuthConfig{
+					RequireTLS:        true,
+					Algorithm:         "bcrypt",
+					Realm:             "Restricted Area",
+					MinPasswordLength: 8,
+				},
 				Headers: SecurityHeaders{
 					XFrameOptions:       "DENY",
 					XContentTypeOptions: "nosniff",
 					ReferrerPolicy:      "strict-origin-when-cross-origin",
-				},
-				Auth: AuthConfig{
-					RequireTLS: true,
-					Algorithm:  "bcrypt",
-					Realm:      "Restricted Area",
 				},
 			},
 			Compression: CompressionConfig{
@@ -61,6 +74,12 @@ func DefaultConfig() *Config {
 			},
 		},
 		Performance: PerformanceConfig{
+			GoroutinePool: GoroutinePoolConfig{
+				Enabled:     false,
+				MaxWorkers:  1000,
+				MinWorkers:  10,
+				IdleTimeout: 60 * time.Second,
+			},
 			FileCache: FileCacheConfig{
 				MaxEntries:  10000,
 				MaxSize:     256 * 1024 * 1024, // 256MB
@@ -71,6 +90,7 @@ func DefaultConfig() *Config {
 				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 32,
 				IdleConnTimeout:     90 * time.Second,
+				MaxConnsPerHost:     0, // 0 表示不限制
 			},
 		},
 		Monitoring: MonitoringConfig{
@@ -88,7 +108,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	var buf bytes.Buffer
 
 	buf.WriteString("# Lolly 配置文件\n")
-	buf.WriteString("# 文档: https://github.com/xfy/lolly\n")
+	// buf.WriteString("# 文档: https://github.com/xfy/lolly\n")
 	buf.WriteString("\n")
 
 	// server 配置
@@ -109,72 +129,92 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("\n")
 
 	// proxy 配置示例
-	buf.WriteString("  # 反向代理配置（示例）\n")
+	buf.WriteString("  # 反向代理配置\n")
 	buf.WriteString("  # proxy:\n")
-	buf.WriteString("  #   - path: /api         # 匹配路径前缀\n")
-	buf.WriteString("  #     targets:           # 后端目标列表\n")
+	buf.WriteString("  #   - path: /api                  # 匹配路径前缀\n")
+	buf.WriteString("  #     targets:                    # 后端目标列表\n")
 	buf.WriteString("  #       - url: http://backend1:8080\n")
-	buf.WriteString("  #         weight: 3      # 权重（加权轮询）\n")
+	buf.WriteString("  #         weight: 3               # 权重（加权轮询时有效）\n")
 	buf.WriteString("  #       - url: http://backend2:8080\n")
 	buf.WriteString("  #         weight: 1\n")
-	buf.WriteString("  #     load_balance: weighted_round_robin  # 负载均衡算法\n")
-	buf.WriteString("  #     health_check:      # 健康检查\n")
+	buf.WriteString("  #     load_balance: round_robin   # 负载均衡算法: round_robin, weighted_round_robin, least_conn, ip_hash\n")
+	buf.WriteString("  #     health_check:               # 健康检查\n")
 	buf.WriteString("  #       interval: 10s\n")
 	buf.WriteString("  #       path: /health\n")
 	buf.WriteString("  #       timeout: 5s\n")
+	buf.WriteString("  #     timeout:                    # 超时配置\n")
+	buf.WriteString("  #       connect: 5s               # 连接超时\n")
+	buf.WriteString("  #       read: 30s                 # 读取超时\n")
+	buf.WriteString("  #       write: 30s                # 写入超时\n")
+	buf.WriteString("  #     headers:                    # 头部修改\n")
+	buf.WriteString("  #       set_request: {X-Custom: value}\n")
+	buf.WriteString("  #       set_response: {X-Server: lolly}\n")
+	buf.WriteString("  #       remove: [X-Powered-By]\n")
+	buf.WriteString("  #     cache:                      # 代理缓存\n")
+	buf.WriteString("  #       enabled: false\n")
+	buf.WriteString("  #       max_age: 60s\n")
+	buf.WriteString("  #       cache_lock: true          # 防止缓存击穿\n")
+	buf.WriteString("  #       stale_while_revalidate: 30s\n")
 	buf.WriteString("\n")
 
 	// SSL 配置
 	buf.WriteString("  # SSL/TLS 配置\n")
 	buf.WriteString("  # ssl:\n")
-	buf.WriteString("  #   cert: /path/to/cert.pem      # 证书文件\n")
-	buf.WriteString("  #   key: /path/to/key.pem        # 私钥文件\n")
-	buf.WriteString("  #   protocols:                   # TLS 版本（默认安全）\n")
+	buf.WriteString("  #   cert: /path/to/cert.pem        # 证书文件\n")
+	buf.WriteString("  #   key: /path/to/key.pem          # 私钥文件\n")
+	buf.WriteString("  #   cert_chain: /path/to/chain.pem # 证书链文件\n")
+	buf.WriteString("  #   protocols:                     # TLS 版本（有效值: TLSv1.2, TLSv1.3）\n")
 	for _, proto := range cfg.Server.SSL.Protocols {
 		buf.WriteString(fmt.Sprintf("  #     - \"%s\"\n", proto))
 	}
-	buf.WriteString("  #   hsts:                        # HTTP Strict Transport Security\n")
-	buf.WriteString(fmt.Sprintf("  #     max_age: %d             # 过期时间（秒）\n", cfg.Server.SSL.HSTS.MaxAge))
-	buf.WriteString(fmt.Sprintf("  #     include_sub_domains: %v  # 包含子域名\n", cfg.Server.SSL.HSTS.IncludeSubDomains))
+	buf.WriteString("  #   ciphers: []                    # 加密套件（仅 TLS 1.2 有效）\n")
+	buf.WriteString(fmt.Sprintf("  #   ocsp_stapling: %v              # OCSP Stapling\n", cfg.Server.SSL.OCSPStapling))
+	buf.WriteString("  #   hsts:                          # HTTP Strict Transport Security\n")
+	buf.WriteString(fmt.Sprintf("  #     max_age: %d                  # 过期时间（秒）\n", cfg.Server.SSL.HSTS.MaxAge))
+	buf.WriteString(fmt.Sprintf("  #     include_sub_domains: %v      # 包含子域名\n", cfg.Server.SSL.HSTS.IncludeSubDomains))
+	buf.WriteString(fmt.Sprintf("  #     preload: %v                  # 加入 HSTS 预加载列表\n", cfg.Server.SSL.HSTS.Preload))
 	buf.WriteString("\n")
 
 	// security 配置
 	buf.WriteString("  # 安全配置\n")
 	buf.WriteString("  security:\n")
 	buf.WriteString("    # IP 访问控制\n")
-	buf.WriteString("    # access:\n")
-	buf.WriteString("    #   allow: [192.168.1.0/24]   # 允许的 IP/CIDR\n")
-	buf.WriteString("    #   deny: [192.168.2.100/32]  # 拒绝的 IP/CIDR\n")
-	buf.WriteString("    #   default: deny             # 默认动作\n")
+	buf.WriteString("    access:\n")
+	buf.WriteString("      allow: []                   # 允许的 IP/CIDR 列表\n")
+	buf.WriteString("      deny: []                    # 拒绝的 IP/CIDR 列表\n")
+	buf.WriteString(fmt.Sprintf("      default: \"%s\"             # 默认动作（有效值: allow, deny）\n", cfg.Server.Security.Access.Default))
 	buf.WriteString("\n")
 	buf.WriteString("    # 速率限制\n")
-	buf.WriteString("    # rate_limit:\n")
-	buf.WriteString("    #   request_rate: 100         # 每秒请求数\n")
-	buf.WriteString("    #   burst: 200                # 突发上限\n")
-	buf.WriteString("    #   conn_limit: 1000          # 连接数限制\n")
+	buf.WriteString("    rate_limit:\n")
+	buf.WriteString(fmt.Sprintf("      request_rate: %d            # 每秒请求数（0 表示不限制）\n", cfg.Server.Security.RateLimit.RequestRate))
+	buf.WriteString(fmt.Sprintf("      burst: %d                   # 突发上限\n", cfg.Server.Security.RateLimit.Burst))
+	buf.WriteString(fmt.Sprintf("      conn_limit: %d              # 连接数限制\n", cfg.Server.Security.RateLimit.ConnLimit))
+	buf.WriteString(fmt.Sprintf("      key: \"%s\"                  # 限流 key 来源（有效值: ip, header）\n", cfg.Server.Security.RateLimit.Key))
 	buf.WriteString("\n")
-	buf.WriteString("    # 认证配置（启用时强制 HTTPS）\n")
-	buf.WriteString("    # auth:\n")
-	buf.WriteString("    #   type: basic\n")
-	buf.WriteString("    #   users:\n")
-	buf.WriteString("    #     - name: admin\n")
-	buf.WriteString("    #       password: $2b$12$...  # bcrypt 哈希\n")
-	buf.WriteString("    #   require_tls: true\n")
+	buf.WriteString("    # 认证配置（type 为空时禁用）\n")
+	buf.WriteString("    auth:\n")
+	buf.WriteString("      type: \"\"                    # 认证类型（有效值: basic，空表示禁用）\n")
+	buf.WriteString(fmt.Sprintf("      require_tls: %v             # 启用时强制 HTTPS\n", cfg.Server.Security.Auth.RequireTLS))
+	buf.WriteString(fmt.Sprintf("      algorithm: \"%s\"            # 密码哈希算法（有效值: bcrypt, argon2id）\n", cfg.Server.Security.Auth.Algorithm))
+	buf.WriteString("      users: []                   # 用户列表\n")
+	buf.WriteString(fmt.Sprintf("      realm: \"%s\"                # 认证域\n", cfg.Server.Security.Auth.Realm))
+	buf.WriteString(fmt.Sprintf("      min_password_length: %d     # 密码最小长度\n", cfg.Server.Security.Auth.MinPasswordLength))
 	buf.WriteString("\n")
-	buf.WriteString("    # 安全头部（默认值）\n")
+	buf.WriteString("    # 安全头部\n")
 	buf.WriteString("    headers:\n")
-	buf.WriteString(fmt.Sprintf("      x_frame_options: \"%s\"        # 防止点击劫持\n", cfg.Server.Security.Headers.XFrameOptions))
+	buf.WriteString(fmt.Sprintf("      x_frame_options: \"%s\"        # 防止点击劫持（有效值: DENY, SAMEORIGIN）\n", cfg.Server.Security.Headers.XFrameOptions))
 	buf.WriteString(fmt.Sprintf("      x_content_type_options: \"%s\" # 防止 MIME 嗅探\n", cfg.Server.Security.Headers.XContentTypeOptions))
 	buf.WriteString(fmt.Sprintf("      referrer_policy: \"%s\"        # 引用策略\n", cfg.Server.Security.Headers.ReferrerPolicy))
 	buf.WriteString("      # content_security_policy: \"default-src 'self'\"  # CSP（推荐配置）\n")
+	buf.WriteString("      # permissions_policy: \"geolocation=(), microphone=()\"  # 权限策略\n")
 	buf.WriteString("\n")
 
 	// rewrite 配置示例
-	buf.WriteString("  # URL 重写规则（示例）\n")
+	buf.WriteString("  # URL 重写规则\n")
 	buf.WriteString("  # rewrite:\n")
-	buf.WriteString("  #   - pattern: \"^/old/(.*)$\"\n")
-	buf.WriteString("  #     replacement: /new/$1\n")
-	buf.WriteString("  #     flag: permanent  # 301 重定向\n")
+	buf.WriteString("  #   - pattern: \"^/old/(.*)$\"     # 匹配模式（正则表达式）\n")
+	buf.WriteString("  #     replacement: /new/$1       # 替换目标\n")
+	buf.WriteString("  #     flag: last                 # 标志（有效值: last, redirect, permanent, break）\n")
 	buf.WriteString("\n")
 
 	// compression 配置
@@ -217,15 +257,21 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	// performance 配置
 	buf.WriteString("# 性能配置\n")
 	buf.WriteString("performance:\n")
-	buf.WriteString("  file_cache:             # 静态文件缓存\n")
-	buf.WriteString(fmt.Sprintf("    max_entries: %d    # 最大缓存条目\n", cfg.Performance.FileCache.MaxEntries))
-	buf.WriteString(fmt.Sprintf("    max_size: %dMB      # 内存上限\n", cfg.Performance.FileCache.MaxSize/1024/1024))
-	buf.WriteString(fmt.Sprintf("    inactive: %ds         # 未访问淘汰时间\n", int(cfg.Performance.FileCache.Inactive.Seconds())))
-	buf.WriteString(fmt.Sprintf("    lru_eviction: %v     # 启用 LRU 淘汰\n", cfg.Performance.FileCache.LRUEviction))
-	buf.WriteString("  transport:             # HTTP Transport 连接池\n")
-	buf.WriteString(fmt.Sprintf("    max_idle_conns: %d         # 最大空闲连接\n", cfg.Performance.Transport.MaxIdleConns))
-	buf.WriteString(fmt.Sprintf("    max_idle_conns_per_host: %d # 每主机空闲连接\n", cfg.Performance.Transport.MaxIdleConnsPerHost))
-	buf.WriteString(fmt.Sprintf("    idle_conn_timeout: %ds     # 空闲超时\n", int(cfg.Performance.Transport.IdleConnTimeout.Seconds())))
+	buf.WriteString("  goroutine_pool:              # Goroutine 池（处理并发请求）\n")
+	buf.WriteString(fmt.Sprintf("    enabled: %v             # 是否启用\n", cfg.Performance.GoroutinePool.Enabled))
+	buf.WriteString(fmt.Sprintf("    max_workers: %d          # 最大 worker 数\n", cfg.Performance.GoroutinePool.MaxWorkers))
+	buf.WriteString(fmt.Sprintf("    min_workers: %d          # 最小 worker 数（预热）\n", cfg.Performance.GoroutinePool.MinWorkers))
+	buf.WriteString(fmt.Sprintf("    idle_timeout: %ds        # 空闲超时\n", int(cfg.Performance.GoroutinePool.IdleTimeout.Seconds())))
+	buf.WriteString("  file_cache:                  # 静态文件缓存\n")
+	buf.WriteString(fmt.Sprintf("    max_entries: %d          # 最大缓存条目\n", cfg.Performance.FileCache.MaxEntries))
+	buf.WriteString(fmt.Sprintf("    max_size: %d              # 内存上限（字节，%dMB）\n", cfg.Performance.FileCache.MaxSize, cfg.Performance.FileCache.MaxSize/1024/1024))
+	buf.WriteString(fmt.Sprintf("    inactive: %ds             # 未访问淘汰时间\n", int(cfg.Performance.FileCache.Inactive.Seconds())))
+	buf.WriteString(fmt.Sprintf("    lru_eviction: %v          # 启用 LRU 淘汰\n", cfg.Performance.FileCache.LRUEviction))
+	buf.WriteString("  transport:                   # HTTP Transport 连接池\n")
+	buf.WriteString(fmt.Sprintf("    max_idle_conns: %d            # 最大空闲连接\n", cfg.Performance.Transport.MaxIdleConns))
+	buf.WriteString(fmt.Sprintf("    max_idle_conns_per_host: %d   # 每主机空闲连接\n", cfg.Performance.Transport.MaxIdleConnsPerHost))
+	buf.WriteString(fmt.Sprintf("    idle_conn_timeout: %ds        # 空闲超时\n", int(cfg.Performance.Transport.IdleConnTimeout.Seconds())))
+	buf.WriteString(fmt.Sprintf("    max_conns_per_host: %d        # 每主机最大连接（0 表示不限制）\n", cfg.Performance.Transport.MaxConnsPerHost))
 	buf.WriteString("\n")
 
 	// monitoring 配置
