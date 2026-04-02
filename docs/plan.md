@@ -489,32 +489,37 @@ curl http://localhost:8080/api/health  # 应返回 404（代理未实现）
 
 #### 3.1 反向代理核心
 
-**实现**：
+**实现**（基于 fasthttp）：
 
 ```go
 // internal/proxy/proxy.go
 
+import "github.com/valyala/fasthttp"
+
 // Proxy 反向代理
 type Proxy struct {
     targets    []*Target
-    transport  *http.Transport
-    bufferPool *bufferPool
+    clients    map[string]*fasthttp.HostClient  // 每个目标一个 HostClient
+    balancer   Balancer
 }
 
 // Target 后端目标
 type Target struct {
-    URL        *url.URL
-    Weight     int
-    Healthy    bool
-    Connections int
+    URL         string   // 目标地址，如 "http://backend1:8080"
+    Weight      int
+    Healthy     bool
+    Connections int64    // 当前连接数（原子操作）
 }
+
+// HostClient fasthttp 客户端（连接池）
+// 每个 Target 对应一个 HostClient，自动管理连接池
 ```
 
 **功能清单**：
 
 - 请求转发：修改请求头、请求体
 - 响应处理：修改响应头
-- 超时配置：连接超时、响应超时
+- 超时配置：连接超时、响应超时（fasthttp.HostClient 配置）
 - WebSocket 支持：Upgrade 协议检测和转发
 - 错误处理：后端不可用时的响应
 
@@ -1423,12 +1428,16 @@ Phase 6:
 
 | 阶段    | 状态   | 主要功能                  |
 | ------- | ------ | ------------------------- |
-| Phase 1 | 待开始 | 项目骨架、配置系统        |
-| Phase 2 | 待开始 | HTTP 核心、静态文件、路由 |
-| Phase 3 | 待开始 | 反向代理、负载均衡        |
-| Phase 4 | 待开始 | SSL/TLS、安全控制         |
-| Phase 5 | 待开始 | 重写、压缩、缓存、日志    |
-| Phase 6 | 待开始 | Stream、性能优化          |
+| Phase 1 | ✅ 完成 | 项目骨架、配置系统        |
+| Phase 2 | ✅ 完成 | HTTP 核心、静态文件、路由 |
+| Phase 3 | ⏳ 待开始 | 反向代理、负载均衡        |
+| Phase 4 | ⏳ 待开始 | SSL/TLS、安全控制         |
+| Phase 5 | ⏳ 待开始 | 重写、压缩、缓存、日志    |
+| Phase 6 | ⏳ 待开始 | Stream、性能优化          |
+
+**Phase 2 技术选型变更**：
+- HTTP 库：使用 [fasthttp](https://github.com/valyala/fasthttp) 替代 `net/http`（性能提升 6 倍）
+- 日志库：使用 [zerolog](https://github.com/rs/zerolog)（零分配，~40ns/op）
 
 ---
 
