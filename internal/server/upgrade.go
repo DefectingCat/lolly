@@ -159,7 +159,7 @@ func (u *UpgradeManager) GetInheritedListeners() ([]net.Listener, error) {
 
 		listener, err := net.FileListener(file)
 		if err != nil {
-			file.Close()
+			_ = file.Close()
 			continue
 		}
 
@@ -220,7 +220,7 @@ func (u *UpgradeManager) GracefulUpgrade(newBinary string) error {
 
 	// 写入新 PID 到文件
 	if u.pidFile != "" {
-		os.WriteFile(u.pidFile, []byte(fmt.Sprintf("%d", newPid)), 0644)
+		_ = os.WriteFile(u.pidFile, []byte(fmt.Sprintf("%d", newPid)), 0644)
 	}
 
 	return nil
@@ -277,7 +277,7 @@ func (u *UpgradeManager) WaitForShutdown(timeout time.Duration) error {
 	}
 
 	process, _ := os.FindProcess(u.oldPid)
-	process.Signal(syscall.SIGKILL)
+	_ = process.Signal(syscall.SIGKILL)
 	return fmt.Errorf("old process did not shutdown gracefully")
 }
 
@@ -315,7 +315,7 @@ func (u *UpgradeManager) SetupSignalHandlers(newBinary string) {
 	go func() {
 		for sig := range sigCh {
 			if sig == syscall.SIGUSR2 {
-				u.GracefulUpgrade(newBinary)
+				_ = u.GracefulUpgrade(newBinary)
 			}
 		}
 	}()

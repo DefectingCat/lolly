@@ -132,14 +132,14 @@ func getSocketFd(conn net.Conn) (uintptr, error) {
 		if err != nil {
 			return 0, err
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		return file.Fd(), nil
 	case *net.UnixConn:
 		file, err := c.File()
 		if err != nil {
 			return 0, err
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		return file.Fd(), nil
 	default:
 		return 0, syscall.ENOTSUP
@@ -193,5 +193,5 @@ func GetBuffer() []byte {
 
 // PutBuffer 放回缓冲区。
 func PutBuffer(buf []byte) {
-	RealBufferPool.Put(buf)
+	RealBufferPool.Put(buf) //nolint:staticcheck // SA6002: 测试表明指针优化不明显，保持简洁
 }

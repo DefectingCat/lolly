@@ -138,7 +138,7 @@ func (s *Server) Start() error {
 	// 创建 QUIC 监听器
 	s.listener, err = quic.ListenEarly(udpConn, s.tlsConfig, quicConfig)
 	if err != nil {
-		udpConn.Close()
+		_ = udpConn.Close()
 		return fmt.Errorf("failed to listen QUIC: %w", err)
 	}
 
@@ -219,7 +219,7 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 
 		done := make(chan struct{})
 		go func() {
-			s.http3Server.Close()
+			_ = s.http3Server.Close()
 			close(done)
 		}()
 

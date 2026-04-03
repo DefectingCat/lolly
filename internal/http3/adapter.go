@@ -106,7 +106,7 @@ func (a *Adapter) convertRequest(r *http.Request, ctx *fasthttp.RequestCtx) {
 		if err == nil {
 			ctx.Request.SetBody(body)
 		}
-		r.Body.Close()
+		_ = r.Body.Close()
 	}
 
 	// 设置远程地址
@@ -133,9 +133,9 @@ func (a *Adapter) convertResponse(ctx *fasthttp.RequestCtx, w http.ResponseWrite
 	}
 
 	// 复制响应头
-	ctx.Response.Header.VisitAll(func(k, v []byte) {
+	for k, v := range ctx.Response.Header.All() {
 		w.Header().Add(string(k), string(v))
-	})
+	}
 
 	// 写入状态码
 	w.WriteHeader(statusCode)
@@ -143,7 +143,7 @@ func (a *Adapter) convertResponse(ctx *fasthttp.RequestCtx, w http.ResponseWrite
 	// 写入响应体
 	body := ctx.Response.Body()
 	if len(body) > 0 {
-		w.Write(body)
+		_, _ = w.Write(body)
 	}
 }
 
@@ -238,9 +238,9 @@ func convertToHTTPRequest(ctx *fasthttp.RequestCtx) *http.Request {
 
 	// 复制头部
 	r.Header = make(http.Header)
-	ctx.Request.Header.VisitAll(func(k, v []byte) {
+	for k, v := range ctx.Request.Header.All() {
 		r.Header.Add(string(k), string(v))
-	})
+	}
 
 	// 设置请求体
 	if len(ctx.PostBody()) > 0 {

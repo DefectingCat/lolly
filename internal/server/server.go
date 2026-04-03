@@ -610,7 +610,7 @@ func (s *Server) Stop() error {
 
 	// 关闭访问日志
 	if s.accessLogMiddleware != nil {
-		s.accessLogMiddleware.Close()
+		_ = s.accessLogMiddleware.Close()
 	}
 
 	// 关闭 TLS 管理器
@@ -653,7 +653,7 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 
 	// 关闭访问日志
 	if s.accessLogMiddleware != nil {
-		s.accessLogMiddleware.Close()
+		_ = s.accessLogMiddleware.Close()
 	}
 
 	// 关闭 TLS 管理器
@@ -667,7 +667,7 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 
 		done := make(chan struct{})
 		go func() {
-			s.fastServer.Shutdown()
+			_ = s.fastServer.Shutdown()
 			close(done)
 		}()
 

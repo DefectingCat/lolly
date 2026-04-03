@@ -146,9 +146,10 @@ func (m *CompressionMiddleware) Process(next fasthttp.RequestHandler) fasthttp.R
 
 		// 根据算法和客户端支持选择压缩方式
 		var useGzip, useBrotli bool
-		if m.algorithm == AlgorithmGzip {
+		switch m.algorithm {
+		case AlgorithmGzip:
 			useGzip = strings.Contains(acceptEncoding, "gzip")
-		} else if m.algorithm == AlgorithmBrotli {
+		case AlgorithmBrotli:
 			// brotli 或 both 模式
 			if strings.Contains(acceptEncoding, "br") {
 				useBrotli = true
@@ -232,8 +233,8 @@ func (m *CompressionMiddleware) compressGzip(data []byte) []byte {
 
 	var buf bytes.Buffer
 	w.Reset(&buf)
-	w.Write(data)
-	w.Close()
+	_, _ = w.Write(data)
+	_ = w.Close()
 
 	return buf.Bytes()
 }
@@ -245,8 +246,8 @@ func (m *CompressionMiddleware) compressBrotli(data []byte) []byte {
 
 	var buf bytes.Buffer
 	w.Reset(&buf)
-	w.Write(data)
-	w.Close()
+	_, _ = w.Write(data)
+	_ = w.Close()
 
 	return buf.Bytes()
 }

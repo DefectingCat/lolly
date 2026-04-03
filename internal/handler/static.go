@@ -136,7 +136,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 	if h.useSendfile && info.Size() >= MinSendfileSize {
 		file, err := os.Open(filePath)
 		if err == nil {
-			defer file.Close()
+			defer func() { _ = file.Close() }()
 			if err := SendFile(ctx, file, 0, info.Size()); err == nil {
 				return
 			}
@@ -153,7 +153,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 
 	// 存入缓存（仅对小文件缓存）
 	if h.fileCache != nil && info.Size() < 1024*1024 { // < 1MB
-		h.fileCache.Set(filePath, data, info.Size(), info.ModTime())
+		_ = h.fileCache.Set(filePath, data, info.Size(), info.ModTime())
 	}
 
 	ctx.Response.SetBody(data)
