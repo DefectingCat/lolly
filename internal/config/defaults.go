@@ -96,8 +96,12 @@ func DefaultConfig() *Config {
 			},
 		},
 		Logging: LoggingConfig{
+			Format: "text",
 			Access: AccessLogConfig{
-				Format: "$remote_addr - $request - $status - $body_bytes_sent",
+				// 近似 nginx combined 格式
+				// nginx: $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"
+				// lolly: $request 不含 HTTP 版本，$time 为 RFC3339 格式
+				Format: "$remote_addr - $remote_user [$time] \"$request\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\"",
 			},
 			Error: ErrorLogConfig{
 				Level: "info",
@@ -348,9 +352,12 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	// logging 配置
 	buf.WriteString("# 日志配置\n")
 	buf.WriteString("logging:\n")
+	buf.WriteString(fmt.Sprintf("  format: \"%s\"           # 全局日志格式（有效值: text, json），控制启动/停止日志格式\n", cfg.Logging.Format))
 	buf.WriteString("  access:\n")
 	buf.WriteString("    path: \"\"                   # 日志文件路径（空表示输出到 stdout）\n")
-	buf.WriteString(fmt.Sprintf("    format: \"%s\"  # 日志格式（支持变量: $remote_addr, $request, $status, $body_bytes_sent, $request_time, $http_referer, $http_user_agent）\n", cfg.Logging.Access.Format))
+	buf.WriteString(fmt.Sprintf("    format: \"%s\"  # 访问日志格式，近似 nginx combined\n", cfg.Logging.Access.Format))
+	buf.WriteString("    # 支持变量: $remote_addr, $remote_user, $request, $status, $body_bytes_sent, $request_time, $http_referer, $http_user_agent, $time\n")
+	buf.WriteString("    # 特殊值 \"json\" 输出结构化 JSON\n")
 	buf.WriteString("  error:\n")
 	buf.WriteString("    path: \"\"                   # 日志文件路径（空表示输出到 stderr）\n")
 	buf.WriteString(fmt.Sprintf("    level: \"%s\"           # 日志级别（有效值: debug, info, warn, error，级别越高日志越少）\n", cfg.Logging.Error.Level))

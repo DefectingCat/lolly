@@ -189,8 +189,9 @@ type CompressionConfig struct {
 
 // LoggingConfig 日志配置。
 type LoggingConfig struct {
-	Access AccessLogConfig `yaml:"access"` // 访问日志
-	Error  ErrorLogConfig  `yaml:"error"`  // 错误日志
+	Format string           `yaml:"format"` // 全局格式：text（默认）或 json，控制启动/停止日志
+	Access AccessLogConfig  `yaml:"access"` // 访问日志
+	Error  ErrorLogConfig   `yaml:"error"`  // 错误日志
 }
 
 // AccessLogConfig 访问日志配置。

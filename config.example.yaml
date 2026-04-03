@@ -109,17 +109,54 @@ server:
       - "application/json"
       - "application/javascript"
 
-# 多虚拟主机模式（可选）
+# 多虚拟主机模式（可选，每个虚拟主机支持完整的 server 配置）
 # servers:
-#   - listen: ":8080"
-#     name: "api.example.com"
-#     proxy:
+#   - listen: ":8080"              # 监听地址
+#     name: "api.example.com"        # 服务器名称（用于虚拟主机匹配）
+#     read_timeout: 30s               # 读取超时（0 表示不限制）
+#     write_timeout: 30s              # 写入超时（0 表示不限制）
+#     idle_timeout: 120s              # 空闲超时（0 表示不限制）
+#     max_conns_per_ip: 1000          # 每 IP 最大连接数（0 表示不限制）
+#     max_requests_per_conn: 10000   # 每连接最大请求数（0 表示不限制）
+#     static:                         # 静态文件配置
+#       root: /var/www/api
+#       index: [index.html]
+#     proxy:                          # 反向代理配置
 #       - path: /api
-#         targets: [http://backend:8080]
-#   - listen: ":8443"
+#         targets:
+#           - url: http://backend:8080
+#         load_balance: round_robin
+#     ssl:                            # SSL/TLS 配置
+#       cert: /path/to/api.cert.pem
+#       key: /path/to/api.key.pem
+#       protocols: [TLSv1.2, TLSv1.3]
+#       hsts:
+#         max_age: 31536000
+#         include_sub_domains: true
+#     security:                       # 安全配置
+#       access:
+#         default: allow
+#       rate_limit:
+#         request_rate: 100
+#       headers:
+#         x_frame_options: DENY
+#     compression:                    # 响应压缩配置
+#       type: gzip
+#       level: 6
+#   - listen: ":8443"              # 另一个虚拟主机
 #     name: "static.example.com"
 #     static:
 #       root: /var/www/static
+#       index: [index.html, index.htm]
+#     ssl:
+#       cert: /path/to/static.cert.pem
+#       key: /path/to/static.key.pem
+#     compression:
+#       type: gzip
+
+# SSL/TLS 默认配置说明（未配置证书时不启用）
+# 默认 TLS 协议: TLSv1.2, TLSv1.3（不支持 TLSv1.0/1.1）
+# 默认 HSTS 配置: max_age=31536000（1年）, include_sub_domains=true
 
 # TCP/UDP Stream 代理配置（可选）
 # stream:
@@ -135,9 +172,12 @@ server:
 
 # 日志配置
 logging:
+  format: "text"           # 全局日志格式（有效值: text, json），控制启动/停止日志格式
   access:
     path: ""                   # 日志文件路径（空表示输出到 stdout）
-    format: "$remote_addr - $request - $status - $body_bytes_sent"  # 日志格式（支持变量: $remote_addr, $request, $status, $body_bytes_sent, $request_time, $http_referer, $http_user_agent）
+    format: "$remote_addr - $remote_user [$time] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent""  # 访问日志格式，近似 nginx combined
+    # 支持变量: $remote_addr, $remote_user, $request, $status, $body_bytes_sent, $request_time, $http_referer, $http_user_agent, $time
+    # 特殊值 "json" 输出结构化 JSON
   error:
     path: ""                   # 日志文件路径（空表示输出到 stderr）
     level: "info"           # 日志级别（有效值: debug, info, warn, error，级别越高日志越少）

@@ -204,7 +204,10 @@ func (ba *BasicAuth) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 			return
 		}
 
-		// 认证成功，继续执行下一个处理器
+		// 认证成功，存储用户名到上下文（用于访问日志 $remote_user）
+		ctx.SetUserValue("remote_user", username)
+
+		// 继续执行下一个处理器
 		next(ctx)
 	}
 }

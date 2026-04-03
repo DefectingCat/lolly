@@ -1,8 +1,10 @@
 package logging
 
 import (
+	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,10 +15,19 @@ import (
 
 // Logger 日志管理器，分离访问日志和错误日志。
 type Logger struct {
-	accessLog  zerolog.Logger
-	errorLog   zerolog.Logger
-	accessFile *os.File
-	errorFile  *os.File
+	accessLog    zerolog.Logger
+	errorLog     zerolog.Logger
+	accessFormat string    // 访问日志格式模板
+	accessWriter io.Writer // 访问日志输出目标
+	accessFile   *os.File
+	errorFile    *os.File
+}
+
+// AppLogger 应用日志管理器，统一管理启动/停止日志。
+type AppLogger struct {
+	format   string       // "text" 或 "json"
+	errorLog zerolog.Logger
+	writer   io.Writer
 }
 
 var log zerolog.Logger
@@ -37,9 +48,13 @@ func New(cfg *config.LoggingConfig) *Logger {
 		cfg = &config.LoggingConfig{}
 	}
 
+	accessWriter := getOutput(cfg.Access.Path)
+
 	logger := &Logger{
-		accessLog: zerolog.New(getOutput(cfg.Access.Path)).With().Timestamp().Logger(),
-		errorLog:  zerolog.New(getOutput(cfg.Error.Path)).Level(parseLevel(cfg.Error.Level)).With().Timestamp().Logger(),
+		accessFormat: cfg.Access.Format,
+		accessWriter: accessWriter,
+		accessLog:    zerolog.New(accessWriter).With().Timestamp().Logger(),
+		errorLog:     zerolog.New(getOutput(cfg.Error.Path)).Level(parseLevel(cfg.Error.Level)).With().Timestamp().Logger(),
 	}
 
 	return logger
@@ -74,17 +89,54 @@ func LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.D
 		Msg("request")
 }
 
-// LogAccessWithLogger 使用 Logger 实例记录访问日志（nginx 格式变量）。
+// LogAccess 记录访问日志，支持模板格式或 JSON。
 func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.Duration) {
-	l.accessLog.Info().
-		Str("remote_addr", ctx.RemoteAddr().String()).
-		Str("request", string(ctx.Method())+" "+string(ctx.Path())).
-		Int("status", status).
-		Int64("body_bytes_sent", size).
-		Dur("request_time", duration).
-		Str("http_referrer", string(ctx.Request.Header.Peek("Referer"))).
-		Str("http_user_agent", string(ctx.Request.Header.Peek("User-Agent"))).
-		Msg("")
+	// JSON 格式或空格式：输出结构化 JSON
+	if l.accessFormat == "json" || l.accessFormat == "" {
+		l.accessLog.Info().
+			Str("remote_addr", ctx.RemoteAddr().String()).
+			Str("request", string(ctx.Method())+" "+string(ctx.Path())).
+			Int("status", status).
+			Int64("body_bytes_sent", size).
+			Dur("request_time", duration).
+			Str("http_referrer", string(ctx.Request.Header.Peek("Referer"))).
+			Str("http_user_agent", string(ctx.Request.Header.Peek("User-Agent"))).
+			Msg("")
+		return
+	}
+
+	// 模板格式：直接输出纯文本
+	output := l.formatAccessLog(ctx, status, size, duration)
+	fmt.Fprintln(l.accessWriter, output)
+}
+
+// formatAccessLog 根据模板格式化访问日志。
+func (l *Logger) formatAccessLog(ctx *fasthttp.RequestCtx, status int, size int64, duration time.Duration) string {
+	// 获取认证用户名，无认证时为 "-"
+	remoteUser := "-"
+	if user := ctx.UserValue("remote_user"); user != nil {
+		if username, ok := user.(string); ok && username != "" {
+			remoteUser = username
+		}
+	}
+
+	replacements := map[string]string{
+		"$remote_addr":      ctx.RemoteAddr().String(),
+		"$remote_user":      remoteUser,
+		"$request":          string(ctx.Method()) + " " + string(ctx.Path()) + " " + string(ctx.Request.Header.Protocol()),
+		"$status":           strconv.Itoa(status),
+		"$body_bytes_sent":  strconv.FormatInt(size, 10),
+		"$request_time":     fmt.Sprintf("%.6f", duration.Seconds()),
+		"$http_referer":     string(ctx.Request.Header.Peek("Referer")),
+		"$http_user_agent":  string(ctx.Request.Header.Peek("User-Agent")),
+		"$time":             time.Now().Format(time.RFC3339),
+	}
+
+	result := l.accessFormat
+	for varName, value := range replacements {
+		result = strings.ReplaceAll(result, varName, value)
+	}
+	return result
 }
 
 // Debug 返回 Debug 级别日志记录器。
@@ -137,4 +189,83 @@ func parseLevel(level string) zerolog.Level {
 	default:
 		return zerolog.InfoLevel
 	}
+}
+
+// NewAppLogger 创建应用日志管理器。
+func NewAppLogger(cfg *config.LoggingConfig) *AppLogger {
+	if cfg == nil {
+		cfg = &config.LoggingConfig{}
+	}
+
+	format := cfg.Format
+	if format == "" {
+		format = "text" // 默认纯文本
+	}
+
+	writer := getOutput(cfg.Error.Path)
+	errorLog := zerolog.New(writer).Level(parseLevel(cfg.Error.Level)).With().Timestamp().Logger()
+
+	return &AppLogger{
+		format:   format,
+		errorLog: errorLog,
+		writer:   writer,
+	}
+}
+
+// LogStartup 记录启动消息。
+func (l *AppLogger) LogStartup(msg string, fields map[string]string) {
+	if l.format == "json" {
+		event := l.errorLog.Info()
+		for k, v := range fields {
+			event.Str(k, v)
+		}
+		event.Msg(msg)
+		return
+	}
+
+	// 纯文本格式
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	if len(fields) == 0 {
+		fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
+		return
+	}
+
+	// 带字段的文本格式
+	extra := ""
+	for k, v := range fields {
+		extra += fmt.Sprintf(" %s=%s", k, v)
+	}
+	fmt.Fprintf(l.writer, "[%s] INFO %s%s\n", timestamp, msg, extra)
+}
+
+// LogShutdown 记录停止消息。
+func (l *AppLogger) LogShutdown(msg string) {
+	if l.format == "json" {
+		l.errorLog.Info().Msg(msg)
+		return
+	}
+
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
+}
+
+// LogSignal 记录信号处理消息。
+func (l *AppLogger) LogSignal(sig string, action string) {
+	if l.format == "json" {
+		l.errorLog.Info().Str("signal", sig).Str("action", action).Msg("")
+		return
+	}
+
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	fmt.Fprintf(l.writer, "[%s] INFO 收到 %s，%s\n", timestamp, sig, action)
+}
+
+// Info 返回 Info 级别日志记录器。
+func (l *AppLogger) Info() *zerolog.Event {
+	return l.errorLog.Info()
+}
+
+// Error 返回 Error 级别日志记录器。
+func (l *AppLogger) Error() *zerolog.Event {
+	return l.errorLog.Error()
 }
