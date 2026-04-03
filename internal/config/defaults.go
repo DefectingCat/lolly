@@ -174,22 +174,22 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	// server 配置
 	buf.WriteString("# 服务器配置（单服务器模式）\n")
 	buf.WriteString("server:\n")
-	buf.WriteString(fmt.Sprintf("  listen: \"%s\"           # 监听地址\n", cfg.Server.Listen))
-	buf.WriteString(fmt.Sprintf("  name: \"%s\"             # 服务器名称（虚拟主机匹配）\n", cfg.Server.Name))
-	buf.WriteString(fmt.Sprintf("  read_timeout: %ds            # 读取超时（0 表示不限制）\n", int(cfg.Server.ReadTimeout.Seconds())))
-	buf.WriteString(fmt.Sprintf("  write_timeout: %ds           # 写入超时（0 表示不限制）\n", int(cfg.Server.WriteTimeout.Seconds())))
-	buf.WriteString(fmt.Sprintf("  idle_timeout: %ds            # 空闲超时（0 表示不限制）\n", int(cfg.Server.IdleTimeout.Seconds())))
-	buf.WriteString(fmt.Sprintf("  max_conns_per_ip: %d         # 每 IP 最大连接数（0 表示不限制）\n", cfg.Server.MaxConnsPerIP))
-	buf.WriteString(fmt.Sprintf("  max_requests_per_conn: %d    # 每连接最大请求数（0 表示不限制）\n", cfg.Server.MaxRequestsPerConn))
+	fmt.Fprintf(&buf, "  listen: \"%s\"           # 监听地址\n", cfg.Server.Listen)
+	fmt.Fprintf(&buf, "  name: \"%s\"             # 服务器名称（虚拟主机匹配）\n", cfg.Server.Name)
+	fmt.Fprintf(&buf, "  read_timeout: %ds            # 读取超时（0 表示不限制）\n", int(cfg.Server.ReadTimeout.Seconds()))
+	fmt.Fprintf(&buf, "  write_timeout: %ds           # 写入超时（0 表示不限制）\n", int(cfg.Server.WriteTimeout.Seconds()))
+	fmt.Fprintf(&buf, "  idle_timeout: %ds            # 空闲超时（0 表示不限制）\n", int(cfg.Server.IdleTimeout.Seconds()))
+	fmt.Fprintf(&buf, "  max_conns_per_ip: %d         # 每 IP 最大连接数（0 表示不限制）\n", cfg.Server.MaxConnsPerIP)
+	fmt.Fprintf(&buf, "  max_requests_per_conn: %d    # 每连接最大请求数（0 表示不限制）\n", cfg.Server.MaxRequestsPerConn)
 	buf.WriteString("\n")
 
 	// static 配置
 	buf.WriteString("  # 静态文件服务配置\n")
 	buf.WriteString("  static:\n")
-	buf.WriteString(fmt.Sprintf("    root: \"%s\"   # 静态文件根目录\n", cfg.Server.Static.Root))
+	fmt.Fprintf(&buf, "    root: \"%s\"   # 静态文件根目录\n", cfg.Server.Static.Root)
 	buf.WriteString("    index:                  # 索引文件\n")
 	for _, idx := range cfg.Server.Static.Index {
-		buf.WriteString(fmt.Sprintf("      - \"%s\"\n", idx))
+		fmt.Fprintf(&buf, "      - \"%s\"\n", idx)
 	}
 	buf.WriteString("\n")
 
@@ -232,14 +232,14 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("  #   cert_chain: /path/to/chain.pem # 证书链文件\n")
 	buf.WriteString("  #   protocols:                     # TLS 版本（有效值: TLSv1.2, TLSv1.3）\n")
 	for _, proto := range cfg.Server.SSL.Protocols {
-		buf.WriteString(fmt.Sprintf("  #     - \"%s\"\n", proto))
+		fmt.Fprintf(&buf, "  #     - \"%s\"\n", proto)
 	}
 	buf.WriteString("  #   ciphers: []                    # 加密套件（仅 TLS 1.2 有效）\n")
-	buf.WriteString(fmt.Sprintf("  #   ocsp_stapling: %v              # OCSP Stapling\n", cfg.Server.SSL.OCSPStapling))
+	fmt.Fprintf(&buf, "  #   ocsp_stapling: %v              # OCSP Stapling\n", cfg.Server.SSL.OCSPStapling)
 	buf.WriteString("  #   hsts:                          # HTTP Strict Transport Security\n")
-	buf.WriteString(fmt.Sprintf("  #     max_age: %d                  # 过期时间（秒）\n", cfg.Server.SSL.HSTS.MaxAge))
-	buf.WriteString(fmt.Sprintf("  #     include_sub_domains: %v      # 包含子域名\n", cfg.Server.SSL.HSTS.IncludeSubDomains))
-	buf.WriteString(fmt.Sprintf("  #     preload: %v                  # 加入 HSTS 预加载列表\n", cfg.Server.SSL.HSTS.Preload))
+	fmt.Fprintf(&buf, "  #     max_age: %d                  # 过期时间（秒）\n", cfg.Server.SSL.HSTS.MaxAge)
+	fmt.Fprintf(&buf, "  #     include_sub_domains: %v      # 包含子域名\n", cfg.Server.SSL.HSTS.IncludeSubDomains)
+	fmt.Fprintf(&buf, "  #     preload: %v                  # 加入 HSTS 预加载列表\n", cfg.Server.SSL.HSTS.Preload)
 	buf.WriteString("\n")
 
 	// security 配置
@@ -249,7 +249,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    access:\n")
 	buf.WriteString("      allow: []                   # 允许的 IP/CIDR 列表\n")
 	buf.WriteString("      deny: []                    # 拒绝的 IP/CIDR 列表\n")
-	buf.WriteString(fmt.Sprintf("      default: \"%s\"             # 默认动作（有效值: allow, deny）\n", cfg.Server.Security.Access.Default))
+	fmt.Fprintf(&buf, "      default: \"%s\"             # 默认动作（有效值: allow, deny）\n", cfg.Server.Security.Access.Default)
 	buf.WriteString("\n")
 	buf.WriteString("    # 速率限制\n")
 	buf.WriteString("    rate_limit:\n")
