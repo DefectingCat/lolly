@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-02 | Updated: 2026-04-02 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-03 -->
 
 # internal
 
@@ -11,11 +11,16 @@
 | Directory | Purpose |
 |-----------|---------|
 | `app/` | 应用程序入口和运行逻辑（启动、信号处理、版本信息） |
+| `cache/` | 文件缓存模块（缓存存储、过期管理） |
 | `config/` | 配置解析、验证和默认值生成 |
-| `handler/` | HTTP 请求处理器（路由、静态文件） |
+| `handler/` | HTTP 请求处理器（路由、静态文件、Sendfile） |
+| `loadbalance/` | 负载均衡策略（轮询、最少连接、健康检查） |
 | `logging/` | 日志系统（zerolog 初始化、访问日志） |
 | `middleware/` | 中间件框架（接口定义、链式组合） |
-| `server/` | HTTP 服务器核心和虚拟主机管理 |
+| `proxy/` | 反向代理模块（HTTP/WebSocket 代理） |
+| `server/` | HTTP 服务器核心、虚拟主机、热升级、状态监控 |
+| `ssl/` | SSL/TLS 管理（证书加载、OCSP Stapling） |
+| `stream/` | TCP/UDP Stream 代理模块 |
 
 ## For AI Agents
 

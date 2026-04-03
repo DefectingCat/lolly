@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-02 | Updated: 2026-04-02 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-03 -->
 
 # server
 
@@ -12,6 +12,9 @@ HTTP 服务器核心，提供服务器创建、启动、停止和虚拟主机管
 |------|-------------|
 | `server.go` | 服务器核心：Server 结构体、Start()、Stop()、GracefulStop() |
 | `vhost.go` | 虚拟主机管理：VHostManager、VirtualHost、按 Host 头匹配 |
+| `pool.go` | 连接池管理：Worker 池、连接复用、并发控制 |
+| `upgrade.go` | 热升级：UpgradeManager、USR2 信号处理、平滑交接 |
+| `status.go` | 状态监控：健康端点、统计信息、Prometheus 格式 |
 
 ## For AI Agents
 

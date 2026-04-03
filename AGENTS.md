@@ -1,4 +1,4 @@
-<!-- Generated: 2026-04-02 | Updated: 2026-04-02 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-03 -->
 
 # lolly
 
@@ -14,6 +14,7 @@
 | `go.sum` | 依赖版本锁定 |
 | `Makefile` | 构建脚本，支持多平台编译、测试、覆盖率 |
 | `lolly.yaml` | 默认配置文件示例 |
+| `config.example.yaml` | 完整配置文件示例（所有字段枚举） |
 | `.gitignore` | Git 忽略规则 |
 
 ## Subdirectories

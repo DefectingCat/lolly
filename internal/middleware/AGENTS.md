@@ -1,16 +1,25 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-02 | Updated: 2026-04-02 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-03 -->
 
 # middleware
 
 ## Purpose
-中间件框架，定义统一的中间件接口和链式组合机制。
+中间件框架，定义统一的中间件接口和链式组合机制，包含多个具体中间件实现。
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
 | `middleware.go` | 中间件接口和链：Middleware 接口、Chain 结构体、Apply 方法 |
+
+## Subdirectories
+
+| Directory | Purpose |
+|-----------|---------|
+| `accesslog/` | 访问日志中间件（请求记录、响应统计） |
+| `compression/` | 响应压缩中间件（Gzip、Deflate） |
+| `rewrite/` | URL 重写中间件（正则替换、路径转换） |
+| `security/` | 安全中间件（访问控制、认证、限流、安全头部） |
 
 ## For AI Agents
 

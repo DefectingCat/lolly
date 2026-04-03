@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-02 | Updated: 2026-04-02 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-03 -->
 
 # docs
 
@@ -32,6 +32,17 @@
 | `10-nginx-stream-tcp-udp.md` | TCP/UDP Stream 代理参考 |
 | `11-nginx-mail-proxy.md` | 邮件代理参考 |
 | `12-nginx-performance-tuning.md` | 性能调优参考 |
+| `14-nginx-grpc-uwsgi.md` | gRPC/uWSGI/SCGI 代理参考 |
+| `15-nginx-advanced-features.md` | 高级特性参考 |
+| `16-nginx-internal-redirect.md` | 内部重定向参考 |
+| `17-nginx-mirror-slice.md` | 镜像与切片参考 |
+| `18-nginx-memcached.md` | Memcached 集成参考 |
+| `19-nginx-http-modules-detail.md` | HTTP 功能模块详解 |
+| `20-nginx-rate-limiting.md` | 限流与连接控制参考 |
+| `21-nginx-http2-http3.md` | HTTP/2 与 HTTP/3 参考 |
+| `22-nginx-third-party-modules.md` | 第三方扩展模块参考 |
+| `23-nginx-special-modules.md` | 特殊功能模块参考 |
+| `24-nginx-core-events.md` | 核心与事件模块参考 |
 
 ## For AI Agents
 

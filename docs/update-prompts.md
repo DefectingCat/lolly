@@ -9,6 +9,8 @@
 
 ## 单元测试
 
+/ultrawork 分析下当前测试覆盖率
+
 ## 注释
 
 /ultrawork 参考 @docs/comments.md，分析项目注释是否完善

@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-02 | Updated: 2026-04-02 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-03 -->
 
 # handler
 
@@ -12,6 +12,7 @@ HTTP 请求处理器，包含路由管理和静态文件服务功能。
 |------|-------------|
 | `router.go` | 路由器封装：基于 fasthttp/router，支持 GET/POST/PUT/DELETE/HEAD |
 | `static.go` | 静态文件处理器：文件路径安全检查、索引文件支持 |
+| `sendfile.go` | Sendfile 支持：X-Sendfile 头处理、高效文件传输 |
 
 ## For AI Agents
 
