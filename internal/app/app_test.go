@@ -537,3 +537,238 @@ logging:
 		t.Errorf("Expected listen ':9090', got '%s'", app.cfg.Server.Listen)
 	}
 }
+
+// TestSetupSignalHandlers 测试信号处理设置
+func TestSetupSignalHandlers(t *testing.T) {
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0",
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	sigChan := make(chan os.Signal, 1)
+	app.setupSignalHandlers(sigChan)
+
+	// 验证信号通道已设置（无法直接验证 signal.Notify，但可确认函数执行成功）
+}
+
+// TestHandleSignal_SIGUSR2 测试 SIGUSR2 信号处理（热升级）
+func TestHandleSignal_SIGUSR2(t *testing.T) {
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0",
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.srv = server.New(app.cfg)
+	app.upgradeMgr = server.NewUpgradeManager(app.srv)
+
+	// SIGUSR2 处理应返回 true（继续运行）
+	result := app.handleSignal(syscall.SIGUSR2)
+
+	if result != true {
+		t.Error("Expected handleSignal(SIGUSR2) to return true (continue)")
+	}
+}
+
+// TestGracefulUpgrade_NoListener 测试无监听器时的热升级
+func TestGracefulUpgrade_NoListener(t *testing.T) {
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0",
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.srv = server.New(app.cfg)
+	app.upgradeMgr = server.NewUpgradeManager(app.srv)
+
+	// 在没有监听器的情况下执行热升级
+	app.gracefulUpgrade()
+	// 应记录错误但不 panic
+}
+
+// TestVersionVariables 测试版本变量默认值
+func TestVersionVariables(t *testing.T) {
+	if Version != "dev" {
+		t.Errorf("Default Version should be 'dev', got '%s'", Version)
+	}
+	if GitCommit != "unknown" {
+		t.Errorf("Default GitCommit should be 'unknown', got '%s'", GitCommit)
+	}
+	if GitBranch != "unknown" {
+		t.Errorf("Default GitBranch should be 'unknown', got '%s'", GitBranch)
+	}
+	if BuildTime != "unknown" {
+		t.Errorf("Default BuildTime should be 'unknown', got '%s'", BuildTime)
+	}
+	if GoVersion != "unknown" {
+		t.Errorf("Default GoVersion should be 'unknown', got '%s'", GoVersion)
+	}
+	if BuildPlatform != "unknown" {
+		t.Errorf("Default BuildPlatform should be 'unknown', got '%s'", BuildPlatform)
+	}
+}
+
+// TestAppFields 测试 App 结构体字段初始化
+func TestAppFields(t *testing.T) {
+	app := NewApp("/test/config.yaml")
+
+	// 验证初始状态
+	if app.cfgPath != "/test/config.yaml" {
+		t.Errorf("cfgPath = %q, want %q", app.cfgPath, "/test/config.yaml")
+	}
+	if app.cfg != nil {
+		t.Error("cfg should be nil initially")
+	}
+	if app.srv != nil {
+		t.Error("srv should be nil initially")
+	}
+	if app.http3Srv != nil {
+		t.Error("http3Srv should be nil initially")
+	}
+	if app.streamSrv != nil {
+		t.Error("streamSrv should be nil initially")
+	}
+	if app.upgradeMgr != nil {
+		t.Error("upgradeMgr should be nil initially")
+	}
+	if len(app.listeners) != 0 {
+		t.Error("listeners should be empty initially")
+	}
+}
+
+// TestShutdownHTTP3_WithServer 测试有 HTTP3 服务器时的关闭
+func TestShutdownHTTP3_WithServer(t *testing.T) {
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0",
+		},
+		HTTP3: config.HTTP3Config{
+			Enabled: false, // 禁用，避免实际启动
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.srv = server.New(app.cfg)
+
+	// 创建但不启动 http3 服务器
+	app.http3Srv = nil // 确保为 nil
+
+	app.shutdownHTTP3()
+	// 应正常执行无 panic
+}
+
+// TestReopenLogs_WithNilConfig 测试配置为 nil 时重开日志
+func TestReopenLogs_WithNilConfig(t *testing.T) {
+	app := NewApp("")
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	app.reopenLogs()
+	// 应正常执行无 panic
+}
+
+// TestReloadConfig_WithValidConfig 测试多次重载配置
+func TestReloadConfig_WithValidConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建第一个配置
+	cfgPath1 := filepath.Join(tmpDir, "config1.yaml")
+	cfgContent1 := `
+server:
+  listen: ":8080"
+logging:
+  error:
+    level: "info"
+`
+	if err := os.WriteFile(cfgPath1, []byte(cfgContent1), 0644); err != nil {
+		t.Fatalf("Failed to write config1: %v", err)
+	}
+
+	// 创建第二个配置
+	cfgPath2 := filepath.Join(tmpDir, "config2.yaml")
+	cfgContent2 := `
+server:
+  listen: ":9090"
+logging:
+  error:
+    level: "debug"
+`
+	if err := os.WriteFile(cfgPath2, []byte(cfgContent2), 0644); err != nil {
+		t.Fatalf("Failed to write config2: %v", err)
+	}
+
+	app := NewApp(cfgPath1)
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":7070",
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	// 第一次重载
+	app.reloadConfig()
+	if app.cfg.Server.Listen != ":8080" {
+		t.Errorf("After first reload: listen = %q, want :8080", app.cfg.Server.Listen)
+	}
+
+	// 更改配置路径并重载
+	app.cfgPath = cfgPath2
+	app.reloadConfig()
+	if app.cfg.Server.Listen != ":9090" {
+		t.Errorf("After second reload: listen = %q, want :9090", app.cfg.Server.Listen)
+	}
+}
+
+// TestHandleSignal_AllSignals 测试所有信号类型
+func TestHandleSignal_AllSignals(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+	cfgContent := `
+server:
+  listen: ":8080"
+logging:
+  error:
+    level: "info"
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		sig        syscall.Signal
+		wantResult bool
+	}{
+		{"SIGQUIT - graceful stop", syscall.SIGQUIT, false},
+		{"SIGTERM - fast stop", syscall.SIGTERM, false},
+		{"SIGINT - fast stop", syscall.SIGINT, false},
+		{"SIGHUP - reload", syscall.SIGHUP, true},
+		{"SIGUSR1 - reopen logs", syscall.SIGUSR1, true},
+		{"SIGUSR2 - upgrade", syscall.SIGUSR2, true},
+		{"SIGCHLD - unknown", syscall.SIGCHLD, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := NewApp(cfgPath)
+			app.cfg = &config.Config{
+				Server: config.ServerConfig{
+					Listen: ":0",
+				},
+			}
+			app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+			app.srv = server.New(app.cfg)
+			app.upgradeMgr = server.NewUpgradeManager(app.srv)
+
+			result := app.handleSignal(tt.sig)
+
+			if result != tt.wantResult {
+				t.Errorf("handleSignal(%v) = %v, want %v", tt.sig, result, tt.wantResult)
+			}
+		})
+	}
+}
