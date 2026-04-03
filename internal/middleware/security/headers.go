@@ -59,6 +59,20 @@ type SecurityHeadersMiddleware struct {
 // 返回值：
 //   - *SecurityHeadersMiddleware: 配置好的中间件实例
 func NewSecurityHeaders(cfg *config.SecurityHeaders) *SecurityHeadersMiddleware {
+	return NewSecurityHeadersWithHSTS(cfg, nil)
+}
+
+// NewSecurityHeadersWithHSTS 创建新的安全响应头中间件，支持 HSTS 配置。
+//
+// 根据配置创建中间件实例，如果配置为 nil 则使用安全的默认值。
+//
+// 参数：
+//   - cfg: 安全头配置，可以为 nil 使用默认配置
+//   - hstsCfg: HSTS 配置，可以为 nil 使用默认值
+//
+// 返回值：
+//   - *SecurityHeadersMiddleware: 配置好的中间件实例
+func NewSecurityHeadersWithHSTS(cfg *config.SecurityHeaders, hstsCfg *config.HSTSConfig) *SecurityHeadersMiddleware {
 	sh := &SecurityHeadersMiddleware{}
 
 	if cfg != nil {
@@ -73,9 +87,22 @@ func NewSecurityHeaders(cfg *config.SecurityHeaders) *SecurityHeadersMiddleware 
 	}
 
 	// 预格式化 HSTS 头值
-	sh.formatHSTS()
+	sh.formatHSTSFromConfig(hstsCfg)
 
 	return sh
+}
+
+// formatHSTSFromConfig 根据配置格式化 HSTS 头值。
+func (sh *SecurityHeadersMiddleware) formatHSTSFromConfig(hstsCfg *config.HSTSConfig) {
+	if hstsCfg != nil {
+		maxAge := hstsCfg.MaxAge
+		if maxAge <= 0 {
+			maxAge = 31536000 // 默认 1 年
+		}
+		sh.hsts = formatHSTSValue(maxAge, hstsCfg.IncludeSubDomains, hstsCfg.Preload)
+	} else {
+		sh.formatHSTS() // 使用默认值
+	}
 }
 
 // Name 返回中间件名称。

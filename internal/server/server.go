@@ -251,7 +251,7 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 		serverCfg.Security.Headers.ContentSecurityPolicy != "" ||
 		serverCfg.Security.Headers.ReferrerPolicy != "" ||
 		serverCfg.Security.Headers.PermissionsPolicy != "" {
-		headers := security.NewSecurityHeaders(&serverCfg.Security.Headers)
+		headers := security.NewSecurityHeadersWithHSTS(&serverCfg.Security.Headers, &serverCfg.SSL.HSTS)
 		middlewares = append(middlewares, headers)
 	}
 
@@ -534,7 +534,8 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 			targets[j].Healthy.Store(true)
 		}
 
-		p, err := proxy.NewProxy(proxyCfg, targets)
+		// 传递 Transport 配置
+		p, err := proxy.NewProxy(proxyCfg, targets, &s.config.Performance.Transport)
 		if err != nil {
 			logging.Error().Msg("创建代理失败: " + err.Error())
 			continue

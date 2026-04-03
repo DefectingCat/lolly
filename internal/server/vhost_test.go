@@ -99,13 +99,9 @@ func TestVHostManager_Handler(t *testing.T) {
 	})
 
 	t.Run("IPv6地址Host", func(t *testing.T) {
-		// TODO: 当前 vhost.go 的端口剥离逻辑不支持 IPv6 格式 [::1]:8080
-		// 它会错误地在第一个 ':' 处截断（IPv6 地址内部的冒号）
-		// 修复方案：检查 host 是否以 '[' 开头，找 ']:' 作为分隔点
 		manager := NewVHostManager()
 		ipv6Called := false
 		manager.AddHost("[::1]", mockHandler("ipv6", &ipv6Called))
-		manager.SetDefault(mockHandler("default", &ipv6Called)) // fallback
 
 		handler := manager.Handler()
 		ctx := &fasthttp.RequestCtx{}
@@ -113,9 +109,12 @@ func TestVHostManager_Handler(t *testing.T) {
 
 		handler(ctx)
 
-		// 当前实现不支持 IPv6，会 fallback 到默认 handler
-		// 修复 vhost.go 后此测试应验证 ipv6Called 为 true
-		t.Log("注意: 当前实现不支持 IPv6 地址，需要修复 vhost.go 的端口剥离逻辑")
+		if !ipv6Called {
+			t.Error("期望 [::1] handler 被调用，但未被调用")
+		}
+		if string(ctx.Response.Body()) != "ipv6" {
+			t.Errorf("响应体 = %q, want %q", string(ctx.Response.Body()), "ipv6")
+		}
 	})
 
 	t.Run("空Host使用默认", func(t *testing.T) {
@@ -270,6 +269,10 @@ func TestVHostManager_PortStripping(t *testing.T) {
 		{"标准HTTPS端口", "example.com:443", "example.com"},
 		{"自定义端口", "example.com:8080", "example.com"},
 		{"IPv6 localhost带端口", "[localhost]:8080", "[localhost]"},
+		{"IPv6 loopback带端口", "[::1]:8080", "[::1]"},
+		{"IPv6完整地址带端口", "[2001:db8::1]:443", "[2001:db8::1]"},
+		{"IPv6无端口", "[::1]", "[::1]"},
+		{"IPv6完整地址无端口", "[2001:db8::1]", "[2001:db8::1]"},
 		{"空字符串", "", ""},
 	}
 
@@ -291,11 +294,8 @@ func TestVHostManager_PortStripping(t *testing.T) {
 		})
 	}
 
-	// IPv6 数字地址测试 - 当前实现有已知 bug
-	t.Run("IPv6数字地址_已知限制", func(t *testing.T) {
-		// TODO: vhost.go 的端口剥离逻辑不支持 IPv6 数字地址格式 [::1]:8080
-		// 因为它会在第一个 ':' 处截断（IPv6 地址内部的冒号）
-		// 结果：[:而不是 [::1]
+	// IPv6 数字地址测试
+	t.Run("IPv6数字地址", func(t *testing.T) {
 		manager := NewVHostManager()
 		ipv6Called := false
 		manager.AddHost("[::1]", mockHandler("ipv6", &ipv6Called))
@@ -306,10 +306,11 @@ func TestVHostManager_PortStripping(t *testing.T) {
 
 		handler(ctx)
 
-		// 当前行为：不匹配，因为端口剥离错误
-		if ipv6Called {
-			t.Error("当前实现不支持 IPv6 数字地址的端口剥离，不应匹配")
+		if !ipv6Called {
+			t.Error("期望 [::1] handler 被调用，但未被调用")
 		}
-		t.Log("已知限制: IPv6 数字地址端口剥离需要修复 vhost.go")
+		if string(ctx.Response.Body()) != "ipv6" {
+			t.Errorf("响应体 = %q, want %q", string(ctx.Response.Body()), "ipv6")
+		}
 	})
 }

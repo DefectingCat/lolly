@@ -64,11 +64,12 @@ type Proxy struct {
 // 参数：
 //   - cfg: 代理配置，包括超时时间、请求头和负载均衡策略
 //   - targets: 要代理请求的后端目标列表
+//   - transportCfg: 可选的 Transport 连接池配置，nil 时使用默认值
 //
 // 返回值：
 //   - *Proxy: 配置完成并可处理请求的代理实例
 //   - error: 初始化失败时非空（无效配置、没有健康目标等）
-func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target) (*Proxy, error) {
+func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportCfg *config.TransportConfig) (*Proxy, error) {
 	if cfg == nil {
 		return nil, errors.New("proxy config is nil")
 	}
@@ -78,7 +79,7 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target) (*Proxy, e
 	}
 
 	// 根据配置创建负载均衡器
-	balancer, err := createBalancer(cfg.LoadBalance)
+	balancer, err := createBalancer(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +97,7 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target) (*Proxy, e
 			continue
 		}
 
-		client := createHostClient(target.URL, cfg.Timeout)
+		client := createHostClient(target.URL, cfg.Timeout, transportCfg)
 		p.clients[target.URL] = client
 	}
 
@@ -122,8 +123,8 @@ func (p *Proxy) SetHealthChecker(hc *HealthChecker) {
 }
 
 // createBalancer 根据配置的算法创建负载均衡器。
-func createBalancer(algorithm string) (loadbalance.Balancer, error) {
-	switch algorithm {
+func createBalancer(cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
+	switch cfg.LoadBalance {
 	case "round_robin", "":
 		return loadbalance.NewRoundRobin(), nil
 	case "weighted_round_robin":
@@ -132,13 +133,19 @@ func createBalancer(algorithm string) (loadbalance.Balancer, error) {
 		return loadbalance.NewLeastConnections(), nil
 	case "ip_hash":
 		return loadbalance.NewIPHash(), nil
+	case "consistent_hash":
+		virtualNodes := cfg.VirtualNodes
+		if virtualNodes <= 0 {
+			virtualNodes = 150
+		}
+		return loadbalance.NewConsistentHash(virtualNodes, cfg.HashKey), nil
 	default:
-		return nil, errors.New("unsupported load balance algorithm: " + algorithm)
+		return nil, errors.New("unsupported load balance algorithm: " + cfg.LoadBalance)
 	}
 }
 
 // createHostClient 为后台目标 URL 创建 fasthttp.HostClient。
-func createHostClient(targetURL string, timeout config.ProxyTimeout) *fasthttp.HostClient {
+func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCfg *config.TransportConfig) *fasthttp.HostClient {
 	// 从目标 URL 解析主机和协议
 	addr := targetURL
 	isTLS := false
@@ -155,13 +162,27 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout) *fasthttp.H
 		addr = addr[:idx]
 	}
 
+	// 默认值
+	maxIdleConnDuration := 90 * time.Second
+	maxConns := 100
+
+	// 应用 Transport 配置
+	if transportCfg != nil {
+		if transportCfg.IdleConnTimeout > 0 {
+			maxIdleConnDuration = transportCfg.IdleConnTimeout
+		}
+		if transportCfg.MaxConnsPerHost > 0 {
+			maxConns = transportCfg.MaxConnsPerHost
+		}
+	}
+
 	client := &fasthttp.HostClient{
 		Addr:                   addr,
 		IsTLS:                  isTLS,
 		ReadTimeout:            timeout.Read,
 		WriteTimeout:           timeout.Write,
-		MaxIdleConnDuration:    60 * time.Second,
-		MaxConns:               100,
+		MaxIdleConnDuration:    maxIdleConnDuration,
+		MaxConns:               maxConns,
 		MaxConnWaitTimeout:     timeout.Connect,
 		RetryIf:                nil, // Disable automatic retries
 		DisablePathNormalizing: false,
@@ -389,13 +410,13 @@ func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
 	// 清除旧客户端
 	p.clients = make(map[string]*fasthttp.HostClient)
 
-	// 初始化新客户端
+	// 初始化新客户端（使用 nil TransportConfig 保持原有行为）
 	for _, target := range targets {
 		if target.URL == "" {
 			continue
 		}
 
-		client := createHostClient(target.URL, p.config.Timeout)
+		client := createHostClient(target.URL, p.config.Timeout, nil)
 		p.clients[target.URL] = client
 	}
 

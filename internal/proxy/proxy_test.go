@@ -121,7 +121,7 @@ func TestNewProxy(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p, err := NewProxy(tt.cfg, tt.targets)
+			p, err := NewProxy(tt.cfg, tt.targets, nil)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("NewProxy() expected error containing %q, got nil", tt.errContains)
@@ -166,7 +166,7 @@ func TestServeHTTP_NoHealthyTargets(t *testing.T) {
 	targets[0].Healthy.Store(false)
 	targets[1].Healthy.Store(false)
 
-	p, err := NewProxy(cfg, targets)
+	p, err := NewProxy(cfg, targets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
@@ -216,7 +216,7 @@ func TestServeHTTP_RequestForwarding(t *testing.T) {
 		{URL: "http://localhost:8080"},
 	}
 
-	p, err := NewProxy(cfg, targets)
+	p, err := NewProxy(cfg, targets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestSelectTarget(t *testing.T) {
 				Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
 			}
 
-			p, err := NewProxy(cfg, tt.targets)
+			p, err := NewProxy(cfg, tt.targets, nil)
 			if err != nil {
 				t.Fatalf("NewProxy() error: %v", err)
 			}
@@ -425,7 +425,7 @@ func TestModifyRequestHeaders(t *testing.T) {
 				{URL: "http://localhost:8080"},
 			}
 
-			p, err := NewProxy(cfg, targets)
+			p, err := NewProxy(cfg, targets, nil)
 			if err != nil {
 				t.Fatalf("NewProxy() error: %v", err)
 			}
@@ -520,7 +520,7 @@ func TestModifyResponseHeaders(t *testing.T) {
 				{URL: "http://localhost:8080"},
 			}
 
-			p, err := NewProxy(cfg, targets)
+			p, err := NewProxy(cfg, targets, nil)
 			if err != nil {
 				t.Fatalf("NewProxy() error: %v", err)
 			}
@@ -608,7 +608,7 @@ func TestUpdateTargets(t *testing.T) {
 		{URL: "http://old2:8080"},
 	}
 
-	p, err := NewProxy(cfg, initialTargets)
+	p, err := NewProxy(cfg, initialTargets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
@@ -657,7 +657,7 @@ func TestGetTargets(t *testing.T) {
 		{URL: "http://backend2:8080"},
 	}
 
-	p, err := NewProxy(cfg, targets)
+	p, err := NewProxy(cfg, targets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
@@ -686,7 +686,7 @@ func TestGetConfig(t *testing.T) {
 		{URL: "http://localhost:8080"},
 	}
 
-	p, err := NewProxy(cfg, targets)
+	p, err := NewProxy(cfg, targets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
@@ -763,38 +763,37 @@ func TestIsWebSocketRequest(t *testing.T) {
 func TestCreateBalancer(t *testing.T) {
 	tests := []struct {
 		name        string
-		algorithm   string
+		cfg         *config.ProxyConfig
 		wantErr     bool
 		errContains string
 	}{
 		{
-			name:      "轮询",
-			algorithm: "round_robin",
-			wantErr:   false,
+			name: "轮询",
+			cfg:  &config.ProxyConfig{LoadBalance: "round_robin"},
 		},
 		{
-			name:      "加权轮询",
-			algorithm: "weighted_round_robin",
-			wantErr:   false,
+			name: "加权轮询",
+			cfg:  &config.ProxyConfig{LoadBalance: "weighted_round_robin"},
 		},
 		{
-			name:      "最少连接",
-			algorithm: "least_conn",
-			wantErr:   false,
+			name: "最少连接",
+			cfg:  &config.ProxyConfig{LoadBalance: "least_conn"},
 		},
 		{
-			name:      "IP哈希",
-			algorithm: "ip_hash",
-			wantErr:   false,
+			name: "IP哈希",
+			cfg:  &config.ProxyConfig{LoadBalance: "ip_hash"},
 		},
 		{
-			name:      "空算法（默认轮询）",
-			algorithm: "",
-			wantErr:   false,
+			name: "一致性哈希",
+			cfg:  &config.ProxyConfig{LoadBalance: "consistent_hash", HashKey: "ip", VirtualNodes: 150},
+		},
+		{
+			name: "空算法（默认轮询）",
+			cfg:  &config.ProxyConfig{LoadBalance: ""},
 		},
 		{
 			name:        "无效算法",
-			algorithm:   "unknown_algorithm",
+			cfg:         &config.ProxyConfig{LoadBalance: "unknown_algorithm"},
 			wantErr:     true,
 			errContains: "unsupported load balance algorithm",
 		},
@@ -802,23 +801,23 @@ func TestCreateBalancer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			balancer, err := createBalancer(tt.algorithm)
+			balancer, err := createBalancer(tt.cfg)
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("createBalancer(%q) expected error", tt.algorithm)
+					t.Errorf("createBalancer(%v) expected error", tt.cfg.LoadBalance)
 					return
 				}
 				if !contains(err.Error(), tt.errContains) {
-					t.Errorf("createBalancer(%q) error = %v, want containing %q", tt.algorithm, err, tt.errContains)
+					t.Errorf("createBalancer(%v) error = %v, want containing %q", tt.cfg.LoadBalance, err, tt.errContains)
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("createBalancer(%q) unexpected error: %v", tt.algorithm, err)
+				t.Errorf("createBalancer(%v) unexpected error: %v", tt.cfg.LoadBalance, err)
 				return
 			}
 			if balancer == nil {
-				t.Errorf("createBalancer(%q) returned nil balancer", tt.algorithm)
+				t.Errorf("createBalancer(%v) returned nil balancer", tt.cfg.LoadBalance)
 			}
 		})
 	}
@@ -850,7 +849,7 @@ func TestCreateHostClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := createHostClient(tt.targetURL, tt.timeout)
+			client := createHostClient(tt.targetURL, tt.timeout, nil)
 			if client == nil {
 				t.Error("createHostClient() returned nil")
 				return
@@ -882,7 +881,7 @@ func TestHandleWebSocket(t *testing.T) {
 		{URL: "http://localhost:8080"},
 	}
 
-	p, err := NewProxy(cfg, targets)
+	p, err := NewProxy(cfg, targets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
@@ -916,7 +915,7 @@ func TestSetHealthChecker(t *testing.T) {
 		{URL: "http://localhost:8081"},
 	}
 
-	p, err := NewProxy(cfg, targets)
+	p, err := NewProxy(cfg, targets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
@@ -954,7 +953,7 @@ func TestGetClient(t *testing.T) {
 		{URL: "http://localhost:8082"},
 	}
 
-	p, err := NewProxy(cfg, targets)
+	p, err := NewProxy(cfg, targets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
@@ -1018,7 +1017,7 @@ func TestProxyCache(t *testing.T) {
 	}
 	targets[0].Healthy.Store(true)
 
-	p, err := NewProxy(cfg, targets)
+	p, err := NewProxy(cfg, targets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}
@@ -1069,7 +1068,7 @@ func TestServeHTTP_WithPassiveHealthCheck(t *testing.T) {
 	}
 	targets[0].Healthy.Store(true)
 
-	p, err := NewProxy(cfg, targets)
+	p, err := NewProxy(cfg, targets, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
 	}

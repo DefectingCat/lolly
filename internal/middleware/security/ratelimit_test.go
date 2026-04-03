@@ -83,12 +83,17 @@ func TestNewRateLimiter(t *testing.T) {
 }
 
 func TestRateLimiterAllow(t *testing.T) {
-	rl, err := NewRateLimiter(&config.RateLimitConfig{
+	mw, err := NewRateLimiter(&config.RateLimitConfig{
 		RequestRate: 10,
 		Burst:       10,
 	})
 	if err != nil {
 		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+
+	rl, ok := mw.(*RateLimiter)
+	if !ok {
+		t.Fatalf("Expected *RateLimiter, got %T", mw)
 	}
 
 	// Test burst allowance
@@ -108,12 +113,17 @@ func TestRateLimiterAllow(t *testing.T) {
 }
 
 func TestRateLimiterTokenRefill(t *testing.T) {
-	rl, err := NewRateLimiter(&config.RateLimitConfig{
+	mw, err := NewRateLimiter(&config.RateLimitConfig{
 		RequestRate: 100, // 100 tokens per second
 		Burst:       100,
 	})
 	if err != nil {
 		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+
+	rl, ok := mw.(*RateLimiter)
+	if !ok {
+		t.Fatalf("Expected *RateLimiter, got %T", mw)
 	}
 
 	key := "refill-test"
@@ -138,12 +148,17 @@ func TestRateLimiterTokenRefill(t *testing.T) {
 }
 
 func TestRateLimiterReset(t *testing.T) {
-	rl, err := NewRateLimiter(&config.RateLimitConfig{
+	mw, err := NewRateLimiter(&config.RateLimitConfig{
 		RequestRate: 1,
 		Burst:       1,
 	})
 	if err != nil {
 		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+
+	rl, ok := mw.(*RateLimiter)
+	if !ok {
+		t.Fatalf("Expected *RateLimiter, got %T", mw)
 	}
 
 	key := "reset-test"
@@ -164,12 +179,17 @@ func TestRateLimiterReset(t *testing.T) {
 }
 
 func TestRateLimiterResetAll(t *testing.T) {
-	rl, err := NewRateLimiter(&config.RateLimitConfig{
+	mw, err := NewRateLimiter(&config.RateLimitConfig{
 		RequestRate: 1,
 		Burst:       1,
 	})
 	if err != nil {
 		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+
+	rl, ok := mw.(*RateLimiter)
+	if !ok {
+		t.Fatalf("Expected *RateLimiter, got %T", mw)
 	}
 
 	// Create multiple buckets
@@ -186,12 +206,17 @@ func TestRateLimiterResetAll(t *testing.T) {
 }
 
 func TestRateLimiterCleanup(t *testing.T) {
-	rl, err := NewRateLimiter(&config.RateLimitConfig{
+	mw, err := NewRateLimiter(&config.RateLimitConfig{
 		RequestRate: 100,
 		Burst:       100,
 	})
 	if err != nil {
 		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+
+	rl, ok := mw.(*RateLimiter)
+	if !ok {
+		t.Fatalf("Expected *RateLimiter, got %T", mw)
 	}
 
 	// Create some buckets
@@ -208,7 +233,7 @@ func TestRateLimiterCleanup(t *testing.T) {
 }
 
 func TestRateLimiterProcess(t *testing.T) {
-	rl, err := NewRateLimiter(&config.RateLimitConfig{
+	mw, err := NewRateLimiter(&config.RateLimitConfig{
 		RequestRate: 100,
 		Burst:       100,
 	})
@@ -220,19 +245,24 @@ func TestRateLimiterProcess(t *testing.T) {
 		ctx.WriteString("OK")
 	}
 
-	handler := rl.Process(nextHandler)
+	handler := mw.Process(nextHandler)
 	if handler == nil {
 		t.Error("Process() returned nil handler")
 	}
 }
 
 func TestRateLimiterGetStats(t *testing.T) {
-	rl, err := NewRateLimiter(&config.RateLimitConfig{
+	mw, err := NewRateLimiter(&config.RateLimitConfig{
 		RequestRate: 100,
 		Burst:       200,
 	})
 	if err != nil {
 		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+
+	rl, ok := mw.(*RateLimiter)
+	if !ok {
+		t.Fatalf("Expected *RateLimiter, got %T", mw)
 	}
 
 	rl.Allow("key1")

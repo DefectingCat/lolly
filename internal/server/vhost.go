@@ -69,14 +69,7 @@ func (v *VHostManager) SetDefault(handler fasthttp.RequestHandler) {
 // Handler 返回虚拟主机选择器
 func (v *VHostManager) Handler() fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
-		host := string(ctx.Host())
-		// 去除端口号
-		for i := 0; i < len(host); i++ {
-			if host[i] == ':' {
-				host = host[:i]
-				break
-			}
-		}
+		host := stripPort(string(ctx.Host()))
 
 		if vhost, ok := v.hosts[host]; ok {
 			vhost.handler(ctx)
@@ -86,4 +79,39 @@ func (v *VHostManager) Handler() fasthttp.RequestHandler {
 			ctx.Error("Host not found", fasthttp.StatusNotFound)
 		}
 	}
+}
+
+// stripPort 从 Host 头中移除端口号。
+//
+// 支持 IPv4 和 IPv6 格式：
+//   - example.com:8080 -> example.com
+//   - [::1]:8080 -> [::1]
+//   - [2001:db8::1]:443 -> [2001:db8::1]
+//   - example.com -> example.com
+func stripPort(host string) string {
+	// 空字符串直接返回
+	if len(host) == 0 {
+		return host
+	}
+
+	// IPv6 格式：以 '[' 开头，找 ']:' 作为分隔点
+	if host[0] == '[' {
+		// 查找 ']:' 分隔符
+		for i := 0; i < len(host)-1; i++ {
+			if host[i] == ']' && host[i+1] == ':' {
+				return host[:i+1] // 返回包含 ']' 的部分，如 "[::1]"
+			}
+		}
+		// 没有 ']:' 分隔符，可能是纯 IPv6 地址（如 "[::1]"）
+		return host
+	}
+
+	// IPv4 或域名格式：找第一个 ':' 作为分隔点
+	for i := 0; i < len(host); i++ {
+		if host[i] == ':' {
+			return host[:i]
+		}
+	}
+
+	return host
 }

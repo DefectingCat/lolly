@@ -82,7 +82,7 @@ type KeyFunc func(ctx *fasthttp.RequestCtx) string
 // 返回值：
 //   - *RateLimiter: 配置好的限流器实例
 //   - error: 配置无效时返回错误（如速率小于 0）
-func NewRateLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
+func NewRateLimiter(cfg *config.RateLimitConfig) (middleware.Middleware, error) {
 	if cfg == nil {
 		return nil, errors.New("rate limit config is nil")
 	}
@@ -91,6 +91,29 @@ func NewRateLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
 		return nil, errors.New("request rate must be positive")
 	}
 
+	// 根据算法选择限流器
+	algorithm := cfg.Algorithm
+	if algorithm == "" {
+		algorithm = "token_bucket" // 默认令牌桶
+	}
+
+	switch algorithm {
+	case "token_bucket", "":
+		return newTokenBucketLimiter(cfg)
+	case "sliding_window":
+		window := time.Duration(cfg.SlidingWindow) * time.Second
+		if window <= 0 {
+			window = time.Second // 默认 1 秒窗口
+		}
+		precise := cfg.SlidingWindowMode == "precise"
+		return NewSlidingWindowLimiterWrapper(cfg, window, precise)
+	default:
+		return nil, fmt.Errorf("unknown algorithm: %s", algorithm)
+	}
+}
+
+// newTokenBucketLimiter 创建令牌桶限流器。
+func newTokenBucketLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
 	if cfg.Burst < cfg.RequestRate {
 		return nil, errors.New("burst must be at least equal to request rate")
 	}
@@ -112,6 +135,49 @@ func NewRateLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
 	}
 
 	return rl, nil
+}
+
+// SlidingWindowLimiterWrapper 滑动窗口限流器包装，实现 middleware.Middleware 接口。
+type SlidingWindowLimiterWrapper struct {
+	limiter *SlidingWindowLimiter
+	keyFunc KeyFunc
+}
+
+// NewSlidingWindowLimiterWrapper 创建滑动窗口限流器包装。
+func NewSlidingWindowLimiterWrapper(cfg *config.RateLimitConfig, window time.Duration, precise bool) (*SlidingWindowLimiterWrapper, error) {
+	var keyFunc KeyFunc
+	switch cfg.Key {
+	case "ip", "":
+		keyFunc = keyByIP
+	case "header":
+		keyFunc = keyByHeader
+	default:
+		return nil, fmt.Errorf("unknown key type: %s", cfg.Key)
+	}
+
+	return &SlidingWindowLimiterWrapper{
+		limiter: NewSlidingWindowLimiter(window, cfg.RequestRate, precise),
+		keyFunc: keyFunc,
+	}, nil
+}
+
+// Name 返回中间件名称。
+func (s *SlidingWindowLimiterWrapper) Name() string {
+	return "sliding_window_limiter"
+}
+
+// Process 包装下一个处理器，添加限流逻辑。
+func (s *SlidingWindowLimiterWrapper) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	return func(ctx *fasthttp.RequestCtx) {
+		key := s.keyFunc(ctx)
+
+		if !s.limiter.Allow(key) {
+			ctx.Error("Too Many Requests", fasthttp.StatusTooManyRequests)
+			return
+		}
+
+		next(ctx)
+	}
 }
 
 // Name 返回中间件名称。

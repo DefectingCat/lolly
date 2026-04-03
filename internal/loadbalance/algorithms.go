@@ -7,6 +7,7 @@ var ValidAlgorithms = []string{
 	"weighted_round_robin",
 	"least_conn",
 	"ip_hash",
+	"consistent_hash",
 }
 
 // IsValidAlgorithm 检查算法是否有效。

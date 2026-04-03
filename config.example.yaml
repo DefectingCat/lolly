@@ -25,7 +25,9 @@ server:
   #         weight: 3               # 权重（加权轮询时有效）
   #       - url: http://backend2:8080
   #         weight: 1
-  #     load_balance: round_robin   # 负载均衡算法: round_robin, weighted_round_robin, least_conn, ip_hash
+  #     load_balance: round_robin   # 负载均衡算法: round_robin, weighted_round_robin, least_conn, ip_hash, consistent_hash
+  #     hash_key: "ip"              # 一致性哈希键（有效值: ip, uri, header:X-Name）
+  #     virtual_nodes: 150          # 一致性哈希虚拟节点数
   #     health_check:               # 健康检查
   #       interval: 10s
   #       path: /health
@@ -73,6 +75,9 @@ server:
       burst: 0                   # 突发上限
       conn_limit: 0              # 连接数限制
       key: "ip"                  # 限流 key 来源（有效值: ip, header）
+      algorithm: "token_bucket"  # 限流算法（有效值: token_bucket, sliding_window）
+      sliding_window_mode: "approximate"  # 滑动窗口模式（有效值: approximate, precise）
+      sliding_window: 60         # 滑动窗口大小（秒）
 
     # 认证配置（type 为空时禁用）
     auth:
@@ -108,6 +113,14 @@ server:
       - "text/javascript"
       - "application/json"
       - "application/javascript"
+    gzip_static: true      # 启用预压缩文件支持（检测 .gz 文件）
+    gzip_static_extensions:  # 预压缩文件扩展名
+      - ".html"
+      - ".css"
+      - ".js"
+      - ".json"
+      - ".xml"
+      - ".svg"
 
 # 多虚拟主机模式（可选，每个虚拟主机支持完整的 server 配置）
 # servers:
@@ -157,6 +170,14 @@ server:
 # SSL/TLS 默认配置说明（未配置证书时不启用）
 # 默认 TLS 协议: TLSv1.2, TLSv1.3（不支持 TLSv1.0/1.1）
 # 默认 HSTS 配置: max_age=31536000（1年）, include_sub_domains=true
+
+# HTTP/3 (QUIC) 配置（可选）
+# http3:
+#   enabled: false           # 是否启用 HTTP/3
+#   listen: ":443"           # UDP 监听地址
+#   max_streams: 100         # 最大并发流数
+#   idle_timeout: 30s        # 空闲超时
+#   enable_0rtt: false       # 启用 0-RTT 快速连接
 
 # TCP/UDP Stream 代理配置（可选）
 # stream:

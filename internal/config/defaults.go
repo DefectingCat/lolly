@@ -65,10 +65,13 @@ func DefaultConfig() *Config {
 					Default: "allow",
 				},
 				RateLimit: RateLimitConfig{
-					RequestRate: 0,
-					Burst:       0,
-					ConnLimit:   0,
-					Key:         "ip",
+					RequestRate:       0,
+					Burst:             0,
+					ConnLimit:         0,
+					Key:               "ip",
+					Algorithm:         "token_bucket",
+					SlidingWindowMode: "approximate",
+					SlidingWindow:     60,
 				},
 				Auth: AuthConfig{
 					RequireTLS:        true,
@@ -83,9 +86,11 @@ func DefaultConfig() *Config {
 				},
 			},
 			Compression: CompressionConfig{
-				Type:    "gzip",
-				Level:   6,
-				MinSize: 1024,
+				Type:                 "gzip",
+				Level:                6,
+				MinSize:              1024,
+				GzipStatic:           false,
+				GzipStaticExtensions: []string{".gz", ".br"},
 				Types: []string{
 					"text/html",
 					"text/css",
@@ -132,6 +137,13 @@ func DefaultConfig() *Config {
 				Path:  "/_status",
 				Allow: []string{"127.0.0.1"},
 			},
+		},
+		HTTP3: HTTP3Config{
+			Enabled:     false,
+			Listen:      ":443",
+			MaxStreams:  100,
+			IdleTimeout: 60 * time.Second,
+			Enable0RTT:  false,
 		},
 	}
 }
@@ -190,7 +202,9 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("  #         weight: 3               # 权重（加权轮询时有效）\n")
 	buf.WriteString("  #       - url: http://backend2:8080\n")
 	buf.WriteString("  #         weight: 1\n")
-	buf.WriteString("  #     load_balance: round_robin   # 负载均衡算法: round_robin, weighted_round_robin, least_conn, ip_hash\n")
+	buf.WriteString("  #     load_balance: round_robin   # 负载均衡算法（有效值: round_robin, weighted_round_robin, least_conn, ip_hash, consistent_hash）\n")
+	buf.WriteString("  #     hash_key: ip                # 一致性哈希键（仅 load_balance=consistent_hash 时有效，有效值: ip, uri, header:X-Name）\n")
+	buf.WriteString("  #     virtual_nodes: 150          # 一致性哈希虚拟节点数（仅 load_balance=consistent_hash 时有效）\n")
 	buf.WriteString("  #     health_check:               # 健康检查\n")
 	buf.WriteString("  #       interval: 10s\n")
 	buf.WriteString("  #       path: /health\n")
@@ -243,6 +257,9 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString(fmt.Sprintf("      burst: %d                   # 突发上限\n", cfg.Server.Security.RateLimit.Burst))
 	buf.WriteString(fmt.Sprintf("      conn_limit: %d              # 连接数限制\n", cfg.Server.Security.RateLimit.ConnLimit))
 	buf.WriteString(fmt.Sprintf("      key: \"%s\"                  # 限流 key 来源（有效值: ip, header）\n", cfg.Server.Security.RateLimit.Key))
+	buf.WriteString(fmt.Sprintf("      algorithm: \"%s\"             # 限流算法（有效值: token_bucket, sliding_window）\n", cfg.Server.Security.RateLimit.Algorithm))
+	buf.WriteString(fmt.Sprintf("      sliding_window_mode: \"%s\"   # 滑动窗口模式（有效值: approximate, precise，仅 algorithm=sliding_window 时有效）\n", cfg.Server.Security.RateLimit.SlidingWindowMode))
+	buf.WriteString(fmt.Sprintf("      sliding_window: %d          # 滑动窗口大小（秒，仅 algorithm=sliding_window 时有效）\n", cfg.Server.Security.RateLimit.SlidingWindow))
 	buf.WriteString("\n")
 	buf.WriteString("    # 认证配置（type 为空时禁用）\n")
 	buf.WriteString("    auth:\n")
@@ -276,6 +293,11 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString(fmt.Sprintf("    type: \"%s\"            # 压缩类型（有效值: gzip, brotli, both，空表示禁用）\n", cfg.Server.Compression.Type))
 	buf.WriteString(fmt.Sprintf("    level: %d              # 压缩级别（范围 1-9，值越大压缩率越高但速度越慢）\n", cfg.Server.Compression.Level))
 	buf.WriteString(fmt.Sprintf("    min_size: %d        # 最小压缩大小（字节，小于此值不压缩）\n", cfg.Server.Compression.MinSize))
+	buf.WriteString(fmt.Sprintf("    gzip_static: %v        # 启用预压缩文件支持（自动查找 .gz/.br 文件）\n", cfg.Server.Compression.GzipStatic))
+	buf.WriteString("    gzip_static_extensions:  # 预压缩文件扩展名\n")
+	for _, ext := range cfg.Server.Compression.GzipStaticExtensions {
+		buf.WriteString(fmt.Sprintf("      - \"%s\"\n", ext))
+	}
 	buf.WriteString("    types:                 # 可压缩的 MIME 类型\n")
 	for _, t := range cfg.Server.Compression.Types {
 		buf.WriteString(fmt.Sprintf("      - \"%s\"\n", t))
@@ -381,6 +403,16 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString(fmt.Sprintf("    max_idle_conns_per_host: %d   # 每主机空闲连接\n", cfg.Performance.Transport.MaxIdleConnsPerHost))
 	buf.WriteString(fmt.Sprintf("    idle_conn_timeout: %ds        # 空闲超时\n", int(cfg.Performance.Transport.IdleConnTimeout.Seconds())))
 	buf.WriteString(fmt.Sprintf("    max_conns_per_host: %d        # 每主机最大连接（0 表示不限制）\n", cfg.Performance.Transport.MaxConnsPerHost))
+	buf.WriteString("\n")
+
+	// HTTP3 配置
+	buf.WriteString("# HTTP/3 (QUIC) 配置（需要 SSL 证书）\n")
+	buf.WriteString("http3:\n")
+	buf.WriteString(fmt.Sprintf("  enabled: %v              # 是否启用 HTTP/3\n", cfg.HTTP3.Enabled))
+	buf.WriteString(fmt.Sprintf("  listen: \"%s\"             # UDP 监听地址\n", cfg.HTTP3.Listen))
+	buf.WriteString(fmt.Sprintf("  max_streams: %d          # 最大并发流\n", cfg.HTTP3.MaxStreams))
+	buf.WriteString(fmt.Sprintf("  idle_timeout: %ds        # 空闲超时\n", int(cfg.HTTP3.IdleTimeout.Seconds())))
+	buf.WriteString(fmt.Sprintf("  enable_0rtt: %v          # 启用 0-RTT（早期数据，可能存在安全风险）\n", cfg.HTTP3.Enable0RTT))
 	buf.WriteString("\n")
 
 	// monitoring 配置
