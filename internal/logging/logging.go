@@ -32,6 +32,11 @@ func LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.D
 		Msg("request")
 }
 
+// Error 返回 Error 级别日志记录器
+func Error() *zerolog.Event {
+	return log.Error()
+}
+
 // parseLevel 解析日志级别
 func parseLevel(level string) zerolog.Level {
 	switch level {

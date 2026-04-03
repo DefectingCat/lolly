@@ -6,14 +6,21 @@ import (
 	"testing"
 )
 
+// createHealthyTarget 创建一个带有健康状态的目标（辅助函数）
+func createHealthyTarget(url string, healthy bool) *Target {
+	t := &Target{URL: url}
+	t.Healthy.Store(healthy)
+	return t
+}
+
 // TestRoundRobin_Select 测试轮询负载均衡选择器。
 func TestRoundRobin_Select(t *testing.T) {
 	t.Run("多目标轮询", func(t *testing.T) {
 		rr := NewRoundRobin()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: true},
-			{URL: "http://backend2:8080", Healthy: true},
-			{URL: "http://backend3:8080", Healthy: true},
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
 		}
 
 		// 验证轮询顺序
@@ -39,7 +46,7 @@ func TestRoundRobin_Select(t *testing.T) {
 	t.Run("单目标", func(t *testing.T) {
 		rr := NewRoundRobin()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: true},
+			createHealthyTarget("http://backend1:8080", true),
 		}
 
 		got := rr.Select(targets)
@@ -62,9 +69,9 @@ func TestRoundRobin_Select(t *testing.T) {
 	t.Run("跳过不健康目标", func(t *testing.T) {
 		rr := NewRoundRobin()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: false},
-			{URL: "http://backend2:8080", Healthy: true},
-			{URL: "http://backend3:8080", Healthy: false},
+			createHealthyTarget("http://backend1:8080", false),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", false),
 		}
 
 		got := rr.Select(targets)
@@ -79,8 +86,8 @@ func TestRoundRobin_Select(t *testing.T) {
 	t.Run("所有目标都不健康", func(t *testing.T) {
 		rr := NewRoundRobin()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: false},
-			{URL: "http://backend2:8080", Healthy: false},
+			createHealthyTarget("http://backend1:8080", false),
+			createHealthyTarget("http://backend2:8080", false),
 		}
 
 		got := rr.Select(targets)
@@ -92,8 +99,8 @@ func TestRoundRobin_Select(t *testing.T) {
 	t.Run("并发安全", func(t *testing.T) {
 		rr := NewRoundRobin()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: true},
-			{URL: "http://backend2:8080", Healthy: true},
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
 		}
 
 		var wg sync.WaitGroup
@@ -113,9 +120,11 @@ func TestWeightedRoundRobin_Select(t *testing.T) {
 	t.Run("权重分配", func(t *testing.T) {
 		wrr := NewWeightedRoundRobin()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Weight: 1, Healthy: true},
-			{URL: "http://backend2:8080", Weight: 3, Healthy: true},
+			{URL: "http://backend1:8080", Weight: 1},
+			{URL: "http://backend2:8080", Weight: 3},
 		}
+		targets[0].Healthy.Store(true)
+		targets[1].Healthy.Store(true)
 
 		// 统计选择次数
 		counts := make(map[string]int)
@@ -138,9 +147,11 @@ func TestWeightedRoundRobin_Select(t *testing.T) {
 	t.Run("权重为0", func(t *testing.T) {
 		wrr := NewWeightedRoundRobin()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Weight: 0, Healthy: true},
-			{URL: "http://backend2:8080", Weight: 1, Healthy: true},
+			{URL: "http://backend1:8080", Weight: 0},
+			{URL: "http://backend2:8080", Weight: 1},
 		}
+		targets[0].Healthy.Store(true)
+		targets[1].Healthy.Store(true)
 
 		// 权重为0的目标应该被当作权重为1处理
 		counts := make(map[string]int)
@@ -172,9 +183,11 @@ func TestWeightedRoundRobin_Select(t *testing.T) {
 	t.Run("所有目标权重为0或不健康", func(t *testing.T) {
 		wrr := NewWeightedRoundRobin()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Weight: 0, Healthy: false},
-			{URL: "http://backend2:8080", Weight: 0, Healthy: false},
+			{URL: "http://backend1:8080", Weight: 0},
+			{URL: "http://backend2:8080", Weight: 0},
 		}
+		targets[0].Healthy.Store(false)
+		targets[1].Healthy.Store(false)
 
 		got := wrr.Select(targets)
 		if got != nil {
@@ -185,9 +198,11 @@ func TestWeightedRoundRobin_Select(t *testing.T) {
 	t.Run("跳过不健康目标", func(t *testing.T) {
 		wrr := NewWeightedRoundRobin()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Weight: 5, Healthy: false},
-			{URL: "http://backend2:8080", Weight: 1, Healthy: true},
+			{URL: "http://backend1:8080", Weight: 5},
+			{URL: "http://backend2:8080", Weight: 1},
 		}
+		targets[0].Healthy.Store(false)
+		targets[1].Healthy.Store(true)
 
 		// 所有选择都应该落在健康目标上
 		for i := 0; i < 50; i++ {
@@ -206,9 +221,12 @@ func TestWeightedRoundRobin_Select(t *testing.T) {
 func TestLeastConnections_Select(t *testing.T) {
 	t.Run("选择最少连接", func(t *testing.T) {
 		lc := NewLeastConnections()
-		target1 := &Target{URL: "http://backend1:8080", Healthy: true, Connections: 10}
-		target2 := &Target{URL: "http://backend2:8080", Healthy: true, Connections: 5}
-		target3 := &Target{URL: "http://backend3:8080", Healthy: true, Connections: 15}
+		target1 := &Target{URL: "http://backend1:8080", Connections: 10}
+		target1.Healthy.Store(true)
+		target2 := &Target{URL: "http://backend2:8080", Connections: 5}
+		target2.Healthy.Store(true)
+		target3 := &Target{URL: "http://backend3:8080", Connections: 15}
+		target3.Healthy.Store(true)
 		targets := []*Target{target1, target2, target3}
 
 		got := lc.Select(targets)
@@ -223,9 +241,11 @@ func TestLeastConnections_Select(t *testing.T) {
 	t.Run("连接数相等时选择第一个", func(t *testing.T) {
 		lc := NewLeastConnections()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: true, Connections: 5},
-			{URL: "http://backend2:8080", Healthy: true, Connections: 5},
+			{URL: "http://backend1:8080", Connections: 5},
+			{URL: "http://backend2:8080", Connections: 5},
 		}
+		targets[0].Healthy.Store(true)
+		targets[1].Healthy.Store(true)
 
 		got := lc.Select(targets)
 		if got == nil {
@@ -247,9 +267,11 @@ func TestLeastConnections_Select(t *testing.T) {
 	t.Run("跳过不健康目标", func(t *testing.T) {
 		lc := NewLeastConnections()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: false, Connections: 1},
-			{URL: "http://backend2:8080", Healthy: true, Connections: 10},
+			{URL: "http://backend1:8080", Connections: 1},
+			{URL: "http://backend2:8080", Connections: 10},
 		}
+		targets[0].Healthy.Store(false)
+		targets[1].Healthy.Store(true)
 
 		got := lc.Select(targets)
 		if got == nil {
@@ -263,9 +285,11 @@ func TestLeastConnections_Select(t *testing.T) {
 	t.Run("所有目标都不健康", func(t *testing.T) {
 		lc := NewLeastConnections()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: false, Connections: 1},
-			{URL: "http://backend2:8080", Healthy: false, Connections: 2},
+			{URL: "http://backend1:8080", Connections: 1},
+			{URL: "http://backend2:8080", Connections: 2},
 		}
+		targets[0].Healthy.Store(false)
+		targets[1].Healthy.Store(false)
 
 		got := lc.Select(targets)
 		if got != nil {
@@ -279,9 +303,9 @@ func TestIPHash_Select(t *testing.T) {
 	t.Run("相同IP返回相同目标", func(t *testing.T) {
 		ih := NewIPHash()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: true},
-			{URL: "http://backend2:8080", Healthy: true},
-			{URL: "http://backend3:8080", Healthy: true},
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
 		}
 
 		// 使用相同的IP地址多次选择
@@ -303,8 +327,8 @@ func TestIPHash_Select(t *testing.T) {
 	t.Run("不同IP分配", func(t *testing.T) {
 		ih := NewIPHash()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: true},
-			{URL: "http://backend2:8080", Healthy: true},
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
 		}
 
 		// 使用不同的IP地址
@@ -337,7 +361,7 @@ func TestIPHash_Select(t *testing.T) {
 	t.Run("Select方法使用空IP", func(t *testing.T) {
 		ih := NewIPHash()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: true},
+			createHealthyTarget("http://backend1:8080", true),
 		}
 
 		got := ih.Select(targets)
@@ -352,8 +376,8 @@ func TestIPHash_Select(t *testing.T) {
 	t.Run("跳过不健康目标", func(t *testing.T) {
 		ih := NewIPHash()
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: false},
-			{URL: "http://backend2:8080", Healthy: true},
+			createHealthyTarget("http://backend1:8080", false),
+			createHealthyTarget("http://backend2:8080", true),
 		}
 
 		got := ih.SelectByIP(targets, "192.168.1.1")
@@ -369,7 +393,8 @@ func TestIPHash_Select(t *testing.T) {
 // TestConnectionsAtomic 测试连接数的原子操作。
 func TestConnectionsAtomic(t *testing.T) {
 	t.Run("IncrementConnections", func(t *testing.T) {
-		target := &Target{URL: "http://backend1:8080", Healthy: true, Connections: 0}
+		target := &Target{URL: "http://backend1:8080", Connections: 0}
+		target.Healthy.Store(true)
 
 		IncrementConnections(target)
 		if target.Connections != 1 {
@@ -383,7 +408,8 @@ func TestConnectionsAtomic(t *testing.T) {
 	})
 
 	t.Run("DecrementConnections", func(t *testing.T) {
-		target := &Target{URL: "http://backend1:8080", Healthy: true, Connections: 5}
+		target := &Target{URL: "http://backend1:8080", Connections: 5}
+		target.Healthy.Store(true)
 
 		DecrementConnections(target)
 		if target.Connections != 4 {
@@ -397,7 +423,8 @@ func TestConnectionsAtomic(t *testing.T) {
 	})
 
 	t.Run("并发IncrementConnections", func(t *testing.T) {
-		target := &Target{URL: "http://backend1:8080", Healthy: true, Connections: 0}
+		target := &Target{URL: "http://backend1:8080", Connections: 0}
+		target.Healthy.Store(true)
 
 		var wg sync.WaitGroup
 		for i := 0; i < 1000; i++ {
@@ -415,7 +442,8 @@ func TestConnectionsAtomic(t *testing.T) {
 	})
 
 	t.Run("并发DecrementConnections", func(t *testing.T) {
-		target := &Target{URL: "http://backend1:8080", Healthy: true, Connections: 1000}
+		target := &Target{URL: "http://backend1:8080", Connections: 1000}
+		target.Healthy.Store(true)
 
 		var wg sync.WaitGroup
 		for i := 0; i < 1000; i++ {
@@ -433,7 +461,8 @@ func TestConnectionsAtomic(t *testing.T) {
 	})
 
 	t.Run("混合增减操作", func(t *testing.T) {
-		target := &Target{URL: "http://backend1:8080", Healthy: true, Connections: 100}
+		target := &Target{URL: "http://backend1:8080", Connections: 100}
+		target.Healthy.Store(true)
 
 		var wg sync.WaitGroup
 		// 500个增加
@@ -461,7 +490,8 @@ func TestConnectionsAtomic(t *testing.T) {
 	})
 
 	t.Run("允许负值", func(t *testing.T) {
-		target := &Target{URL: "http://backend1:8080", Healthy: true, Connections: 0}
+		target := &Target{URL: "http://backend1:8080", Connections: 0}
+		target.Healthy.Store(true)
 
 		DecrementConnections(target)
 		if target.Connections != -1 {
@@ -474,45 +504,46 @@ func TestConnectionsAtomic(t *testing.T) {
 func TestHealthStatus(t *testing.T) {
 	t.Run("IsHealthy", func(t *testing.T) {
 		tests := []struct {
-			name    string
-			target  *Target
-			want    bool
+			name   string
+			target *Target
+			want   bool
 		}{
 			{
-				name:    "健康目标",
-				target:  &Target{URL: "http://backend1:8080", Healthy: true},
-				want:    true,
+				name:   "健康目标",
+				target: createHealthyTarget("http://backend1:8080", true),
+				want:   true,
 			},
 			{
-				name:    "不健康目标",
-				target:  &Target{URL: "http://backend1:8080", Healthy: false},
-				want:    false,
+				name:   "不健康目标",
+				target: createHealthyTarget("http://backend1:8080", false),
+				want:   false,
 			},
 		}
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				got := IsHealthy(tt.target)
+				got := tt.target.Healthy.Load()
 				if got != tt.want {
-					t.Errorf("IsHealthy() = %v, want %v", got, tt.want)
+					t.Errorf("Healthy.Load() = %v, want %v", got, tt.want)
 				}
 			})
 		}
 	})
 
 	t.Run("SetHealthy", func(t *testing.T) {
-		target := &Target{URL: "http://backend1:8080", Healthy: true}
+		target := &Target{URL: "http://backend1:8080"}
+		target.Healthy.Store(true)
 
 		// 设置为不健康
-		SetHealthy(target, false)
-		if IsHealthy(target) {
-			t.Error("SetHealthy(target, false) 后期望 IsHealthy = false, 但 got true")
+		target.Healthy.Store(false)
+		if target.Healthy.Load() {
+			t.Error("Store(false) 后期望 Load = false, 但 got true")
 		}
 
 		// 设置为健康
-		SetHealthy(target, true)
-		if !IsHealthy(target) {
-			t.Error("SetHealthy(target, true) 后期望 IsHealthy = true, 但 got false")
+		target.Healthy.Store(true)
+		if !target.Healthy.Load() {
+			t.Error("Store(true) 后期望 Load = true, 但 got false")
 		}
 	})
 }
@@ -521,10 +552,10 @@ func TestHealthStatus(t *testing.T) {
 func TestFilterHealthy(t *testing.T) {
 	t.Run("过滤健康目标", func(t *testing.T) {
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: true},
-			{URL: "http://backend2:8080", Healthy: false},
-			{URL: "http://backend3:8080", Healthy: true},
-			{URL: "http://backend4:8080", Healthy: false},
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", false),
+			createHealthyTarget("http://backend3:8080", true),
+			createHealthyTarget("http://backend4:8080", false),
 		}
 
 		got := filterHealthy(targets)
@@ -534,7 +565,7 @@ func TestFilterHealthy(t *testing.T) {
 
 		// 验证返回的都是健康目标
 		for _, target := range got {
-			if !target.Healthy {
+			if !target.Healthy.Load() {
 				t.Errorf("filterHealthy 返回了不健康目标: %q", target.URL)
 			}
 		}
@@ -542,8 +573,8 @@ func TestFilterHealthy(t *testing.T) {
 
 	t.Run("全部健康", func(t *testing.T) {
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: true},
-			{URL: "http://backend2:8080", Healthy: true},
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
 		}
 
 		got := filterHealthy(targets)
@@ -554,8 +585,8 @@ func TestFilterHealthy(t *testing.T) {
 
 	t.Run("全部不健康", func(t *testing.T) {
 		targets := []*Target{
-			{URL: "http://backend1:8080", Healthy: false},
-			{URL: "http://backend2:8080", Healthy: false},
+			createHealthyTarget("http://backend1:8080", false),
+			createHealthyTarget("http://backend2:8080", false),
 		}
 
 		got := filterHealthy(targets)
@@ -604,7 +635,7 @@ func TestBalancerInterface(t *testing.T) {
 	}
 
 	targets := []*Target{
-		{URL: "http://backend1:8080", Healthy: true},
+		createHealthyTarget("http://backend1:8080", true),
 	}
 
 	for _, tt := range tests {

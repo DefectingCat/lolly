@@ -29,6 +29,12 @@ type ServerConfig struct {
 	Security    SecurityConfig    `yaml:"security"`    // 安全配置
 	Rewrite     []RewriteRule     `yaml:"rewrite"`     // URL 重写规则
 	Compression CompressionConfig `yaml:"compression"` // 响应压缩配置
+	// 新增字段
+	ReadTimeout        time.Duration `yaml:"read_timeout"`          // 读取超时
+	WriteTimeout       time.Duration `yaml:"write_timeout"`         // 写入超时
+	IdleTimeout        time.Duration `yaml:"idle_timeout"`          // 空闲超时
+	MaxConnsPerIP      int           `yaml:"max_conns_per_ip"`      // 每 IP 最大连接数
+	MaxRequestsPerConn int           `yaml:"max_requests_per_conn"` // 每连接最大请求数
 }
 
 // StaticConfig 静态文件服务配置。

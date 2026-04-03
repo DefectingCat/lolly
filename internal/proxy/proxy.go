@@ -6,9 +6,11 @@
 // 使用示例：
 //
 //	targets := []*loadbalance.Target{
-//	    {URL: "http://backend1:8080", Weight: 1, Healthy: true},
-//	    {URL: "http://backend2:8080", Weight: 2, Healthy: true},
+//	    {URL: "http://backend1:8080", Weight: 1},
+//	    {URL: "http://backend2:8080", Weight: 2},
 //	}
+//	targets[0].Healthy.Store(true)
+//	targets[1].Healthy.Store(true)
 //
 //	proxyConfig := &config.ProxyConfig{
 //	    Path:        "/api",

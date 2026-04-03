@@ -15,8 +15,9 @@ import (
 func TestNewHealthChecker(t *testing.T) {
 	t.Run("默认值应用", func(t *testing.T) {
 		targets := []*loadbalance.Target{
-			{URL: "http://backend1:8080", Healthy: true},
+			{URL: "http://backend1:8080"},
 		}
+		targets[0].Healthy.Store(true)
 		cfg := &config.HealthCheckConfig{}
 
 		checker := NewHealthChecker(targets, cfg)
@@ -37,9 +38,11 @@ func TestNewHealthChecker(t *testing.T) {
 
 	t.Run("自定义配置", func(t *testing.T) {
 		targets := []*loadbalance.Target{
-			{URL: "http://backend1:8080", Healthy: true},
-			{URL: "http://backend2:8080", Healthy: true},
+			{URL: "http://backend1:8080"},
+			{URL: "http://backend2:8080"},
 		}
+		targets[0].Healthy.Store(true)
+		targets[1].Healthy.Store(true)
 		cfg := &config.HealthCheckConfig{
 			Interval: 30 * time.Second,
 			Timeout:  10 * time.Second,
@@ -61,8 +64,9 @@ func TestNewHealthChecker(t *testing.T) {
 
 	t.Run("负值配置使用默认值", func(t *testing.T) {
 		targets := []*loadbalance.Target{
-			{URL: "http://backend1:8080", Healthy: true},
+			{URL: "http://backend1:8080"},
 		}
+		targets[0].Healthy.Store(true)
 		cfg := &config.HealthCheckConfig{
 			Interval: -1 * time.Second,
 			Timeout:  -1 * time.Second,
@@ -80,8 +84,9 @@ func TestNewHealthChecker(t *testing.T) {
 
 	t.Run("零值配置使用默认值", func(t *testing.T) {
 		targets := []*loadbalance.Target{
-			{URL: "http://backend1:8080", Healthy: true},
+			{URL: "http://backend1:8080"},
 		}
+		targets[0].Healthy.Store(true)
 		cfg := &config.HealthCheckConfig{
 			Interval: 0,
 			Timeout:  0,
@@ -106,8 +111,9 @@ func TestNewHealthChecker(t *testing.T) {
 func TestHealthCheckerStartStop(t *testing.T) {
 	t.Run("启动和停止", func(t *testing.T) {
 		targets := []*loadbalance.Target{
-			{URL: "http://backend1:8080", Healthy: true},
+			{URL: "http://backend1:8080"},
 		}
+		targets[0].Healthy.Store(true)
 		cfg := &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
@@ -135,8 +141,9 @@ func TestHealthCheckerStartStop(t *testing.T) {
 
 	t.Run("重复启动无效果", func(t *testing.T) {
 		targets := []*loadbalance.Target{
-			{URL: "http://backend1:8080", Healthy: true},
+			{URL: "http://backend1:8080"},
 		}
+		targets[0].Healthy.Store(true)
 		cfg := &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
@@ -156,8 +163,9 @@ func TestHealthCheckerStartStop(t *testing.T) {
 
 	t.Run("重复停止无效果", func(t *testing.T) {
 		targets := []*loadbalance.Target{
-			{URL: "http://backend1:8080", Healthy: true},
+			{URL: "http://backend1:8080"},
 		}
+		targets[0].Healthy.Store(true)
 		cfg := &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
@@ -186,9 +194,9 @@ func TestCheckTarget(t *testing.T) {
 		defer server.Close()
 
 		target := &loadbalance.Target{
-			URL:     server.URL,
-			Healthy: false,
+			URL: server.URL,
 		}
+		target.Healthy.Store(false)
 
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
@@ -198,7 +206,7 @@ func TestCheckTarget(t *testing.T) {
 
 		checker.checkTarget(target)
 
-		if !target.Healthy {
+		if !target.Healthy.Load() {
 			t.Error("健康响应后 target 应标记为 healthy")
 		}
 	})
@@ -210,9 +218,9 @@ func TestCheckTarget(t *testing.T) {
 		defer server.Close()
 
 		target := &loadbalance.Target{
-			URL:     server.URL,
-			Healthy: true,
+			URL: server.URL,
 		}
+		target.Healthy.Store(true)
 
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
@@ -222,7 +230,7 @@ func TestCheckTarget(t *testing.T) {
 
 		checker.checkTarget(target)
 
-		if target.Healthy {
+		if target.Healthy.Load() {
 			t.Error("5xx 响应后 target 应标记为 unhealthy")
 		}
 	})
@@ -234,9 +242,9 @@ func TestCheckTarget(t *testing.T) {
 		defer server.Close()
 
 		target := &loadbalance.Target{
-			URL:     server.URL,
-			Healthy: true,
+			URL: server.URL,
 		}
+		target.Healthy.Store(true)
 
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
@@ -246,16 +254,16 @@ func TestCheckTarget(t *testing.T) {
 
 		checker.checkTarget(target)
 
-		if target.Healthy {
+		if target.Healthy.Load() {
 			t.Error("超时后 target 应标记为 unhealthy")
 		}
 	})
 
 	t.Run("连接失败", func(t *testing.T) {
 		target := &loadbalance.Target{
-			URL:     "http://invalid-host-that-does-not-exist:99999",
-			Healthy: true,
+			URL: "http://invalid-host-that-does-not-exist:99999",
 		}
+		target.Healthy.Store(true)
 
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
@@ -265,7 +273,7 @@ func TestCheckTarget(t *testing.T) {
 
 		checker.checkTarget(target)
 
-		if target.Healthy {
+		if target.Healthy.Load() {
 			t.Error("连接失败后 target 应标记为 unhealthy")
 		}
 	})
@@ -277,9 +285,9 @@ func TestCheckTarget(t *testing.T) {
 		defer server.Close()
 
 		target := &loadbalance.Target{
-			URL:     server.URL,
-			Healthy: true,
+			URL: server.URL,
 		}
+		target.Healthy.Store(true)
 
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
@@ -289,7 +297,7 @@ func TestCheckTarget(t *testing.T) {
 
 		checker.checkTarget(target)
 
-		if target.Healthy {
+		if target.Healthy.Load() {
 			t.Error("3xx 响应后 target 应标记为 unhealthy")
 		}
 	})
@@ -301,9 +309,9 @@ func TestCheckTarget(t *testing.T) {
 		defer server.Close()
 
 		target := &loadbalance.Target{
-			URL:     server.URL,
-			Healthy: true,
+			URL: server.URL,
 		}
+		target.Healthy.Store(true)
 
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
@@ -313,7 +321,7 @@ func TestCheckTarget(t *testing.T) {
 
 		checker.checkTarget(target)
 
-		if target.Healthy {
+		if target.Healthy.Load() {
 			t.Error("4xx 响应后 target 应标记为 unhealthy")
 		}
 	})
@@ -336,9 +344,9 @@ func TestCheckTarget(t *testing.T) {
 				defer server.Close()
 
 				target := &loadbalance.Target{
-					URL:     server.URL,
-					Healthy: false,
+					URL: server.URL,
 				}
+				target.Healthy.Store(false)
 
 				checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 					Interval: 1 * time.Hour,
@@ -348,7 +356,7 @@ func TestCheckTarget(t *testing.T) {
 
 				checker.checkTarget(target)
 
-				if !target.Healthy {
+				if !target.Healthy.Load() {
 					t.Errorf("%d 响应后 target 应标记为 healthy", tt.statusCode)
 				}
 			})
@@ -360,9 +368,9 @@ func TestCheckTarget(t *testing.T) {
 func TestMarkUnhealthy(t *testing.T) {
 	t.Run("标记不健康", func(t *testing.T) {
 		target := &loadbalance.Target{
-			URL:     "http://backend1:8080",
-			Healthy: true,
+			URL: "http://backend1:8080",
 		}
+		target.Healthy.Store(true)
 
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
@@ -372,16 +380,16 @@ func TestMarkUnhealthy(t *testing.T) {
 
 		checker.MarkUnhealthy(target)
 
-		if target.Healthy {
+		if target.Healthy.Load() {
 			t.Error("MarkUnhealthy 后 target 应标记为 unhealthy")
 		}
 	})
 
 	t.Run("已不健康的 target 再次标记", func(t *testing.T) {
 		target := &loadbalance.Target{
-			URL:     "http://backend1:8080",
-			Healthy: false,
+			URL: "http://backend1:8080",
 		}
+		target.Healthy.Store(false)
 
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
@@ -391,20 +399,20 @@ func TestMarkUnhealthy(t *testing.T) {
 
 		checker.MarkUnhealthy(target)
 
-		if target.Healthy {
+		if target.Healthy.Load() {
 			t.Error("MarkUnhealthy 后 target 应保持 unhealthy 状态")
 		}
 	})
 
 	t.Run("多 target 场景", func(t *testing.T) {
 		target1 := &loadbalance.Target{
-			URL:     "http://backend1:8080",
-			Healthy: true,
+			URL: "http://backend1:8080",
 		}
+		target1.Healthy.Store(true)
 		target2 := &loadbalance.Target{
-			URL:     "http://backend2:8080",
-			Healthy: true,
+			URL: "http://backend2:8080",
 		}
+		target2.Healthy.Store(true)
 
 		checker := NewHealthChecker([]*loadbalance.Target{target1, target2}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
@@ -414,10 +422,10 @@ func TestMarkUnhealthy(t *testing.T) {
 
 		checker.MarkUnhealthy(target1)
 
-		if target1.Healthy {
+		if target1.Healthy.Load() {
 			t.Error("target1 应标记为 unhealthy")
 		}
-		if !target2.Healthy {
+		if !target2.Healthy.Load() {
 			t.Error("target2 应保持 healthy")
 		}
 	})

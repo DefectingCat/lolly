@@ -31,8 +31,8 @@ func TestNewProxy(t *testing.T) {
 				Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
 			},
 			targets: []*loadbalance.Target{
-				{URL: "http://localhost:8081", Healthy: true},
-				{URL: "http://localhost:8082", Healthy: true},
+				{URL: "http://localhost:8081"},
+				{URL: "http://localhost:8082"},
 			},
 			wantErr: false,
 		},
@@ -64,7 +64,7 @@ func TestNewProxy(t *testing.T) {
 				LoadBalance: "",
 			},
 			targets: []*loadbalance.Target{
-				{URL: "http://localhost:8081", Healthy: true},
+				{URL: "http://localhost:8081"},
 			},
 			wantErr: false,
 		},
@@ -76,8 +76,8 @@ func TestNewProxy(t *testing.T) {
 				Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
 			},
 			targets: []*loadbalance.Target{
-				{URL: "http://localhost:8081", Weight: 1, Healthy: true},
-				{URL: "http://localhost:8082", Weight: 2, Healthy: true},
+				{URL: "http://localhost:8081", Weight: 1},
+				{URL: "http://localhost:8082", Weight: 2},
 			},
 			wantErr: false,
 		},
@@ -89,7 +89,7 @@ func TestNewProxy(t *testing.T) {
 				Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
 			},
 			targets: []*loadbalance.Target{
-				{URL: "http://localhost:8081", Healthy: true},
+				{URL: "http://localhost:8081"},
 			},
 			wantErr: false,
 		},
@@ -101,7 +101,7 @@ func TestNewProxy(t *testing.T) {
 				Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
 			},
 			targets: []*loadbalance.Target{
-				{URL: "http://localhost:8081", Healthy: true},
+				{URL: "http://localhost:8081"},
 			},
 			wantErr: false,
 		},
@@ -112,7 +112,7 @@ func TestNewProxy(t *testing.T) {
 				LoadBalance: "invalid_algorithm",
 			},
 			targets: []*loadbalance.Target{
-				{URL: "http://localhost:8081", Healthy: true},
+				{URL: "http://localhost:8081"},
 			},
 			wantErr:     true,
 			errContains: "unsupported load balance algorithm",
@@ -160,9 +160,11 @@ func TestServeHTTP_NoHealthyTargets(t *testing.T) {
 
 	// 所有目标都不健康
 	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8081", Healthy: false},
-		{URL: "http://localhost:8082", Healthy: false},
+		{URL: "http://localhost:8081"},
+		{URL: "http://localhost:8082"},
 	}
+	targets[0].Healthy.Store(false)
+	targets[1].Healthy.Store(false)
 
 	p, err := NewProxy(cfg, targets)
 	if err != nil {
@@ -211,7 +213,7 @@ func TestServeHTTP_RequestForwarding(t *testing.T) {
 	}
 
 	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8080", Healthy: true},
+		{URL: "http://localhost:8080"},
 	}
 
 	p, err := NewProxy(cfg, targets)
@@ -248,8 +250,8 @@ func TestSelectTarget(t *testing.T) {
 			name:        "轮询选择",
 			loadBalance: "round_robin",
 			targets: []*loadbalance.Target{
-				{URL: "http://backend1:8080", Healthy: true},
-				{URL: "http://backend2:8080", Healthy: true},
+				{URL: "http://backend1:8080"},
+				{URL: "http://backend2:8080"},
 			},
 			expectedTarget: "http://backend1:8080",
 		},
@@ -257,8 +259,8 @@ func TestSelectTarget(t *testing.T) {
 			name:        "跳过不健康目标",
 			loadBalance: "round_robin",
 			targets: []*loadbalance.Target{
-				{URL: "http://backend1:8080", Healthy: false},
-				{URL: "http://backend2:8080", Healthy: true},
+				{URL: "http://backend1:8080"},
+				{URL: "http://backend2:8080"},
 			},
 			expectedTarget: "http://backend2:8080",
 		},
@@ -266,8 +268,8 @@ func TestSelectTarget(t *testing.T) {
 			name:        "IP哈希选择",
 			loadBalance: "ip_hash",
 			targets: []*loadbalance.Target{
-				{URL: "http://backend1:8080", Healthy: true},
-				{URL: "http://backend2:8080", Healthy: true},
+				{URL: "http://backend1:8080"},
+				{URL: "http://backend2:8080"},
 			},
 			clientIP:       "192.168.1.100",
 			expectedTarget: "any", // IP哈希应该返回一个目标，具体是哪个取决于哈希值
@@ -276,8 +278,8 @@ func TestSelectTarget(t *testing.T) {
 			name:        "所有目标都不健康",
 			loadBalance: "round_robin",
 			targets: []*loadbalance.Target{
-				{URL: "http://backend1:8080", Healthy: false},
-				{URL: "http://backend2:8080", Healthy: false},
+				{URL: "http://backend1:8080"},
+				{URL: "http://backend2:8080"},
 			},
 			expectedTarget: "",
 		},
@@ -285,6 +287,21 @@ func TestSelectTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// 根据测试用例设置健康状态
+			switch tt.name {
+			case "轮询选择", "IP哈希选择":
+				for _, target := range tt.targets {
+					target.Healthy.Store(true)
+				}
+			case "跳过不健康目标":
+				tt.targets[0].Healthy.Store(false)
+				tt.targets[1].Healthy.Store(true)
+			case "所有目标都不健康":
+				for _, target := range tt.targets {
+					target.Healthy.Store(false)
+				}
+			}
+
 			cfg := &config.ProxyConfig{
 				Path:        "/api",
 				LoadBalance: tt.loadBalance,
@@ -405,7 +422,7 @@ func TestModifyRequestHeaders(t *testing.T) {
 			}
 
 			targets := []*loadbalance.Target{
-				{URL: "http://localhost:8080", Healthy: true},
+				{URL: "http://localhost:8080"},
 			}
 
 			p, err := NewProxy(cfg, targets)
@@ -500,7 +517,7 @@ func TestModifyResponseHeaders(t *testing.T) {
 			}
 
 			targets := []*loadbalance.Target{
-				{URL: "http://localhost:8080", Healthy: true},
+				{URL: "http://localhost:8080"},
 			}
 
 			p, err := NewProxy(cfg, targets)
@@ -587,8 +604,8 @@ func TestUpdateTargets(t *testing.T) {
 	}
 
 	initialTargets := []*loadbalance.Target{
-		{URL: "http://old1:8080", Healthy: true},
-		{URL: "http://old2:8080", Healthy: true},
+		{URL: "http://old1:8080"},
+		{URL: "http://old2:8080"},
 	}
 
 	p, err := NewProxy(cfg, initialTargets)
@@ -598,9 +615,9 @@ func TestUpdateTargets(t *testing.T) {
 
 	// 更新目标
 	newTargets := []*loadbalance.Target{
-		{URL: "http://new1:8080", Healthy: true},
-		{URL: "http://new2:8080", Healthy: true},
-		{URL: "http://new3:8080", Healthy: true},
+		{URL: "http://new1:8080"},
+		{URL: "http://new2:8080"},
+		{URL: "http://new3:8080"},
 	}
 
 	err = p.UpdateTargets(newTargets)
@@ -636,8 +653,8 @@ func TestGetTargets(t *testing.T) {
 	}
 
 	targets := []*loadbalance.Target{
-		{URL: "http://backend1:8080", Healthy: true},
-		{URL: "http://backend2:8080", Healthy: true},
+		{URL: "http://backend1:8080"},
+		{URL: "http://backend2:8080"},
 	}
 
 	p, err := NewProxy(cfg, targets)
@@ -666,7 +683,7 @@ func TestGetConfig(t *testing.T) {
 	}
 
 	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8080", Healthy: true},
+		{URL: "http://localhost:8080"},
 	}
 
 	p, err := NewProxy(cfg, targets)
@@ -860,7 +877,7 @@ func TestHandleWebSocket(t *testing.T) {
 	}
 
 	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8080", Healthy: true},
+		{URL: "http://localhost:8080"},
 	}
 
 	p, err := NewProxy(cfg, targets)

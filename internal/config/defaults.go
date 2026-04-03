@@ -5,16 +5,19 @@ import (
 	"bytes"
 	"fmt"
 	"time"
-
-	"gopkg.in/yaml.v3"
 )
 
 // DefaultConfig 返回带默认值的配置结构体。
 func DefaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Listen: ":8080",
-			Name:   "localhost",
+			Listen:             ":8080",
+			Name:               "localhost",
+			ReadTimeout:        30 * time.Second,
+			WriteTimeout:       30 * time.Second,
+			IdleTimeout:        120 * time.Second,
+			MaxConnsPerIP:      1000,
+			MaxRequestsPerConn: 10000,
 			Static: StaticConfig{
 				Root:  "/var/www/html",
 				Index: []string{"index.html", "index.htm"},
@@ -287,7 +290,3 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// GenerateSimpleYAML 生成简洁的 YAML（不带注释），用于程序内部使用。
-func GenerateSimpleYAML(cfg *Config) ([]byte, error) {
-	return yaml.Marshal(cfg)
-}

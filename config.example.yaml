@@ -1,0 +1,151 @@
+# Lolly 配置文件
+
+# 服务器配置（单服务器模式）
+server:
+  listen: ":8080"           # 监听地址
+  name: "localhost"             # 服务器名称（虚拟主机匹配）
+
+  # 静态文件服务配置
+  static:
+    root: "/var/www/html"   # 静态文件根目录
+    index:                  # 索引文件
+      - "index.html"
+      - "index.htm"
+
+  # 反向代理配置
+  # proxy:
+  #   - path: /api                  # 匹配路径前缀
+  #     targets:                    # 后端目标列表
+  #       - url: http://backend1:8080
+  #         weight: 3               # 权重（加权轮询时有效）
+  #       - url: http://backend2:8080
+  #         weight: 1
+  #     load_balance: round_robin   # 负载均衡算法: round_robin, weighted_round_robin, least_conn, ip_hash
+  #     health_check:               # 健康检查
+  #       interval: 10s
+  #       path: /health
+  #       timeout: 5s
+  #     timeout:                    # 超时配置
+  #       connect: 5s               # 连接超时
+  #       read: 30s                 # 读取超时
+  #       write: 30s                # 写入超时
+  #     headers:                    # 头部修改
+  #       set_request: {X-Custom: value}
+  #       set_response: {X-Server: lolly}
+  #       remove: [X-Powered-By]
+  #     cache:                      # 代理缓存
+  #       enabled: false
+  #       max_age: 60s
+  #       cache_lock: true          # 防止缓存击穿
+  #       stale_while_revalidate: 30s
+
+  # SSL/TLS 配置
+  # ssl:
+  #   cert: /path/to/cert.pem        # 证书文件
+  #   key: /path/to/key.pem          # 私钥文件
+  #   cert_chain: /path/to/chain.pem # 证书链文件
+  #   protocols:                     # TLS 版本（有效值: TLSv1.2, TLSv1.3）
+  #     - "TLSv1.2"
+  #     - "TLSv1.3"
+  #   ciphers: []                    # 加密套件（仅 TLS 1.2 有效）
+  #   ocsp_stapling: false              # OCSP Stapling
+  #   hsts:                          # HTTP Strict Transport Security
+  #     max_age: 31536000                  # 过期时间（秒）
+  #     include_sub_domains: true      # 包含子域名
+  #     preload: false                  # 加入 HSTS 预加载列表
+
+  # 安全配置
+  security:
+    # IP 访问控制
+    access:
+      allow: []                   # 允许的 IP/CIDR 列表
+      deny: []                    # 拒绝的 IP/CIDR 列表
+      default: "allow"             # 默认动作（有效值: allow, deny）
+
+    # 速率限制
+    rate_limit:
+      request_rate: 0            # 每秒请求数（0 表示不限制）
+      burst: 0                   # 突发上限
+      conn_limit: 0              # 连接数限制
+      key: "ip"                  # 限流 key 来源（有效值: ip, header）
+
+    # 认证配置（type 为空时禁用）
+    auth:
+      type: ""                    # 认证类型（有效值: basic，空表示禁用）
+      require_tls: true             # 启用时强制 HTTPS
+      algorithm: "bcrypt"            # 密码哈希算法（有效值: bcrypt, argon2id）
+      users: []                   # 用户列表
+      realm: "Restricted Area"                # 认证域
+      min_password_length: 8     # 密码最小长度
+
+    # 安全头部
+    headers:
+      x_frame_options: "DENY"        # 防止点击劫持（有效值: DENY, SAMEORIGIN）
+      x_content_type_options: "nosniff" # 防止 MIME 嗅探
+      referrer_policy: "strict-origin-when-cross-origin"        # 引用策略
+      # content_security_policy: "default-src 'self'"  # CSP（推荐配置）
+      # permissions_policy: "geolocation=(), microphone=()"  # 权限策略
+
+  # URL 重写规则
+  # rewrite:
+  #   - pattern: "^/old/(.*)$"     # 匹配模式（正则表达式）
+  #     replacement: /new/$1       # 替换目标
+  #     flag: last                 # 标志（有效值: last, redirect, permanent, break）
+
+  # 响应压缩配置
+  compression:
+    type: "gzip"            # 压缩类型: gzip, brotli, both
+    level: 6              # 压缩级别 (1-9)
+    min_size: 1024        # 最小压缩大小（字节）
+    types:                 # 可压缩的 MIME 类型
+      - "text/html"
+      - "text/css"
+      - "text/javascript"
+      - "application/json"
+      - "application/javascript"
+
+# 多虚拟主机模式（可选）
+# servers:
+#   - listen: ":8080"
+#     name: "api.example.com"
+#     proxy:
+#       - path: /api
+#         targets: [http://backend:8080]
+#   - listen: ":8443"
+#     name: "static.example.com"
+#     static:
+#       root: /var/www/static
+
+# 日志配置
+logging:
+  access:
+    format: "$remote_addr - $request - $status - $body_bytes_sent"  # 日志格式
+    # path: /var/log/lolly/access.log  # 日志文件路径
+  error:
+    level: "info"           # 日志级别: debug, info, warn, error
+    # path: /var/log/lolly/error.log
+
+# 性能配置
+performance:
+  goroutine_pool:              # Goroutine 池（处理并发请求）
+    enabled: false             # 是否启用
+    max_workers: 1000          # 最大 worker 数
+    min_workers: 10          # 最小 worker 数（预热）
+    idle_timeout: 60s        # 空闲超时
+  file_cache:                  # 静态文件缓存
+    max_entries: 10000          # 最大缓存条目
+    max_size: 268435456              # 内存上限（字节，256MB）
+    inactive: 20s             # 未访问淘汰时间
+    lru_eviction: true          # 启用 LRU 淘汰
+  transport:                   # HTTP Transport 连接池
+    max_idle_conns: 100            # 最大空闲连接
+    max_idle_conns_per_host: 32   # 每主机空闲连接
+    idle_conn_timeout: 90s        # 空闲超时
+    max_conns_per_host: 0        # 每主机最大连接（0 表示不限制）
+
+# 监控配置
+monitoring:
+  status:
+    path: "/_status"        # 状态端点路径
+    allow:                 # 允许访问的 IP
+      - "127.0.0.1"

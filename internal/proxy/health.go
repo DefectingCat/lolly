@@ -30,9 +30,11 @@ import (
 // Example usage:
 //
 //	targets := []*loadbalance.Target{
-//	    {URL: "http://backend1:8080", Healthy: true},
-//	    {URL: "http://backend2:8080", Healthy: true},
+//	    {URL: "http://backend1:8080"},
+//	    {URL: "http://backend2:8080"},
 //	}
+//	targets[0].Healthy.Store(true)
+//	targets[1].Healthy.Store(true)
 //
 //	cfg := &config.HealthCheckConfig{
 //	    Interval: 10 * time.Second,
@@ -110,11 +112,9 @@ func (h *HealthChecker) Start() {
 // 它向后台 goroutine 发送停止信号并等待其完成。
 // Stop 是幂等的；在已停止的检查器上调用它不会产生任何效果。
 func (h *HealthChecker) Stop() {
-	if !h.running.Load() {
-		return
+	if !h.running.CompareAndSwap(true, false) {
+		return // 已经停止，直接返回
 	}
-
-	h.running.Store(false)
 	close(h.stopCh)
 }
 
@@ -185,16 +185,16 @@ func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 
 	if err != nil {
 		// 连接失败或超时 - 标记为不健康
-		loadbalance.SetHealthy(target, false)
+		target.Healthy.Store(false)
 		return
 	}
 
 	// 检查状态码 - 2xx 为健康
 	statusCode := resp.StatusCode()
 	if statusCode >= 200 && statusCode < 300 {
-		loadbalance.SetHealthy(target, true)
+		target.Healthy.Store(true)
 	} else {
-		loadbalance.SetHealthy(target, false)
+		target.Healthy.Store(false)
 	}
 }
 
@@ -213,7 +213,7 @@ func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 // 必须成功。没有 MarkHealthy 方法 - 健康状态只能通过
 // 成功的健康检查积极恢复。
 func (h *HealthChecker) MarkUnhealthy(target *loadbalance.Target) {
-	loadbalance.SetHealthy(target, false)
+	target.Healthy.Store(false)
 }
 
 // IsRunning 如果健康检查器当前正在运行，则返回 true。
@@ -223,21 +223,15 @@ func (h *HealthChecker) IsRunning() bool {
 
 // GetInterval 返回配置的检查间隔。
 func (h *HealthChecker) GetInterval() time.Duration {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
 	return h.interval
 }
 
 // GetTimeout 返回配置的检查超时时间。
 func (h *HealthChecker) GetTimeout() time.Duration {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
 	return h.timeout
 }
 
 // GetPath 返回配置的健康检查路径。
 func (h *HealthChecker) GetPath() string {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
 	return h.path
 }

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"rua.plus/lolly/internal/loadbalance"
 )
 
 // validateServer 验证服务器配置。
@@ -87,16 +89,8 @@ func validateProxy(p *ProxyConfig) error {
 	}
 
 	// 验证负载均衡算法
-	validAlgorithms := []string{"", "round_robin", "weighted_round_robin", "least_conn", "ip_hash"}
-	valid := false
-	for _, alg := range validAlgorithms {
-		if p.LoadBalance == alg {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return fmt.Errorf("无效的负载均衡算法: %s", p.LoadBalance)
+	if !loadbalance.IsValidAlgorithm(p.LoadBalance) {
+		return fmt.Errorf("无效的负载均衡算法：%s", p.LoadBalance)
 	}
 
 	return nil

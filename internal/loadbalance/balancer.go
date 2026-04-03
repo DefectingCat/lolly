@@ -7,9 +7,11 @@
 // 使用示例：
 //
 //	targets := []*Target{
-//	    {URL: "http://backend1:8080", Weight: 1, Healthy: true},
-//	    {URL: "http://backend2:8080", Weight: 2, Healthy: true},
+//	    {URL: "http://backend1:8080", Weight: 1},
+//	    {URL: "http://backend2:8080", Weight: 2},
 //	}
+//	targets[0].Healthy.Store(true)
+//	targets[1].Healthy.Store(true)
 //
 //	balancer := NewWeightedRoundRobin()
 //	selected := balancer.Select(targets)
@@ -33,8 +35,8 @@ type Target struct {
 	Weight int
 
 	// Healthy 表示此目标是否健康可用。
-	// 并发读写此字段时应使用原子操作。
-	Healthy bool
+	// 使用 atomic.Bool 保证并发安全。
+	Healthy atomic.Bool
 
 	// Connections 跟踪当前活跃连接数。
 	// 并发修改此字段时应使用原子操作。
@@ -145,7 +147,7 @@ func (l *LeastConnections) Select(targets []*Target) *Target {
 	var minConns int64 = -1
 
 	for _, t := range targets {
-		if !t.Healthy {
+		if !t.Healthy.Load() {
 			continue
 		}
 
@@ -199,7 +201,7 @@ func (i *IPHash) SelectByIP(targets []*Target, clientIP string) *Target {
 func filterHealthy(targets []*Target) []*Target {
 	healthy := make([]*Target, 0, len(targets))
 	for _, t := range targets {
-		if t.Healthy {
+		if t.Healthy.Load() {
 			healthy = append(healthy, t)
 		}
 	}
@@ -216,22 +218,4 @@ func IncrementConnections(t *Target) {
 // 当连接关闭时应调用此函数。
 func DecrementConnections(t *Target) {
 	atomic.AddInt64(&t.Connections, -1)
-}
-
-// IsHealthy 原子地读取目标的健康状态。
-func IsHealthy(t *Target) bool {
-	// Healthy 是 bool 类型，在 Go 的内存模型中无需原子操作即可安全读取
-	// 但为了与 setter 保持一致，我们可以使用原子操作
-	// 对于 bool，简单的读取是安全的
-	return t.Healthy
-}
-
-// SetHealthy 原子地设置目标的健康状态。
-// 注意：在 Go 中，bool 操作不能直接是原子的。
-// 此函数提供了同步更新健康状态的方式。
-// 对于 bool 的真正原子操作，请考虑使用 atomic.Bool（Go 1.19+）
-// 或 sync.RWMutex。对于本实现，我们使用直接赋值
-// 当与调用层的适当同步结合时，这通常是足够的。
-func SetHealthy(t *Target, healthy bool) {
-	t.Healthy = healthy
 }
