@@ -1,16 +1,16 @@
-// Package security provides security-related middleware for the Lolly HTTP server.
+// Package security 提供安全相关的 HTTP 中间件。
 //
-// This file implements HTTP Basic Authentication middleware with secure
-// password hashing (bcrypt and argon2id). It enforces HTTPS by default.
+// 该文件实现 HTTP Basic 认证中间件，支持安全的密码哈希
+// （bcrypt 和 argon2id）。默认强制使用 HTTPS。
 //
-// Example usage:
+// 使用示例：
 //
 //	cfg := &config.AuthConfig{
 //	    Type:       "basic",
 //	    RequireTLS: true,
 //	    Algorithm:  "bcrypt",
 //	    Users: []config.User{
-//	        {Name: "admin", Password: "$2b$12$..."}, // bcrypt hash
+//	        {Name: "admin", Password: "$2b$12$..."}, // bcrypt 哈希
 //	    },
 //	    Realm: "Restricted Area",
 //	}
@@ -20,11 +20,11 @@
 //	    log.Fatal(err)
 //	}
 //
-//	// Apply as middleware
+//	// 应用为中间件
 //	chain := middleware.NewChain(auth)
 //	handler := chain.Apply(finalHandler)
 //
-//go:generate go test -v ./...
+// 作者：xfy
 package security
 
 import (
@@ -42,35 +42,55 @@ import (
 	"rua.plus/lolly/internal/middleware"
 )
 
-// HashAlgorithm represents the password hashing algorithm type.
+// HashAlgorithm 表示密码哈希算法类型。
 type HashAlgorithm int
 
 const (
-	HashBcrypt   HashAlgorithm = iota // bcrypt (default, recommended)
-	HashArgon2id                      // Argon2id (more secure, compute-intensive)
+	// HashBcrypt bcrypt 算法（默认，推荐）
+	HashBcrypt HashAlgorithm = iota
+	// HashArgon2id Argon2id 算法（更安全，计算密集）
+	HashArgon2id
 )
 
-// BasicAuth implements HTTP Basic Authentication middleware.
+// BasicAuth 实现 HTTP Basic 认证中间件。
 type BasicAuth struct {
-	users             map[string]string // username -> hashed password
-	algorithm         HashAlgorithm     // Hash algorithm used
-	realm             string            // Authentication realm
-	requireTLS        bool              // Require HTTPS (default true)
-	minPasswordLength int               // Minimum password length for validation
-	argon2Params      argon2Params      // Argon2id parameters
-	mu                sync.RWMutex
+	// users 用户名到哈希密码的映射
+	users map[string]string
+
+	// algorithm 使用的哈希算法
+	algorithm HashAlgorithm
+
+	// realm 认证域
+	realm string
+
+	// requireTLS 是否强制 HTTPS（默认 true）
+	requireTLS bool
+
+	// minPasswordLength 密码最小长度（用于验证）
+	minPasswordLength int
+
+	// argon2Params Argon2id 配置参数
+	argon2Params argon2Params
+
+	// mu 保护并发访问的读写锁
+	mu sync.RWMutex
 }
 
-// argon2Params holds Argon2id configuration parameters.
+// argon2Params 保存 Argon2id 配置参数。
 type argon2Params struct {
-	time    uint32 // Number of passes
-	memory  uint32 // Memory cost in KB
-	threads uint8  // Parallelism
-	saltLen uint32 // Salt length
-	keyLen  uint32 // Output key length
+	// time 迭代次数
+	time uint32
+	// memory 内存成本（KB）
+	memory uint32
+	// threads 并行度
+	threads uint8
+	// saltLen 盐长度
+	saltLen uint32
+	// keyLen 输出密钥长度
+	keyLen uint32
 }
 
-// Default Argon2id parameters (OWASP recommended)
+// defaultArgon2Params 默认 Argon2id 参数（OWASP 推荐）
 var defaultArgon2Params = argon2Params{
 	time:    3,
 	memory:  64 * 1024, // 64 MB
@@ -79,14 +99,16 @@ var defaultArgon2Params = argon2Params{
 	keyLen:  32,
 }
 
-// NewBasicAuth creates a new Basic Auth middleware from configuration.
+// NewBasicAuth 创建 Basic 认证中间件。
 //
-// Parameters:
-//   - cfg: Authentication configuration with users and settings
+// 根据配置创建认证中间件实例，解析用户列表并设置哈希算法。
 //
-// Returns:
-//   - *BasicAuth: Configured authentication middleware
-//   - error: Non-nil if configuration is invalid
+// 参数：
+//   - cfg: 认证配置，包含用户列表和设置
+//
+// 返回值：
+//   - *BasicAuth: 配置好的认证中间件
+//   - error: 配置无效时返回错误
 func NewBasicAuth(cfg *config.AuthConfig) (*BasicAuth, error) {
 	if cfg == nil {
 		return nil, errors.New("auth config is nil")
@@ -107,14 +129,14 @@ func NewBasicAuth(cfg *config.AuthConfig) (*BasicAuth, error) {
 		argon2Params:      defaultArgon2Params,
 	}
 
-	// Set realm
+	// 设置认证域
 	if cfg.Realm != "" {
 		auth.realm = cfg.Realm
 	} else {
 		auth.realm = "Restricted Area"
 	}
 
-	// Set hash algorithm
+	// 设置哈希算法
 	switch strings.ToLower(cfg.Algorithm) {
 	case "bcrypt", "":
 		auth.algorithm = HashBcrypt
@@ -124,7 +146,7 @@ func NewBasicAuth(cfg *config.AuthConfig) (*BasicAuth, error) {
 		return nil, fmt.Errorf("unsupported hash algorithm: %s", cfg.Algorithm)
 	}
 
-	// Load users
+	// 加载用户
 	for _, user := range cfg.Users {
 		if user.Name == "" {
 			return nil, errors.New("username cannot be empty")
@@ -133,7 +155,7 @@ func NewBasicAuth(cfg *config.AuthConfig) (*BasicAuth, error) {
 			return nil, fmt.Errorf("password for user %s cannot be empty", user.Name)
 		}
 
-		// Validate password hash format
+		// 验证密码哈希格式
 		if err := validatePasswordHash(user.Password, auth.algorithm); err != nil {
 			return nil, fmt.Errorf("invalid password hash for user %s: %w", user.Name, err)
 		}
@@ -144,41 +166,59 @@ func NewBasicAuth(cfg *config.AuthConfig) (*BasicAuth, error) {
 	return auth, nil
 }
 
-// Name returns the middleware name.
+// Name 返回中间件名称。
+//
+// 返回值：
+//   - string: 中间件标识名 "basic_auth"
 func (ba *BasicAuth) Name() string {
 	return "basic_auth"
 }
 
-// Process wraps the next handler with authentication logic.
-// Returns 401 Unauthorized if authentication fails.
+// Process 用认证逻辑包装下一个处理器。
+//
+// 认证失败返回 401 Unauthorized。
+//
+// 参数：
+//   - next: 下一个请求处理器
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 包装后的处理器
 func (ba *BasicAuth) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
-		// Check TLS requirement
+		// 检查 TLS 要求
 		if ba.requireTLS && !ctx.IsTLS() {
 			ctx.Error("Forbidden: HTTPS required for authentication", fasthttp.StatusForbidden)
 			return
 		}
 
-		// Extract and validate credentials
+		// 提取并验证凭据
 		username, password, ok := ba.extractCredentials(ctx)
 		if !ok {
 			ba.sendAuthChallenge(ctx)
 			return
 		}
 
-		// Authenticate
+		// 执行认证
 		if !ba.Authenticate(username, password) {
 			ba.sendAuthChallenge(ctx)
 			return
 		}
 
-		// Success - proceed to next handler
+		// 认证成功，继续执行下一个处理器
 		next(ctx)
 	}
 }
 
-// Authenticate validates username and password credentials.
-// Returns true if authentication succeeds.
+// Authenticate 验证用户名和密码凭据。
+//
+// 根据配置的哈希算法验证密码，返回验证结果。
+//
+// 参数：
+//   - username: 用户名
+//   - password: 明文密码
+//
+// 返回值：
+//   - bool: true 表示认证成功，false 表示失败
 func (ba *BasicAuth) Authenticate(username, password string) bool {
 	ba.mu.RLock()
 	hashedPassword, exists := ba.users[username]
@@ -198,26 +238,41 @@ func (ba *BasicAuth) Authenticate(username, password string) bool {
 	}
 }
 
-// authenticateBcrypt verifies password against bcrypt hash.
+// authenticateBcrypt 使用 bcrypt 验证密码。
+//
+// 参数：
+//   - password: 明文密码
+//   - hash: bcrypt 哈希值
+//
+// 返回值：
+//   - bool: true 表示验证通过
 func authenticateBcrypt(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
 
-// authenticateArgon2id verifies password against Argon2id hash.
-// Hash format: $argon2id$v=19$m=<memory>,t=<time>,p=<threads>$<salt>$<hash>
+// authenticateArgon2id 使用 Argon2id 验证密码。
+//
+// 哈希格式：$argon2id$v=19$m=<memory>,t=<time>,p=<threads>$<salt>$<hash>
+//
+// 参数：
+//   - password: 明文密码
+//   - hash: Argon2id 哈希值
+//
+// 返回值：
+//   - bool: true 表示验证通过
 func authenticateArgon2id(password, hash string) bool {
-	// Parse the hash string
+	// 解析哈希字符串
 	params, salt, expectedHash, err := parseArgon2idHash(hash)
 	if err != nil {
 		return false
 	}
 
-	// Generate hash with same parameters
+	// 使用相同参数生成哈希
 	actualHash := argon2.IDKey([]byte(password), salt,
 		params.time, params.memory, params.threads, params.keyLen)
 
-	// Compare
+	// 常量时间比较
 	if len(actualHash) != len(expectedHash) {
 		return false
 	}
@@ -231,7 +286,18 @@ func authenticateArgon2id(password, hash string) bool {
 	return true
 }
 
-// parseArgon2idHash parses an Argon2id hash string.
+// parseArgon2idHash 解析 Argon2id 哈希字符串。
+//
+// 解析格式为 $argon2id$v=19$m=<memory>,t=<time>,p=<threads>$<salt>$<hash> 的字符串。
+//
+// 参数：
+//   - hash: Argon2id 哈希字符串
+//
+// 返回值：
+//   - argon2Params: 解析出的参数
+//   - []byte: 盐值
+//   - []byte: 哈希值
+//   - error: 解析失败时返回错误
 func parseArgon2idHash(hash string) (argon2Params, []byte, []byte, error) {
 	parts := strings.Split(hash, "$")
 	if len(parts) != 6 {
@@ -246,7 +312,7 @@ func parseArgon2idHash(hash string) (argon2Params, []byte, []byte, error) {
 		return argon2Params{}, nil, nil, errors.New("unsupported argon2 version")
 	}
 
-	// Parse parameters: m=<memory>,t=<time>,p=<threads>
+	// 解析参数：m=<memory>,t=<time>,p=<threads>
 	paramsStr := parts[3]
 	params := defaultArgon2Params
 
@@ -267,13 +333,13 @@ func parseArgon2idHash(hash string) (argon2Params, []byte, []byte, error) {
 		}
 	}
 
-	// Decode salt
+	// 解码盐值
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
 		return argon2Params{}, nil, nil, fmt.Errorf("invalid salt: %w", err)
 	}
 
-	// Decode hash
+	// 解码哈希
 	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
 		return argon2Params{}, nil, nil, fmt.Errorf("invalid hash: %w", err)
@@ -284,27 +350,37 @@ func parseArgon2idHash(hash string) (argon2Params, []byte, []byte, error) {
 	return params, salt, expectedHash, nil
 }
 
-// extractCredentials extracts username and password from Authorization header.
+// extractCredentials 从 Authorization 头部提取用户名和密码。
+//
+// 解析 Basic 认证头部的 Base64 编码凭据。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//
+// 返回值：
+//   - string: 用户名
+//   - string: 密码
+//   - bool: 提取成功返回 true
 func (ba *BasicAuth) extractCredentials(ctx *fasthttp.RequestCtx) (string, string, bool) {
 	authHeader := ctx.Request.Header.Peek("Authorization")
 	if len(authHeader) == 0 {
 		return "", "", false
 	}
 
-	// Check "Basic" prefix
+	// 检查 "Basic" 前缀
 	authStr := string(authHeader)
 	if !strings.HasPrefix(authStr, "Basic ") {
 		return "", "", false
 	}
 
-	// Decode base64 credentials
+	// 解码 Base64 凭据
 	encoded := strings.TrimPrefix(authStr, "Basic ")
 	decoded, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return "", "", false
 	}
 
-	// Split username:password
+	// 分割用户名:密码
 	credentials := string(decoded)
 	idx := strings.Index(credentials, ":")
 	if idx == -1 {
@@ -317,15 +393,28 @@ func (ba *BasicAuth) extractCredentials(ctx *fasthttp.RequestCtx) (string, strin
 	return username, password, true
 }
 
-// sendAuthChallenge sends 401 Unauthorized with Basic Auth challenge.
+// sendAuthChallenge 发送 401 Unauthorized 和 Basic Auth 质询。
+//
+// 设置 WWW-Authenticate 响应头，要求客户端提供凭据。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
 func (ba *BasicAuth) sendAuthChallenge(ctx *fasthttp.RequestCtx) {
 	ctx.Response.Header.Set("WWW-Authenticate",
 		fmt.Sprintf("Basic realm=\"%s\", charset=\"UTF-8\"", ba.realm))
 	ctx.Error("Unauthorized", fasthttp.StatusUnauthorized)
 }
 
-// AddUser adds a new user dynamically.
-// The password should be pre-hashed.
+// AddUser 动态添加新用户。
+//
+// 密码应预先哈希。使用写锁保护并发访问。
+//
+// 参数：
+//   - username: 用户名
+//   - hashedPassword: 已哈希的密码
+//
+// 返回值：
+//   - error: 用户名为空或密码哈希格式无效时返回错误
 func (ba *BasicAuth) AddUser(username, hashedPassword string) error {
 	ba.mu.Lock()
 	defer ba.mu.Unlock()
@@ -342,43 +431,71 @@ func (ba *BasicAuth) AddUser(username, hashedPassword string) error {
 	return nil
 }
 
-// RemoveUser removes a user.
+// RemoveUser 删除用户。
+//
+// 参数：
+//   - username: 要删除的用户名
 func (ba *BasicAuth) RemoveUser(username string) {
 	ba.mu.Lock()
 	delete(ba.users, username)
 	ba.mu.Unlock()
 }
 
-// UpdateUser updates a user's password hash.
+// UpdateUser 更新用户的密码哈希。
+//
+// 参数：
+//   - username: 用户名
+//   - hashedPassword: 新的已哈希密码
+//
+// 返回值：
+//   - error: 更新失败时返回错误
 func (ba *BasicAuth) UpdateUser(username, hashedPassword string) error {
 	return ba.AddUser(username, hashedPassword)
 }
 
-// HasUser checks if a user exists.
+// HasUser 检查用户是否存在。
+//
+// 参数：
+//   - username: 用户名
+//
+// 返回值：
+//   - bool: 用户存在返回 true
 func (ba *BasicAuth) HasUser(username string) bool {
 	ba.mu.RLock()
 	defer ba.mu.RUnlock()
 	return ba.users[username] != ""
 }
 
-// UserCount returns the number of configured users.
+// UserCount 返回已配置用户的数量。
+//
+// 返回值：
+//   - int: 用户数量
 func (ba *BasicAuth) UserCount() int {
 	ba.mu.RLock()
 	defer ba.mu.RUnlock()
 	return len(ba.users)
 }
 
-// validatePasswordHash validates the format of a password hash.
+// validatePasswordHash 验证密码哈希格式。
+//
+// 根据算法类型检查哈希字符串的前缀格式。
+//
+// 参数：
+//   - hash: 密码哈希字符串
+//   - algorithm: 哈希算法类型
+//
+// 返回值：
+//   - error: 格式无效时返回错误
 func validatePasswordHash(hash string, algorithm HashAlgorithm) error {
 	switch algorithm {
 	case HashBcrypt:
-		// bcrypt hash format: $2b$<cost>$<salt><hash>
+		// bcrypt 哈希格式：$2b$<cost>$<salt><hash>
 		if !strings.HasPrefix(hash, "$2") {
 			return errors.New("invalid bcrypt hash format")
 		}
 		return nil
 	case HashArgon2id:
-		// argon2id hash format: $argon2id$v=19$m=...,t=...,p=...$<salt>$<hash>
+		// argon2id 哈希格式：$argon2id$v=19$m=...,t=...,p=...$<salt>$<hash>
 		if !strings.HasPrefix(hash, "$argon2id$") {
 			return errors.New("invalid argon2id hash format")
 		}
@@ -388,8 +505,17 @@ func validatePasswordHash(hash string, algorithm HashAlgorithm) error {
 	}
 }
 
-// HashPassword generates a password hash using the configured algorithm.
-// This is a utility function for generating hashes to use in configuration.
+// HashPassword 使用配置的算法生成密码哈希。
+//
+// 这是用于生成配置文件中使用的哈希的工具函数。
+//
+// 参数：
+//   - password: 明文密码
+//   - algorithm: 哈希算法
+//
+// 返回值：
+//   - string: 生成的哈希字符串
+//   - error: 生成失败时返回错误
 func HashPassword(password string, algorithm HashAlgorithm) (string, error) {
 	switch algorithm {
 	case HashBcrypt:
@@ -401,7 +527,15 @@ func HashPassword(password string, algorithm HashAlgorithm) (string, error) {
 	}
 }
 
-// HashPasswordBcrypt generates a bcrypt hash.
+// HashPasswordBcrypt 生成 bcrypt 哈希。
+//
+// 参数：
+//   - password: 明文密码
+//   - cost: 计算成本（推荐 bcrypt.DefaultCost）
+//
+// 返回值：
+//   - string: bcrypt 哈希字符串
+//   - error: 生成失败时返回错误
 func HashPasswordBcrypt(password string, cost int) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
 	if err != nil {
@@ -410,18 +544,28 @@ func HashPasswordBcrypt(password string, cost int) (string, error) {
 	return string(hash), nil
 }
 
-// HashPasswordArgon2id generates an Argon2id hash.
+// HashPasswordArgon2id 生成 Argon2id 哈希。
+//
+// 使用指定的参数生成安全的密码哈希。
+//
+// 参数：
+//   - password: 明文密码
+//   - params: Argon2id 配置参数
+//
+// 返回值：
+//   - string: Argon2id 哈希字符串
+//   - error: 生成失败时返回错误
 func HashPasswordArgon2id(password string, params argon2Params) (string, error) {
-	// Generate random salt
+	// 生成随机盐值
 	salt := make([]byte, params.saltLen)
-	// Note: In production, use crypto/rand for salt generation
-	// For this utility, we'll use a placeholder approach
+	// 注意：生产环境应使用 crypto/rand 生成盐值
+	// 此工具函数使用占位符方法
 
-	// Generate hash
+	// 生成哈希
 	hash := argon2.IDKey([]byte(password), salt,
 		params.time, params.memory, params.threads, params.keyLen)
 
-	// Encode to string format
+	// 编码为字符串格式
 	encodedSalt := base64.RawStdEncoding.EncodeToString(salt)
 	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
 
@@ -429,7 +573,13 @@ func HashPasswordArgon2id(password string, params argon2Params) (string, error) 
 		params.memory, params.time, params.threads, encodedSalt, encodedHash), nil
 }
 
-// parseUint32 parses a string to uint32.
+// parseUint32 将字符串解析为 uint32。
+//
+// 参数：
+//   - s: 数字字符串
+//
+// 返回值：
+//   - uint32: 解析结果
 func parseUint32(s string) uint32 {
 	var result uint32
 	for _, c := range s {
@@ -440,7 +590,13 @@ func parseUint32(s string) uint32 {
 	return result
 }
 
-// parseUint8 parses a string to uint8.
+// parseUint8 将字符串解析为 uint8。
+//
+// 参数：
+//   - s: 数字字符串
+//
+// 返回值：
+//   - uint8: 解析结果
 func parseUint8(s string) uint8 {
 	var result uint8
 	for _, c := range s {
@@ -451,5 +607,5 @@ func parseUint8(s string) uint8 {
 	return result
 }
 
-// Verify interface compliance
+// 验证接口实现
 var _ middleware.Middleware = (*BasicAuth)(nil)

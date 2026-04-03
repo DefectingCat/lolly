@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/gzip"
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
@@ -29,7 +30,8 @@ type CompressionMiddleware struct {
 	algorithm Algorithm // 压缩算法
 
 	// 缓冲池
-	gzipPool sync.Pool
+	gzipPool    sync.Pool
+	brotliPool  sync.Pool
 }
 
 // New 创建压缩中间件。
@@ -80,6 +82,15 @@ func New(cfg *config.CompressionConfig) (*CompressionMiddleware, error) {
 		New: func() interface{} {
 			w, _ := gzip.NewWriterLevel(nil, cfg.Level)
 			return w
+		},
+	}
+
+	// 初始化 brotli 缓冲池
+	m.brotliPool = sync.Pool{
+		New: func() interface{} {
+			return brotli.NewWriterOptions(nil, brotli.WriterOptions{
+				Quality: cfg.Level,
+			})
 		},
 	}
 
@@ -208,9 +219,15 @@ func (m *CompressionMiddleware) compressGzip(data []byte) []byte {
 
 // compressBrotli 使用 brotli 压缩数据。
 func (m *CompressionMiddleware) compressBrotli(data []byte) []byte {
-	// 简单实现：brotli 需要额外依赖，这里降级为 gzip
-	// 实际生产环境应使用 github.com/andybalholm/brotli
-	return m.compressGzip(data)
+	w := m.brotliPool.Get().(*brotli.Writer)
+	defer m.brotliPool.Put(w)
+
+	var buf bytes.Buffer
+	w.Reset(&buf)
+	w.Write(data)
+	w.Close()
+
+	return buf.Bytes()
 }
 
 // Types 返回可压缩的 MIME 类型列表。

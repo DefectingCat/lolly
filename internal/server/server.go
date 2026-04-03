@@ -1,8 +1,28 @@
+// Package server 提供 HTTP 服务器的核心实现，支持单服务器和虚拟主机两种运行模式。
+//
+// 该文件包含服务器相关的核心逻辑，包括：
+//   - HTTP 服务器的创建和生命周期管理
+//   - 中间件链的构建和应用
+//   - 代理路由的注册和处理
+//   - 静态文件服务的集成
+//   - Goroutine 池的性能优化
+//
+// 主要用途：
+//   用于启动和管理 HTTP 服务器，处理客户端请求并转发到上游服务或静态文件。
+//
+// 注意事项：
+//   - 服务器支持优雅关闭和热升级
+//   - 所有公开方法均为并发安全
+//   - 使用前需确保配置已正确加载
+//
+// 作者：xfy
 package server
 
 import (
 	"context"
 	"fmt"
+	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -17,27 +37,134 @@ import (
 	"rua.plus/lolly/internal/middleware/rewrite"
 	"rua.plus/lolly/internal/middleware/security"
 	"rua.plus/lolly/internal/proxy"
+	"rua.plus/lolly/internal/ssl"
 )
 
-// Server HTTP 服务器
+// Server HTTP 服务器，封装 fasthttp.Server 并提供中间件链和生命周期管理。
+//
+// 该结构体是服务器的核心实体，负责：
+//   - 管理配置和 fasthttp.Server 实例
+//   - 构建和应用中间件链
+//   - 维护健康检查器和访问日志中间件
+//   - 可选的 Goroutine 池和文件缓存
+//
+// 注意事项：
+//   - 创建后需调用 Start 方法启动服务器
+//   - 关闭时建议使用 GracefulStop 实现优雅关闭
 type Server struct {
-	config              *config.Config
-	fastServer          *fasthttp.Server
-	handler             fasthttp.RequestHandler
-	running             bool
-	healthCheckers      []*proxy.HealthChecker
+	// config 服务器配置，包含监听地址、代理、静态文件、安全等配置
+	config *config.Config
+
+	// fastServer fasthttp 服务器实例，处理底层 HTTP 请求
+	fastServer *fasthttp.Server
+
+	// handler 最终的请求处理器，经过中间件链包装
+	handler fasthttp.RequestHandler
+
+	// running 服务器运行状态标志
+	running bool
+
+	// healthCheckers 健康检查器列表，用于检查代理目标健康状态
+	healthCheckers []*proxy.HealthChecker
+
+	// accessLogMiddleware 访问日志中间件，记录请求详细信息
 	accessLogMiddleware *accesslog.AccessLog
-	pool                *GoroutinePool  // Goroutine 池（可选）
-	fileCache           *cache.FileCache // 文件缓存（可选）
+
+	// pool Goroutine 池，用于限制并发处理请求数（可选）
+	pool *GoroutinePool
+
+	// fileCache 文件缓存，用于缓存静态文件内容（可选）
+	fileCache *cache.FileCache
+
+	// startTime 服务器启动时间
+	startTime time.Time
+
+	// connections 当前活动连接数
+	connections atomic.Int64
+
+	// requests 总请求数
+	requests atomic.Int64
+
+	// bytesSent 发送的总字节数
+	bytesSent atomic.Int64
+
+	// bytesReceived 接收的总字节数
+	bytesReceived atomic.Int64
+
+	// tlsManager TLS 配置管理器（可选）
+	tlsManager *ssl.TLSManager
+
+	// listeners 保存的监听器列表，用于热升级
+	listeners []net.Listener
 }
 
-// New 创建服务器
+// New 创建 HTTP 服务器实例。
+//
+// 根据提供的配置创建服务器对象，但不启动服务器。
+// 服务器创建后需调用 Start 方法才能开始处理请求。
+//
+// 参数：
+//   - cfg: 服务器配置对象，包含监听地址、代理、静态文件、安全等配置
+//
+// 返回值：
+//   - *Server: 创建的服务器实例
 func New(cfg *config.Config) *Server {
 	return &Server{config: cfg}
 }
 
-// buildMiddlewareChain 构建中间件链
-// 按顺序：AccessLog -> AccessControl -> RateLimiter -> BasicAuth -> Rewrite -> Compression -> SecurityHeaders
+// trackStats 包装处理器以统计请求数和数据传输量。
+//
+// 在每个请求处理前后更新统计字段：requests、bytesSent、bytesReceived。
+//
+// 参数：
+//   - handler: 原始的请求处理器
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 包装后的处理器
+func (s *Server) trackStats(handler fasthttp.RequestHandler) fasthttp.RequestHandler {
+	return func(ctx *fasthttp.RequestCtx) {
+		s.requests.Add(1)
+		s.bytesReceived.Add(int64(len(ctx.Request.Body())))
+		handler(ctx)
+		s.bytesSent.Add(int64(len(ctx.Response.Body())))
+	}
+}
+
+// GetListeners 获取服务器监听器列表。
+//
+// 返回当前服务器使用的监听器，用于热升级时传递给子进程。
+//
+// 返回值：
+//   - []net.Listener: 监听器列表
+func (s *Server) GetListeners() []net.Listener {
+	return s.listeners
+}
+
+// SetListeners 设置服务器监听器列表。
+//
+// 用于热升级时，子进程从父进程继承监听器。
+//
+// 参数：
+//   - listeners: 要设置的监听器列表
+func (s *Server) SetListeners(listeners []net.Listener) {
+	s.listeners = listeners
+}
+
+// buildMiddlewareChain 构建中间件链。
+//
+// 根据服务器配置按顺序构建中间件链，顺序为：
+//   AccessLog -> AccessControl -> RateLimiter -> BasicAuth -> Rewrite -> Compression -> SecurityHeaders
+//
+// 参数：
+//   - serverCfg: 单个服务器的配置对象
+//
+// 返回值：
+//   - *middleware.Chain: 构建完成的中间件链
+//   - error: 构建过程中遇到的错误，如中间件创建失败
+//
+// 注意事项：
+//   - 各中间件按顺序依次包装请求处理器
+//   - 未配置的中间件不会添加到链中
 func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middleware.Chain, error) {
 	var middlewares []middleware.Middleware
 
@@ -104,9 +231,23 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 	return middleware.NewChain(middlewares...), nil
 }
 
-// Start 启动服务器
+// Start 启动 HTTP 服务器。
+//
+// 初始化日志系统、性能优化组件（Goroutine池、文件缓存），
+// 根据配置选择单服务器模式或虚拟主机模式启动。
+//
+// 返回值：
+//   - error: 启动过程中遇到的错误，如监听地址绑定失败
+//
+// 注意事项：
+//   - 该方法会阻塞运行，直到服务器停止
+//   - 调用前需确保配置已正确加载
+//   - Goroutine池和文件缓存根据配置自动启用
 func (s *Server) Start() error {
 	logging.Init(s.config.Logging.Error.Level, true)
+
+	// 记录启动时间
+	s.startTime = time.Now()
 
 	// 启用 GoroutinePool（如果配置）
 	if s.config.Performance.GoroutinePool.Enabled {
@@ -133,9 +274,29 @@ func (s *Server) Start() error {
 	return s.startSingleMode()
 }
 
-// startSingleMode 单服务器模式
+// startSingleMode 单服务器模式启动。
+//
+// 在单服务器模式下，创建单一路由器，注册代理路由和静态文件服务，
+// 应用中间件链后启动 fasthttp 服务器。
+//
+// 返回值：
+//   - error: 启动过程中遇到的错误
+//
+// 注意事项：
+//   - 静态文件服务作为 fallback 处理非代理路径的请求
+//   - 使用零拷贝传输优化大文件传输
 func (s *Server) startSingleMode() error {
 	router := handler.NewRouter()
+
+	// 注册状态监控端点（如果配置）
+	if s.config.Monitoring.Status.Path != "" || len(s.config.Monitoring.Status.Allow) > 0 {
+		statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
+		if err != nil {
+			logging.Error().Msg("创建状态处理器失败: " + err.Error())
+		} else {
+			router.GET(statusHandler.Path(), statusHandler.ServeHTTP)
+		}
+	}
 
 	// 注册代理路由
 	s.registerProxyRoutes(router, &s.config.Server)
@@ -165,6 +326,8 @@ func (s *Server) startSingleMode() error {
 	if s.pool != nil {
 		handler = s.pool.WrapHandler(handler)
 	}
+	// 包装统计追踪
+	handler = s.trackStats(handler)
 	s.handler = handler
 
 	s.fastServer = &fasthttp.Server{
@@ -178,10 +341,32 @@ func (s *Server) startSingleMode() error {
 	}
 
 	s.running = true
+
+	// 检查是否配置了 SSL/TLS
+	if s.config.Server.SSL.Cert != "" && s.config.Server.SSL.Key != "" {
+		var err error
+		s.tlsManager, err = ssl.NewTLSManager(&s.config.Server.SSL)
+		if err != nil {
+			return fmt.Errorf("创建 TLS 管理器失败: %w", err)
+		}
+		s.fastServer.TLSConfig = s.tlsManager.GetTLSConfig()
+		return s.fastServer.ListenAndServeTLS(s.config.Server.Listen, "", "")
+	}
+
 	return s.fastServer.ListenAndServe(s.config.Server.Listen)
 }
 
-// startVHostMode 虚拟主机模式
+// startVHostMode 虚拟主机模式启动。
+//
+// 在虚拟主机模式下，为每个配置的服务器创建独立的路由器和中间件链，
+// 通过虚拟主机管理器根据 Host 头分发请求。
+//
+// 返回值：
+//   - error: 启动过程中遇到的错误
+//
+// 注意事项：
+//   - 每个虚拟主机有独立的中间件配置
+//   - 未匹配的 Host 头请求由默认主机处理
 func (s *Server) startVHostMode() error {
 	vhostMgr := NewVHostManager()
 
@@ -218,6 +403,17 @@ func (s *Server) startVHostMode() error {
 	// 默认主机
 	if s.config.HasDefaultServer() {
 		router := handler.NewRouter()
+
+		// 注册状态监控端点（如果配置）
+		if s.config.Monitoring.Status.Path != "" || len(s.config.Monitoring.Status.Allow) > 0 {
+			statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
+			if err != nil {
+				logging.Error().Msg("创建状态处理器失败: " + err.Error())
+			} else {
+				router.GET(statusHandler.Path(), statusHandler.ServeHTTP)
+			}
+		}
+
 		s.registerProxyRoutes(router, &s.config.Server)
 		staticHandler := handler.NewStaticHandler(
 			s.config.Server.Static.Root,
@@ -242,6 +438,8 @@ func (s *Server) startVHostMode() error {
 	}
 
 	s.handler = vhostMgr.Handler()
+	// 包装统计追踪
+	s.handler = s.trackStats(s.handler)
 
 	s.fastServer = &fasthttp.Server{
 		Name:               "lolly",
@@ -254,10 +452,33 @@ func (s *Server) startVHostMode() error {
 	}
 
 	s.running = true
+
+	// 检查是否配置了 SSL/TLS
+	if s.config.Server.SSL.Cert != "" && s.config.Server.SSL.Key != "" {
+		var err error
+		s.tlsManager, err = ssl.NewTLSManager(&s.config.Server.SSL)
+		if err != nil {
+			return fmt.Errorf("创建 TLS 管理器失败: %w", err)
+		}
+		s.fastServer.TLSConfig = s.tlsManager.GetTLSConfig()
+		return s.fastServer.ListenAndServeTLS(s.config.Server.Listen, "", "")
+	}
+
 	return s.fastServer.ListenAndServe(s.config.Server.Listen)
 }
 
-// registerProxyRoutes 注册代理路由
+// registerProxyRoutes 注册代理路由。
+//
+// 根据配置为路由器注册代理路径，创建代理处理器和健康检查器。
+// 支持 GET、POST、PUT、DELETE、HEAD 等 HTTP 方法。
+//
+// 参数：
+//   - router: 路由器实例，用于注册路由规则
+//   - serverCfg: 服务器配置，包含代理目标、负载均衡、健康检查等设置
+//
+// 注意事项：
+//   - 代理目标初始状态默认为健康
+//   - 健康检查根据配置自动启动
 func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.ServerConfig) {
 	for i := range serverCfg.Proxy {
 		proxyCfg := &serverCfg.Proxy[i]
@@ -283,6 +504,8 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 			hc := proxy.NewHealthChecker(targets, &proxyCfg.HealthCheck)
 			hc.Start()
 			s.healthCheckers = append(s.healthCheckers, hc)
+			// 设置被动健康检查
+			p.SetHealthChecker(hc)
 		}
 
 		router.GET(proxyCfg.Path, p.ServeHTTP)
@@ -293,9 +516,23 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 	}
 }
 
-// Stop 快速停止服务器
+// Stop 快速停止服务器。
+//
+// 立即停止服务器，不等待正在处理的请求完成。
+// 停止所有健康检查器和访问日志中间件。
+//
+// 返回值：
+//   - error: 停止过程中遇到的错误
+//
+// 注意事项：
+//   - 对于生产环境，建议使用 GracefulStop 实现优雅关闭
 func (s *Server) Stop() error {
 	s.running = false
+
+	// 停止 Goroutine 池
+	if s.pool != nil {
+		s.pool.Stop()
+	}
 
 	// 停止健康检查器
 	for _, hc := range s.healthCheckers {
@@ -305,6 +542,11 @@ func (s *Server) Stop() error {
 	// 关闭访问日志
 	if s.accessLogMiddleware != nil {
 		s.accessLogMiddleware.Close()
+	}
+
+	// 关闭 TLS 管理器
+	if s.tlsManager != nil {
+		s.tlsManager.Close()
 	}
 
 	if s.fastServer != nil {
@@ -313,9 +555,27 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-// GracefulStop 优雅停止
+// GracefulStop 优雅停止服务器。
+//
+// 等待正在处理的请求完成后再停止服务器，确保连接正常关闭。
+// 如果超时时间到达仍有请求未完成，将返回超时错误。
+//
+// 参数：
+//   - timeout: 优雅关闭的最大等待时间
+//
+// 返回值：
+//   - error: 停止过程中遇到的错误，超时返回 context.DeadlineExceeded
+//
+// 注意事项：
+//   - 推荐在生产环境使用此方法关闭服务器
+//   - 超时后会强制关闭，可能导致部分请求中断
 func (s *Server) GracefulStop(timeout time.Duration) error {
 	s.running = false
+
+	// 停止 Goroutine 池
+	if s.pool != nil {
+		s.pool.Stop()
+	}
 
 	// 停止健康检查器
 	for _, hc := range s.healthCheckers {
@@ -325,6 +585,11 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 	// 关闭访问日志
 	if s.accessLogMiddleware != nil {
 		s.accessLogMiddleware.Close()
+	}
+
+	// 关闭 TLS 管理器
+	if s.tlsManager != nil {
+		s.tlsManager.Close()
 	}
 
 	if s.fastServer != nil {

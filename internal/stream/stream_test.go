@@ -231,3 +231,119 @@ func TestConcurrentConnections(t *testing.T) {
 		t.Errorf("Expected 100 connections, got %d", s.connCount)
 	}
 }
+
+func TestUDPServer(t *testing.T) {
+	s := NewServer()
+
+	// 添加 UDP 上游配置
+	targets := []TargetSpec{
+		{Addr: "127.0.0.1:0", Weight: 1},
+	}
+	err := s.AddUpstream("udp_test", targets, "round_robin", HealthCheckSpec{})
+	if err != nil {
+		t.Fatalf("AddUpstream failed: %v", err)
+	}
+
+	// 测试 UDP 监听（使用 :0 让系统分配端口）
+	err = s.ListenUDP("127.0.0.1:0", "udp_test", 1*time.Second)
+	if err != nil {
+		t.Fatalf("ListenUDP failed: %v", err)
+	}
+
+	// 验证 UDP 服务器已创建
+	s.mu.RLock()
+	if len(s.udpServers) != 1 {
+		t.Errorf("Expected 1 UDP server, got %d", len(s.udpServers))
+	}
+	s.mu.RUnlock()
+
+	// 测试 Stats 包含 UDP 监听器
+	stats := s.Stats()
+	if stats.Listeners != 1 {
+		t.Errorf("Expected 1 listener in stats, got %d", stats.Listeners)
+	}
+}
+
+func TestUDPServerInvalidUpstream(t *testing.T) {
+	s := NewServer()
+
+	// 尝试监听不存在的上游配置
+	err := s.ListenUDP("127.0.0.1:0", "non_existent", 0)
+	if err == nil {
+		t.Error("Expected error for non-existent upstream")
+	}
+}
+
+func TestUDPServerStartAndStop(t *testing.T) {
+	s := NewServer()
+
+	// 添加上游
+	targets := []TargetSpec{
+		{Addr: "127.0.0.1:19001", Weight: 1},
+	}
+	s.AddUpstream("udp_stop_test", targets, "round_robin", HealthCheckSpec{})
+
+	// 监听 UDP
+	err := s.ListenUDP("127.0.0.1:19000", "udp_stop_test", 500*time.Millisecond)
+	if err != nil {
+		t.Fatalf("ListenUDP failed: %v", err)
+	}
+
+	// 启动服务器
+	err = s.Start()
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	// 给服务器一点时间启动
+	time.Sleep(50 * time.Millisecond)
+
+	// 停止服务器
+	err = s.Stop()
+	if err != nil {
+		t.Errorf("Stop failed: %v", err)
+	}
+}
+
+func TestUDPSessionKey(t *testing.T) {
+	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:1234")
+	addr2, _ := net.ResolveUDPAddr("udp", "127.0.0.1:5678")
+	addr3, _ := net.ResolveUDPAddr("udp", "127.0.0.1:1234")
+
+	key1 := sessionKey(addr1)
+	key2 := sessionKey(addr2)
+	key3 := sessionKey(addr3)
+
+	if key1 == key2 {
+		t.Error("Different addresses should have different keys")
+	}
+
+	if key1 != key3 {
+		t.Error("Same addresses should have same keys")
+	}
+}
+
+func TestNewUDPServer(t *testing.T) {
+	// 创建 UDP 连接
+	udpAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	conn, _ := net.ListenUDP("udp", udpAddr)
+	defer conn.Close()
+
+	// 创建上游
+	upstream := &Upstream{
+		targets:  []*Target{{addr: "127.0.0.1:19002"}},
+		balancer: newRoundRobin(),
+	}
+
+	// 测试默认超时
+	srv := newUDPServer(conn, upstream, 0)
+	if srv.timeout != 60*time.Second {
+		t.Errorf("Expected default timeout 60s, got %v", srv.timeout)
+	}
+
+	// 测试自定义超时
+	srv2 := newUDPServer(conn, upstream, 30*time.Second)
+	if srv2.timeout != 30*time.Second {
+		t.Errorf("Expected timeout 30s, got %v", srv2.timeout)
+	}
+}

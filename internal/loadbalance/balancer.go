@@ -1,22 +1,18 @@
-// Package loadbalance 负载均衡包为 Lolly HTTP 服务器提供负载均衡算法。
+// Package loadbalance 提供负载均衡算法实现。
 //
-// 本包实现了多种负载均衡策略，包括轮询（round-robin）、
-// 权重轮询（weighted round-robin）、最少连接（least connections）和 IP 哈希（IP hash）。
-// 所有实现都使用原子操作来保证并发安全。
+// 该文件包含负载均衡相关的核心定义，包括：
+//   - Target 目标结构体定义
+//   - Balancer 接口定义
+//   - ValidAlgorithms 有效算法列表
 //
-// 使用示例：
+// 主要用途：
+//   用于定义负载均衡的标准接口和目标结构，支持多种负载均衡算法。
 //
-//	targets := []*Target{
-//	    {URL: "http://backend1:8080", Weight: 1},
-//	    {URL: "http://backend2:8080", Weight: 2},
-//	}
-//	targets[0].Healthy.Store(true)
-//	targets[1].Healthy.Store(true)
+// 注意事项：
+//   - 所有实现必须并发安全
+//   - 目标的健康状态使用 atomic.Bool
 //
-//	balancer := NewWeightedRoundRobin()
-//	selected := balancer.Select(targets)
-//
-//go:generate go test -v ./...
+// 作者：xfy
 package loadbalance
 
 import (

@@ -1,4 +1,19 @@
-// Package handler 提供零拷贝文件传输功能，优化大文件传输性能。
+// Package handler 提供 HTTP 请求处理器，包括路由、静态文件服务和零拷贝传输。
+//
+// 该文件包含零拷贝文件传输相关的核心逻辑，包括：
+//   - sendfile 系统调用的平台特定实现
+//   - 文件传输的 fallback 机制
+//   - 缓冲池管理
+//
+// 主要用途：
+//   用于优化大文件传输性能，通过零拷贝技术减少 CPU 和内存开销。
+//
+// 注意事项：
+//   - Linux 平台使用 sendfile 系统调用
+//   - macOS 和 Windows 使用 fallback 方式
+//   - 小文件（< 8KB）直接使用 io.Copy
+//
+// 作者：xfy
 package handler
 
 import (
@@ -14,6 +29,7 @@ import (
 
 const (
 	// MinSendfileSize 使用 sendfile 的最小文件大小（8KB）。
+	// 小于该值的文件使用普通 io.Copy，避免系统调用开销。
 	MinSendfileSize = 8 * 1024
 )
 

@@ -19,8 +19,49 @@
 | 11 | [邮件代理模块](./11-nginx-mail-proxy.md) | IMAP/POP3/SMTP 代理、认证配置、SSL/TLS、认证服务器 |
 | 12 | [性能优化](./12-nginx-performance-tuning.md) | Worker 配置、事件优化、连接复用、缓冲配置、内核参数 |
 | 13 | [Git Commit 规范](./13-git-commit-guide.md) | Conventional Commits 格式、类型定义、范围划分、示例库 |
+| 14 | [gRPC/uWSGI/SCGI 代理](./14-nginx-grpc-uwsgi.md) | gRPC 代理、uWSGI Python 部署、SCGI 通用代理、模块对比 |
+| 15 | [高级特性](./15-nginx-advanced-features.md) | 内部重定向、错误处理、请求拦截、高级路由 |
+| 16 | [内部重定向](./16-nginx-internal-redirect.md) | internal 指令、X-Accel-Redirect、try_files、命名 location |
+| 17 | [镜像与切片](./17-nginx-mirror-slice.md) | mirror 请求镜像、slice 大文件切片、流量复制 |
+| 18 | [Memcached 集成](./18-nginx-memcached.md) | memcached_pass、缓存加速、键值设计 |
+| 19 | [HTTP 功能模块详解](./19-nginx-http-modules-detail.md) | access/auth/autoindex/geo/map/realip/referer/secure_link/ssi/sub 等 16 个模块 |
+| 20 | [限流与连接控制](./20-nginx-rate-limiting.md) | limit_req 请求限流、limit_conn 连接限制、令牌桶算法、DDoS 防护 |
+| 21 | [HTTP/2 与 HTTP/3](./21-nginx-http2-http3.md) | HTTP/2 多路复用、HTTP/3 QUIC、配置迁移、性能对比 |
+| 22 | [第三方扩展模块](./22-nginx-third-party-modules.md) | NJS/Lua/Brotli/Cache Purge/Headers More/RTMP/Sticky 模块 |
+| 23 | [特殊功能模块](./23-nginx-special-modules.md) | WebDAV/图像过滤/FLV/MP4/HLS 流媒体/XSLT 转换 |
+| 24 | [核心与事件模块](./24-nginx-core-events.md) | worker_processes/events/epoll/kqueue/连接数计算 |
 
 ---
+
+## 模块分类索引
+
+### 核心模块
+- [核心与事件模块](./24-nginx-core-events.md) - ngx_core_module, ngx_events_module
+- [HTTP 核心模块](./03-nginx-http-core.md) - ngx_http_core_module
+
+### 代理与负载均衡
+- [反向代理与负载均衡](./04-nginx-proxy-loadbalancing.md) - ngx_http_proxy_module, ngx_http_upstream_module
+- [gRPC/uWSGI/SCGI 代理](./14-nginx-grpc-uwsgi.md) - gRPC, Python, CGI 代理
+- [TCP/UDP Stream 模块](./10-nginx-stream-tcp-udp.md) - ngx_stream_* 模块
+- [邮件代理模块](./11-nginx-mail-proxy.md) - ngx_mail_* 模块
+
+### 安全与访问控制
+- [安全与访问控制](./09-nginx-security.md) - 综合安全配置
+- [HTTP 功能模块详解](./19-nginx-http-modules-detail.md) - access/auth_basic/auth_request/referer/secure_link
+- [限流与连接控制](./20-nginx-rate-limiting.md) - limit_req, limit_conn
+
+### 性能与优化
+- [性能优化](./12-nginx-performance-tuning.md) - Worker/事件/缓冲/内核参数
+- [压缩与缓存](./07-nginx-compression-caching.md) - Gzip, proxy_cache, fastcgi_cache
+- [HTTP/2 与 HTTP/3](./21-nginx-http2-http3.md) - HTTP/2, HTTP/3 QUIC
+
+### 内容处理
+- [URL 重写与请求处理](./06-nginx-rewrite.md) - rewrite, return, map
+- [镜像与切片](./17-nginx-mirror-slice.md) - mirror, slice
+- [特殊功能模块](./23-nginx-special-modules.md) - WebDAV, 图像过滤, 流媒体
+
+### 扩展与第三方
+- [第三方扩展模块](./22-nginx-third-party-modules.md) - NJS, Lua, Brotli, RTMP 等
 
 ## 快速参考
 

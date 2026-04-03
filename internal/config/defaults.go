@@ -1,4 +1,17 @@
 // Package config 提供 YAML 配置文件的解析、验证和默认配置生成功能。
+//
+// 该文件包含默认配置生成功能，包括：
+//   - DefaultConfig 函数：返回带合理默认值的配置结构体
+//   - GenerateConfigYAML 函数：生成带注释的示例配置文件
+//
+// 主要用途：
+//   用于生成默认配置和示例配置文件，便于用户快速上手。
+//
+// 注意事项：
+//   - 默认值经过优化，适合大多数常见场景
+//   - 生成的 YAML 包含详细注释说明
+//
+// 作者：xfy
 package config
 
 import (
@@ -8,6 +21,19 @@ import (
 )
 
 // DefaultConfig 返回带默认值的配置结构体。
+//
+// 返回一个预填充了合理默认值的配置对象，包含服务器、
+// SSL、安全、压缩、日志、性能和监控等各模块的默认设置。
+//
+// 返回值：
+//   - *Config: 带默认值的配置对象
+//
+// 默认值说明：
+//   - 监听地址: :8080
+//   - 超时: 读取/写入 30s，空闲 120s
+//   - TLS: 仅支持 TLSv1.2 和 TLSv1.3
+//   - 安全头部: X-Frame-Options=DENY, X-Content-Type-Options=nosniff
+//   - 压缩: gzip，级别 6，最小 1024 字节
 func DefaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
@@ -106,6 +132,20 @@ func DefaultConfig() *Config {
 }
 
 // GenerateConfigYAML 生成带注释的默认配置 YAML。
+//
+// 根据配置对象生成带详细注释的 YAML 配置文件内容，
+// 包含各配置项的说明和有效值提示。
+//
+// 参数：
+//   - cfg: 配置对象，用于填充 YAML 中的默认值
+//
+// 返回值：
+//   - []byte: 生成的 YAML 内容（包含注释）
+//   - error: 当前实现始终返回 nil
+//
+// 注意事项：
+//   - 生成的 YAML 包含中文注释，便于理解各配置项用途
+//   - 注释中包含有效值范围和默认值说明
 func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	// 手动构建带注释的 YAML
 	var buf bytes.Buffer
@@ -237,29 +277,82 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	}
 	buf.WriteString("\n")
 
-	// servers 配置说明
-	buf.WriteString("# 多虚拟主机模式（可选）\n")
+	// servers 配置说明 - 完整示例
+	buf.WriteString("# 多虚拟主机模式（可选，每个虚拟主机支持完整的 server 配置）\n")
 	buf.WriteString("# servers:\n")
-	buf.WriteString("#   - listen: \":8080\"\n")
-	buf.WriteString("#     name: \"api.example.com\"\n")
-	buf.WriteString("#     proxy:\n")
+	buf.WriteString("#   - listen: \":8080\"              # 监听地址\n")
+	buf.WriteString("#     name: \"api.example.com\"        # 服务器名称（用于虚拟主机匹配）\n")
+	buf.WriteString("#     read_timeout: 30s               # 读取超时（0 表示不限制）\n")
+	buf.WriteString("#     write_timeout: 30s              # 写入超时（0 表示不限制）\n")
+	buf.WriteString("#     idle_timeout: 120s              # 空闲超时（0 表示不限制）\n")
+	buf.WriteString("#     max_conns_per_ip: 1000          # 每 IP 最大连接数（0 表示不限制）\n")
+	buf.WriteString("#     max_requests_per_conn: 10000   # 每连接最大请求数（0 表示不限制）\n")
+	buf.WriteString("#     static:                         # 静态文件配置\n")
+	buf.WriteString("#       root: /var/www/api\n")
+	buf.WriteString("#       index: [index.html]\n")
+	buf.WriteString("#     proxy:                          # 反向代理配置\n")
 	buf.WriteString("#       - path: /api\n")
-	buf.WriteString("#         targets: [http://backend:8080]\n")
-	buf.WriteString("#   - listen: \":8443\"\n")
+	buf.WriteString("#         targets:\n")
+	buf.WriteString("#           - url: http://backend:8080\n")
+	buf.WriteString("#         load_balance: round_robin\n")
+	buf.WriteString("#     ssl:                            # SSL/TLS 配置\n")
+	buf.WriteString("#       cert: /path/to/api.cert.pem\n")
+	buf.WriteString("#       key: /path/to/api.key.pem\n")
+	buf.WriteString("#       protocols: [TLSv1.2, TLSv1.3]\n")
+	buf.WriteString("#       hsts:\n")
+	buf.WriteString("#         max_age: 31536000\n")
+	buf.WriteString("#         include_sub_domains: true\n")
+	buf.WriteString("#     security:                       # 安全配置\n")
+	buf.WriteString("#       access:\n")
+	buf.WriteString("#         default: allow\n")
+	buf.WriteString("#       rate_limit:\n")
+	buf.WriteString("#         request_rate: 100\n")
+	buf.WriteString("#       headers:\n")
+	buf.WriteString("#         x_frame_options: DENY\n")
+	buf.WriteString("#     compression:                    # 响应压缩配置\n")
+	buf.WriteString("#       type: gzip\n")
+	buf.WriteString("#       level: 6\n")
+	buf.WriteString("#   - listen: \":8443\"              # 另一个虚拟主机\n")
 	buf.WriteString("#     name: \"static.example.com\"\n")
 	buf.WriteString("#     static:\n")
 	buf.WriteString("#       root: /var/www/static\n")
+	buf.WriteString("#       index: [index.html, index.htm]\n")
+	buf.WriteString("#     ssl:\n")
+	buf.WriteString("#       cert: /path/to/static.cert.pem\n")
+	buf.WriteString("#       key: /path/to/static.key.pem\n")
+	buf.WriteString("#     compression:\n")
+	buf.WriteString("#       type: gzip\n")
+	buf.WriteString("\n")
+
+	// SSL 默认值说明（即使不启用也展示默认配置）
+	buf.WriteString("# SSL/TLS 默认配置说明（未配置证书时不启用）\n")
+	buf.WriteString("# 默认 TLS 协议: TLSv1.2, TLSv1.3（不支持 TLSv1.0/1.1）\n")
+	buf.WriteString("# 默认 HSTS 配置: max_age=31536000（1年）, include_sub_domains=true\n")
+	buf.WriteString("\n")
+
+	// stream 配置
+	buf.WriteString("# TCP/UDP Stream 代理配置（可选）\n")
+	buf.WriteString("# stream:\n")
+	buf.WriteString("#   - listen: \"3306\"              # 监听地址\n")
+	buf.WriteString("#     protocol: \"tcp\"             # 协议类型（有效值: tcp, udp）\n")
+	buf.WriteString("#     upstream:\n")
+	buf.WriteString("#       targets:                   # 上游目标列表\n")
+	buf.WriteString("#         - addr: \"mysql1:3306\"   # 目标地址\n")
+	buf.WriteString("#           weight: 3              # 权重（加权轮询时有效）\n")
+	buf.WriteString("#         - addr: \"mysql2:3306\"\n")
+	buf.WriteString("#           weight: 1\n")
+	buf.WriteString("#       load_balance: \"round_robin\"  # 负载均衡算法（有效值: round_robin, weighted_round_robin, least_conn, ip_hash）\n")
 	buf.WriteString("\n")
 
 	// logging 配置
 	buf.WriteString("# 日志配置\n")
 	buf.WriteString("logging:\n")
 	buf.WriteString("  access:\n")
+	buf.WriteString("    path: \"\"                   # 日志文件路径（空表示输出到 stdout）\n")
 	buf.WriteString(fmt.Sprintf("    format: \"%s\"  # 日志格式（支持变量: $remote_addr, $request, $status, $body_bytes_sent, $request_time, $http_referer, $http_user_agent）\n", cfg.Logging.Access.Format))
-	buf.WriteString("    # path: /var/log/lolly/access.log  # 日志文件路径（空表示输出到 stdout）\n")
 	buf.WriteString("  error:\n")
+	buf.WriteString("    path: \"\"                   # 日志文件路径（空表示输出到 stderr）\n")
 	buf.WriteString(fmt.Sprintf("    level: \"%s\"           # 日志级别（有效值: debug, info, warn, error，级别越高日志越少）\n", cfg.Logging.Error.Level))
-	buf.WriteString("    # path: /var/log/lolly/error.log  # 日志文件路径（空表示输出到 stderr）\n")
 	buf.WriteString("\n")
 
 	// performance 配置

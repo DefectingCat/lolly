@@ -1,3 +1,18 @@
+// Package handler 提供 HTTP 请求处理器，包括路由、静态文件服务和零拷贝传输。
+//
+// 该文件包含静态文件服务相关的核心逻辑，包括：
+//   - 静态文件请求处理
+//   - 目录索引文件支持
+//   - 文件缓存和零拷贝传输优化
+//
+// 主要用途：
+//   用于提供静态文件服务，支持缓存和零拷贝传输优化。
+//
+// 注意事项：
+//   - 自动处理目录遍历攻击防护
+//   - 支持多索引文件（如 index.html、index.htm）
+//
+// 作者：xfy
 package handler
 
 import (
@@ -10,12 +25,21 @@ import (
 	"rua.plus/lolly/internal/cache"
 )
 
-// StaticHandler 静态文件处理器
+// StaticHandler 静态文件处理器。
+//
+// 提供静态文件服务，支持目录索引、文件缓存和零拷贝传输。
 type StaticHandler struct {
-	root        string
-	index       []string
-	useSendfile bool          // 是否启用零拷贝传输
-	fileCache   *cache.FileCache // 文件缓存（可选）
+	// root 静态文件根目录
+	root string
+
+	// index 索引文件列表，当请求目录时依次查找
+	index []string
+
+	// useSendfile 是否启用零拷贝传输（大文件优化）
+	useSendfile bool
+
+	// fileCache 文件缓存实例（可选）
+	fileCache *cache.FileCache
 }
 
 // NewStaticHandler 创建静态文件处理器

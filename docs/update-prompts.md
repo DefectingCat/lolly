@@ -3,7 +3,9 @@
 /ultrawork 分析配置文件，当前支持的配置和 --generate-config 是否有不一样的地方，--generate-config
 需要完整且详细，包括所有字段的枚举值都要有
 
-/ultrawork 分析下 @docs/plan.md 和 @docs/ 下的 nginx 文档，看看当前项目实现的怎么样了
+/ultrawork 深度分析下 @docs/plan.md 和 @docs/ 下的 nginx 文档，看看当前项目实现的怎么样了
+
+/ultrawork 深度分析 https://nginx.org/en/docs/ nginx 的功能，@docs/ 目录下已经有一些分析过的文档了，看看有没有能完善的
 
 ## 单元测试
 

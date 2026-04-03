@@ -1,4 +1,19 @@
 // Package config 提供 YAML 配置文件的解析、验证和默认配置生成功能。
+//
+// 该文件包含配置验证相关的核心逻辑，包括：
+//   - 服务器配置验证（监听地址、静态文件、代理）
+//   - SSL/TLS 配置验证（证书、协议、加密套件）
+//   - 安全配置验证（访问控制、认证、速率限制）
+//   - 压缩配置验证（类型、级别、最小大小）
+//
+// 主要用途：
+//   用于验证用户提供的配置是否符合要求，确保服务器启动前配置有效。
+//
+// 注意事项：
+//   - 验证失败时返回详细的错误信息
+//   - 支持默认服务器和虚拟主机两种模式的验证
+//
+// 作者：xfy
 package config
 
 import (
@@ -11,6 +26,20 @@ import (
 )
 
 // validateServer 验证服务器配置。
+//
+// 检查服务器配置的各项参数是否符合要求，包括监听地址、
+// 静态文件、代理、SSL、安全和压缩等配置。
+//
+// 参数：
+//   - s: 服务器配置对象
+//   - isDefault: 是否为默认服务器，默认服务器可省略部分配置
+//
+// 返回值：
+//   - error: 验证失败时返回具体错误信息，成功返回 nil
+//
+// 注意事项：
+//   - 默认服务器可省略监听地址
+//   - 验证错误信息包含字段路径，便于定位问题
 func validateServer(s *ServerConfig, isDefault bool) error {
 	// 监听地址必填（默认服务器可省略，使用默认值）
 	if s.Listen == "" && !isDefault {
@@ -55,6 +84,14 @@ func validateServer(s *ServerConfig, isDefault bool) error {
 }
 
 // validateStatic 验证静态文件配置。
+//
+// 检查静态文件根目录路径的安全性，防止路径遍历攻击。
+//
+// 参数：
+//   - s: 静态文件配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
 func validateStatic(s *StaticConfig) error {
 	// 静态文件根目录非空时验证路径有效性
 	if s.Root != "" {
@@ -67,6 +104,20 @@ func validateStatic(s *StaticConfig) error {
 }
 
 // validateProxy 验证代理配置。
+//
+// 检查代理路径、目标地址和负载均衡算法的有效性。
+//
+// 参数：
+//   - p: 代理配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - path 必填
+//   - targets 至少需要一个目标
+//   - 目标 URL 必须以 http:// 或 https:// 开头
+//   - load_balance 必须是有效的负载均衡算法
 func validateProxy(p *ProxyConfig) error {
 	// 路径必填
 	if p.Path == "" {
@@ -97,6 +148,19 @@ func validateProxy(p *ProxyConfig) error {
 }
 
 // validateSSL 验证 SSL 配置。
+//
+// 检查 SSL 证书、私钥、TLS 协议版本和加密套件的有效性。
+//
+// 参数：
+//   - s: SSL 配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - cert 和 key 必须同时配置或同时为空
+//   - TLS 协议仅允许 TLSv1.2 和 TLSv1.3
+//   - 拒绝不安全的加密套件（RC4、DES、3DES、CBC）
 func validateSSL(s *SSLConfig) error {
 	// 未配置 SSL 时跳过验证
 	if s.Cert == "" && s.Key == "" {
@@ -132,6 +196,14 @@ func validateSSL(s *SSLConfig) error {
 }
 
 // validateSecurity 验证安全配置。
+//
+// 验证访问控制、认证和速率限制配置的有效性。
+//
+// 参数：
+//   - s: 安全配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
 func validateSecurity(s *SecurityConfig) error {
 	// 验证访问控制配置
 	if err := validateAccess(&s.Access); err != nil {
@@ -152,6 +224,18 @@ func validateSecurity(s *SecurityConfig) error {
 }
 
 // validateAccess 验证访问控制配置。
+//
+// 检查允许和拒绝列表中的 CIDR/IP 格式，以及默认动作的有效性。
+//
+// 参数：
+//   - a: 访问控制配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - allow 和 deny 列表中的项必须是有效的 CIDR 或 IP 地址
+//   - default 动作仅允许 "allow" 或 "deny"
 func validateAccess(a *AccessConfig) error {
 	// 验证 CIDR 格式
 	for _, cidr := range a.Allow {
@@ -180,6 +264,19 @@ func validateAccess(a *AccessConfig) error {
 }
 
 // validateAuth 验证认证配置。
+//
+// 检查认证类型、哈希算法和用户列表的有效性。
+//
+// 参数：
+//   - a: 认证配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - type 目前仅支持 "basic"
+//   - algorithm 仅支持 bcrypt 或 argon2id
+//   - 启用认证时至少需要一个用户
 func validateAuth(a *AuthConfig) error {
 	// 未配置认证时跳过
 	if a.Type == "" {
@@ -229,6 +326,18 @@ func validateAuth(a *AuthConfig) error {
 }
 
 // validateRateLimit 验证速率限制配置。
+//
+// 检查请求速率、突发容量和连接限制的有效性。
+//
+// 参数：
+//   - r: 速率限制配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - request_rate、burst、conn_limit 不能为负数
+//   - key 仅支持 "ip" 或 "header"
 func validateRateLimit(r *RateLimitConfig) error {
 	// 未配置时跳过
 	if r.RequestRate == 0 && r.ConnLimit == 0 {
@@ -263,6 +372,19 @@ func validateRateLimit(r *RateLimitConfig) error {
 }
 
 // validateCompression 验证压缩配置。
+//
+// 检查压缩类型、压缩级别和最小压缩大小的有效性。
+//
+// 参数：
+//   - c: 压缩配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - type 仅支持 gzip、brotli 或 both
+//   - level 范围为 0-9
+//   - min_size 不能为负数
 func validateCompression(c *CompressionConfig) error {
 	// 未配置时跳过
 	if c.Type == "" {

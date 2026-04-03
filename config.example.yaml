@@ -121,14 +121,26 @@ server:
 #     static:
 #       root: /var/www/static
 
+# TCP/UDP Stream 代理配置（可选）
+# stream:
+#   - listen: "3306"              # 监听地址
+#     protocol: "tcp"             # 协议类型（有效值: tcp, udp）
+#     upstream:
+#       targets:                   # 上游目标列表
+#         - addr: "mysql1:3306"   # 目标地址
+#           weight: 3              # 权重（加权轮询时有效）
+#         - addr: "mysql2:3306"
+#           weight: 1
+#       load_balance: "round_robin"  # 负载均衡算法（有效值: round_robin, weighted_round_robin, least_conn, ip_hash）
+
 # 日志配置
 logging:
   access:
+    path: ""                   # 日志文件路径（空表示输出到 stdout）
     format: "$remote_addr - $request - $status - $body_bytes_sent"  # 日志格式（支持变量: $remote_addr, $request, $status, $body_bytes_sent, $request_time, $http_referer, $http_user_agent）
-    # path: /var/log/lolly/access.log  # 日志文件路径（空表示输出到 stdout）
   error:
+    path: ""                   # 日志文件路径（空表示输出到 stderr）
     level: "info"           # 日志级别（有效值: debug, info, warn, error，级别越高日志越少）
-    # path: /var/log/lolly/error.log  # 日志文件路径（空表示输出到 stderr）
 
 # 性能配置
 performance:

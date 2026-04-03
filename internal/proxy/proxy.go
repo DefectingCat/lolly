@@ -48,12 +48,13 @@ import (
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
 // 它为每个后端目标管理连接池，并提供负载均衡功能。
 type Proxy struct {
-	targets  []*loadbalance.Target
-	clients  map[string]*fasthttp.HostClient // key: target URL
-	balancer loadbalance.Balancer
-	config   *config.ProxyConfig
-	cache    *cache.ProxyCache // 代理缓存（可选）
-	mu       sync.RWMutex
+	targets       []*loadbalance.Target
+	clients       map[string]*fasthttp.HostClient // key: target URL
+	balancer      loadbalance.Balancer
+	config        *config.ProxyConfig
+	cache         *cache.ProxyCache // 代理缓存（可选）
+	healthChecker *HealthChecker    // 健康检查器（用于被动检查）
+	mu            sync.RWMutex
 }
 
 // NewProxy 使用给定的配置和后台目标创建一个新的反向代理实例。
@@ -111,6 +112,12 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target) (*Proxy, e
 	}
 
 	return p, nil
+}
+
+// SetHealthChecker 设置健康检查器用于被动健康检查。
+// 当代理请求失败时，将调用健康检查器的 MarkUnhealthy 方法。
+func (p *Proxy) SetHealthChecker(hc *HealthChecker) {
+	p.healthChecker = hc
 }
 
 // createBalancer 根据配置的算法创建负载均衡器。
@@ -208,6 +215,11 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// 执行代理请求
 	err := client.Do(req, &ctx.Response)
 	if err != nil {
+		// 被动健康检查：标记目标为不健康
+		if p.healthChecker != nil {
+			p.healthChecker.MarkUnhealthy(target)
+		}
+
 		// 处理不同类型的错误
 		if errors.Is(err, fasthttp.ErrTimeout) {
 			ctx.Error("Gateway Timeout", fasthttp.StatusGatewayTimeout)

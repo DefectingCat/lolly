@@ -1,4 +1,19 @@
 // Package cache 提供文件缓存和代理缓存功能，支持 LRU 淘汰和缓存锁防击穿。
+//
+// 该文件包含缓存相关的核心逻辑，包括：
+//   - 文件缓存实现，支持 LRU 淘汰策略
+//   - 代理响应缓存，支持缓存锁防止缓存击穿
+//   - 缓存统计和生命周期管理
+//
+// 主要用途：
+//   用于缓存静态文件内容和代理响应，减少磁盘 I/O 和上游请求，提升服务性能。
+//
+// 注意事项：
+//   - 文件缓存支持按条目数和内存大小双重限制
+//   - 代理缓存支持过期缓存复用（stale）机制
+//   - 所有公开方法均为并发安全
+//
+// 作者：xfy
 package cache
 
 import (
@@ -8,28 +23,69 @@ import (
 	"time"
 )
 
-// FileEntry 文件缓存条目。
+// FileEntry 文件缓存条目，存储单个文件的缓存信息。
 type FileEntry struct {
-	Path       string        // 文件路径
-	Size       int64         // 文件大小
-	ModTime    time.Time     // 修改时间
-	LastAccess time.Time     // 最后访问时间
-	Data       []byte        // 文件内容
-	element    *list.Element // LRU 链表元素
+	// Path 文件路径，作为缓存键
+	Path string
+
+	// Size 文件大小，单位为字节
+	Size int64
+
+	// ModTime 文件最后修改时间，用于检测文件变更
+	ModTime time.Time
+
+	// LastAccess 最后访问时间，用于 LRU 淘汰策略
+	LastAccess time.Time
+
+	// Data 文件内容字节
+	Data []byte
+
+	// element LRU 链表元素，用于快速更新链表位置
+	element *list.Element
 }
 
-// FileCache 文件缓存，支持 LRU 淘汰。
+// FileCache 文件缓存，支持 LRU 淘汰策略。
+//
+// 该结构体实现了基于内存的文件缓存，支持按条目数和内存大小限制进行淘汰。
+// 使用 LRU（最近最少使用）算法决定淘汰顺序。
+//
+// 注意事项：
+//   - 所有方法均为并发安全
+//   - 支持过期时间自动淘汰
 type FileCache struct {
-	maxEntries  int64         // 最大条目数
-	maxSize     int64         // 内存上限（字节）
-	inactive    time.Duration // 未访问淘汰时间
-	entries     map[string]*FileEntry
-	lruList     *list.List // LRU 链表
-	mu          sync.RWMutex
-	currentSize int64 // 当前内存使用
+	// maxEntries 最大缓存条目数，超过时触发 LRU 淘汰
+	maxEntries int64
+
+	// maxSize 内存使用上限，单位为字节，超过时触发 LRU 淘汰
+	maxSize int64
+
+	// inactive 未访问淘汰时间，超过此时间未访问的条目将被淘汰
+	inactive time.Duration
+
+	// entries 缓存条目映射，以文件路径为键
+	entries map[string]*FileEntry
+
+	// lruList LRU 链表，头部为最近访问，尾部为最久未访问
+	lruList *list.List
+
+	// mu 读写锁，保护并发访问
+	mu sync.RWMutex
+
+	// currentSize 当前内存使用量，单位为字节
+	currentSize int64
 }
 
-// NewFileCache 创建文件缓存。
+// NewFileCache 创建文件缓存实例。
+//
+// 根据指定的条目数限制、内存大小限制和过期时间创建缓存。
+//
+// 参数：
+//   - maxEntries: 最大缓存条目数，设为 0 表示不限制
+//   - maxSize: 内存使用上限（字节），设为 0 表示不限制
+//   - inactive: 未访问淘汰时间，超过此时间未访问的条目将被淘汰
+//
+// 返回值：
+//   - *FileCache: 创建的文件缓存实例
 func NewFileCache(maxEntries, maxSize int64, inactive time.Duration) *FileCache {
 	return &FileCache{
 		maxEntries: maxEntries,
@@ -41,6 +97,16 @@ func NewFileCache(maxEntries, maxSize int64, inactive time.Duration) *FileCache 
 }
 
 // Get 获取缓存的文件。
+//
+// 根据文件路径查找缓存条目，如果找到且未过期则返回。
+// 访问时会更新条目的访问时间并移动到 LRU 链表头部。
+//
+// 参数：
+//   - path: 文件路径，作为缓存键
+//
+// 返回值：
+//   - *FileEntry: 缓存条目，包含文件内容和元数据
+//   - bool: 是否找到有效缓存
 func (c *FileCache) Get(path string) (*FileEntry, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -64,6 +130,18 @@ func (c *FileCache) Get(path string) (*FileEntry, bool) {
 }
 
 // Set 设置缓存条目。
+//
+// 将文件内容存入缓存，如果缓存已存在则更新。
+// 存入后检查是否需要触发 LRU 淘汰。
+//
+// 参数：
+//   - path: 文件路径，作为缓存键
+//   - data: 文件内容字节
+//   - size: 文件大小（字节）
+//   - modTime: 文件最后修改时间
+//
+// 返回值：
+//   - error: 当前实现始终返回 nil
 func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -98,6 +176,11 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time)
 }
 
 // Delete 删除缓存条目。
+//
+// 根据文件路径删除对应的缓存条目。
+//
+// 参数：
+//   - path: 文件路径，作为缓存键
 func (c *FileCache) Delete(path string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -108,6 +191,12 @@ func (c *FileCache) Delete(path string) {
 }
 
 // removeEntry 内部删除条目（不加锁）。
+//
+// 从 LRU 链表和条目映射中移除指定条目，更新当前内存使用量。
+// 调用此方法前必须已持有写锁。
+//
+// 参数：
+//   - entry: 要删除的缓存条目
 func (c *FileCache) removeEntry(entry *FileEntry) {
 	c.lruList.Remove(entry.element)
 	delete(c.entries, entry.Path)

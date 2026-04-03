@@ -1,4 +1,19 @@
 // Package config 提供 YAML 配置文件的解析、验证和默认配置生成功能。
+//
+// 该文件包含配置结构体定义和加载/保存功能，包括：
+//   - 根配置和服务器配置结构体
+//   - SSL、安全、代理、压缩等子配置结构体
+//   - 配置文件的加载、保存和验证方法
+//
+// 主要用途：
+//   用于定义和管理服务器的完整配置，支持单服务器和多虚拟主机两种模式。
+//
+// 注意事项：
+//   - 配置文件使用 YAML 格式
+//   - 所有配置项都有合理的默认值
+//   - 配置加载后会自动验证
+//
+// 作者：xfy
 package config
 
 import (
@@ -251,6 +266,19 @@ type StreamTarget struct {
 }
 
 // Load 从文件加载配置。
+//
+// 读取指定路径的 YAML 配置文件，解析并验证配置内容。
+//
+// 参数：
+//   - path: 配置文件路径
+//
+// 返回值：
+//   - *Config: 解析后的配置对象
+//   - error: 读取、解析或验证失败时的错误信息
+//
+// 注意事项：
+//   - 加载后会自动调用 Validate 进行配置验证
+//   - 文件不存在或格式错误都会返回错误
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -270,6 +298,18 @@ func Load(path string) (*Config, error) {
 }
 
 // LoadFromString 从 YAML 字符串加载配置。
+//
+// 解析 YAML 格式的配置字符串，适用于从环境变量或命令行参数加载配置。
+//
+// 参数：
+//   - yamlStr: YAML 格式的配置字符串
+//
+// 返回值：
+//   - *Config: 解析后的配置对象
+//   - error: 解析或验证失败时的错误信息
+//
+// 注意事项：
+//   - 加载后会自动调用 Validate 进行配置验证
 func LoadFromString(yamlStr string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal([]byte(yamlStr), &cfg); err != nil {
@@ -284,6 +324,18 @@ func LoadFromString(yamlStr string) (*Config, error) {
 }
 
 // Save 保存配置到文件。
+//
+// 将配置对象序列化为 YAML 格式并写入指定文件。
+//
+// 参数：
+//   - cfg: 配置对象
+//   - path: 目标文件路径
+//
+// 返回值：
+//   - error: 序列化或写入失败时的错误信息
+//
+// 注意事项：
+//   - 文件权限设为 0644
 func Save(cfg *Config, path string) error {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -298,16 +350,27 @@ func Save(cfg *Config, path string) error {
 }
 
 // HasServers 检查是否为多虚拟主机模式。
+//
+// 返回值：
+//   - bool: 如果配置了 servers 列表且非空，返回 true
 func (c *Config) HasServers() bool {
 	return len(c.Servers) > 0
 }
 
 // HasDefaultServer 检查是否有默认服务器配置。
+//
+// 返回值：
+//   - bool: 如果 server.listen 已配置，返回 true
 func (c *Config) HasDefaultServer() bool {
 	return c.Server.Listen != ""
 }
 
-// GetDefaultServer 获取默认服务器配置（用于 fallback）。
+// GetDefaultServer 获取默认服务器配置。
+//
+// 用于在虚拟主机模式下获取默认服务器的配置作为 fallback。
+//
+// 返回值：
+//   - *ServerConfig: 默认服务器配置，如未配置则返回 nil
 func (c *Config) GetDefaultServer() *ServerConfig {
 	if c.HasDefaultServer() {
 		return &c.Server
@@ -316,6 +379,19 @@ func (c *Config) GetDefaultServer() *ServerConfig {
 }
 
 // Validate 配置验证入口。
+//
+// 验证配置的完整性和有效性，检查是否至少配置了一个服务器，
+// 并递归验证所有服务器配置。
+//
+// 参数：
+//   - cfg: 配置对象
+//
+// 返回值：
+//   - error: 验证失败时的错误信息，包含具体字段路径
+//
+// 验证规则：
+//   - 必须配置 server 或 servers 中的至少一个
+//   - 所有服务器配置必须通过 validateServer 验证
 func Validate(cfg *Config) error {
 	// 至少需要一种服务器配置
 	if !cfg.HasDefaultServer() && !cfg.HasServers() {

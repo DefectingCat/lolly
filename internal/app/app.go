@@ -1,4 +1,19 @@
 // Package app 提供应用程序的启动和运行逻辑。
+//
+// 该文件包含应用程序相关的核心逻辑，包括：
+//   - 应用程序生命周期管理
+//   - 信号处理（优雅停止、重载配置、热升级）
+//   - 配置加载和版本信息
+//
+// 主要用途：
+//   用于启动和管理服务器进程，处理系统信号和运行时操作。
+//
+// 注意事项：
+//   - 支持热升级（USR2 信号）
+//   - 支持配置重载（HUP 信号）
+//   - 支持日志重新打开（USR1 信号）
+//
+// 作者：xfy
 package app
 
 import (
@@ -16,28 +31,51 @@ import (
 
 // 版本信息，通过 -ldflags 注入。
 var (
-	Version       = "dev"
-	GitCommit     = "unknown"
-	GitBranch     = "unknown"
-	BuildTime     = "unknown"
-	GoVersion     = "unknown"
+	// Version 版本号
+	Version = "dev"
+	// GitCommit Git 提交哈希
+	GitCommit = "unknown"
+	// GitBranch Git 分支名
+	GitBranch = "unknown"
+	// BuildTime 构建时间
+	BuildTime = "unknown"
+	// GoVersion Go 版本
+	GoVersion = "unknown"
+	// BuildPlatform 构建平台
 	BuildPlatform = "unknown"
 )
 
 // 应用状态。
 var (
-	shutdownTimeout = 30 * time.Second // 优雅停止超时时间
+	// shutdownTimeout 优雅停止超时时间
+	shutdownTimeout = 30 * time.Second
 )
 
 // App 应用程序结构。
+//
+// 管理服务器的完整生命周期，包括 HTTP 服务器、Stream 服务器
+// 和热升级管理器。
 type App struct {
-	cfgPath      string
-	cfg          *config.Config
-	srv          *server.Server
-	streamSrv    *stream.Server // Stream 服务器（可选）
-	upgradeMgr   *server.UpgradeManager
-	pidFile      string
-	logFile      string // 日志文件路径（用于重新打开）
+	// cfgPath 配置文件路径
+	cfgPath string
+
+	// cfg 配置对象
+	cfg *config.Config
+
+	// srv HTTP 服务器实例
+	srv *server.Server
+
+	// streamSrv Stream 服务器实例（可选）
+	streamSrv *stream.Server
+
+	// upgradeMgr 热升级管理器
+	upgradeMgr *server.UpgradeManager
+
+	// pidFile PID 文件路径
+	pidFile string
+
+	// logFile 日志文件路径（用于重新打开）
+	logFile string
 }
 
 // NewApp 创建应用程序。
@@ -142,7 +180,7 @@ func (a *App) Run() int {
 
 			// 监听端口
 			if sc.Protocol == "udp" {
-				if err := a.streamSrv.ListenUDP(sc.Listen); err != nil {
+				if err := a.streamSrv.ListenUDP(sc.Listen, sc.Listen, 60*time.Second); err != nil {
 					fmt.Fprintf(os.Stderr, "监听 UDP %s 失败: %v\n", sc.Listen, err)
 				}
 			} else {
@@ -283,6 +321,17 @@ func (a *App) gracefulUpgrade() {
 		fmt.Fprintf(os.Stderr, "获取可执行文件路径失败: %v\n", err)
 		return
 	}
+
+	// 尝试从服务器获取监听器
+	listeners := a.srv.GetListeners()
+	if len(listeners) == 0 {
+		fmt.Fprintf(os.Stderr, "热升级失败: 服务器未保存监听器（热升级当前未完全实现）\n")
+		fmt.Fprintf(os.Stderr, "提示: 热升级需要服务器使用手动监听器管理模式\n")
+		return
+	}
+
+	// 设置监听器到升级管理器
+	a.upgradeMgr.SetListeners(listeners)
 
 	// 执行升级
 	if err := a.upgradeMgr.GracefulUpgrade(execPath); err != nil {

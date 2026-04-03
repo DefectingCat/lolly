@@ -1,17 +1,17 @@
-// Package security provides security-related middleware for the Lolly HTTP server.
+// Package security 提供了 Lolly HTTP 服务器的安全相关中间件。
 //
-// This file implements security headers middleware, adding standard security
-// headers to responses to protect against common web vulnerabilities.
+// 该文件实现了安全响应头中间件，为响应添加标准安全头部，
+// 以防止常见的 Web 安全漏洞。
 //
-// Headers implemented:
-//   - X-Frame-Options: Prevent clickjacking
-//   - X-Content-Type-Options: Prevent MIME sniffing
-//   - Content-Security-Policy: Control resource loading (XSS protection)
-//   - Strict-Transport-Security: Enforce HTTPS (HSTS)
-//   - Referrer-Policy: Control referrer information
-//   - Permissions-Policy: Control browser features
+// 实现的安全头包括：
+//   - X-Frame-Options: 防止点击劫持攻击
+//   - X-Content-Type-Options: 防止 MIME 类型嗅探
+//   - Content-Security-Policy: 控制资源加载（XSS 防护）
+//   - Strict-Transport-Security: 强制使用 HTTPS（HSTS）
+//   - Referrer-Policy: 控制 Referer 信息泄露
+//   - Permissions-Policy: 控制浏览器功能权限
 //
-// Example usage:
+// 使用示例：
 //
 //	cfg := &config.SecurityHeaders{
 //	    XFrameOptions:        "DENY",
@@ -23,7 +23,7 @@
 //	chain := middleware.NewChain(headers)
 //	handler := chain.Apply(finalHandler)
 //
-//go:generate go test -v ./...
+// 作者：xfy
 package security
 
 import (
@@ -35,27 +35,36 @@ import (
 	"rua.plus/lolly/internal/middleware"
 )
 
-// SecurityHeadersMiddleware adds security-related headers to responses.
+// SecurityHeadersMiddleware 安全响应头中间件。
+//
+// 为 HTTP 响应添加安全相关的头部字段，防止常见的 Web 安全漏洞。
+// 支持配置各种安全头的值，并提供安全的默认配置。
+//
+// 注意事项：
+//   - 所有方法均为并发安全
+//   - HSTS 头仅在 TLS 连接时添加
 type SecurityHeadersMiddleware struct {
-	config *config.SecurityHeaders
-	hsts   string // Pre-formatted HSTS header value
-	mu     sync.RWMutex
+	config *config.SecurityHeaders // 安全头配置
+	hsts   string                   // 预格式化的 HSTS 头值
+	mu     sync.RWMutex             // 读写锁，保护并发访问
 }
 
-// NewSecurityHeaders creates a new security headers middleware.
+// NewSecurityHeaders 创建新的安全响应头中间件。
 //
-// Parameters:
-//   - cfg: Security headers configuration (can be nil for defaults)
+// 根据配置创建中间件实例，如果配置为 nil 则使用安全的默认值。
 //
-// Returns:
-//   - *SecurityHeadersMiddleware: Configured middleware with default safe values
+// 参数：
+//   - cfg: 安全头配置，可以为 nil 使用默认配置
+//
+// 返回值：
+//   - *SecurityHeadersMiddleware: 配置好的中间件实例
 func NewSecurityHeaders(cfg *config.SecurityHeaders) *SecurityHeadersMiddleware {
 	sh := &SecurityHeadersMiddleware{}
 
 	if cfg != nil {
 		sh.config = cfg
 	} else {
-		// Use secure defaults
+		// 使用安全的默认配置
 		sh.config = &config.SecurityHeaders{
 			XFrameOptions:       "DENY",
 			XContentTypeOptions: "nosniff",
@@ -63,29 +72,45 @@ func NewSecurityHeaders(cfg *config.SecurityHeaders) *SecurityHeadersMiddleware 
 		}
 	}
 
-	// Pre-format HSTS header if configured
+	// 预格式化 HSTS 头值
 	sh.formatHSTS()
 
 	return sh
 }
 
-// Name returns the middleware name.
+// Name 返回中间件名称。
+//
+// 返回值：
+//   - string: 中间件标识名 "security_headers"
 func (sh *SecurityHeadersMiddleware) Name() string {
 	return "security_headers"
 }
 
-// Process wraps the next handler, adding security headers to the response.
+// Process 包装下一个处理器，为响应添加安全头。
+//
+// 该方法实现了中间件接口，在调用下一个处理器后添加安全响应头。
+//
+// 参数：
+//   - next: 下一个请求处理器
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 包装后的处理器
 func (sh *SecurityHeadersMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
-		// Call next handler first
+		// 先调用下一个处理器
 		next(ctx)
 
-		// Add security headers to response
+		// 为响应添加安全头
 		sh.addHeaders(ctx)
 	}
 }
 
-// addHeaders adds all configured security headers to the response.
+// addHeaders 为响应添加所有配置的安全头。
+//
+// 遍历配置的安全头并设置到响应中，使用读锁保护并发访问。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
 func (sh *SecurityHeadersMiddleware) addHeaders(ctx *fasthttp.RequestCtx) {
 	headers := &ctx.Response.Header
 
@@ -127,19 +152,30 @@ func (sh *SecurityHeadersMiddleware) addHeaders(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-// formatHSTS formats the HSTS header value from configuration.
+// formatHSTS 根据配置格式化 HSTS 头值。
+//
+// HSTS（HTTP Strict Transport Security）用于强制浏览器使用 HTTPS 连接。
+// 默认配置为 1 年有效期，包含子域名。
 func (sh *SecurityHeadersMiddleware) formatHSTS() {
-	// Default HSTS values
-	maxAge := 31536000 // 1 year
-	includeSubDomains := true
-	preload := false
+	// 默认 HSTS 值
+	maxAge := 31536000 // 1 年有效期（秒）
+	includeSubDomains := true // 包含所有子域名
+	preload := false // 不预加载到浏览器列表
 
-	// These would come from SSLConfig.HSTS in real usage
-	// For now, use defaults
+	// 实际使用时应从 SSLConfig.HSTS 获取配置
+	// 当前使用默认值
 	sh.hsts = formatHSTSValue(maxAge, includeSubDomains, preload)
 }
 
-// formatHSTSValue formats HSTS header value components.
+// formatHSTSValue 格式化 HSTS 头值组件。
+//
+// 参数：
+//   - maxAge: HSTS 有效期（秒）
+//   - includeSubDomains: 是否包含子域名
+//   - preload: 是否预加载到浏览器 HSTS 列表
+//
+// 返回值：
+//   - string: 格式化后的 HSTS 头值
 func formatHSTSValue(maxAge int, includeSubDomains bool, preload bool) string {
 	value := fmt.Sprintf("max-age=%d", maxAge)
 
@@ -154,7 +190,12 @@ func formatHSTSValue(maxAge int, includeSubDomains bool, preload bool) string {
 	return value
 }
 
-// UpdateConfig updates the security headers configuration.
+// UpdateConfig 更新安全头配置。
+//
+// 使用写锁保护并发访问，同时更新 HSTS 格式化值。
+//
+// 参数：
+//   - cfg: 新的安全头配置
 func (sh *SecurityHeadersMiddleware) UpdateConfig(cfg *config.SecurityHeaders) {
 	sh.mu.Lock()
 	sh.config = cfg
@@ -162,7 +203,10 @@ func (sh *SecurityHeadersMiddleware) UpdateConfig(cfg *config.SecurityHeaders) {
 	sh.mu.Unlock()
 }
 
-// SetXFrameOptions sets the X-Frame-Options header value.
+// SetXFrameOptions 设置 X-Frame-Options 头值。
+//
+// 参数：
+//   - value: 新的 X-Frame-Options 值（如 "DENY"、"SAMEORIGIN"）
 func (sh *SecurityHeadersMiddleware) SetXFrameOptions(value string) {
 	sh.mu.Lock()
 	if sh.config != nil {
@@ -171,7 +215,10 @@ func (sh *SecurityHeadersMiddleware) SetXFrameOptions(value string) {
 	sh.mu.Unlock()
 }
 
-// SetContentSecurityPolicy sets the CSP header value.
+// SetContentSecurityPolicy 设置 CSP 头值。
+//
+// 参数：
+//   - value: 新的 Content-Security-Policy 值
 func (sh *SecurityHeadersMiddleware) SetContentSecurityPolicy(value string) {
 	sh.mu.Lock()
 	if sh.config != nil {
@@ -180,7 +227,10 @@ func (sh *SecurityHeadersMiddleware) SetContentSecurityPolicy(value string) {
 	sh.mu.Unlock()
 }
 
-// SetReferrerPolicy sets the Referrer-Policy header value.
+// SetReferrerPolicy 设置 Referrer-Policy 头值。
+//
+// 参数：
+//   - value: 新的 Referrer-Policy 值（如 "no-referrer"、"strict-origin"）
 func (sh *SecurityHeadersMiddleware) SetReferrerPolicy(value string) {
 	sh.mu.Lock()
 	if sh.config != nil {
@@ -189,7 +239,10 @@ func (sh *SecurityHeadersMiddleware) SetReferrerPolicy(value string) {
 	sh.mu.Unlock()
 }
 
-// SetPermissionsPolicy sets the Permissions-Policy header value.
+// SetPermissionsPolicy 设置 Permissions-Policy 头值。
+//
+// 参数：
+//   - value: 新的 Permissions-Policy 值
 func (sh *SecurityHeadersMiddleware) SetPermissionsPolicy(value string) {
 	sh.mu.Lock()
 	if sh.config != nil {
@@ -198,14 +251,20 @@ func (sh *SecurityHeadersMiddleware) SetPermissionsPolicy(value string) {
 	sh.mu.Unlock()
 }
 
-// GetConfig returns the current configuration.
+// GetConfig 返回当前的安全头配置。
+//
+// 返回值：
+//   - *config.SecurityHeaders: 当前配置的副本
 func (sh *SecurityHeadersMiddleware) GetConfig() *config.SecurityHeaders {
 	sh.mu.RLock()
 	defer sh.mu.RUnlock()
 	return sh.config
 }
 
-// DefaultSecurityHeaders returns a SecurityHeaders config with safe defaults.
+// DefaultSecurityHeaders 返回安全的安全头默认配置。
+//
+// 返回值：
+//   - *config.SecurityHeaders: 包含安全默认值的配置对象
 func DefaultSecurityHeaders() *config.SecurityHeaders {
 	return &config.SecurityHeaders{
 		XFrameOptions:       "DENY",
@@ -214,8 +273,12 @@ func DefaultSecurityHeaders() *config.SecurityHeaders {
 	}
 }
 
-// StrictSecurityHeaders returns a SecurityHeaders config with strict values.
-// Suitable for high-security applications.
+// StrictSecurityHeaders 返回严格模式的安全头配置。
+//
+// 适用于高安全要求的应用场景，包含严格的 CSP 和权限策略。
+//
+// 返回值：
+//   - *config.SecurityHeaders: 包含严格安全值的配置对象
 func StrictSecurityHeaders() *config.SecurityHeaders {
 	return &config.SecurityHeaders{
 		XFrameOptions:         "DENY",
@@ -226,8 +289,12 @@ func StrictSecurityHeaders() *config.SecurityHeaders {
 	}
 }
 
-// DevelopmentSecurityHeaders returns relaxed security headers for development.
-// WARNING: Do not use in production.
+// DevelopmentSecurityHeaders 返回开发环境使用的宽松安全头配置。
+//
+// 警告：请勿在生产环境使用此配置，安全性较低。
+//
+// 返回值：
+//   - *config.SecurityHeaders: 包含宽松安全值的配置对象
 func DevelopmentSecurityHeaders() *config.SecurityHeaders {
 	return &config.SecurityHeaders{
 		XFrameOptions:       "SAMEORIGIN",
@@ -236,5 +303,5 @@ func DevelopmentSecurityHeaders() *config.SecurityHeaders {
 	}
 }
 
-// Verify interface compliance
+// 验证接口实现
 var _ middleware.Middleware = (*SecurityHeadersMiddleware)(nil)
