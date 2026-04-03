@@ -102,8 +102,8 @@ func TestWaitForShutdownNoOldPid(t *testing.T) {
 	}
 }
 
-// TestSetListeners 测试监听器设置
-func TestSetListeners(t *testing.T) {
+// TestUpgradeSetListeners 测试监听器设置
+func TestUpgradeSetListeners(t *testing.T) {
 	mgr := NewUpgradeManager(nil)
 
 	// 创建模拟监听器

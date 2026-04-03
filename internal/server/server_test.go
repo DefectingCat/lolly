@@ -105,3 +105,177 @@ func TestGracefulStopWithZeroTimeout(t *testing.T) {
 		t.Errorf("GracefulStop(0) returned error: %v", err)
 	}
 }
+
+// TestBuildMiddlewareChain_AccessLog 测试访问日志中间件
+func TestBuildMiddlewareChain_AccessLog(t *testing.T) {
+	cfg := &config.Config{
+		Logging: config.LoggingConfig{},
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	if err != nil {
+		t.Errorf("buildMiddlewareChain failed: %v", err)
+	}
+	if chain == nil {
+		t.Error("Expected non-nil chain")
+	}
+}
+
+// TestBuildMiddlewareChain_AccessControl 测试访问控制中间件
+func TestBuildMiddlewareChain_AccessControl(t *testing.T) {
+	cfg := &config.Config{
+		Logging: config.LoggingConfig{},
+		Server: config.ServerConfig{
+			Listen: ":8080",
+			Security: config.SecurityConfig{
+				Access: config.AccessConfig{
+					Allow: []string{"127.0.0.1"},
+				},
+			},
+		},
+	}
+
+	s := New(cfg)
+	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	if err != nil {
+		t.Errorf("buildMiddlewareChain failed: %v", err)
+	}
+	if chain == nil {
+		t.Error("Expected non-nil chain")
+	}
+}
+
+// TestBuildMiddlewareChain_RateLimiter 测试限流中间件
+func TestBuildMiddlewareChain_RateLimiter(t *testing.T) {
+	cfg := &config.Config{
+		Logging: config.LoggingConfig{},
+		Server: config.ServerConfig{
+			Listen: ":8080",
+			Security: config.SecurityConfig{
+				RateLimit: config.RateLimitConfig{
+					RequestRate: 100,
+					Burst:       200,
+				},
+			},
+		},
+	}
+
+	s := New(cfg)
+	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	if err != nil {
+		t.Errorf("buildMiddlewareChain failed: %v", err)
+	}
+	if chain == nil {
+		t.Error("Expected non-nil chain")
+	}
+}
+
+// TestBuildMiddlewareChain_Rewrite 测试重写中间件
+func TestBuildMiddlewareChain_Rewrite(t *testing.T) {
+	cfg := &config.Config{
+		Logging: config.LoggingConfig{},
+		Server: config.ServerConfig{
+			Listen: ":8080",
+			Rewrite: []config.RewriteRule{
+				{Pattern: "/old/(.*)", Replacement: "/new/$1"},
+			},
+		},
+	}
+
+	s := New(cfg)
+	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	if err != nil {
+		t.Errorf("buildMiddlewareChain failed: %v", err)
+	}
+	if chain == nil {
+		t.Error("Expected non-nil chain")
+	}
+}
+
+// TestBuildMiddlewareChain_Compression 测试压缩中间件
+func TestBuildMiddlewareChain_Compression(t *testing.T) {
+	cfg := &config.Config{
+		Logging: config.LoggingConfig{},
+		Server: config.ServerConfig{
+			Listen: ":8080",
+			Compression: config.CompressionConfig{
+				Level: 6,
+			},
+		},
+	}
+
+	s := New(cfg)
+	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	if err != nil {
+		t.Errorf("buildMiddlewareChain failed: %v", err)
+	}
+	if chain == nil {
+		t.Error("Expected non-nil chain")
+	}
+}
+
+// TestBuildMiddlewareChain_SecurityHeaders 测试安全头中间件
+func TestBuildMiddlewareChain_SecurityHeaders(t *testing.T) {
+	cfg := &config.Config{
+		Logging: config.LoggingConfig{},
+		Server: config.ServerConfig{
+			Listen: ":8080",
+			Security: config.SecurityConfig{
+				Headers: config.SecurityHeaders{
+					XFrameOptions:       "DENY",
+					XContentTypeOptions: "nosniff",
+				},
+			},
+		},
+	}
+
+	s := New(cfg)
+	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	if err != nil {
+		t.Errorf("buildMiddlewareChain failed: %v", err)
+	}
+	if chain == nil {
+		t.Error("Expected non-nil chain")
+	}
+}
+
+// TestBuildMiddlewareChain_AllMiddlewares 测试所有中间件组合
+func TestBuildMiddlewareChain_AllMiddlewares(t *testing.T) {
+	cfg := &config.Config{
+		Logging: config.LoggingConfig{},
+		Server: config.ServerConfig{
+			Listen: ":8080",
+			Security: config.SecurityConfig{
+				Access: config.AccessConfig{
+					Allow: []string{"127.0.0.1"},
+				},
+				RateLimit: config.RateLimitConfig{
+					RequestRate: 100,
+					Burst:       200,
+				},
+				Headers: config.SecurityHeaders{
+					XFrameOptions: "DENY",
+				},
+			},
+			Rewrite: []config.RewriteRule{
+				{Pattern: "/old/(.*)", Replacement: "/new/$1"},
+			},
+			Compression: config.CompressionConfig{
+				Level: 6,
+			},
+		},
+	}
+
+	s := New(cfg)
+	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	if err != nil {
+		t.Errorf("buildMiddlewareChain failed: %v", err)
+	}
+	if chain == nil {
+		t.Error("Expected non-nil chain")
+	}
+}
