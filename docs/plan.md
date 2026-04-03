@@ -1424,6 +1424,263 @@ Phase 6:
 
 ---
 
+## 第七阶段：功能完善
+
+### 目标
+
+补齐项目缺失功能，提升完整性和生产可用性。
+
+### 背景分析
+
+通过代码审查发现以下缺失功能：
+
+| 功能 | 当前状态 | 优先级 | 说明 |
+|------|----------|--------|------|
+| WebSocket 代理 | ⚠️ 返回 501 | P0 | 现代Web应用必备 |
+| 状态监控端点 | ⚠️ 配置已有，处理器缺失 | P1 | 运维必需 |
+| 代理缓存集成 | ⚠️ 缓存模块未集成 | P1 | 性能优化关键 |
+| Brotli 压缩 | ⚠️ 降级为 gzip | P2 | 需引入依赖 |
+| UDP Stream | ⚠️ Accept 返回 EOF | P2 | 需重写处理逻辑 |
+| OCSP Stapling | ❌ 未实现 | P3 | 安全增强（可选）|
+
+### 任务列表
+
+#### 7.1 WebSocket 代理 (P0)
+
+**问题**：`proxy.go:344-349` 当前返回 501 Not Implemented。
+
+**实现方案**：
+
+```go
+// internal/proxy/websocket.go
+
+// WebSocketBridge WebSocket 桥接器。
+type WebSocketBridge struct {
+    clientConn net.Conn
+    targetConn net.Conn
+}
+
+// Bridge 双向转发 WebSocket 数据。
+func (b *WebSocketBridge) Bridge() error {
+    // 使用 io.Copy 双向转发
+    // 客户端 → 后端
+    // 后端 → 客户端
+}
+```
+
+**实现要点**：
+
+- 使用 `ctx.Hijack()` 获取底层 TCP 连接
+- 建立到后端的 TCP 连接
+- 发送 HTTP 升级请求
+- 启动双向 io.Copy 数据转发
+- 处理连接关闭和错误
+
+**修改文件**：
+- `internal/proxy/proxy.go:341-349` - 调用 WebSocket 桥接
+- 新增 `internal/proxy/websocket.go` - WebSocket 桥接逻辑
+
+#### 7.2 状态监控端点 (P1)
+
+**问题**：`config.go:222-231` 已定义配置，但未实现处理器。
+
+**实现方案**：
+
+```go
+// internal/server/status.go
+
+// StatusHandler 状态监控处理器。
+type StatusHandler struct {
+    server  *Server
+    allowed []net.IPNet
+}
+
+// Status 状态响应结构。
+type Status struct {
+    Version       string        `json:"version"`
+    Uptime        time.Duration `json:"uptime"`
+    Connections   int64         `json:"connections"`
+    Requests      int64         `json:"requests"`
+    BytesSent     int64         `json:"bytes_sent"`
+    BytesReceived int64         `json:"bytes_received"`
+}
+
+// ServeHTTP 返回 JSON 格式状态。
+func (h *StatusHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
+    // 1. 检查 IP 访问权限
+    // 2. 收集状态数据
+    // 3. 返回 JSON 响应
+}
+```
+
+**修改文件**：
+- 新增 `internal/server/status.go` - 状态处理器
+- `internal/server/server.go:54,95` - 注册状态路由
+
+#### 7.3 代理缓存集成 (P1)
+
+**问题**：`cache/file_cache.go` 已实现 `ProxyCache`，但未与代理集成。
+
+**实现方案**：
+
+```go
+// internal/proxy/proxy.go
+
+// Proxy 添加缓存字段。
+type Proxy struct {
+    // ... 现有字段
+    cache *cache.ProxyCache  // 新增
+}
+
+// ServeHTTP 集成缓存逻辑。
+func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
+    // 1. 生成缓存键
+    key := p.cacheKey(ctx)
+
+    // 2. 尝试获取缓存
+    if entry, ok, stale := p.cache.Get(key); ok {
+        // 返回缓存响应
+        p.serveFromCache(ctx, entry, stale)
+        return
+    }
+
+    // 3. 检查缓存锁（防击穿）
+    if waitCh := p.cache.AcquireLock(key); waitCh != nil {
+        <-waitCh  // 等待其他请求生成缓存
+        // 重新获取缓存
+    }
+
+    // 4. 请求后端
+    // 5. 存入缓存
+}
+```
+
+**修改文件**：
+- `internal/proxy/proxy.go` - 添加缓存逻辑
+- `internal/server/server.go:129-161` - 传递缓存配置
+
+#### 7.4 Brotli 压缩 (P2)
+
+**问题**：`compression.go:209-214` 降级为 gzip。
+
+**实现方案**：
+
+```go
+// internal/middleware/compression/compression.go
+
+import "github.com/andybalholm/brotli"
+
+// compressBrotli 使用 brotli 压缩数据。
+func (m *CompressionMiddleware) compressBrotli(data []byte) []byte {
+    var buf bytes.Buffer
+    w := brotli.NewWriterLevel(&buf, m.level)
+    w.Write(data)
+    w.Close()
+    return buf.Bytes()
+}
+```
+
+**实现要点**：
+
+- 添加依赖：`go get github.com/andybalholm/brotli`
+- 添加 brotli 缓冲池
+- 更新 `compressBrotli` 方法
+
+**修改文件**：
+- `internal/middleware/compression/compression.go`
+
+#### 7.5 UDP Stream 完善 (P2)
+
+**问题**：`stream.go:388-391` `udpListener.Accept()` 返回 EOF。
+
+**原因分析**：UDP 是数据报协议，不能像 TCP 那样 Accept 连接。
+
+**实现方案**：
+
+```go
+// internal/stream/stream.go
+
+// udpServer UDP 服务器。
+type udpServer struct {
+    conn     *net.UDPConn
+    sessions map[string]*udpSession  // 客户端地址 → 会话
+    mu       sync.RWMutex
+}
+
+// udpSession UDP 会话。
+type udpSession struct {
+    clientAddr *net.UDPAddr
+    targetConn net.Conn
+    lastActive time.Time
+}
+
+// serveUDP 处理 UDP 数据报。
+func (s *udpServer) serveUDP() {
+    buf := make([]byte, 65535)
+    for {
+        n, clientAddr, err := s.conn.ReadFromUDP(buf)
+        if err != nil {
+            continue
+        }
+
+        // 查找或创建会话
+        session := s.getOrCreateSession(clientAddr)
+
+        // 转发数据到后端
+        session.targetConn.Write(buf[:n])
+    }
+}
+```
+
+**修改文件**：
+- `internal/stream/stream.go:199-217,383-401` - 重写 UDP 处理
+
+#### 7.6 OCSP Stapling (P3 - 可选)
+
+**问题**：`ssl.go` 未实现 OCSP Stapling。
+
+**实现方案**：
+
+- 在 TLS 配置中添加 `GetConfigForClient` 回调
+- 定期查询 OCSP 服务器并缓存响应
+- 在 TLS 握手中附加 OCSP 响应
+
+**注意**：此功能实现复杂，可作为后续迭代项。
+
+### 验证方法
+
+```bash
+# WebSocket 测试
+wscat -c ws://localhost:8080/ws
+
+# 状态监控测试
+curl http://localhost:8080/_status
+
+# 代理缓存测试（检查响应头）
+curl -I http://localhost:8080/api/data
+# 第二次请求应返回 X-Cache-Status: HIT
+
+# Brotli 压缩测试
+curl -H "Accept-Encoding: br" -I http://localhost:8080/index.html
+# 检查 Content-Encoding: br
+
+# UDP Stream 测试
+dig @localhost example.com  # 通过 lolly 代理 DNS
+```
+
+### 文件依赖关系图
+
+```
+Phase 7:
+  internal/proxy/proxy.go → internal/proxy/websocket.go（新增）
+  internal/proxy/proxy.go → internal/cache/file_cache.go
+  internal/server/server.go → internal/server/status.go（新增）
+  internal/middleware/compression/compression.go → github.com/andybalholm/brotli
+  internal/stream/stream.go → 重写 UDP 处理
+```
+
+---
+
 ## 总体进度追踪
 
 | 阶段    | 状态   | 主要功能                  |
@@ -1434,6 +1691,7 @@ Phase 6:
 | Phase 4 | ✅ 完成 | SSL/TLS、安全控制         |
 | Phase 5 | ✅ 完成 | 重写、压缩、缓存、日志    |
 | Phase 6 | ✅ 完成 | Stream、性能优化、热升级  |
+| Phase 7 | 🚧 待开始 | 功能完善（WebSocket、缓存集成、监控端点） |
 
 **Phase 2 技术选型变更**：
 - HTTP 库：使用 [fasthttp](https://github.com/valyala/fasthttp) 替代 `net/http`（性能提升 6 倍）

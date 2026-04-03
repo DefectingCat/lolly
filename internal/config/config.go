@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Server      ServerConfig      `yaml:"server"`      // 单服务器模式配置
 	Servers     []ServerConfig    `yaml:"servers"`     // 多虚拟主机模式配置
+	Stream      []StreamConfig    `yaml:"stream"`      // TCP/UDP Stream 代理配置
 	Logging     LoggingConfig     `yaml:"logging"`     // 日志配置
 	Performance PerformanceConfig `yaml:"performance"` // 性能配置
 	Monitoring  MonitoringConfig  `yaml:"monitoring"`  // 监控配置
@@ -228,6 +229,25 @@ type MonitoringConfig struct {
 type StatusConfig struct {
 	Path  string   `yaml:"path"`  // 端点路径
 	Allow []string `yaml:"allow"` // 允许访问的 IP 列表
+}
+
+// StreamConfig TCP/UDP Stream 代理配置。
+type StreamConfig struct {
+	Listen   string         `yaml:"listen"`   // 监听地址，如 ":3306"
+	Protocol string         `yaml:"protocol"` // 协议：tcp 或 udp
+	Upstream StreamUpstream `yaml:"upstream"` // 上游配置
+}
+
+// StreamUpstream Stream 上游配置。
+type StreamUpstream struct {
+	Targets     []StreamTarget `yaml:"targets"`     // 目标列表
+	LoadBalance string         `yaml:"load_balance"` // 负载均衡算法
+}
+
+// StreamTarget Stream 目标配置。
+type StreamTarget struct {
+	Addr   string `yaml:"addr"`   // 目标地址，如 "mysql1:3306"
+	Weight int    `yaml:"weight"` // 权重
 }
 
 // Load 从文件加载配置。

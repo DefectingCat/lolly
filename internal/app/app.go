@@ -11,6 +11,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/server"
+	"rua.plus/lolly/internal/stream"
 )
 
 // 版本信息，通过 -ldflags 注入。
@@ -30,12 +31,13 @@ var (
 
 // App 应用程序结构。
 type App struct {
-	cfgPath    string
-	cfg        *config.Config
-	srv        *server.Server
-	upgradeMgr *server.UpgradeManager
-	pidFile    string
-	logFile    string // 日志文件路径（用于重新打开）
+	cfgPath      string
+	cfg          *config.Config
+	srv          *server.Server
+	streamSrv    *stream.Server // Stream 服务器（可选）
+	upgradeMgr   *server.UpgradeManager
+	pidFile      string
+	logFile      string // 日志文件路径（用于重新打开）
 }
 
 // NewApp 创建应用程序。
@@ -117,8 +119,47 @@ func (a *App) Run() int {
 	fmt.Printf("配置加载成功: %s\n", a.cfgPath)
 	fmt.Printf("监听地址: %s\n", cfg.Server.Listen)
 
-	// 创建服务器
+	// 创建 HTTP 服务器
 	a.srv = server.New(cfg)
+
+	// 创建 Stream 服务器（如果配置了）
+	if len(cfg.Stream) > 0 {
+		a.streamSrv = stream.NewServer()
+		for _, sc := range cfg.Stream {
+			// 转换目标配置
+			targets := make([]stream.TargetSpec, len(sc.Upstream.Targets))
+			for i, t := range sc.Upstream.Targets {
+				targets[i] = stream.TargetSpec{
+					Addr:   t.Addr,
+					Weight: t.Weight,
+				}
+			}
+
+			// 添加上游配置
+			if err := a.streamSrv.AddUpstream(sc.Listen, targets, sc.Upstream.LoadBalance, stream.HealthCheckSpec{}); err != nil {
+				fmt.Fprintf(os.Stderr, "添加 Stream 上游失败: %v\n", err)
+			}
+
+			// 监听端口
+			if sc.Protocol == "udp" {
+				if err := a.streamSrv.ListenUDP(sc.Listen); err != nil {
+					fmt.Fprintf(os.Stderr, "监听 UDP %s 失败: %v\n", sc.Listen, err)
+				}
+			} else {
+				if err := a.streamSrv.ListenTCP(sc.Listen); err != nil {
+					fmt.Fprintf(os.Stderr, "监听 TCP %s 失败: %v\n", sc.Listen, err)
+				}
+			}
+		}
+
+		// 启动 Stream 服务器
+		go func() {
+			fmt.Println("Stream 服务器启动中...")
+			if err := a.streamSrv.Start(); err != nil {
+				fmt.Fprintf(os.Stderr, "Stream 服务器启动失败: %v\n", err)
+			}
+		}()
+	}
 
 	// 创建升级管理器
 	a.upgradeMgr = server.NewUpgradeManager(a.srv)
@@ -131,10 +172,10 @@ func (a *App) Run() int {
 	sigChan := make(chan os.Signal, 1)
 	a.setupSignalHandlers(sigChan)
 
-	// 启动服务器
+	// 启动 HTTP 服务器
 	errChan := make(chan error, 1)
 	go func() {
-		fmt.Println("服务器启动中...")
+		fmt.Println("HTTP 服务器启动中...")
 		if err := a.srv.Start(); err != nil {
 			errChan <- err
 		}

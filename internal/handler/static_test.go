@@ -12,7 +12,7 @@ import (
 // newTestHandler 创建测试用的静态文件处理器
 func newTestHandler(t *testing.T, root string) *StaticHandler {
 	t.Helper()
-	return NewStaticHandler(root, []string{"index.html", "index.htm"})
+	return NewStaticHandler(root, []string{"index.html", "index.htm"}, false) // 测试时禁用 sendfile
 }
 
 // newTestContext 创建测试用的 fasthttp 请求上下文
@@ -375,7 +375,7 @@ func TestNewStaticHandler(t *testing.T) {
 	t.Run("正常创建", func(t *testing.T) {
 		root := "/var/www"
 		index := []string{"index.html", "index.htm"}
-		handler := NewStaticHandler(root, index)
+		handler := NewStaticHandler(root, index, true)
 
 		if handler == nil {
 			t.Fatal("NewStaticHandler() 返回 nil")
@@ -389,7 +389,7 @@ func TestNewStaticHandler(t *testing.T) {
 	})
 
 	t.Run("空索引列表", func(t *testing.T) {
-		handler := NewStaticHandler("/var/www", nil)
+		handler := NewStaticHandler("/var/www", nil, false)
 		if handler == nil {
 			t.Fatal("NewStaticHandler() 返回 nil")
 		}

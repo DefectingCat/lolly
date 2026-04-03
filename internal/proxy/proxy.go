@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 )
@@ -51,6 +52,7 @@ type Proxy struct {
 	clients  map[string]*fasthttp.HostClient // key: target URL
 	balancer loadbalance.Balancer
 	config   *config.ProxyConfig
+	cache    *cache.ProxyCache // 代理缓存（可选）
 	mu       sync.RWMutex
 }
 
@@ -94,6 +96,18 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target) (*Proxy, e
 
 		client := createHostClient(target.URL, cfg.Timeout)
 		p.clients[target.URL] = client
+	}
+
+	// 初始化代理缓存（如果启用）
+	if cfg.Cache.Enabled {
+		rules := make([]cache.ProxyCacheRule, 0)
+		if cfg.Cache.MaxAge > 0 {
+			rules = append(rules, cache.ProxyCacheRule{
+				Path:   cfg.Path,
+				MaxAge: cfg.Cache.MaxAge,
+			})
+		}
+		p.cache = cache.NewProxyCache(rules, cfg.Cache.CacheLock, cfg.Cache.StaleWhileRevalidate)
 	}
 
 	return p, nil
