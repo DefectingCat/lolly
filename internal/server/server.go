@@ -10,16 +10,18 @@ import (
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/middleware"
+	"rua.plus/lolly/internal/middleware/accesslog"
 	"rua.plus/lolly/internal/proxy"
 )
 
 // Server HTTP 服务器
 type Server struct {
-	config         *config.Config
-	fastServer     *fasthttp.Server
-	handler        fasthttp.RequestHandler
-	running        bool
-	healthCheckers []*proxy.HealthChecker // 新增
+	config              *config.Config
+	fastServer          *fasthttp.Server
+	handler             fasthttp.RequestHandler
+	running             bool
+	healthCheckers      []*proxy.HealthChecker
+	accessLogMiddleware *accesslog.AccessLog
 }
 
 // New 创建服务器
@@ -52,7 +54,10 @@ func (s *Server) startSingleMode() error {
 	router.GET("/{filepath:*}", staticHandler.Handle)
 	router.HEAD("/{filepath:*}", staticHandler.Handle)
 
-	chain := middleware.NewChain()
+	// 创建访问日志中间件
+	s.accessLogMiddleware = accesslog.New(&s.config.Logging)
+
+	chain := middleware.NewChain(s.accessLogMiddleware)
 	s.handler = chain.Apply(router.Handler())
 
 	s.fastServer = &fasthttp.Server{
@@ -73,6 +78,10 @@ func (s *Server) startSingleMode() error {
 func (s *Server) startVHostMode() error {
 	vhostMgr := NewVHostManager()
 
+	// 创建访问日志中间件（共享给所有虚拟主机）
+	s.accessLogMiddleware = accesslog.New(&s.config.Logging)
+	chain := middleware.NewChain(s.accessLogMiddleware)
+
 	for i := range s.config.Servers {
 		router := handler.NewRouter()
 		s.registerProxyRoutes(router, &s.config.Servers[i])
@@ -85,7 +94,7 @@ func (s *Server) startVHostMode() error {
 		router.GET("/{filepath:*}", staticHandler.Handle)
 		router.HEAD("/{filepath:*}", staticHandler.Handle)
 
-		vhostMgr.AddHost(s.config.Servers[i].Name, router.Handler())
+		vhostMgr.AddHost(s.config.Servers[i].Name, chain.Apply(router.Handler()))
 	}
 
 	// 默认主机
@@ -97,7 +106,7 @@ func (s *Server) startVHostMode() error {
 			s.config.Server.Static.Index,
 		)
 		router.GET("/{filepath:*}", staticHandler.Handle)
-		vhostMgr.SetDefault(router.Handler())
+		vhostMgr.SetDefault(chain.Apply(router.Handler()))
 	}
 
 	s.handler = vhostMgr.Handler()
@@ -161,6 +170,11 @@ func (s *Server) Stop() error {
 		hc.Stop()
 	}
 
+	// 关闭访问日志
+	if s.accessLogMiddleware != nil {
+		s.accessLogMiddleware.Close()
+	}
+
 	if s.fastServer != nil {
 		return s.fastServer.Shutdown()
 	}
@@ -174,6 +188,11 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 	// 停止健康检查器
 	for _, hc := range s.healthCheckers {
 		hc.Stop()
+	}
+
+	// 关闭访问日志
+	if s.accessLogMiddleware != nil {
+		s.accessLogMiddleware.Close()
 	}
 
 	if s.fastServer != nil {
