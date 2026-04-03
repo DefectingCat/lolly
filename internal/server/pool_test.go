@@ -168,3 +168,59 @@ func TestPoolSubmitWhenStopped(t *testing.T) {
 		t.Error("Expected task to be executed directly when pool is stopped")
 	}
 }
+
+func TestPoolWrapHandler(t *testing.T) {
+	p := NewGoroutinePool(PoolConfig{
+		MaxWorkers:  10,
+		MinWorkers:  2,
+		QueueSize:   10,
+		IdleTimeout: 5 * time.Second,
+	})
+
+	p.Start()
+	defer p.Stop()
+
+	var executed atomic.Bool
+	originalHandler := func(ctx *fasthttp.RequestCtx) {
+		executed.Store(true)
+		ctx.SetBodyString("wrapped response")
+	}
+
+	wrappedHandler := p.WrapHandler(originalHandler)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	wrappedHandler(ctx)
+
+	// 等待异步执行
+	time.Sleep(100 * time.Millisecond)
+
+	if !executed.Load() {
+		t.Error("Expected wrapped handler to be executed")
+	}
+}
+
+func TestPoolWrapHandler_WhenStopped(t *testing.T) {
+	p := NewGoroutinePool(PoolConfig{
+		MaxWorkers: 10,
+	})
+	// 不启动池
+
+	var executed atomic.Bool
+	originalHandler := func(ctx *fasthttp.RequestCtx) {
+		executed.Store(true)
+	}
+
+	wrappedHandler := p.WrapHandler(originalHandler)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	wrappedHandler(ctx)
+
+	// 池停止时应该直接执行
+	if !executed.Load() {
+		t.Error("Expected handler to be executed directly when pool is stopped")
+	}
+}

@@ -488,3 +488,139 @@ func TestServer_Connections(t *testing.T) {
 		t.Errorf("Expected 0 connections, got %d", s.connections.Load())
 	}
 }
+
+// TestServer_Proxies 测试代理管理
+func TestServer_Proxies(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	// 初始代理列表应为空
+	if len(s.proxies) != 0 {
+		t.Error("Initial proxies should be empty")
+	}
+}
+
+// TestServer_Running 测试运行状态
+func TestServer_Running(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	// 初始状态应为未运行
+	if s.running {
+		t.Error("Initial running state should be false")
+	}
+}
+
+// TestServer_StopWithNilFastServer 测试无 fastServer 时停止
+func TestServer_StopWithNilFastServer(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+	s.fastServer = nil
+
+	err := s.Stop()
+	if err != nil {
+		t.Errorf("Stop with nil fastServer should succeed: %v", err)
+	}
+}
+
+// TestServer_GracefulStopWithNilFastServer 测试无 fastServer 时优雅停止
+func TestServer_GracefulStopWithNilFastServer(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+	s.fastServer = nil
+
+	err := s.GracefulStop(5 * time.Second)
+	if err != nil {
+		t.Errorf("GracefulStop with nil fastServer should succeed: %v", err)
+	}
+}
+
+// TestServer_GetProxyCacheStats 测试代理缓存统计
+func TestServer_GetProxyCacheStats(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	// 无代理时应返回空统计
+	stats := s.getProxyCacheStats()
+	if stats.Entries != 0 {
+		t.Errorf("Expected 0 entries, got %d", stats.Entries)
+	}
+	if stats.Pending != 0 {
+		t.Errorf("Expected 0 pending, got %d", stats.Pending)
+	}
+}
+
+// TestServer_BuildMiddlewareChain_EmptyConfig 测试空配置的中间件链
+func TestServer_BuildMiddlewareChain_EmptyConfig(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if chain == nil {
+		t.Error("Expected non-nil chain")
+	}
+}
+
+// TestServer_TrackStats_EmptyBody 测试空响应体的统计
+func TestServer_TrackStats_EmptyBody(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	handler := func(ctx *fasthttp.RequestCtx) {
+		// 空响应
+	}
+
+	wrappedHandler := s.trackStats(handler)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+	ctx.Request.SetBody(nil)
+
+	wrappedHandler(ctx)
+
+	if s.requests.Load() != 1 {
+		t.Errorf("Expected 1 request, got %d", s.requests.Load())
+	}
+
+	if s.bytesSent.Load() != 0 {
+		t.Errorf("Expected 0 bytes sent, got %d", s.bytesSent.Load())
+	}
+}
