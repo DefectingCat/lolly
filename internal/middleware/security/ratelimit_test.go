@@ -242,7 +242,7 @@ func TestRateLimiterProcess(t *testing.T) {
 	}
 
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("OK")
+		_, _ = ctx.WriteString("OK")
 	}
 
 	handler := mw.Process(nextHandler)

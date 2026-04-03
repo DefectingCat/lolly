@@ -57,7 +57,7 @@ func TestSecurityHeadersProcess(t *testing.T) {
 	handlerCalled := false
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
 		handlerCalled = true
-		ctx.WriteString("OK")
+		_, _ = ctx.WriteString("OK")
 	}
 
 	handler := sh.Process(nextHandler)
@@ -105,7 +105,7 @@ func TestSecurityHeadersHSTS(t *testing.T) {
 	sh := NewSecurityHeaders(cfg)
 
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("OK")
+		_, _ = ctx.WriteString("OK")
 	}
 
 	handler := sh.Process(nextHandler)

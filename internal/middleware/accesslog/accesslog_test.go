@@ -46,7 +46,7 @@ func TestAccessLog_Process(t *testing.T) {
 	}
 
 	// 清理
-	al.Close()
+	_ = al.Close()
 }
 
 func TestAccessLog_ProcessWithDuration(t *testing.T) {
@@ -75,5 +75,5 @@ func TestAccessLog_ProcessWithDuration(t *testing.T) {
 		t.Errorf("expected duration >= 10ms, got %v", elapsed)
 	}
 
-	al.Close()
+	_ = al.Close()
 }

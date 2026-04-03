@@ -11,7 +11,7 @@ import (
 func mockHandler(name string, called *bool) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		*called = true
-		ctx.WriteString(name)
+		_, _ = ctx.WriteString(name)
 	}
 }
 

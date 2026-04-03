@@ -13,8 +13,8 @@ import (
 func TestNewWebSocketBridge(t *testing.T) {
 	clientConn, _ := net.Pipe()
 	targetConn, _ := net.Pipe()
-	defer clientConn.Close()
-	defer targetConn.Close()
+	defer func() { _ = clientConn.Close() }()
+	defer func() { _ = targetConn.Close() }()
 
 	bridge := NewWebSocketBridge(clientConn, targetConn)
 
@@ -155,8 +155,8 @@ func TestWebSocketBridge_Bridge(t *testing.T) {
 	// 创建管道连接
 	client1, client2 := net.Pipe()
 	target1, target2 := net.Pipe()
-	defer client2.Close()
-	defer target2.Close()
+	defer func() { _ = client2.Close() }()
+	defer func() { _ = target2.Close() }()
 
 	bridge := NewWebSocketBridge(client1, target1)
 
@@ -169,7 +169,7 @@ func TestWebSocketBridge_Bridge(t *testing.T) {
 	// 发送数据从客户端到后端
 	testData := []byte("hello from client")
 	go func() {
-		client2.Write(testData)
+		_, _ = client2.Write(testData)
 	}()
 
 	// 在后端读取数据
@@ -185,7 +185,7 @@ func TestWebSocketBridge_Bridge(t *testing.T) {
 	// 发送数据从后端到客户端
 	testData2 := []byte("hello from target")
 	go func() {
-		target2.Write(testData2)
+		_, _ = target2.Write(testData2)
 	}()
 
 	// 在客户端读取数据
@@ -199,8 +199,8 @@ func TestWebSocketBridge_Bridge(t *testing.T) {
 	}
 
 	// 关闭连接以结束桥接
-	client2.Close()
-	target2.Close()
+	_ = client2.Close()
+	_ = target2.Close()
 
 	// 等待桥接完成
 	select {
@@ -258,8 +258,8 @@ func TestCopyData(t *testing.T) {
 	// 创建管道连接
 	src1, src2 := net.Pipe()
 	dst1, dst2 := net.Pipe()
-	defer src2.Close()
-	defer dst2.Close()
+	defer func() { _ = src2.Close() }()
+	defer func() { _ = dst2.Close() }()
 
 	bridge := &WebSocketBridge{}
 
@@ -271,7 +271,7 @@ func TestCopyData(t *testing.T) {
 
 	// 发送数据
 	testData := []byte("test data")
-	src2.Write(testData)
+	_, _ = src2.Write(testData)
 
 	// 接收数据
 	buf := make([]byte, 1024)
@@ -284,8 +284,8 @@ func TestCopyData(t *testing.T) {
 	}
 
 	// 关闭连接
-	src2.Close()
-	dst2.Close()
+	_ = src2.Close()
+	_ = dst2.Close()
 
 	// 等待复制完成
 	select {

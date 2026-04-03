@@ -189,7 +189,7 @@ func TestBasicAuthProcess(t *testing.T) {
 	}
 
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("OK")
+		_, _ = ctx.WriteString("OK")
 	}
 
 	handler := auth.Process(nextHandler)
@@ -270,7 +270,7 @@ func TestBasicAuthUserCount(t *testing.T) {
 		t.Errorf("Expected UserCount 2, got %d", count)
 	}
 
-	auth.AddUser("user3", "$2b$12$hash3")
+	_ = auth.AddUser("user3", "$2b$12$hash3")
 	if count := auth.UserCount(); count != 3 {
 		t.Errorf("Expected UserCount 3, got %d", count)
 	}

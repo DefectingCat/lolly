@@ -189,7 +189,7 @@ func TestServeHTTP_NoHealthyTargets(t *testing.T) {
 func TestServeHTTP_RequestForwarding(t *testing.T) {
 	// 创建本地测试服务器
 	ln := fasthttputil.NewInmemoryListener()
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	// 启动后端服务器
 	go func() {
@@ -200,7 +200,7 @@ func TestServeHTTP_RequestForwarding(t *testing.T) {
 				ctx.Response.Header.Set("X-Backend-Header", "test-value")
 			},
 		}
-		s.Serve(ln)
+		_ = s.Serve(ln)
 	}()
 
 	// 等待服务器启动
@@ -980,7 +980,7 @@ func TestGetClient(t *testing.T) {
 func TestProxyCache(t *testing.T) {
 	// 创建内存监听器作为后端服务器
 	ln := fasthttputil.NewInmemoryListener()
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	requestCount := 0
 	go func() {
@@ -992,7 +992,7 @@ func TestProxyCache(t *testing.T) {
 				ctx.Response.Header.Set("X-Request-Count", string(rune(requestCount)))
 			},
 		}
-		s.Serve(ln)
+		_ = s.Serve(ln)
 	}()
 
 	// 等待服务器启动

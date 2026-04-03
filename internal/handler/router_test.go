@@ -14,7 +14,7 @@ func TestRouterGET(t *testing.T) {
 	var called bool
 	handler := func(ctx *fasthttp.RequestCtx) {
 		called = true
-		ctx.WriteString("GET response")
+		_, _ = ctx.WriteString("GET response")
 	}
 
 	r.GET("/test", handler)
@@ -41,7 +41,7 @@ func TestRouterPOST(t *testing.T) {
 	var called bool
 	handler := func(ctx *fasthttp.RequestCtx) {
 		called = true
-		ctx.WriteString("POST response")
+		_, _ = ctx.WriteString("POST response")
 	}
 
 	r.POST("/submit", handler)
@@ -69,12 +69,12 @@ func TestRouterMultipleMethods(t *testing.T) {
 
 	r.GET("/api", func(ctx *fasthttp.RequestCtx) {
 		getCalled = true
-		ctx.WriteString("GET api")
+		_, _ = ctx.WriteString("GET api")
 	})
 
 	r.POST("/api", func(ctx *fasthttp.RequestCtx) {
 		postCalled = true
-		ctx.WriteString("POST api")
+		_, _ = ctx.WriteString("POST api")
 	})
 
 	// 测试 GET 请求
@@ -131,7 +131,7 @@ func TestRouterMultipleRoutes(t *testing.T) {
 
 	for path, response := range routes {
 		r.GET(path, func(ctx *fasthttp.RequestCtx) {
-			ctx.WriteString(response)
+			_, _ = ctx.WriteString(response)
 		})
 	}
 
@@ -155,7 +155,7 @@ func TestRouterPUT(t *testing.T) {
 	var called bool
 	r.PUT("/update", func(ctx *fasthttp.RequestCtx) {
 		called = true
-		ctx.WriteString("PUT response")
+		_, _ = ctx.WriteString("PUT response")
 	})
 
 	var ctx fasthttp.RequestCtx
@@ -176,7 +176,7 @@ func TestRouterDELETE(t *testing.T) {
 	var called bool
 	r.DELETE("/remove", func(ctx *fasthttp.RequestCtx) {
 		called = true
-		ctx.WriteString("DELETE response")
+		_, _ = ctx.WriteString("DELETE response")
 	})
 
 	var ctx fasthttp.RequestCtx
@@ -216,7 +216,7 @@ func TestRouterNotFound(t *testing.T) {
 	r := NewRouter()
 
 	r.GET("/exists", func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("found")
+		_, _ = ctx.WriteString("found")
 	})
 
 	var ctx fasthttp.RequestCtx

@@ -93,7 +93,7 @@ func TestRewriteMiddlewareLast(t *testing.T) {
 		if string(ctx.Path()) != "/new/test" {
 			t.Errorf("Expected path /new/test, got %s", ctx.Path())
 		}
-		ctx.WriteString("OK")
+		_, _ = ctx.WriteString("OK")
 	}
 
 	handler := m.Process(nextHandler)
@@ -152,7 +152,7 @@ func TestRewriteMiddlewarePermanent(t *testing.T) {
 	}
 
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("OK")
+		_, _ = ctx.WriteString("OK")
 	}
 
 	handler := m.Process(nextHandler)

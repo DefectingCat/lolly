@@ -131,7 +131,7 @@ func TestPoolConcurrentSubmit(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			p.Submit(nil, func(ctx *fasthttp.RequestCtx) {
+			_ = p.Submit(nil, func(ctx *fasthttp.RequestCtx) {
 				counter.Add(1)
 			})
 		}()

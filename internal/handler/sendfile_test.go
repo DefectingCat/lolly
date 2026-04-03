@@ -83,7 +83,7 @@ func TestPlatformSendfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// 测试平台 sendfile（小文件会 fallback 到 copyFile）
 	// 由于没有真实的网络连接，这个测试主要验证不会崩溃
@@ -122,7 +122,7 @@ func TestCopyFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	tests := []struct {
 		name    string
@@ -164,7 +164,7 @@ func TestCopyFile(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// 重置文件位置
-			file.Seek(0, io.SeekStart)
+			_, _ = file.Seek(0, io.SeekStart)
 
 			// 创建响应上下文
 			ctx := &fasthttp.RequestCtx{}
@@ -210,7 +210,7 @@ func TestPlatformSendfile_NonLinux(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	err = platformSendfile(nil, file, 0, int64(len(content)))
 	if err != syscall.ENOTSUP {
@@ -263,7 +263,7 @@ func TestSendFile_SmallFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Init(&fasthttp.Request{}, nil, nil)
@@ -293,7 +293,7 @@ func TestSendFile_WithOffset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Init(&fasthttp.Request{}, nil, nil)
@@ -323,7 +323,7 @@ func TestSendFile_ZeroLength(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Init(&fasthttp.Request{}, nil, nil)
@@ -358,6 +358,7 @@ func TestSendFile_NilFile(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
 			// 没有 panic，检查是否有错误返回
+			t.Log("expected panic did not occur for nil file")
 		}
 	}()
 
@@ -378,7 +379,7 @@ func TestCopyFile_Error(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Init(&fasthttp.Request{}, nil, nil)
@@ -399,13 +400,13 @@ func TestLinuxSendfile_NilConn(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.txt")
 	content := []byte("test")
-	os.WriteFile(tmpFile, content, 0644)
+	_ = os.WriteFile(tmpFile, content, 0644)
 
 	file, err := os.Open(tmpFile)
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	err = linuxSendfile(nil, file.Fd(), 0, int64(len(content)))
 	if err == nil {

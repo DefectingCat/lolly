@@ -25,13 +25,13 @@ func captureStdout(t *testing.T) (func() string, func()) {
 	os.Stdout = w
 
 	return func() string {
-			w.Close()
+			_ = w.Close()
 			os.Stdout = old
 			var buf bytes.Buffer
-			buf.ReadFrom(r)
+			_, _ = buf.ReadFrom(r)
 			return buf.String()
 		}, func() {
-			w.Close()
+			_ = w.Close()
 			os.Stdout = old
 		}
 }
@@ -47,13 +47,13 @@ func captureStderr(t *testing.T) (func() string, func()) {
 	os.Stderr = w
 
 	return func() string {
-			w.Close()
+			_ = w.Close()
 			os.Stderr = old
 			var buf bytes.Buffer
-			buf.ReadFrom(r)
+			_, _ = buf.ReadFrom(r)
 			return buf.String()
 		}, func() {
-			w.Close()
+			_ = w.Close()
 			os.Stderr = old
 		}
 }

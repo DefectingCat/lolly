@@ -338,7 +338,7 @@ func TestOCSPManagerRegisterCertificate(t *testing.T) {
 	ocspServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Return a simple OCSP response
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("mock-ocsp-response"))
+		_, _ = w.Write([]byte("mock-ocsp-response"))
 	}))
 	defer ocspServer.Close()
 

@@ -305,7 +305,7 @@ func TestFastHTTPHandler(t *testing.T) {
 	stdHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(200)
-		w.Write([]byte("Hello from std http"))
+		_, _ = w.Write([]byte("Hello from std http"))
 	})
 
 	ctx := &fasthttp.RequestCtx{}

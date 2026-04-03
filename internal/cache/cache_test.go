@@ -35,7 +35,7 @@ func TestFileCacheSetGet(t *testing.T) {
 func TestFileCacheDelete(t *testing.T) {
 	fc := NewFileCache(10, 1024, 1*time.Hour)
 
-	fc.Set("/test.txt", []byte("data"), 4, time.Now())
+	_ = fc.Set("/test.txt", []byte("data"), 4, time.Now())
 
 	fc.Delete("/test.txt")
 
@@ -49,12 +49,12 @@ func TestFileCacheLRUEviction(t *testing.T) {
 	// 最大 3 个条目
 	fc := NewFileCache(3, 0, 1*time.Hour)
 
-	fc.Set("/a", []byte("a"), 1, time.Now())
-	fc.Set("/b", []byte("b"), 1, time.Now())
-	fc.Set("/c", []byte("c"), 1, time.Now())
+	_ = fc.Set("/a", []byte("a"), 1, time.Now())
+	_ = fc.Set("/b", []byte("b"), 1, time.Now())
+	_ = fc.Set("/c", []byte("c"), 1, time.Now())
 
 	// 再添加一个，应该淘汰 /a
-	fc.Set("/d", []byte("d"), 1, time.Now())
+	_ = fc.Set("/d", []byte("d"), 1, time.Now())
 
 	_, ok := fc.Get("/a")
 	if ok {
@@ -74,11 +74,11 @@ func TestFileCacheSizeEviction(t *testing.T) {
 	// 最大 10 字节
 	fc := NewFileCache(0, 10, 1*time.Hour)
 
-	fc.Set("/a", []byte("12345"), 5, time.Now())
-	fc.Set("/b", []byte("12345"), 5, time.Now())
+	_ = fc.Set("/a", []byte("12345"), 5, time.Now())
+	_ = fc.Set("/b", []byte("12345"), 5, time.Now())
 
 	// 再添加 6 字节，应该淘汰一个
-	fc.Set("/c", []byte("123456"), 6, time.Now())
+	_ = fc.Set("/c", []byte("123456"), 6, time.Now())
 
 	stats := fc.Stats()
 	if stats.Size > 10 {
@@ -89,7 +89,7 @@ func TestFileCacheSizeEviction(t *testing.T) {
 func TestFileCacheInactiveEviction(t *testing.T) {
 	fc := NewFileCache(10, 1024, 100*time.Millisecond)
 
-	fc.Set("/test", []byte("data"), 4, time.Now())
+	_ = fc.Set("/test", []byte("data"), 4, time.Now())
 
 	// 立即获取应该成功
 	_, ok := fc.Get("/test")
@@ -110,8 +110,8 @@ func TestFileCacheInactiveEviction(t *testing.T) {
 func TestFileCacheClear(t *testing.T) {
 	fc := NewFileCache(10, 1024, 1*time.Hour)
 
-	fc.Set("/a", []byte("a"), 1, time.Now())
-	fc.Set("/b", []byte("b"), 1, time.Now())
+	_ = fc.Set("/a", []byte("a"), 1, time.Now())
+	_ = fc.Set("/b", []byte("b"), 1, time.Now())
 
 	fc.Clear()
 
@@ -124,8 +124,8 @@ func TestFileCacheClear(t *testing.T) {
 func TestFileCacheStats(t *testing.T) {
 	fc := NewFileCache(100, 1024, 1*time.Hour)
 
-	fc.Set("/a", []byte("12345"), 5, time.Now())
-	fc.Set("/b", []byte("12345"), 5, time.Now())
+	_ = fc.Set("/a", []byte("12345"), 5, time.Now())
+	_ = fc.Set("/b", []byte("12345"), 5, time.Now())
 
 	stats := fc.Stats()
 	if stats.Entries != 2 {

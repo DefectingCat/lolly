@@ -106,7 +106,7 @@ func TestLoggerWithFile(t *testing.T) {
 
 	logger.LogAccess(ctx, 200, 10, 100*time.Millisecond)
 	logger.Error().Str("test", "value").Msg("test error")
-	logger.Close()
+	_ = logger.Close()
 
 	if _, err := os.Stat(accessPath); os.IsNotExist(err) {
 		t.Error("Expected access log file to be created")
@@ -143,11 +143,11 @@ func TestLoggerNginxFormat(t *testing.T) {
 
 	logger.LogAccess(ctx, 201, 512, 250*time.Millisecond)
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 
 	output := buf.String()
 	expectedFields := []string{"request", "status", "body_bytes_sent", "request_time", "remote_addr"}
@@ -169,11 +169,11 @@ func TestLoggerDebug(t *testing.T) {
 	logger.Debug().Msg("debug message")
 	logger.Info().Msg("info message")
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 
 	output := buf.String()
 	if !strings.Contains(output, "debug message") {

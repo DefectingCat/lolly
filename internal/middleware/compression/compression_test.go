@@ -154,7 +154,7 @@ func TestProcessNoCompression(t *testing.T) {
 
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
 		ctx.Response.Header.Set("Content-Type", "text/html")
-		ctx.WriteString("Short response")
+		_, _ = ctx.WriteString("Short response")
 	}
 
 	handler := m.Process(nextHandler)
@@ -189,7 +189,7 @@ func TestProcessWithGzip(t *testing.T) {
 
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
 		ctx.Response.Header.Set("Content-Type", "text/html")
-		ctx.Write(longResponse)
+		_, _ = ctx.Write(longResponse)
 	}
 
 	handler := m.Process(nextHandler)
@@ -223,7 +223,7 @@ func TestProcessWithBrotli(t *testing.T) {
 
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
 		ctx.Response.Header.Set("Content-Type", "text/html")
-		ctx.Write(longResponse)
+		_, _ = ctx.Write(longResponse)
 	}
 
 	handler := m.Process(nextHandler)
@@ -247,7 +247,7 @@ func TestProcessUnsupportedEncoding(t *testing.T) {
 
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
 		ctx.Response.Header.Set("Content-Type", "text/html")
-		ctx.WriteString("Test response")
+		_, _ = ctx.WriteString("Test response")
 	}
 
 	handler := m.Process(nextHandler)
@@ -275,7 +275,7 @@ func TestProcessNonCompressibleType(t *testing.T) {
 
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
 		ctx.Response.Header.Set("Content-Type", "image/png")
-		ctx.Write(longResponse)
+		_, _ = ctx.Write(longResponse)
 	}
 
 	handler := m.Process(nextHandler)

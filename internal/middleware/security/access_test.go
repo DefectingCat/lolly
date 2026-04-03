@@ -187,7 +187,7 @@ func TestAccessControlProcess(t *testing.T) {
 
 	// Create a simple handler
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("OK")
+		_, _ = ctx.WriteString("OK")
 	}
 
 	handler := ac.Process(nextHandler)
