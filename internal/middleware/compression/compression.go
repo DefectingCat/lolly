@@ -23,10 +23,10 @@ const (
 
 // CompressionMiddleware 响应压缩中间件。
 type CompressionMiddleware struct {
-	types     []string   // 可压缩的 MIME 类型
-	level     int        // 压缩级别
-	minSize   int        // 最小压缩大小
-	algorithm Algorithm  // 压缩算法
+	types     []string  // 可压缩的 MIME 类型
+	level     int       // 压缩级别
+	minSize   int       // 最小压缩大小
+	algorithm Algorithm // 压缩算法
 
 	// 缓冲池
 	gzipPool sync.Pool

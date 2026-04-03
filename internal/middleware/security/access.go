@@ -40,16 +40,16 @@ type Action int
 
 const (
 	ActionAllow Action = iota // Allow the request
-	ActionDeny                 // Deny the request (403 Forbidden)
+	ActionDeny                // Deny the request (403 Forbidden)
 )
 
 // AccessControl implements IP-based access control middleware.
 // It checks incoming requests against configured allow/deny CIDR lists.
 type AccessControl struct {
-	allowList    []net.IPNet // CIDR networks to allow
-	denyList     []net.IPNet // CIDR networks to deny
+	allowList     []net.IPNet // CIDR networks to allow
+	denyList      []net.IPNet // CIDR networks to deny
 	defaultAction Action      // Default action when no rule matches
-	mu           sync.RWMutex
+	mu            sync.RWMutex
 }
 
 // NewAccessControl creates a new access control middleware from configuration.

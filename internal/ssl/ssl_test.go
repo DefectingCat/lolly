@@ -181,10 +181,10 @@ func TestParseTLSVersions(t *testing.T) {
 
 func TestParseCipherSuites(t *testing.T) {
 	tests := []struct {
-		name     string
-		ciphers  []string
-		wantLen  int
-		wantErr  bool
+		name    string
+		ciphers []string
+		wantLen int
+		wantErr bool
 	}{
 		{
 			name:    "valid cipher",
@@ -192,7 +192,7 @@ func TestParseCipherSuites(t *testing.T) {
 			wantLen: 1,
 		},
 		{
-			name:    "multiple valid ciphers",
+			name: "multiple valid ciphers",
 			ciphers: []string{
 				"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
 				"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",

@@ -177,7 +177,7 @@ func TestBasicAuthProcess(t *testing.T) {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
 	auth, err := NewBasicAuth(&config.AuthConfig{
-		Type:      "basic",
+		Type:       "basic",
 		RequireTLS: false, // Disable TLS for testing
 		Users: []config.User{
 			{Name: "admin", Password: string(hashedPassword)},
@@ -346,7 +346,7 @@ func TestExtractCredentials(t *testing.T) {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
 	auth, err := NewBasicAuth(&config.AuthConfig{
-		Type:      "basic",
+		Type:       "basic",
 		RequireTLS: false,
 		Users: []config.User{
 			{Name: "admin", Password: string(hashedPassword)},

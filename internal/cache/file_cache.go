@@ -10,23 +10,23 @@ import (
 
 // FileEntry 文件缓存条目。
 type FileEntry struct {
-	Path       string      // 文件路径
-	Size       int64       // 文件大小
-	ModTime    time.Time   // 修改时间
-	LastAccess time.Time   // 最后访问时间
-	Data       []byte      // 文件内容
+	Path       string        // 文件路径
+	Size       int64         // 文件大小
+	ModTime    time.Time     // 修改时间
+	LastAccess time.Time     // 最后访问时间
+	Data       []byte        // 文件内容
 	element    *list.Element // LRU 链表元素
 }
 
 // FileCache 文件缓存，支持 LRU 淘汰。
 type FileCache struct {
-	maxEntries int64           // 最大条目数
-	maxSize    int64           // 内存上限（字节）
-	inactive   time.Duration   // 未访问淘汰时间
-	entries    map[string]*FileEntry
-	lruList    *list.List      // LRU 链表
-	mu         sync.RWMutex
-	currentSize int64          // 当前内存使用
+	maxEntries  int64         // 最大条目数
+	maxSize     int64         // 内存上限（字节）
+	inactive    time.Duration // 未访问淘汰时间
+	entries     map[string]*FileEntry
+	lruList     *list.List // LRU 链表
+	mu          sync.RWMutex
+	currentSize int64 // 当前内存使用
 }
 
 // NewFileCache 创建文件缓存。
@@ -158,10 +158,10 @@ func (c *FileCache) Stats() FileCacheStats {
 	defer c.mu.RUnlock()
 
 	return FileCacheStats{
-		Entries:     int64(len(c.entries)),
-		MaxEntries:  c.maxEntries,
-		Size:        c.currentSize,
-		MaxSize:     c.maxSize,
+		Entries:    int64(len(c.entries)),
+		MaxEntries: c.maxEntries,
+		Size:       c.currentSize,
+		MaxSize:    c.maxSize,
 	}
 }
 
@@ -183,22 +183,22 @@ type ProxyCacheRule struct {
 
 // ProxyCacheEntry 代理缓存条目。
 type ProxyCacheEntry struct {
-	Key        string        // 缓存 key
-	Data       []byte        // 响应体
-	Headers    map[string]string // 响应头
-	Status     int           // 状态码
-	Created    time.Time     // 创建时间
-	MaxAge     time.Duration // 有效期
+	Key     string            // 缓存 key
+	Data    []byte            // 响应体
+	Headers map[string]string // 响应头
+	Status  int               // 状态码
+	Created time.Time         // 创建时间
+	MaxAge  time.Duration     // 有效期
 }
 
 // ProxyCache 代理响应缓存，支持缓存锁防击穿。
 type ProxyCache struct {
-	rules      []ProxyCacheRule
-	entries    map[string]*ProxyCacheEntry
-	mu         sync.RWMutex
-	cacheLock  bool          // 缓存锁开关
-	pending    map[string]*pendingRequest // 正在生成的缓存项
-	staleTime  time.Duration // 过期缓存复用时间
+	rules     []ProxyCacheRule
+	entries   map[string]*ProxyCacheEntry
+	mu        sync.RWMutex
+	cacheLock bool                       // 缓存锁开关
+	pending   map[string]*pendingRequest // 正在生成的缓存项
+	staleTime time.Duration              // 过期缓存复用时间
 }
 
 // pendingRequest 等待中的缓存请求。

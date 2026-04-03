@@ -35,8 +35,8 @@ import (
 	"sync"
 
 	"github.com/valyala/fasthttp"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/argon2"
+	"golang.org/x/crypto/bcrypt"
 
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/middleware"
@@ -46,37 +46,37 @@ import (
 type HashAlgorithm int
 
 const (
-	HashBcrypt HashAlgorithm = iota // bcrypt (default, recommended)
-	HashArgon2id                    // Argon2id (more secure, compute-intensive)
+	HashBcrypt   HashAlgorithm = iota // bcrypt (default, recommended)
+	HashArgon2id                      // Argon2id (more secure, compute-intensive)
 )
 
 // BasicAuth implements HTTP Basic Authentication middleware.
 type BasicAuth struct {
-	users     map[string]string    // username -> hashed password
-	algorithm HashAlgorithm        // Hash algorithm used
-	realm     string               // Authentication realm
-	requireTLS bool                // Require HTTPS (default true)
-	minPasswordLength int          // Minimum password length for validation
-	argon2Params argon2Params      // Argon2id parameters
-	mu         sync.RWMutex
+	users             map[string]string // username -> hashed password
+	algorithm         HashAlgorithm     // Hash algorithm used
+	realm             string            // Authentication realm
+	requireTLS        bool              // Require HTTPS (default true)
+	minPasswordLength int               // Minimum password length for validation
+	argon2Params      argon2Params      // Argon2id parameters
+	mu                sync.RWMutex
 }
 
 // argon2Params holds Argon2id configuration parameters.
 type argon2Params struct {
-	time      uint32 // Number of passes
-	memory    uint32 // Memory cost in KB
-	threads   uint8  // Parallelism
-	saltLen   uint32 // Salt length
-	keyLen    uint32 // Output key length
+	time    uint32 // Number of passes
+	memory  uint32 // Memory cost in KB
+	threads uint8  // Parallelism
+	saltLen uint32 // Salt length
+	keyLen  uint32 // Output key length
 }
 
 // Default Argon2id parameters (OWASP recommended)
 var defaultArgon2Params = argon2Params{
-	time:      3,
-	memory:    64 * 1024, // 64 MB
-	threads:   4,
-	saltLen:   16,
-	keyLen:    32,
+	time:    3,
+	memory:  64 * 1024, // 64 MB
+	threads: 4,
+	saltLen: 16,
+	keyLen:  32,
 }
 
 // NewBasicAuth creates a new Basic Auth middleware from configuration.
@@ -101,10 +101,10 @@ func NewBasicAuth(cfg *config.AuthConfig) (*BasicAuth, error) {
 	}
 
 	auth := &BasicAuth{
-		users:     make(map[string]string),
-		requireTLS: cfg.RequireTLS, // Default is true from config defaults
+		users:             make(map[string]string),
+		requireTLS:        cfg.RequireTLS, // Default is true from config defaults
 		minPasswordLength: cfg.MinPasswordLength,
-		argon2Params: defaultArgon2Params,
+		argon2Params:      defaultArgon2Params,
 	}
 
 	// Set realm

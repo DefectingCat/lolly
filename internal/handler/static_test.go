@@ -26,12 +26,12 @@ func newTestContext(t *testing.T, path string) *fasthttp.RequestCtx {
 // TestStaticHandlerHandle 测试静态文件处理器
 func TestStaticHandlerHandle(t *testing.T) {
 	tests := []struct {
-		name         string
-		setup        func(t *testing.T, root string) // 在临时目录中设置测试文件
-		path         string                          // 请求路径
-		wantStatus   int                             // 期望的 HTTP 状态码
-		wantContent  string                          // 期望的响应内容（可选）
-		skipContent  bool                            // 是否跳过内容验证
+		name        string
+		setup       func(t *testing.T, root string) // 在临时目录中设置测试文件
+		path        string                          // 请求路径
+		wantStatus  int                             // 期望的 HTTP 状态码
+		wantContent string                          // 期望的响应内容（可选）
+		skipContent bool                            // 是否跳过内容验证
 	}{
 		{
 			name: "正常文件访问",
@@ -89,8 +89,8 @@ func TestStaticHandlerHandle(t *testing.T) {
 					t.Fatalf("创建目录失败: %v", err)
 				}
 			},
-			path:       "/noindex/",
-			wantStatus: fasthttp.StatusForbidden,
+			path:        "/noindex/",
+			wantStatus:  fasthttp.StatusForbidden,
 			skipContent: true,
 		},
 		{
@@ -99,8 +99,8 @@ func TestStaticHandlerHandle(t *testing.T) {
 				t.Helper()
 				// 不创建任何文件
 			},
-			path:       "/nonexistent.txt",
-			wantStatus: fasthttp.StatusNotFound,
+			path:        "/nonexistent.txt",
+			wantStatus:  fasthttp.StatusNotFound,
 			skipContent: true,
 		},
 		{
@@ -109,8 +109,8 @@ func TestStaticHandlerHandle(t *testing.T) {
 				t.Helper()
 				// root 目录没有索引文件
 			},
-			path:       "/",
-			wantStatus: fasthttp.StatusForbidden,
+			path:        "/",
+			wantStatus:  fasthttp.StatusForbidden,
 			skipContent: true,
 		},
 		{

@@ -402,9 +402,9 @@ func TestModifyRequestHeaders(t *testing.T) {
 			},
 		},
 		{
-			name:          "移除请求头",
-			clientIP:      "192.168.1.100",
-			removeHeaders: []string{"X-Remove-Me"},
+			name:           "移除请求头",
+			clientIP:       "192.168.1.100",
+			removeHeaders:  []string{"X-Remove-Me"},
 			shouldNotExist: []string{"X-Remove-Me"},
 		},
 	}
@@ -416,8 +416,8 @@ func TestModifyRequestHeaders(t *testing.T) {
 				LoadBalance: "round_robin",
 				Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
 				Headers: config.ProxyHeaders{
-					SetRequest:  tt.setRequest,
-					Remove:      tt.removeHeaders,
+					SetRequest: tt.setRequest,
+					Remove:     tt.removeHeaders,
 				},
 			}
 
@@ -704,40 +704,40 @@ func TestGetConfig(t *testing.T) {
 // TestIsWebSocketRequest 测试WebSocket请求检测
 func TestIsWebSocketRequest(t *testing.T) {
 	tests := []struct {
-		name     string
-		upgrade  string
+		name       string
+		upgrade    string
 		connection string
-		expected bool
+		expected   bool
 	}{
 		{
-			name:     "标准WebSocket请求",
-			upgrade:  "websocket",
+			name:       "标准WebSocket请求",
+			upgrade:    "websocket",
 			connection: "upgrade",
-			expected: true,
+			expected:   true,
 		},
 		{
-			name:     "大小写不敏感",
-			upgrade:  "WebSocket",
+			name:       "大小写不敏感",
+			upgrade:    "WebSocket",
 			connection: "Upgrade",
-			expected: true,
+			expected:   true,
 		},
 		{
-			name:     "非WebSocket升级",
-			upgrade:  "h2c",
+			name:       "非WebSocket升级",
+			upgrade:    "h2c",
 			connection: "upgrade",
-			expected: false,
+			expected:   false,
 		},
 		{
-			name:     "非upgrade连接",
-			upgrade:  "websocket",
+			name:       "非upgrade连接",
+			upgrade:    "websocket",
 			connection: "keep-alive",
-			expected: false,
+			expected:   false,
 		},
 		{
-			name:     "keep-alive, Upgrade",
-			upgrade:  "websocket",
+			name:       "keep-alive, Upgrade",
+			upgrade:    "websocket",
 			connection: "keep-alive, Upgrade",
-			expected: true,
+			expected:   true,
 		},
 	}
 

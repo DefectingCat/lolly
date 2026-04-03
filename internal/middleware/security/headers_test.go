@@ -19,8 +19,8 @@ func TestNewSecurityHeaders(t *testing.T) {
 		{
 			name: "custom config",
 			cfg: &config.SecurityHeaders{
-				XFrameOptions:        "SAMEORIGIN",
-				XContentTypeOptions:  "nosniff",
+				XFrameOptions:         "SAMEORIGIN",
+				XContentTypeOptions:   "nosniff",
 				ContentSecurityPolicy: "default-src 'self'",
 			},
 		},
@@ -45,11 +45,11 @@ func TestSecurityHeadersName(t *testing.T) {
 
 func TestSecurityHeadersProcess(t *testing.T) {
 	cfg := &config.SecurityHeaders{
-		XFrameOptions:        "DENY",
-		XContentTypeOptions:  "nosniff",
+		XFrameOptions:         "DENY",
+		XContentTypeOptions:   "nosniff",
 		ContentSecurityPolicy: "default-src 'self'",
-		ReferrerPolicy:       "strict-origin-when-cross-origin",
-		PermissionsPolicy:    "geolocation=()",
+		ReferrerPolicy:        "strict-origin-when-cross-origin",
+		PermissionsPolicy:     "geolocation=()",
 	}
 
 	sh := NewSecurityHeaders(cfg)
@@ -157,7 +157,7 @@ func TestUpdateConfig(t *testing.T) {
 	sh := NewSecurityHeaders(nil)
 
 	newCfg := &config.SecurityHeaders{
-		XFrameOptions: "DENY",
+		XFrameOptions:  "DENY",
 		ReferrerPolicy: "no-referrer",
 	}
 

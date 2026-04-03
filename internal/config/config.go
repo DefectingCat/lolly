@@ -45,13 +45,13 @@ type StaticConfig struct {
 
 // ProxyConfig 反向代理配置，支持负载均衡和健康检查。
 type ProxyConfig struct {
-	Path        string           `yaml:"path"`         // 匹配路径前缀
-	Targets     []ProxyTarget    `yaml:"targets"`      // 后端目标列表
-	LoadBalance string           `yaml:"load_balance"` // 负载均衡算法：round_robin, weighted_round_robin, least_conn, ip_hash
+	Path        string            `yaml:"path"`         // 匹配路径前缀
+	Targets     []ProxyTarget     `yaml:"targets"`      // 后端目标列表
+	LoadBalance string            `yaml:"load_balance"` // 负载均衡算法：round_robin, weighted_round_robin, least_conn, ip_hash
 	HealthCheck HealthCheckConfig `yaml:"health_check"` // 健康检查配置
-	Timeout     ProxyTimeout     `yaml:"timeout"`      // 超时配置
-	Headers     ProxyHeaders     `yaml:"headers"`      // 请求/响应头修改
-	Cache       ProxyCacheConfig `yaml:"cache"`        // 代理缓存配置
+	Timeout     ProxyTimeout      `yaml:"timeout"`      // 超时配置
+	Headers     ProxyHeaders      `yaml:"headers"`      // 请求/响应头修改
+	Cache       ProxyCacheConfig  `yaml:"cache"`        // 代理缓存配置
 }
 
 // ProxyTarget 后端目标配置。
@@ -83,21 +83,21 @@ type ProxyHeaders struct {
 
 // ProxyCacheConfig 代理缓存配置。
 type ProxyCacheConfig struct {
-	Enabled             bool          `yaml:"enabled"`               // 是否启用缓存
-	MaxAge              time.Duration `yaml:"max_age"`               // 缓存有效期
-	CacheLock           bool          `yaml:"cache_lock"`            // 缓存锁，防止击穿
+	Enabled              bool          `yaml:"enabled"`                // 是否启用缓存
+	MaxAge               time.Duration `yaml:"max_age"`                // 缓存有效期
+	CacheLock            bool          `yaml:"cache_lock"`             // 缓存锁，防止击穿
 	StaleWhileRevalidate time.Duration `yaml:"stale_while_revalidate"` // 过期缓存复用时间
 }
 
 // SSLConfig SSL/TLS 配置。
 type SSLConfig struct {
-	Cert         string   `yaml:"cert"`          // 证书文件路径
-	Key          string   `yaml:"key"`           // 私钥文件路径
-	CertChain    string   `yaml:"cert_chain"`    // 证书链文件路径
-	Protocols    []string `yaml:"protocols"`     // TLS 版本，默认 ["TLSv1.2", "TLSv1.3"]
-	Ciphers      []string `yaml:"ciphers"`       // 加密套件（仅 TLS 1.2 有效）
-	OCSPStapling bool     `yaml:"ocsp_stapling"` // OCSP Stapling 支持
-	HSTS         HSTSConfig `yaml:"hsts"`        // HSTS 配置
+	Cert         string     `yaml:"cert"`          // 证书文件路径
+	Key          string     `yaml:"key"`           // 私钥文件路径
+	CertChain    string     `yaml:"cert_chain"`    // 证书链文件路径
+	Protocols    []string   `yaml:"protocols"`     // TLS 版本，默认 ["TLSv1.2", "TLSv1.3"]
+	Ciphers      []string   `yaml:"ciphers"`       // 加密套件（仅 TLS 1.2 有效）
+	OCSPStapling bool       `yaml:"ocsp_stapling"` // OCSP Stapling 支持
+	HSTS         HSTSConfig `yaml:"hsts"`          // HSTS 配置
 }
 
 // HSTSConfig HTTP Strict Transport Security 配置。
@@ -109,10 +109,10 @@ type HSTSConfig struct {
 
 // SecurityConfig 安全配置，包含访问控制、限流、认证和安全头部。
 type SecurityConfig struct {
-	Access    AccessConfig    `yaml:"access"`    // IP 访问控制
+	Access    AccessConfig    `yaml:"access"`     // IP 访问控制
 	RateLimit RateLimitConfig `yaml:"rate_limit"` // 速率限制
-	Auth      AuthConfig      `yaml:"auth"`      // 认证配置
-	Headers   SecurityHeaders `yaml:"headers"`   // 安全头部
+	Auth      AuthConfig      `yaml:"auth"`       // 认证配置
+	Headers   SecurityHeaders `yaml:"headers"`    // 安全头部
 }
 
 // AccessConfig IP 访问控制配置。
@@ -132,12 +132,12 @@ type RateLimitConfig struct {
 
 // AuthConfig 认证配置。
 type AuthConfig struct {
-	Type              string   `yaml:"type"`               // 认证类型：basic
-	RequireTLS        bool     `yaml:"require_tls"`        // 强制 HTTPS，默认 true
-	Algorithm         string   `yaml:"algorithm"`          // 哈希算法：bcrypt, argon2id
-	Users             []User   `yaml:"users"`              // 用户列表
-	Realm             string   `yaml:"realm"`              // 认证域
-	MinPasswordLength int      `yaml:"min_password_length"` // 密码最小长度
+	Type              string `yaml:"type"`                // 认证类型：basic
+	RequireTLS        bool   `yaml:"require_tls"`         // 强制 HTTPS，默认 true
+	Algorithm         string `yaml:"algorithm"`           // 哈希算法：bcrypt, argon2id
+	Users             []User `yaml:"users"`               // 用户列表
+	Realm             string `yaml:"realm"`               // 认证域
+	MinPasswordLength int    `yaml:"min_password_length"` // 密码最小长度
 }
 
 // User 认证用户配置。
@@ -148,11 +148,11 @@ type User struct {
 
 // SecurityHeaders 安全头部配置。
 type SecurityHeaders struct {
-	XFrameOptions        string `yaml:"x_frame_options"`         // X-Frame-Options: DENY, SAMEORIGIN
-	XContentTypeOptions  string `yaml:"x_content_type_options"`  // X-Content-Type-Options: nosniff
+	XFrameOptions         string `yaml:"x_frame_options"`         // X-Frame-Options: DENY, SAMEORIGIN
+	XContentTypeOptions   string `yaml:"x_content_type_options"`  // X-Content-Type-Options: nosniff
 	ContentSecurityPolicy string `yaml:"content_security_policy"` // Content-Security-Policy
-	ReferrerPolicy       string `yaml:"referrer_policy"`        // Referrer-Policy
-	PermissionsPolicy    string `yaml:"permissions_policy"`     // Permissions-Policy
+	ReferrerPolicy        string `yaml:"referrer_policy"`         // Referrer-Policy
+	PermissionsPolicy     string `yaml:"permissions_policy"`      // Permissions-Policy
 }
 
 // RewriteRule URL 重写规则。
@@ -164,10 +164,10 @@ type RewriteRule struct {
 
 // CompressionConfig 响应压缩配置。
 type CompressionConfig struct {
-	Type    string   `yaml:"type"`    // 压缩类型：gzip, brotli, both
-	Level   int      `yaml:"level"`   // 压缩级别：1-9
+	Type    string   `yaml:"type"`     // 压缩类型：gzip, brotli, both
+	Level   int      `yaml:"level"`    // 压缩级别：1-9
 	MinSize int      `yaml:"min_size"` // 最小压缩大小（字节）
-	Types   []string `yaml:"types"`   // 可压缩的 MIME 类型
+	Types   []string `yaml:"types"`    // 可压缩的 MIME 类型
 }
 
 // LoggingConfig 日志配置。
@@ -197,9 +197,9 @@ type PerformanceConfig struct {
 
 // GoroutinePoolConfig Goroutine 池配置。
 type GoroutinePoolConfig struct {
-	Enabled     bool          `yaml:"enabled"`     // 是否启用
-	MaxWorkers  int           `yaml:"max_workers"` // 最大 worker 数
-	MinWorkers  int           `yaml:"min_workers"` // 最小 worker 数（预热）
+	Enabled     bool          `yaml:"enabled"`      // 是否启用
+	MaxWorkers  int           `yaml:"max_workers"`  // 最大 worker 数
+	MinWorkers  int           `yaml:"min_workers"`  // 最小 worker 数（预热）
 	IdleTimeout time.Duration `yaml:"idle_timeout"` // 空闲超时
 }
 
@@ -213,10 +213,10 @@ type FileCacheConfig struct {
 
 // TransportConfig HTTP Transport 配置。
 type TransportConfig struct {
-	MaxIdleConns        int           `yaml:"max_idle_conns"`        // 最大空闲连接数
+	MaxIdleConns        int           `yaml:"max_idle_conns"`          // 最大空闲连接数
 	MaxIdleConnsPerHost int           `yaml:"max_idle_conns_per_host"` // 每主机最大空闲连接
-	IdleConnTimeout     time.Duration `yaml:"idle_conn_timeout"`     // 空闲连接超时
-	MaxConnsPerHost     int           `yaml:"max_conns_per_host"`    // 每主机最大连接数
+	IdleConnTimeout     time.Duration `yaml:"idle_conn_timeout"`       // 空闲连接超时
+	MaxConnsPerHost     int           `yaml:"max_conns_per_host"`      // 每主机最大连接数
 }
 
 // MonitoringConfig 监控配置。

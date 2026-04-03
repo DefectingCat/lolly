@@ -37,9 +37,9 @@ import (
 
 // SecurityHeadersMiddleware adds security-related headers to responses.
 type SecurityHeadersMiddleware struct {
-	config    *config.SecurityHeaders
-	hsts      string // Pre-formatted HSTS header value
-	mu        sync.RWMutex
+	config *config.SecurityHeaders
+	hsts   string // Pre-formatted HSTS header value
+	mu     sync.RWMutex
 }
 
 // NewSecurityHeaders creates a new security headers middleware.
@@ -218,11 +218,11 @@ func DefaultSecurityHeaders() *config.SecurityHeaders {
 // Suitable for high-security applications.
 func StrictSecurityHeaders() *config.SecurityHeaders {
 	return &config.SecurityHeaders{
-		XFrameOptions:        "DENY",
-		XContentTypeOptions:  "nosniff",
+		XFrameOptions:         "DENY",
+		XContentTypeOptions:   "nosniff",
 		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
-		ReferrerPolicy:       "no-referrer",
-		PermissionsPolicy:    "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
+		ReferrerPolicy:        "no-referrer",
+		PermissionsPolicy:     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
 	}
 }
 

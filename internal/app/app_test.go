@@ -56,13 +56,13 @@ func captureStderr(t *testing.T) (func() string, func()) {
 // TestRun 测试 Run 函数的各种场景。
 func TestRun(t *testing.T) {
 	tests := []struct {
-		name         string
-		cfgPath      string
-		genConfig    bool
-		outputPath   string
-		showVersion  bool
-		wantExitCode int
-		wantContains string // stdout 应包含的内容
+		name            string
+		cfgPath         string
+		genConfig       bool
+		outputPath      string
+		showVersion     bool
+		wantExitCode    int
+		wantContains    string // stdout 应包含的内容
 		wantErrContains string // stderr 应包含的内容（可选）
 	}{
 		{
@@ -86,11 +86,11 @@ func TestRun(t *testing.T) {
 			wantContains: "配置已写入:",
 		},
 		{
-			name:         "配置文件不存在",
-			cfgPath:      filepath.Join(t.TempDir(), "nonexistent.yaml"),
-			genConfig:    false,
-			showVersion:  false,
-			wantExitCode: 1,
+			name:            "配置文件不存在",
+			cfgPath:         filepath.Join(t.TempDir(), "nonexistent.yaml"),
+			genConfig:       false,
+			showVersion:     false,
+			wantExitCode:    1,
 			wantErrContains: "加载配置失败",
 		},
 	}

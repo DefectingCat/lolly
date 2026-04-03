@@ -8,11 +8,11 @@ import (
 
 func TestValidateServer(t *testing.T) {
 	tests := []struct {
-		name    string
-		config  ServerConfig
+		name      string
+		config    ServerConfig
 		isDefault bool
-		wantErr bool
-		errMsg  string
+		wantErr   bool
+		errMsg    string
 	}{
 		{
 			name: "有效配置",

@@ -38,9 +38,9 @@ import (
 
 // RateLimiter implements request rate limiting using token bucket algorithm.
 type RateLimiter struct {
-	rate    float64       // Tokens added per second
-	burst   float64       // Maximum bucket capacity
-	keyFunc KeyFunc       // Function to extract limit key
+	rate    float64 // Tokens added per second
+	burst   float64 // Maximum bucket capacity
+	keyFunc KeyFunc // Function to extract limit key
 	buckets map[string]*tokenBucket
 	mu      sync.RWMutex
 }
@@ -294,12 +294,12 @@ func (rl *RateLimiter) GetStats() RateLimitStats {
 // ConnLimiter implements connection count limiting.
 // This is a separate limiter for maximum concurrent connections.
 type ConnLimiter struct {
-	max      int           // Maximum concurrent connections
-	current  int64         // Current connection count (atomic)
-	perKey   bool          // Limit per key instead of global
-	keyFunc  KeyFunc       // Key extraction function
-	counts   map[string]int64 // Connection counts per key
-	mu       sync.RWMutex
+	max     int              // Maximum concurrent connections
+	current int64            // Current connection count (atomic)
+	perKey  bool             // Limit per key instead of global
+	keyFunc KeyFunc          // Key extraction function
+	counts  map[string]int64 // Connection counts per key
+	mu      sync.RWMutex
 }
 
 // NewConnLimiter creates a new connection limiter.
@@ -318,9 +318,9 @@ func NewConnLimiter(max int, perKey bool, keyType string) (*ConnLimiter, error) 
 	}
 
 	cl := &ConnLimiter{
-		max:     max,
-		perKey:  perKey,
-		counts:  make(map[string]int64),
+		max:    max,
+		perKey: perKey,
+		counts: make(map[string]int64),
 	}
 
 	if perKey {

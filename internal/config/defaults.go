@@ -119,6 +119,11 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("server:\n")
 	buf.WriteString(fmt.Sprintf("  listen: \"%s\"           # 监听地址\n", cfg.Server.Listen))
 	buf.WriteString(fmt.Sprintf("  name: \"%s\"             # 服务器名称（虚拟主机匹配）\n", cfg.Server.Name))
+	buf.WriteString(fmt.Sprintf("  read_timeout: %ds            # 读取超时（0 表示不限制）\n", int(cfg.Server.ReadTimeout.Seconds())))
+	buf.WriteString(fmt.Sprintf("  write_timeout: %ds           # 写入超时（0 表示不限制）\n", int(cfg.Server.WriteTimeout.Seconds())))
+	buf.WriteString(fmt.Sprintf("  idle_timeout: %ds            # 空闲超时（0 表示不限制）\n", int(cfg.Server.IdleTimeout.Seconds())))
+	buf.WriteString(fmt.Sprintf("  max_conns_per_ip: %d         # 每 IP 最大连接数（0 表示不限制）\n", cfg.Server.MaxConnsPerIP))
+	buf.WriteString(fmt.Sprintf("  max_requests_per_conn: %d    # 每连接最大请求数（0 表示不限制）\n", cfg.Server.MaxRequestsPerConn))
 	buf.WriteString("\n")
 
 	// static 配置
@@ -205,10 +210,10 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("\n")
 	buf.WriteString("    # 安全头部\n")
 	buf.WriteString("    headers:\n")
-	buf.WriteString(fmt.Sprintf("      x_frame_options: \"%s\"        # 防止点击劫持（有效值: DENY, SAMEORIGIN）\n", cfg.Server.Security.Headers.XFrameOptions))
+	buf.WriteString(fmt.Sprintf("      x_frame_options: \"%s\"        # 防止点击劫持（有效值: DENY, SAMEORIGIN, 空表示禁用）\n", cfg.Server.Security.Headers.XFrameOptions))
 	buf.WriteString(fmt.Sprintf("      x_content_type_options: \"%s\" # 防止 MIME 嗅探\n", cfg.Server.Security.Headers.XContentTypeOptions))
-	buf.WriteString(fmt.Sprintf("      referrer_policy: \"%s\"        # 引用策略\n", cfg.Server.Security.Headers.ReferrerPolicy))
-	buf.WriteString("      # content_security_policy: \"default-src 'self'\"  # CSP（推荐配置）\n")
+	buf.WriteString(fmt.Sprintf("      referrer_policy: \"%s\"        # 引用策略（有效值: no-referrer, no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url）\n", cfg.Server.Security.Headers.ReferrerPolicy))
+	buf.WriteString("      # content_security_policy: \"default-src 'self'\"  # 内容安全策略 CSP\n")
 	buf.WriteString("      # permissions_policy: \"geolocation=(), microphone=()\"  # 权限策略\n")
 	buf.WriteString("\n")
 
@@ -223,9 +228,9 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	// compression 配置
 	buf.WriteString("  # 响应压缩配置\n")
 	buf.WriteString("  compression:\n")
-	buf.WriteString(fmt.Sprintf("    type: \"%s\"            # 压缩类型: gzip, brotli, both\n", cfg.Server.Compression.Type))
-	buf.WriteString(fmt.Sprintf("    level: %d              # 压缩级别 (1-9)\n", cfg.Server.Compression.Level))
-	buf.WriteString(fmt.Sprintf("    min_size: %d        # 最小压缩大小（字节）\n", cfg.Server.Compression.MinSize))
+	buf.WriteString(fmt.Sprintf("    type: \"%s\"            # 压缩类型（有效值: gzip, brotli, both，空表示禁用）\n", cfg.Server.Compression.Type))
+	buf.WriteString(fmt.Sprintf("    level: %d              # 压缩级别（范围 1-9，值越大压缩率越高但速度越慢）\n", cfg.Server.Compression.Level))
+	buf.WriteString(fmt.Sprintf("    min_size: %d        # 最小压缩大小（字节，小于此值不压缩）\n", cfg.Server.Compression.MinSize))
 	buf.WriteString("    types:                 # 可压缩的 MIME 类型\n")
 	for _, t := range cfg.Server.Compression.Types {
 		buf.WriteString(fmt.Sprintf("      - \"%s\"\n", t))
@@ -250,11 +255,11 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("# 日志配置\n")
 	buf.WriteString("logging:\n")
 	buf.WriteString("  access:\n")
-	buf.WriteString(fmt.Sprintf("    format: \"%s\"  # 日志格式\n", cfg.Logging.Access.Format))
-	buf.WriteString("    # path: /var/log/lolly/access.log  # 日志文件路径\n")
+	buf.WriteString(fmt.Sprintf("    format: \"%s\"  # 日志格式（支持变量: $remote_addr, $request, $status, $body_bytes_sent, $request_time, $http_referer, $http_user_agent）\n", cfg.Logging.Access.Format))
+	buf.WriteString("    # path: /var/log/lolly/access.log  # 日志文件路径（空表示输出到 stdout）\n")
 	buf.WriteString("  error:\n")
-	buf.WriteString(fmt.Sprintf("    level: \"%s\"           # 日志级别: debug, info, warn, error\n", cfg.Logging.Error.Level))
-	buf.WriteString("    # path: /var/log/lolly/error.log\n")
+	buf.WriteString(fmt.Sprintf("    level: \"%s\"           # 日志级别（有效值: debug, info, warn, error，级别越高日志越少）\n", cfg.Logging.Error.Level))
+	buf.WriteString("    # path: /var/log/lolly/error.log  # 日志文件路径（空表示输出到 stderr）\n")
 	buf.WriteString("\n")
 
 	// performance 配置
@@ -289,4 +294,3 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 
 	return buf.Bytes(), nil
 }
-
