@@ -2,6 +2,7 @@
 package rewrite
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -39,13 +40,17 @@ func parseFlag(s string) Flag {
 
 // Rule 编译后的重写规则。
 type Rule struct {
-	pattern     *regexp.Regexp
+	// pattern 正则匹配模式
+	pattern *regexp.Regexp
+	// replacement 替换字符串，支持 $1、$2 等捕获组
 	replacement string
-	flag        Flag
+	// flag 执行标志，控制重写后行为
+	flag Flag
 }
 
 // RewriteMiddleware URL 重写中间件。
 type RewriteMiddleware struct {
+	// rules 编译后的规则列表，按配置顺序执行
 	rules []Rule
 }
 
@@ -53,6 +58,11 @@ type RewriteMiddleware struct {
 func New(rules []config.RewriteRule) (*RewriteMiddleware, error) {
 	compiled := make([]Rule, 0, len(rules))
 	for _, r := range rules {
+		// 验证正则表达式安全性，防止 ReDoS
+		if err := validateRegexSafety(r.Pattern); err != nil {
+			return nil, fmt.Errorf("unsafe regex pattern %q: %w", r.Pattern, err)
+		}
+
 		re, err := regexp.Compile(r.Pattern)
 		if err != nil {
 			return nil, err
@@ -64,6 +74,32 @@ func New(rules []config.RewriteRule) (*RewriteMiddleware, error) {
 		})
 	}
 	return &RewriteMiddleware{rules: compiled}, nil
+}
+
+// validateRegexSafety 验证正则表达式的安全性，防止 ReDoS 攻击。
+//
+// 检测可能导致灾难性回溯的危险模式，如嵌套量词。
+func validateRegexSafety(pattern string) error {
+	// 限制模式长度
+	if len(pattern) > 1000 {
+		return fmt.Errorf("pattern too long (max 1000 chars)")
+	}
+
+	// 检测危险模式：嵌套量词
+	// 例如：(\w+)+, (\d+)+, (a+)+, (.+)+
+	dangerousPatterns := []string{
+		`(\w+)+`, `(\d+)+`, `(a+)+`, `(.+)+`,
+		`(\w*)*`, `(\d*)*`, `(a*)*`, `(.*)*`,
+		`(\w+)?+`, `(\d+)?+`,
+	}
+
+	for _, dangerous := range dangerousPatterns {
+		if strings.Contains(pattern, dangerous) {
+			return fmt.Errorf("potential catastrophic backtracking pattern detected")
+		}
+	}
+
+	return nil
 }
 
 // Name 返回中间件名称。

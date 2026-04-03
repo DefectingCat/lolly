@@ -1,4 +1,20 @@
 // Package compression 提供 HTTP 响应压缩中间件，支持 gzip 和 brotli 算法。
+//
+// 该文件包含压缩相关的核心逻辑，包括：
+//   - gzip 压缩（兼容性好，所有浏览器支持）
+//   - brotli 压缩（压缩率更高，适合现代浏览器）
+//   - MIME 类型过滤
+//   - 最小压缩大小控制
+//
+// 主要用途：
+//
+//	用于压缩 HTTP 响应内容，减少传输数据量，提升页面加载速度。
+//
+// 注意事项：
+//   - 使用缓冲池复用压缩对象，减少内存分配
+//   - 小于 MinSize 的响应不压缩
+//
+// 作者：xfy
 package compression
 
 import (
@@ -24,13 +40,18 @@ const (
 
 // CompressionMiddleware 响应压缩中间件。
 type CompressionMiddleware struct {
-	types     []string  // 可压缩的 MIME 类型
-	level     int       // 压缩级别
-	minSize   int       // 最小压缩大小
-	algorithm Algorithm // 压缩算法
+	// types 可压缩的 MIME 类型列表
+	types []string
+	// level 压缩级别（1-9）
+	level int
+	// minSize 最小压缩大小（字节）
+	minSize int
+	// algorithm 压缩算法
+	algorithm Algorithm
 
-	// 缓冲池
-	gzipPool   sync.Pool
+	// gzipPool gzip.Writer 缓冲池
+	gzipPool sync.Pool
+	// brotliPool brotli.Writer 缓冲池
 	brotliPool sync.Pool
 }
 

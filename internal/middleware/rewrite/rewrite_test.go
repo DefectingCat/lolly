@@ -2,6 +2,7 @@ package rewrite
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/valyala/fasthttp"
@@ -283,5 +284,51 @@ func TestRewriteMiddlewareRules(t *testing.T) {
 	compiled := m.Rules()
 	if len(compiled) != 2 {
 		t.Errorf("Expected 2 rules, got %d", len(compiled))
+	}
+}
+
+func TestReDoSProtection(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		wantErr bool
+	}{
+		{
+			name:    "safe pattern",
+			pattern: "^/api/v1/(.*)$",
+			wantErr: false,
+		},
+		{
+			name:    "nested quantifier (\\w+)+",
+			pattern: `(\w+)+`,
+			wantErr: true,
+		},
+		{
+			name:    "nested quantifier (.+)+",
+			pattern: `(.+)+`,
+			wantErr: true,
+		},
+		{
+			name:    "nested quantifier (\\d+)+",
+			pattern: `(\d+)+`,
+			wantErr: true,
+		},
+		{
+			name:    "pattern too long",
+			pattern: strings.Repeat("a", 1001),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rules := []config.RewriteRule{
+				{Pattern: tt.pattern, Replacement: "/new", Flag: "last"},
+			}
+			_, err := New(rules)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

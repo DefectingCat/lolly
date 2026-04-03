@@ -1,4 +1,16 @@
 // Package accesslog 提供访问日志中间件，记录每个请求的详细信息。
+//
+// 该文件包含访问日志相关的核心逻辑，包括：
+//   - 请求方法和路径记录
+//   - 响应状态码和大小记录
+//   - 请求处理耗时记录
+//
+// 使用示例：
+//
+//	accessLog := accesslog.New(cfg.Logging)
+//	chain := middleware.NewChain(accessLog)
+//
+// 作者：xfy
 package accesslog
 
 import (
