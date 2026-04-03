@@ -195,19 +195,14 @@ func (ac *AccessControl) Check(ip net.IP) bool {
 // 返回值：
 //   - error: CIDR 解析失败时返回错误
 func (ac *AccessControl) UpdateAllowList(cidrs []string) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
-
-	newList := make([]net.IPNet, 0, len(cidrs))
-	for _, cidr := range cidrs {
-		network, err := parseCIDR(cidr)
-		if err != nil {
-			return fmt.Errorf("invalid CIDR %s: %w", cidr, err)
-		}
-		newList = append(newList, *network)
+	newList, err := parseCIDRList(cidrs)
+	if err != nil {
+		return err
 	}
 
+	ac.mu.Lock()
 	ac.allowList = newList
+	ac.mu.Unlock()
 	return nil
 }
 
@@ -221,20 +216,35 @@ func (ac *AccessControl) UpdateAllowList(cidrs []string) error {
 // 返回值：
 //   - error: CIDR 解析失败时返回错误
 func (ac *AccessControl) UpdateDenyList(cidrs []string) error {
-	ac.mu.Lock()
-	defer ac.mu.Unlock()
+	newList, err := parseCIDRList(cidrs)
+	if err != nil {
+		return err
+	}
 
+	ac.mu.Lock()
+	ac.denyList = newList
+	ac.mu.Unlock()
+	return nil
+}
+
+// parseCIDRList 解析 CIDR 字符串列表为 IPNet 列表。
+//
+// 参数：
+//   - cidrs: CIDR 字符串列表
+//
+// 返回值：
+//   - []net.IPNet: 解析后的 IP 网络对象列表
+//   - error: 任一 CIDR 解析失败时返回错误
+func parseCIDRList(cidrs []string) ([]net.IPNet, error) {
 	newList := make([]net.IPNet, 0, len(cidrs))
 	for _, cidr := range cidrs {
 		network, err := parseCIDR(cidr)
 		if err != nil {
-			return fmt.Errorf("invalid CIDR %s: %w", cidr, err)
+			return nil, fmt.Errorf("invalid CIDR %s: %w", cidr, err)
 		}
 		newList = append(newList, *network)
 	}
-
-	ac.denyList = newList
-	return nil
+	return newList, nil
 }
 
 // SetDefault 设置默认操作。

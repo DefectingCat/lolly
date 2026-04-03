@@ -34,7 +34,6 @@ package proxy
 
 import (
 	"errors"
-	"net"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +43,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/logging"
+	"rua.plus/lolly/internal/netutil"
 )
 
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
@@ -147,20 +147,7 @@ func createBalancer(cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
 // createHostClient 为后台目标 URL 创建 fasthttp.HostClient。
 func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCfg *config.TransportConfig) *fasthttp.HostClient {
 	// 从目标 URL 解析主机和协议
-	addr := targetURL
-	isTLS := false
-
-	if strings.HasPrefix(targetURL, "http://") {
-		addr = targetURL[7:]
-	} else if strings.HasPrefix(targetURL, "https://") {
-		addr = targetURL[8:]
-		isTLS = true
-	}
-
-	// 如果存在路径则移除，只保留 host:port
-	if idx := strings.Index(addr, "/"); idx != -1 {
-		addr = addr[:idx]
-	}
+	addr, isTLS := netutil.ParseTargetURL(targetURL, false)
 
 	// 默认值
 	maxIdleConnDuration := 90 * time.Second
@@ -321,7 +308,7 @@ func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 
 	// 对于 IPHash 负载均衡器，提取客户端 IP
 	if ipHash, ok := balancer.(*loadbalance.IPHash); ok {
-		clientIP := getClientIP(ctx)
+		clientIP := netutil.ExtractClientIP(ctx)
 		return ipHash.SelectByIP(targets, clientIP)
 	}
 
@@ -339,7 +326,7 @@ func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 func (p *Proxy) extractHashKey(ctx *fasthttp.RequestCtx, hashKey string) string {
 	switch {
 	case hashKey == "ip" || hashKey == "":
-		return getClientIP(ctx)
+		return netutil.ExtractClientIP(ctx)
 	case hashKey == "uri":
 		return string(ctx.RequestURI())
 	case strings.HasPrefix(hashKey, "header:"):
@@ -348,36 +335,10 @@ func (p *Proxy) extractHashKey(ctx *fasthttp.RequestCtx, hashKey string) string 
 		if len(value) > 0 {
 			return string(value)
 		}
-		return getClientIP(ctx) // fallback to IP
+		return netutil.ExtractClientIP(ctx) // fallback to IP
 	default:
-		return getClientIP(ctx)
+		return netutil.ExtractClientIP(ctx)
 	}
-}
-
-// getClientIP 从请求上下文中提取客户端 IP 地址。
-func getClientIP(ctx *fasthttp.RequestCtx) string {
-	// 首先检查 X-Forwarded-For 请求头
-	if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
-		ips := strings.Split(string(xff), ",")
-		if len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
-		}
-	}
-
-	// 检查 X-Real-IP 请求头
-	if xri := ctx.Request.Header.Peek("X-Real-IP"); len(xri) > 0 {
-		return string(xri)
-	}
-
-	// 回退到 RemoteAddr
-	if addr := ctx.RemoteAddr(); addr != nil {
-		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
-			return tcpAddr.IP.String()
-		}
-		return addr.String()
-	}
-
-	return ""
 }
 
 // getClient 返回给定目标 URL 对应的 HostClient。
@@ -394,7 +355,7 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 	headers := &ctx.Request.Header
 
 	// 添加 X-Real-IP 请求头
-	clientIP := getClientIP(ctx)
+	clientIP := netutil.ExtractClientIP(ctx)
 	if clientIP != "" {
 		headers.Set("X-Real-IP", clientIP)
 	}

@@ -22,7 +22,6 @@ import (
 	"net"
 	"os"
 	"runtime"
-	"sync"
 	"syscall"
 
 	"github.com/valyala/fasthttp"
@@ -144,54 +143,4 @@ func getSocketFd(conn net.Conn) (uintptr, error) {
 	default:
 		return 0, syscall.ENOTSUP
 	}
-}
-
-// BufferPool 缓冲池，复用内存减少分配。
-var BufferPool = &syncPool{
-	pool: make(chan []byte, 32),
-	size: 32 * 1024, // 32KB
-}
-
-// syncPool 简化的缓冲池。
-type syncPool struct {
-	pool chan []byte
-	size int
-}
-
-// Get 获取缓冲区。
-func (p *syncPool) Get() []byte {
-	select {
-	case buf := <-p.pool:
-		return buf
-	default:
-		return make([]byte, p.size)
-	}
-}
-
-// Put 放回缓冲区。
-func (p *syncPool) Put(buf []byte) {
-	// 只放回合适大小的缓冲区
-	if len(buf) == p.size {
-		select {
-		case p.pool <- buf:
-		default: // 池满，丢弃
-		}
-	}
-}
-
-// RealBufferPool 使用 sync.Pool 的标准实现（推荐）。
-var RealBufferPool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, 32*1024)
-	},
-}
-
-// GetBuffer 从池获取缓冲区。
-func GetBuffer() []byte {
-	return RealBufferPool.Get().([]byte)
-}
-
-// PutBuffer 放回缓冲区。
-func PutBuffer(buf []byte) {
-	RealBufferPool.Put(buf) //nolint:staticcheck // SA6002: 测试表明指针优化不明显，保持简洁
 }

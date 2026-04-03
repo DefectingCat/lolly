@@ -340,23 +340,8 @@ func (s *Server) startSingleMode() error {
 	// 注册代理路由
 	s.registerProxyRoutes(router, &s.config.Server)
 
-	// 静态文件服务（作为 fallback）
-	// 启用零拷贝传输优化（大文件使用 sendfile）
-	staticHandler := handler.NewStaticHandler(
-		s.config.Server.Static.Root,
-		s.config.Server.Static.Index,
-		true, // useSendfile
-	)
-	// 设置文件缓存
-	if s.fileCache != nil {
-		staticHandler.SetFileCache(s.fileCache)
-	}
-	// 设置预压缩文件支持
-	if s.config.Server.Compression.GzipStatic {
-		staticHandler.SetGzipStatic(true, s.config.Server.Compression.GzipStaticExtensions)
-	}
-	router.GET("/{filepath:*}", staticHandler.Handle)
-	router.HEAD("/{filepath:*}", staticHandler.Handle)
+		// 静态文件服务
+		s.registerStaticHandler(router, &s.config.Server)
 
 	// 构建中间件链
 	chain, err := s.buildMiddlewareChain(&s.config.Server)
@@ -691,4 +676,21 @@ func (s *Server) getProxyCacheStats() ProxyCacheStats {
 		}
 	}
 	return total
+}
+
+// registerStaticHandler registers static file handler.
+func (s *Server) registerStaticHandler(router *handler.Router, cfg *config.ServerConfig) {
+	staticHandler := handler.NewStaticHandler(
+		cfg.Static.Root,
+		cfg.Static.Index,
+		true, // useSendfile
+	)
+	if s.fileCache != nil {
+		staticHandler.SetFileCache(s.fileCache)
+	}
+	if cfg.Compression.GzipStatic {
+		staticHandler.SetGzipStatic(true, cfg.Compression.GzipStaticExtensions)
+	}
+	router.GET("/{filepath:*}", staticHandler.Handle)
+	router.HEAD("/{filepath:*}", staticHandler.Handle)
 }

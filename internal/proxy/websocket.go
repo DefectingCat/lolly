@@ -33,6 +33,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/loadbalance"
+	"rua.plus/lolly/internal/netutil"
 )
 
 // WebSocketBridge WebSocket 桥接器。
@@ -207,30 +208,7 @@ func isConnectionClosedError(err error) bool {
 //   - error: 连接失败时返回错误
 func dialTarget(targetURL string, timeout time.Duration) (net.Conn, error) {
 	// 解析目标 URL
-	isTLS := false
-	addr := targetURL
-
-	// 处理协议前缀
-	if strings.HasPrefix(targetURL, "http://") {
-		addr = targetURL[7:]
-	} else if strings.HasPrefix(targetURL, "https://") {
-		addr = targetURL[8:]
-		isTLS = true
-	}
-
-	// 移除路径部分，只保留 host:port
-	if idx := strings.Index(addr, "/"); idx != -1 {
-		addr = addr[:idx]
-	}
-
-	// 如果没有端口，添加默认端口
-	if !strings.Contains(addr, ":") {
-		if isTLS {
-			addr = addr + ":443"
-		} else {
-			addr = addr + ":80"
-		}
-	}
+	addr, isTLS := netutil.ParseTargetURL(targetURL, true)
 
 	// 建立 TCP 连接
 	dialer := &net.Dialer{
@@ -309,7 +287,7 @@ func buildWebSocketUpgradeRequest(ctx *fasthttp.RequestCtx, targetHost string) s
 	}
 
 	// 添加 X-Forwarded 头
-	clientIP := getClientIP(ctx)
+	clientIP := netutil.ExtractClientIP(ctx)
 	if clientIP != "" {
 		fmt.Fprintf(&req, "X-Forwarded-For: %s\r\n", clientIP)
 		fmt.Fprintf(&req, "X-Real-IP: %s\r\n", clientIP)
@@ -394,49 +372,37 @@ func ProxyWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeou
 		return fmt.Errorf("failed to connect to backend: %w", err)
 	}
 
+	// 创建桥接器管理两个连接
+	bridge := NewWebSocketBridge(clientConn, targetConn)
+	defer func() { _ = bridge.Close() }()
+
 	// 步骤2: 从目标 URL 提取主机地址
 	targetHost := extractHost(target.URL)
 
 	// 步骤3: 构建并发送 WebSocket 升级请求
 	upgradeReq := buildWebSocketUpgradeRequest(ctx, targetHost)
 	if _, err := targetConn.Write([]byte(upgradeReq)); err != nil {
-		_ = clientConn.Close()
-		_ = targetConn.Close()
 		return fmt.Errorf("failed to send upgrade request: %w", err)
 	}
 
 	// 步骤4: 读取升级响应
 	resp, err := readWebSocketUpgradeResponse(targetConn, timeout)
 	if err != nil {
-		_ = clientConn.Close()
-		_ = targetConn.Close()
 		return fmt.Errorf("failed to read upgrade response: %w", err)
 	}
 
 	// 步骤5: 检查响应状态码（期望 101 Switching Protocols）
 	if resp.StatusCode != http.StatusSwitchingProtocols {
-		_ = clientConn.Close()
-		_ = targetConn.Close()
 		return fmt.Errorf("backend rejected WebSocket upgrade: %s", resp.Status)
 	}
 
 	// 步骤6: 将升级响应发送回客户端
 	if err := writeUpgradeResponse(clientConn, resp); err != nil {
-		_ = clientConn.Close()
-		_ = targetConn.Close()
 		return fmt.Errorf("failed to send upgrade response to client: %w", err)
 	}
 
-	// 步骤7: 创建桥接器并启动双向转发
-	bridge := NewWebSocketBridge(clientConn, targetConn)
-
-	// 启动桥接（阻塞直到连接关闭）
-	bridgeErr := bridge.Bridge()
-
-	// 清理：关闭连接
-	_ = bridge.Close()
-
-	return bridgeErr
+	// 步骤7: 启动桥接（阻塞直到连接关闭）
+	return bridge.Bridge()
 }
 
 // extractHost 从 URL 中提取主机地址（带端口）。
@@ -449,28 +415,7 @@ func ProxyWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeou
 // 返回值：
 //   - string: 主机地址（格式 host:port）
 func extractHost(url string) string {
-	addr := url
-	if strings.HasPrefix(url, "http://") {
-		addr = url[7:]
-	} else if strings.HasPrefix(url, "https://") {
-		addr = url[8:]
-	}
-
-	// 移除路径部分
-	if idx := strings.Index(addr, "/"); idx != -1 {
-		addr = addr[:idx]
-	}
-
-	// 如果没有端口，添加默认端口
-	if !strings.Contains(addr, ":") {
-		if strings.HasPrefix(url, "https://") {
-			addr = addr + ":443"
-		} else {
-			addr = addr + ":80"
-		}
-	}
-
-	return addr
+	return netutil.ExtractHost(url)
 }
 
 // writeUpgradeResponse 将 HTTP 升级响应写回客户端。

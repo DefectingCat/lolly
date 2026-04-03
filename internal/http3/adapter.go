@@ -11,11 +11,9 @@
 package http3
 
 import (
-	"bytes"
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"sync"
 
 	"github.com/valyala/fasthttp"
@@ -158,94 +156,4 @@ func (a *Adapter) convertResponse(ctx *fasthttp.RequestCtx, w http.ResponseWrite
 //   - http.Handler: 标准库兼容的处理器
 func (a *Adapter) WrapHandler(handler fasthttp.RequestHandler) http.Handler {
 	return a.Wrap(handler)
-}
-
-// FastHTTPHandler 从 http.Handler 提取并调用 fasthttp 处理器。
-//
-// 这是一个便捷方法，用于在需要时反向转换。
-//
-// 参数：
-//   - h: 标准库 http.Handler
-//   - ctx: FastHTTP 请求上下文
-func FastHTTPHandler(h http.Handler, ctx *fasthttp.RequestCtx) {
-	// 创建虚拟 ResponseWriter
-	rw := &fastHTTPResponseWriter{
-		ctx: ctx,
-	}
-
-	// 转换请求
-	r := convertToHTTPRequest(ctx)
-
-	// 调用标准库 handler
-	h.ServeHTTP(rw, r)
-}
-
-// fastHTTPResponseWriter 实现 http.ResponseWriter 接口。
-type fastHTTPResponseWriter struct {
-	ctx     *fasthttp.RequestCtx
-	status  int
-	header  http.Header
-	written bool
-}
-
-func (w *fastHTTPResponseWriter) Header() http.Header {
-	if w.header == nil {
-		w.header = make(http.Header)
-	}
-	return w.header
-}
-
-func (w *fastHTTPResponseWriter) Write(data []byte) (int, error) {
-	if !w.written {
-		w.WriteHeader(http.StatusOK)
-	}
-	return w.ctx.Write(data)
-}
-
-func (w *fastHTTPResponseWriter) WriteHeader(statusCode int) {
-	if w.written {
-		return
-	}
-	w.written = true
-	w.status = statusCode
-
-	// 复制头部
-	for k, v := range w.header {
-		for _, vv := range v {
-			w.ctx.Response.Header.Add(k, vv)
-		}
-	}
-
-	w.ctx.SetStatusCode(statusCode)
-}
-
-// convertToHTTPRequest 将 fasthttp.RequestCtx 转换为 http.Request。
-func convertToHTTPRequest(ctx *fasthttp.RequestCtx) *http.Request {
-	r := &http.Request{
-		Method:     string(ctx.Method()),
-		Host:       string(ctx.Host()),
-		RemoteAddr: ctx.RemoteAddr().String(),
-		Proto:      "HTTP/3",
-		ProtoMajor: 3,
-		ProtoMinor: 0,
-	}
-
-	// 构建 URL
-	r.URL = &url.URL{
-		Path:     string(ctx.Path()),
-		RawQuery: string(ctx.URI().QueryString()),
-	}
-
-	// 复制头部
-	r.Header = make(http.Header)
-	for k, v := range ctx.Request.Header.All() {
-		r.Header.Add(string(k), string(v))
-	}
-
-	// 设置请求体
-	if len(ctx.PostBody()) > 0 {
-		r.Body = io.NopCloser(bytes.NewReader(ctx.PostBody()))
-	}
-
-	return r
 }

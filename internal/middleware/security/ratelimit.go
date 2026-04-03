@@ -32,8 +32,6 @@ package security
 import (
 	"errors"
 	"fmt"
-	"net"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,6 +39,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/middleware"
+	"rua.plus/lolly/internal/netutil"
 )
 
 // RateLimiter 基于令牌桶算法的请求速率限制器。
@@ -322,51 +321,11 @@ func (rl *RateLimiter) getRetryAfter(key string) int64 {
 // 返回值：
 //   - string: IP 地址字符串，无法获取时返回 "unknown"
 func keyByIP(ctx *fasthttp.RequestCtx) string {
-	ip := extractClientIP(ctx)
+	ip := netutil.ExtractClientIPNet(ctx)
 	if ip == nil {
 		return "unknown"
 	}
 	return ip.String()
-}
-
-// extractClientIP 从请求上下文提取客户端 IP。
-//
-// 按优先级依次检查：X-Forwarded-For、X-Real-IP、RemoteAddr。
-//
-// 参数：
-//   - ctx: FastHTTP 请求上下文
-//
-// 返回值：
-//   - net.IP: 客户端 IP 地址，无法获取时返回 nil
-func extractClientIP(ctx *fasthttp.RequestCtx) net.IP {
-	// 优先检查 X-Forwarded-For 头部
-	if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
-		ips := strings.Split(string(xff), ",")
-		if len(ips) > 0 {
-			ipStr := strings.TrimSpace(ips[0])
-			ip := net.ParseIP(ipStr)
-			if ip != nil {
-				return ip
-			}
-		}
-	}
-
-	// 检查 X-Real-IP 头部
-	if xri := ctx.Request.Header.Peek("X-Real-IP"); len(xri) > 0 {
-		ip := net.ParseIP(string(xri))
-		if ip != nil {
-			return ip
-		}
-	}
-
-	// 回退到 RemoteAddr
-	if addr := ctx.RemoteAddr(); addr != nil {
-		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
-			return tcpAddr.IP
-		}
-	}
-
-	return nil
 }
 
 // keyByHeader 提取头部值作为限流键。

@@ -12,6 +12,7 @@ import (
 
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
+	"rua.plus/lolly/internal/netutil"
 )
 
 // TestNewProxy 测试 NewProxy 函数
@@ -587,9 +588,9 @@ func TestGetClientIP(t *testing.T) {
 				ctx.Request.Header.Set("X-Real-IP", tt.xri)
 			}
 
-			ip := getClientIP(ctx)
+			ip := netutil.ExtractClientIP(ctx)
 			if ip != tt.expected {
-				t.Errorf("getClientIP() = %q, want %q", ip, tt.expected)
+				t.Errorf("ExtractClientIP() = %q, want %q", ip, tt.expected)
 			}
 		})
 	}
