@@ -45,8 +45,8 @@ import (
 //   - HSTS 头仅在 TLS 连接时添加
 type SecurityHeadersMiddleware struct {
 	config *config.SecurityHeaders // 安全头配置
-	hsts   string                   // 预格式化的 HSTS 头值
-	mu     sync.RWMutex             // 读写锁，保护并发访问
+	hsts   string                  // 预格式化的 HSTS 头值
+	mu     sync.RWMutex            // 读写锁，保护并发访问
 }
 
 // NewSecurityHeaders 创建新的安全响应头中间件。
@@ -158,9 +158,9 @@ func (sh *SecurityHeadersMiddleware) addHeaders(ctx *fasthttp.RequestCtx) {
 // 默认配置为 1 年有效期，包含子域名。
 func (sh *SecurityHeadersMiddleware) formatHSTS() {
 	// 默认 HSTS 值
-	maxAge := 31536000 // 1 年有效期（秒）
+	maxAge := 31536000        // 1 年有效期（秒）
 	includeSubDomains := true // 包含所有子域名
-	preload := false // 不预加载到浏览器列表
+	preload := false          // 不预加载到浏览器列表
 
 	// 实际使用时应从 SSLConfig.HSTS 获取配置
 	// 当前使用默认值

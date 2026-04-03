@@ -57,21 +57,21 @@ type OCSPManager struct {
 //
 // 保存 OCSP 响应数据及其元数据，用于证书状态验证。
 type ocspResponse struct {
-	response   []byte      // 原始 OCSP 响应数据
-	thisUpdate time.Time   // 响应生成时间
-	nextUpdate time.Time   // 响应过期时间
-	status     ocspStatus  // 响应状态
-	fetchedAt  time.Time   // 获取响应的时间
-	errors     int         // 连续获取失败的次数
+	response   []byte     // 原始 OCSP 响应数据
+	thisUpdate time.Time  // 响应生成时间
+	nextUpdate time.Time  // 响应过期时间
+	status     ocspStatus // 响应状态
+	fetchedAt  time.Time  // 获取响应的时间
+	errors     int        // 连续获取失败的次数
 }
 
 // ocspStatus OCSP 响应状态类型。
 type ocspStatus int
 
 const (
-	statusValid ocspStatus = iota // 响应有效且新鲜
-	statusStale                   // 响应过期但可用（优雅降级）
-	statusFailed                  // 无有效响应可用
+	statusValid  ocspStatus = iota // 响应有效且新鲜
+	statusStale                    // 响应过期但可用（优雅降级）
+	statusFailed                   // 无有效响应可用
 )
 
 // OCSPConfig OCSP 管理器配置。

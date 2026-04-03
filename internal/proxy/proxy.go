@@ -43,6 +43,7 @@ import (
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
+	"rua.plus/lolly/internal/logging"
 )
 
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
@@ -365,13 +366,14 @@ func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
 }
 
 // handleWebSocket 处理 WebSocket 升级请求。
-// 目前返回 501 Not Implemented，因为 WebSocket 代理需要
-// HTTP 之外的特殊处理。
 func (p *Proxy) handleWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, client *fasthttp.HostClient) {
-	// WebSocket 代理需要原始 TCP 连接处理，
-	// 这超出了基本 HTTP 代理的范围。
-	// 后续可以使用 TCP 桥接实现
-	ctx.Error("WebSocket proxying not implemented", fasthttp.StatusNotImplemented)
+	timeout := p.config.Timeout.Connect
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+	if err := ProxyWebSocket(ctx, target, timeout); err != nil {
+		logging.Error().Msgf("WebSocket proxy error: %v", err)
+	}
 }
 
 // UpdateTargets 更新代理目标并重新初始化客户端。

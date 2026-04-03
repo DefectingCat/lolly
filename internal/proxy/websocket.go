@@ -44,10 +44,10 @@ import (
 //   - 调用 Bridge() 会阻塞直到连接关闭
 //   - 使用完毕后应调用 Close() 释放资源
 type WebSocketBridge struct {
-	clientConn net.Conn    // 客户端 TCP 连接
-	targetConn net.Conn    // 后端目标 TCP 连接
-	mu         sync.Mutex  // 保护 closed 字段的互斥锁
-	closed     bool        // 连接关闭标志
+	clientConn net.Conn   // 客户端 TCP 连接
+	targetConn net.Conn   // 后端目标 TCP 连接
+	mu         sync.Mutex // 保护 closed 字段的互斥锁
+	closed     bool       // 连接关闭标志
 }
 
 // NewWebSocketBridge 创建新的 WebSocket 桥接器。

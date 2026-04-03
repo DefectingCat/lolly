@@ -8,7 +8,8 @@
 //   - Goroutine 池的性能优化
 //
 // 主要用途：
-//   用于启动和管理 HTTP 服务器，处理客户端请求并转发到上游服务或静态文件。
+//
+//	用于启动和管理 HTTP 服务器，处理客户端请求并转发到上游服务或静态文件。
 //
 // 注意事项：
 //   - 服务器支持优雅关闭和热升级
@@ -153,7 +154,8 @@ func (s *Server) SetListeners(listeners []net.Listener) {
 // buildMiddlewareChain 构建中间件链。
 //
 // 根据服务器配置按顺序构建中间件链，顺序为：
-//   AccessLog -> AccessControl -> RateLimiter -> BasicAuth -> Rewrite -> Compression -> SecurityHeaders
+//
+//	AccessLog -> AccessControl -> RateLimiter -> BasicAuth -> Rewrite -> Compression -> SecurityHeaders
 //
 // 参数：
 //   - serverCfg: 单个服务器的配置对象
@@ -342,6 +344,13 @@ func (s *Server) startSingleMode() error {
 
 	s.running = true
 
+	// 创建监听器并保存，用于热升级
+	ln, err := net.Listen("tcp", s.config.Server.Listen)
+	if err != nil {
+		return fmt.Errorf("failed to listen: %w", err)
+	}
+	s.listeners = []net.Listener{ln}
+
 	// 检查是否配置了 SSL/TLS
 	if s.config.Server.SSL.Cert != "" && s.config.Server.SSL.Key != "" {
 		var err error
@@ -350,10 +359,10 @@ func (s *Server) startSingleMode() error {
 			return fmt.Errorf("创建 TLS 管理器失败: %w", err)
 		}
 		s.fastServer.TLSConfig = s.tlsManager.GetTLSConfig()
-		return s.fastServer.ListenAndServeTLS(s.config.Server.Listen, "", "")
+		return s.fastServer.ServeTLS(ln, "", "")
 	}
 
-	return s.fastServer.ListenAndServe(s.config.Server.Listen)
+	return s.fastServer.Serve(ln)
 }
 
 // startVHostMode 虚拟主机模式启动。
@@ -453,6 +462,13 @@ func (s *Server) startVHostMode() error {
 
 	s.running = true
 
+	// 创建监听器并保存，用于热升级
+	ln, err := net.Listen("tcp", s.config.Server.Listen)
+	if err != nil {
+		return fmt.Errorf("failed to listen: %w", err)
+	}
+	s.listeners = []net.Listener{ln}
+
 	// 检查是否配置了 SSL/TLS
 	if s.config.Server.SSL.Cert != "" && s.config.Server.SSL.Key != "" {
 		var err error
@@ -461,10 +477,10 @@ func (s *Server) startVHostMode() error {
 			return fmt.Errorf("创建 TLS 管理器失败: %w", err)
 		}
 		s.fastServer.TLSConfig = s.tlsManager.GetTLSConfig()
-		return s.fastServer.ListenAndServeTLS(s.config.Server.Listen, "", "")
+		return s.fastServer.ServeTLS(ln, "", "")
 	}
 
-	return s.fastServer.ListenAndServe(s.config.Server.Listen)
+	return s.fastServer.Serve(ln)
 }
 
 // registerProxyRoutes 注册代理路由。

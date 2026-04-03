@@ -30,8 +30,8 @@ type CompressionMiddleware struct {
 	algorithm Algorithm // 压缩算法
 
 	// 缓冲池
-	gzipPool    sync.Pool
-	brotliPool  sync.Pool
+	gzipPool   sync.Pool
+	brotliPool sync.Pool
 }
 
 // New 创建压缩中间件。

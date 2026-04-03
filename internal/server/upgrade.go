@@ -40,9 +40,9 @@ import (
 //   - 需要正确配置 PID 文件路径
 //   - 监听器必须在升级前设置
 type UpgradeManager struct {
-	server    *Server       // 服务器实例
-	pidFile   string        // PID 文件路径
-	oldPid    int           // 旧进程 PID（子进程中使用）
+	server    *Server        // 服务器实例
+	pidFile   string         // PID 文件路径
+	oldPid    int            // 旧进程 PID（子进程中使用）
 	listeners []net.Listener // 待继承的监听器列表
 }
 

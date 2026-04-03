@@ -6,7 +6,8 @@
 //   - 配置文件的加载、保存和验证方法
 //
 // 主要用途：
-//   用于定义和管理服务器的完整配置，支持单服务器和多虚拟主机两种模式。
+//
+//	用于定义和管理服务器的完整配置，支持单服务器和多虚拟主机两种模式。
 //
 // 注意事项：
 //   - 配置文件使用 YAML 格式
@@ -255,7 +256,7 @@ type StreamConfig struct {
 
 // StreamUpstream Stream 上游配置。
 type StreamUpstream struct {
-	Targets     []StreamTarget `yaml:"targets"`     // 目标列表
+	Targets     []StreamTarget `yaml:"targets"`      // 目标列表
 	LoadBalance string         `yaml:"load_balance"` // 负载均衡算法
 }
 

@@ -1681,18 +1681,6 @@ Phase 7:
 
 ---
 
-## 总体进度追踪
-
-| 阶段    | 状态   | 主要功能                  |
-| ------- | ------ | ------------------------- |
-| Phase 1 | ✅ 完成 | 项目骨架、配置系统        |
-| Phase 2 | ✅ 完成 | HTTP 核心、静态文件、路由 |
-| Phase 3 | ✅ 完成 | 反向代理、负载均衡        |
-| Phase 4 | ✅ 完成 | SSL/TLS、安全控制         |
-| Phase 5 | ✅ 完成 | 重写、压缩、缓存、日志    |
-| Phase 6 | ✅ 完成 | Stream、性能优化、热升级  |
-| Phase 7 | ✅ 完成 | 功能完善（WebSocket、缓存集成、监控端点、Brotli、UDP、OCSP） |
-
 **Phase 2 技术选型变更**：
 - HTTP 库：使用 [fasthttp](https://github.com/valyala/fasthttp) 替代 `net/http`（性能提升 6 倍）
 - 日志库：使用 [zerolog](https://github.com/rs/zerolog)（零分配，~40ns/op）
@@ -1714,3 +1702,170 @@ Phase 7:
 - 性能优化：`docs/12-nginx-performance-tuning.md`
 
 **代码注释规范**：`docs/comments.md`（必须遵循）
+
+---
+
+## 第八阶段：问题修复与功能完善
+
+### 目标
+
+修复深度分析发现的三个遗留问题，提升项目生产可用性。
+
+### 背景分析
+
+通过代码审查发现以下问题：
+
+| 问题 | 当前状态 | 优先级 | 说明 |
+|------|----------|--------|------|
+| WebSocket 代理未集成 | ⚠️ 返回 501 | P0 | 已实现但未调用 |
+| UDP Stream 冗余代码 | ⚠️ Accept 返回 EOF | P1 | 设计问题，需删除 |
+| 热升级监听器继承 | ⚠️ GetListeners 返回空 | P1 | 监听器未保存 |
+
+### 任务列表
+
+#### 8.1 WebSocket 代理集成 (P0)
+
+**问题**：`proxy.go:370-375` 的 `handleWebSocket` 返回 501 Not Implemented，但 `websocket.go` 中已有完整的 `ProxyWebSocket` 实现。
+
+**修改文件**：`internal/proxy/proxy.go:370-375`
+
+**修改内容**：
+
+```go
+// 修改前
+func (p *Proxy) handleWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, client *fasthttp.HostClient) {
+    ctx.Error("WebSocket proxying not implemented", fasthttp.StatusNotImplemented)
+}
+
+// 修改后
+func (p *Proxy) handleWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, client *fasthttp.HostClient) {
+    timeout := p.config.Timeout.Connect
+    if timeout == 0 {
+        timeout = 30 * time.Second
+    }
+    if err := ProxyWebSocket(ctx, target, timeout); err != nil {
+        logging.Error().Msgf("WebSocket proxy error: %v", err)
+    }
+}
+```
+
+#### 8.2 删除冗余 UDP 监听器 (P1)
+
+**问题**：`stream.go:435-453` 的 `udpListener` 类型实现 `net.Listener` 接口，但 UDP 是无连接协议，`Accept()` 始终返回 `io.EOF`。实际 UDP 处理由 `udpServer` 完成。
+
+**修改文件**：
+- `internal/stream/stream.go:435-453` - 删除 `udpListener` 类型
+- `internal/stream/stream_test.go` - 删除相关测试
+
+**删除代码**：
+
+```go
+// 删除以下代码（第 435-453 行）
+type udpListener struct {
+    conn *net.UDPConn
+}
+
+func (u *udpListener) Accept() (net.Conn, error) {
+    return nil, io.EOF
+}
+
+func (u *udpListener) Close() error {
+    return u.conn.Close()
+}
+
+func (u *udpListener) Addr() net.Addr {
+    return u.conn.LocalAddr()
+}
+```
+
+#### 8.3 热升级监听器继承 (P1)
+
+**问题**：
+1. `Server.listeners` 字段从未被赋值
+2. `fasthttp.ListenAndServe()` 内部创建监听器但未暴露
+3. 子进程未使用继承的监听器
+
+**修改文件**：
+- `internal/server/server.go` - 改用手动监听器管理
+- `internal/app/app.go` - 支持继承监听器启动
+
+**核心修改**：
+
+```go
+// server.go - 使用 net.Listen + fasthttp.Serve 替代 ListenAndServe
+
+// 创建监听器
+ln, err := net.Listen("tcp", s.config.Server.Listen)
+if err != nil {
+    return fmt.Errorf("failed to listen: %w", err)
+}
+s.listeners = []net.Listener{ln}  // 保存监听器
+
+// 使用 Serve 替代 ListenAndServe
+if s.tlsConfig != nil {
+    return s.fastServer.ServeTLS(ln, "", "")
+}
+return s.fastServer.Serve(ln)
+```
+
+```go
+// app.go - 子进程继承监听器
+if os.Getenv("GRACEFUL_UPGRADE") == "1" {
+    fmt.Println("检测到热升级模式，继承父进程监听器")
+    listeners, err := a.upgradeMgr.GetInheritedListeners()
+    if err == nil && len(listeners) > 0 {
+        a.srv.SetListeners(listeners)
+    }
+}
+```
+
+### 验证方法
+
+```bash
+# 1. WebSocket 测试
+wscat -c ws://localhost:8080/ws
+
+# 2. UDP Stream 测试
+go test ./internal/stream/... -v
+
+# 3. 热升级测试
+./lolly -c config.yaml &
+kill -USR2 <PID>
+# 验证新进程接管，旧进程优雅退出
+
+# 4. 完整测试
+go test ./... -race
+go build ./...
+```
+
+### 文件依赖关系图
+
+```
+Phase 8:
+  internal/proxy/proxy.go → internal/proxy/websocket.go（调用）
+  internal/stream/stream.go → 删除 udpListener
+  internal/server/server.go → net.Listen + fasthttp.Serve
+  internal/app/app.go → GetInheritedListeners
+```
+
+---
+
+## 总体进度追踪（更新）
+
+| 阶段    | 状态   | 主要功能                  |
+| ------- | ------ | ------------------------- |
+| Phase 1 | ✅ 完成 | 项目骨架、配置系统        |
+| Phase 2 | ✅ 完成 | HTTP 核心、静态文件、路由 |
+| Phase 3 | ✅ 完成 | 反向代理、负载均衡        |
+| Phase 4 | ✅ 完成 | SSL/TLS、安全控制         |
+| Phase 5 | ✅ 完成 | 重写、压缩、缓存、日志    |
+| Phase 6 | ✅ 完成 | Stream、性能优化、热升级  |
+| Phase 7 | ✅ 完成 | 功能完善                  |
+| Phase 8 | ✅ 完成 | 问题修复（WebSocket集成、UDP清理、热升级修复）|
+
+**Phase 8 完成日期**：2026-04-03
+
+**修复内容**：
+1. WebSocket 代理集成 - `handleWebSocket` 现调用 `ProxyWebSocket`
+2. UDP Stream 冗余代码 - 删除 `udpListener` 类型及相关测试
+3. 热升级监听器继承 - 改用 `net.Listen` + `Serve` 模式，支持监听器继承

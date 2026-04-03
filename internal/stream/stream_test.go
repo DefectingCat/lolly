@@ -225,37 +225,6 @@ func TestHealthCheckerStartStop(t *testing.T) {
 	hc.Stop()
 }
 
-func TestUDPListener(t *testing.T) {
-	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Failed to resolve UDP address: %v", err)
-	}
-
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		t.Fatalf("Failed to listen UDP: %v", err)
-	}
-	defer conn.Close()
-
-	ul := &udpListener{conn: conn}
-
-	// 测试 Addr
-	if ul.Addr() == nil {
-		t.Error("Expected non-nil address")
-	}
-
-	// 测试 Close
-	if err := ul.Close(); err != nil {
-		t.Errorf("Close failed: %v", err)
-	}
-
-	// 测试 Accept（应该返回 io.EOF）
-	_, err = ul.Accept()
-	if err == nil {
-		t.Error("Expected error from Accept")
-	}
-}
-
 func TestConcurrentConnections(t *testing.T) {
 	s := NewServer()
 

@@ -51,19 +51,19 @@ import (
 //   - 所有方法均为并发安全
 //   - 应定期调用 Cleanup 清理过期的桶
 type RateLimiter struct {
-	rate    float64            // 每秒添加的令牌数
-	burst   float64            // 桶的最大容量
-	keyFunc KeyFunc            // 提取限流键的函数
+	rate    float64                 // 每秒添加的令牌数
+	burst   float64                 // 桶的最大容量
+	keyFunc KeyFunc                 // 提取限流键的函数
 	buckets map[string]*tokenBucket // 各键的令牌桶映射
-	mu      sync.RWMutex       // 读写锁，保护并发访问
+	mu      sync.RWMutex            // 读写锁，保护并发访问
 }
 
 // tokenBucket 表示单个限流键的令牌桶。
 //
 // 记录当前令牌数和最后更新时间，用于令牌计算。
 type tokenBucket struct {
-	tokens     float64   // 当前令牌数量
-	lastUpdate time.Time // 最后更新时间
+	tokens     float64    // 当前令牌数量
+	lastUpdate time.Time  // 最后更新时间
 	mu         sync.Mutex // 互斥锁，保护桶内状态
 }
 

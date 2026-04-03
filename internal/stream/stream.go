@@ -94,12 +94,12 @@ func (l *leastConn) Select(targets []*Target) *Target {
 
 // Server TCP/UDP Stream 代理服务器。
 type Server struct {
-	listeners   map[string]net.Listener
-	udpServers  map[string]*udpServer
-	upstreams   map[string]*Upstream
-	connCount   int64 // 当前连接数
-	mu          sync.RWMutex
-	running     atomic.Bool
+	listeners  map[string]net.Listener
+	udpServers map[string]*udpServer
+	upstreams  map[string]*Upstream
+	connCount  int64 // 当前连接数
+	mu         sync.RWMutex
+	running    atomic.Bool
 }
 
 // Upstream Stream 上游配置。
@@ -432,46 +432,26 @@ type Stats struct {
 	Upstreams   int
 }
 
-// udpListener UDP 监听器包装。
-type udpListener struct {
-	conn *net.UDPConn
-}
-
-// Accept UDP 不支持 Accept，返回错误。
-func (u *udpListener) Accept() (net.Conn, error) {
-	return nil, io.EOF
-}
-
-// Close 关闭 UDP 连接。
-func (u *udpListener) Close() error {
-	return u.conn.Close()
-}
-
-// Addr 返回本地地址。
-func (u *udpListener) Addr() net.Addr {
-	return u.conn.LocalAddr()
-}
-
 // udpSession UDP 会话，管理客户端到后端的映射
 type udpSession struct {
-	clientAddr   *net.UDPAddr
-	targetConn   net.Conn
-	lastActive   time.Time
-	mu           sync.RWMutex
-	srv          *udpServer
-	closeOnce    sync.Once
+	clientAddr *net.UDPAddr
+	targetConn net.Conn
+	lastActive time.Time
+	mu         sync.RWMutex
+	srv        *udpServer
+	closeOnce  sync.Once
 }
 
 // udpServer UDP 服务器，管理多个客户端会话
 type udpServer struct {
-	conn         *net.UDPConn
-	sessions     map[string]*udpSession
-	mu           sync.RWMutex
-	running      atomic.Bool
-	upstream     *Upstream
-	timeout      time.Duration
-	stopCh       chan struct{}
-	wg           sync.WaitGroup
+	conn     *net.UDPConn
+	sessions map[string]*udpSession
+	mu       sync.RWMutex
+	running  atomic.Bool
+	upstream *Upstream
+	timeout  time.Duration
+	stopCh   chan struct{}
+	wg       sync.WaitGroup
 }
 
 // newUDPServer 创建新的 UDP 服务器

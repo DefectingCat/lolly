@@ -5,7 +5,8 @@
 //   - Chain 结构体：实现中间件的链式调用
 //
 // 主要用途：
-//   用于构建和管理 HTTP 请求处理中间件链，支持灵活的组合和顺序控制。
+//
+//	用于构建和管理 HTTP 请求处理中间件链，支持灵活的组合和顺序控制。
 //
 // 注意事项：
 //   - 中间件按逆序包装，确保执行顺序与添加顺序一致
@@ -66,8 +67,9 @@ func NewChain(middlewares ...Middleware) *Chain {
 //   - fasthttp.RequestHandler: 包装后的请求处理器
 //
 // 执行顺序：
-//   如果中间件链为 [A, B, C]，最终处理器为 H，则执行顺序为：
-//   A -> B -> C -> H -> C -> B -> A
+//
+//	如果中间件链为 [A, B, C]，最终处理器为 H，则执行顺序为：
+//	A -> B -> C -> H -> C -> B -> A
 func (c *Chain) Apply(final fasthttp.RequestHandler) fasthttp.RequestHandler {
 	handler := final
 	for i := len(c.middlewares) - 1; i >= 0; i-- {

@@ -30,7 +30,7 @@ import (
 //   - 状态端点可能暴露敏感信息，建议配置 IP 白名单
 //   - 所有方法均为并发安全
 type StatusHandler struct {
-	server  *Server    // 服务器实例，用于获取状态数据
+	server  *Server     // 服务器实例，用于获取状态数据
 	allowed []net.IPNet // 允许访问的 IP 网络列表
 	path    string      // 状态端点路径
 }
@@ -39,14 +39,14 @@ type StatusHandler struct {
 //
 // 包含服务器运行的各种统计信息，以 JSON 格式返回给客户端。
 type Status struct {
-	Version       string        `json:"version"`        // 服务器版本号
-	Uptime        time.Duration `json:"uptime"`         // 服务器运行时间
-	Connections   int64         `json:"connections"`    // 当前活跃连接数
-	Requests      int64         `json:"requests"`       // 已处理的总请求数
-	BytesSent     int64         `json:"bytes_sent"`     // 已发送的总字节数
-	BytesReceived int64         `json:"bytes_received"` // 已接收的总字节数
-	Cache         *CacheStats   `json:"cache,omitempty"`  // 缓存统计（可选）
-	Pool          *PoolStats    `json:"pool,omitempty"`   // Goroutine 池统计（可选）
+	Version       string        `json:"version"`         // 服务器版本号
+	Uptime        time.Duration `json:"uptime"`          // 服务器运行时间
+	Connections   int64         `json:"connections"`     // 当前活跃连接数
+	Requests      int64         `json:"requests"`        // 已处理的总请求数
+	BytesSent     int64         `json:"bytes_sent"`      // 已发送的总字节数
+	BytesReceived int64         `json:"bytes_received"`  // 已接收的总字节数
+	Cache         *CacheStats   `json:"cache,omitempty"` // 缓存统计（可选）
+	Pool          *PoolStats    `json:"pool,omitempty"`  // Goroutine 池统计（可选）
 }
 
 // CacheStats 缓存统计信息。

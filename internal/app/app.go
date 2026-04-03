@@ -6,7 +6,8 @@
 //   - 配置加载和版本信息
 //
 // 主要用途：
-//   用于启动和管理服务器进程，处理系统信号和运行时操作。
+//
+//	用于启动和管理服务器进程，处理系统信号和运行时操作。
 //
 // 注意事项：
 //   - 支持热升级（USR2 信号）
@@ -18,6 +19,7 @@ package app
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -76,6 +78,9 @@ type App struct {
 
 	// logFile 日志文件路径（用于重新打开）
 	logFile string
+
+	// listeners 继承的监听器（热升级时使用）
+	listeners []net.Listener
 }
 
 // NewApp 创建应用程序。
@@ -145,6 +150,13 @@ func (a *App) Run() int {
 	// 检查是否是子进程（热升级）
 	if os.Getenv("GRACEFUL_UPGRADE") == "1" {
 		fmt.Println("检测到热升级模式，继承父进程监听器")
+		// 创建升级管理器以获取继承的监听器
+		a.upgradeMgr = server.NewUpgradeManager(nil)
+		listeners, err := a.upgradeMgr.GetInheritedListeners()
+		if err == nil && len(listeners) > 0 {
+			// 暂时保存监听器，等服务器创建后再设置
+			a.listeners = listeners
+		}
 	}
 
 	cfg, err := config.Load(a.cfgPath)
@@ -159,6 +171,11 @@ func (a *App) Run() int {
 
 	// 创建 HTTP 服务器
 	a.srv = server.New(cfg)
+
+	// 如果有继承的监听器，设置到服务器
+	if len(a.listeners) > 0 {
+		a.srv.SetListeners(a.listeners)
+	}
 
 	// 创建 Stream 服务器（如果配置了）
 	if len(cfg.Stream) > 0 {

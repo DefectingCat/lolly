@@ -44,15 +44,15 @@ import (
 //   - 使用前需调用 Start 启动池
 //   - 使用后需调用 Stop 释放资源
 type GoroutinePool struct {
-	maxWorkers  int32          // 最大 worker 数量
-	minWorkers  int32          // 最小 worker 数量（预热）
-	idleTimeout time.Duration  // 空闲超时时间
-	taskQueue   chan Task      // 任务队列通道
-	workers     int32          // 当前活跃 worker 数量
-	idleWorkers int32          // 当前空闲 worker 数量
-	running     atomic.Bool    // 池运行状态标志
-	wg          sync.WaitGroup // 等待所有 worker 退出
-	ctx         context.Context // 上下文，用于取消信号
+	maxWorkers  int32              // 最大 worker 数量
+	minWorkers  int32              // 最小 worker 数量（预热）
+	idleTimeout time.Duration      // 空闲超时时间
+	taskQueue   chan Task          // 任务队列通道
+	workers     int32              // 当前活跃 worker 数量
+	idleWorkers int32              // 当前空闲 worker 数量
+	running     atomic.Bool        // 池运行状态标志
+	wg          sync.WaitGroup     // 等待所有 worker 退出
+	ctx         context.Context    // 上下文，用于取消信号
 	cancel      context.CancelFunc // 取消函数
 }
 
@@ -110,9 +110,9 @@ func NewGoroutinePool(cfg PoolConfig) *GoroutinePool {
 	}
 
 	// 预热最小数量的 worker
-		for i := 0; i < cfg.MinWorkers; i++ {
-			p.startWorker()
-		}
+	for i := 0; i < cfg.MinWorkers; i++ {
+		p.startWorker()
+	}
 
 	return p
 }
