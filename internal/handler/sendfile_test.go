@@ -1,9 +1,16 @@
 package handler
 
 import (
+	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"testing"
+	"time"
+
+	"github.com/valyala/fasthttp"
 )
 
 func TestBufferPool(t *testing.T) {
@@ -99,3 +106,143 @@ func TestBufferPoolConcurrent(t *testing.T) {
 		<-done
 	}
 }
+
+// TestCopyFile 测试 copyFile fallback 函数
+func TestCopyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+
+	content := []byte("Hello, World! This is test content for copyFile.")
+	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	tests := []struct {
+		name    string
+		offset  int64
+		length  int64
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name:    "full file",
+			offset:  0,
+			length:  0, // 0 means copy all
+			wantLen: len(content),
+			wantErr: false,
+		},
+		{
+			name:    "with length",
+			offset:  0,
+			length:  10,
+			wantLen: 10,
+			wantErr: false,
+		},
+		{
+			name:    "with offset",
+			offset:  7,
+			length:  5,
+			wantLen: 5,
+			wantErr: false,
+		},
+		{
+			name:    "offset beyond file",
+			offset:  1000,
+			length:  10,
+			wantLen: 0,
+			wantErr: true, // io.CopyN returns EOF error
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 重置文件位置
+			file.Seek(0, io.SeekStart)
+
+			// 创建响应上下文
+			ctx := &fasthttp.RequestCtx{}
+
+			err := copyFile(ctx, file, tt.offset, tt.length)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				body := ctx.Response.Body()
+				if len(body) != tt.wantLen {
+					t.Errorf("expected body length %d, got %d", tt.wantLen, len(body))
+				}
+				if tt.wantLen > 0 && tt.length == 0 {
+					// 全量拷贝时验证内容
+					if string(body) != string(content[tt.offset:]) {
+						t.Errorf("body content mismatch")
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestPlatformSendfile_NonLinux 测试非 Linux 平台的 sendfile 行为
+func TestPlatformSendfile_NonLinux(t *testing.T) {
+	if runtime.GOOS == "linux" {
+		t.Skip("this test is for non-Linux platforms")
+	}
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+	content := []byte("test content")
+	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	err = platformSendfile(nil, file, 0, int64(len(content)))
+	if err != syscall.ENOTSUP {
+		t.Errorf("expected ENOTSUP on non-Linux, got: %v", err)
+	}
+}
+
+// TestGetSocketFd_NilConn 测试 nil 连接的情况
+func TestGetSocketFd_NilConn(t *testing.T) {
+	_, err := getSocketFd(nil)
+	if err == nil {
+		t.Error("expected error for nil connection")
+	}
+}
+
+// TestGetSocketFd_UnsupportedType 测试不支持的连接类型
+func TestGetSocketFd_UnsupportedType(t *testing.T) {
+	// 创建一个不支持的连接类型
+	conn := &mockConn{}
+	_, err := getSocketFd(conn)
+	if err != syscall.ENOTSUP {
+		t.Errorf("expected ENOTSUP for unsupported conn type, got: %v", err)
+	}
+}
+
+// mockConn 是一个不实现 TCPConn/UnixConn 的连接
+type mockConn struct{}
+
+func (m *mockConn) Read(b []byte) (n int, err error)   { return 0, nil }
+func (m *mockConn) Write(b []byte) (n int, err error)  { return 0, nil }
+func (m *mockConn) Close() error                       { return nil }
+func (m *mockConn) LocalAddr() net.Addr                { return nil }
+func (m *mockConn) RemoteAddr() net.Addr               { return nil }
+func (m *mockConn) SetDeadline(t time.Time) error      { return nil }
+func (m *mockConn) SetReadDeadline(t time.Time) error  { return nil }
+func (m *mockConn) SetWriteDeadline(t time.Time) error { return nil }
