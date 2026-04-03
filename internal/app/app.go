@@ -249,7 +249,7 @@ func (a *App) Run() int {
 	a.upgradeMgr = server.NewUpgradeManager(a.srv)
 	if a.pidFile != "" {
 		a.upgradeMgr.SetPidFile(a.pidFile)
-		a.upgradeMgr.WritePid()
+		_ = a.upgradeMgr.WritePid()
 	}
 
 	// 启动信号处理
@@ -301,14 +301,14 @@ func (a *App) handleSignal(sig os.Signal) bool {
 		// 优雅停止：等待请求完成
 		a.logger.LogSignal("SIGQUIT", fmt.Sprintf("优雅停止（等待 %v）", shutdownTimeout))
 		a.shutdownHTTP3()
-		a.srv.GracefulStop(shutdownTimeout)
+		_ = a.srv.GracefulStop(shutdownTimeout)
 		return false
 
 	case syscall.SIGTERM, syscall.SIGINT:
 		// 快速停止
 		a.logger.LogSignal(sigName(sig.(syscall.Signal)), "停止服务器")
 		a.shutdownHTTP3()
-		a.srv.Stop()
+		_ = a.srv.Stop()
 		return false
 
 	case syscall.SIGHUP:
@@ -398,7 +398,7 @@ func (a *App) gracefulUpgrade() {
 
 	// 当前进程优雅停止
 	a.shutdownHTTP3()
-	a.srv.GracefulStop(shutdownTimeout)
+	_ = a.srv.GracefulStop(shutdownTimeout)
 }
 
 // sigName 返回信号名称（用于日志输出）。

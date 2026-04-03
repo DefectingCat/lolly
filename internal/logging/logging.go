@@ -124,7 +124,7 @@ func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, dur
 
 	// 模板格式：直接输出纯文本
 	output := l.formatAccessLog(ctx, status, size, duration)
-	fmt.Fprintln(l.accessWriter, output)
+	_, _ = fmt.Fprintln(l.accessWriter, output)
 }
 
 // formatAccessLog 根据模板格式化访问日志。
@@ -179,10 +179,10 @@ func (l *Logger) Error() *zerolog.Event {
 // Close 关闭日志文件。
 func (l *Logger) Close() error {
 	if l.accessFile != nil {
-		l.accessFile.Close()
+		_ = l.accessFile.Close()
 	}
 	if l.errorFile != nil {
-		l.errorFile.Close()
+		_ = l.errorFile.Close()
 	}
 	return nil
 }
@@ -258,7 +258,7 @@ func (l *AppLogger) LogStartup(msg string, fields map[string]string) {
 	// 纯文本格式
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	if len(fields) == 0 {
-		fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
+		_, _ = fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
 		return
 	}
 
@@ -267,7 +267,7 @@ func (l *AppLogger) LogStartup(msg string, fields map[string]string) {
 	for k, v := range fields {
 		extra += fmt.Sprintf(" %s=%s", k, v)
 	}
-	fmt.Fprintf(l.writer, "[%s] INFO %s%s\n", timestamp, msg, extra)
+	_, _ = fmt.Fprintf(l.writer, "[%s] INFO %s%s\n", timestamp, msg, extra)
 }
 
 // LogShutdown 记录停止消息。
@@ -278,7 +278,7 @@ func (l *AppLogger) LogShutdown(msg string) {
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
+	_, _ = fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
 }
 
 // LogSignal 记录信号处理消息。
@@ -289,7 +289,7 @@ func (l *AppLogger) LogSignal(sig string, action string) {
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	fmt.Fprintf(l.writer, "[%s] INFO 收到 %s，%s\n", timestamp, sig, action)
+	_, _ = fmt.Fprintf(l.writer, "[%s] INFO 收到 %s，%s\n", timestamp, sig, action)
 }
 
 // Info 返回 Info 级别日志记录器。

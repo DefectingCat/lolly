@@ -249,11 +249,11 @@ func dialTarget(targetURL string, timeout time.Duration) (net.Conn, error) {
 			ServerName:         strings.Split(addr, ":")[0],
 		})
 		if err := tlsConn.SetDeadline(time.Now().Add(timeout)); err != nil {
-			conn.Close()
+			_ = conn.Close()
 			return nil, fmt.Errorf("failed to set TLS deadline: %w", err)
 		}
 		if err := tlsConn.Handshake(); err != nil {
-			conn.Close()
+			_ = conn.Close()
 			return nil, fmt.Errorf("TLS handshake failed: %w", err)
 		}
 		return tlsConn, nil
@@ -390,7 +390,7 @@ func ProxyWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeou
 	// 步骤1: 建立到后端目标的连接
 	targetConn, err := dialTarget(target.URL, timeout)
 	if err != nil {
-		clientConn.Close()
+		_ = clientConn.Close()
 		return fmt.Errorf("failed to connect to backend: %w", err)
 	}
 
@@ -400,30 +400,30 @@ func ProxyWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeou
 	// 步骤3: 构建并发送 WebSocket 升级请求
 	upgradeReq := buildWebSocketUpgradeRequest(ctx, targetHost)
 	if _, err := targetConn.Write([]byte(upgradeReq)); err != nil {
-		clientConn.Close()
-		targetConn.Close()
+		_ = clientConn.Close()
+		_ = targetConn.Close()
 		return fmt.Errorf("failed to send upgrade request: %w", err)
 	}
 
 	// 步骤4: 读取升级响应
 	resp, err := readWebSocketUpgradeResponse(targetConn, timeout)
 	if err != nil {
-		clientConn.Close()
-		targetConn.Close()
+		_ = clientConn.Close()
+		_ = targetConn.Close()
 		return fmt.Errorf("failed to read upgrade response: %w", err)
 	}
 
 	// 步骤5: 检查响应状态码（期望 101 Switching Protocols）
 	if resp.StatusCode != http.StatusSwitchingProtocols {
-		clientConn.Close()
-		targetConn.Close()
+		_ = clientConn.Close()
+		_ = targetConn.Close()
 		return fmt.Errorf("backend rejected WebSocket upgrade: %s", resp.Status)
 	}
 
 	// 步骤6: 将升级响应发送回客户端
 	if err := writeUpgradeResponse(clientConn, resp); err != nil {
-		clientConn.Close()
-		targetConn.Close()
+		_ = clientConn.Close()
+		_ = targetConn.Close()
 		return fmt.Errorf("failed to send upgrade response to client: %w", err)
 	}
 
@@ -434,7 +434,7 @@ func ProxyWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeou
 	bridgeErr := bridge.Bridge()
 
 	// 清理：关闭连接
-	bridge.Close()
+	_ = bridge.Close()
 
 	return bridgeErr
 }

@@ -293,9 +293,9 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		if status >= 200 && status < 300 {
 			// 提取响应头
 			headers := make(map[string]string)
-			ctx.Response.Header.VisitAll(func(key, value []byte) {
+			for key, value := range ctx.Response.Header.All() {
 				headers[string(key)] = string(value)
-			})
+			}
 			p.cache.Set(cacheKey, ctx.Response.Body(), headers, status, p.config.Cache.MaxAge)
 		}
 		p.cache.ReleaseLock(cacheKey, nil)
@@ -555,9 +555,9 @@ func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.
 
 	// 提取响应头
 	headers := make(map[string]string)
-	resp.Header.VisitAll(func(key, value []byte) {
+	for key, value := range resp.Header.All() {
 		headers[string(key)] = string(value)
-	})
+	}
 
 	// 更新缓存
 	p.cache.Set(cacheKey, resp.Body(), headers, resp.StatusCode(), p.config.Cache.MaxAge)

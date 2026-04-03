@@ -53,7 +53,6 @@ type HealthChecker struct {
 	stopCh   chan struct{}
 	running  atomic.Bool
 	client   *fasthttp.Client
-	mu       sync.RWMutex
 }
 
 // NewHealthChecker 使用指定的目标和配置创建一个新的 HealthChecker。
