@@ -81,6 +81,9 @@ type App struct {
 
 	// listeners 继承的监听器（热升级时使用）
 	listeners []net.Listener
+
+	// logger 应用日志管理器
+	logger *logging.AppLogger
 }
 
 // NewApp 创建应用程序。
@@ -147,9 +150,18 @@ func printVersion() {
 
 // Run 启动应用程序。
 func (a *App) Run() int {
+	// 加载配置
+	cfg, err := config.Load(a.cfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "加载配置失败: %v\n", err)
+		return 1
+	}
+	a.cfg = cfg
+	a.logger = logging.NewAppLogger(&cfg.Logging)
+
 	// 检查是否是子进程（热升级）
 	if os.Getenv("GRACEFUL_UPGRADE") == "1" {
-		fmt.Println("检测到热升级模式，继承父进程监听器")
+		a.logger.LogStartup("检测到热升级模式，继承父进程监听器", nil)
 		// 创建升级管理器以获取继承的监听器
 		a.upgradeMgr = server.NewUpgradeManager(nil)
 		listeners, err := a.upgradeMgr.GetInheritedListeners()
@@ -159,18 +171,11 @@ func (a *App) Run() int {
 		}
 	}
 
-	cfg, err := config.Load(a.cfgPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "加载配置失败: %v\n", err)
-		return 1
-	}
-	a.cfg = cfg
-
-	fmt.Printf("配置加载成功: %s\n", a.cfgPath)
-	fmt.Printf("监听地址: %s\n", cfg.Server.Listen)
+	a.logger.LogStartup("配置加载成功", map[string]string{"config_path": a.cfgPath})
+	a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Server.Listen})
 
 	// 创建 HTTP 服务器
-	a.srv = server.New(cfg)
+	a.srv = server.New(a.cfg)
 
 	// 如果有继承的监听器，设置到服务器
 	if len(a.listeners) > 0 {
@@ -178,9 +183,9 @@ func (a *App) Run() int {
 	}
 
 	// 创建 Stream 服务器（如果配置了）
-	if len(cfg.Stream) > 0 {
+	if len(a.cfg.Stream) > 0 {
 		a.streamSrv = stream.NewServer()
-		for _, sc := range cfg.Stream {
+		for _, sc := range a.cfg.Stream {
 			// 转换目标配置
 			targets := make([]stream.TargetSpec, len(sc.Upstream.Targets))
 			for i, t := range sc.Upstream.Targets {
@@ -192,26 +197,26 @@ func (a *App) Run() int {
 
 			// 添加上游配置
 			if err := a.streamSrv.AddUpstream(sc.Listen, targets, sc.Upstream.LoadBalance, stream.HealthCheckSpec{}); err != nil {
-				fmt.Fprintf(os.Stderr, "添加 Stream 上游失败: %v\n", err)
+				a.logger.Error().Err(err).Msg("添加 Stream 上游失败")
 			}
 
 			// 监听端口
 			if sc.Protocol == "udp" {
 				if err := a.streamSrv.ListenUDP(sc.Listen, sc.Listen, 60*time.Second); err != nil {
-					fmt.Fprintf(os.Stderr, "监听 UDP %s 失败: %v\n", sc.Listen, err)
+					a.logger.Error().Err(err).Str("listen", sc.Listen).Msg("监听 UDP 失败")
 				}
 			} else {
 				if err := a.streamSrv.ListenTCP(sc.Listen); err != nil {
-					fmt.Fprintf(os.Stderr, "监听 TCP %s 失败: %v\n", sc.Listen, err)
+					a.logger.Error().Err(err).Str("listen", sc.Listen).Msg("监听 TCP 失败")
 				}
 			}
 		}
 
 		// 启动 Stream 服务器
 		go func() {
-			fmt.Println("Stream 服务器启动中...")
+			a.logger.LogStartup("Stream 服务器启动中", nil)
 			if err := a.streamSrv.Start(); err != nil {
-				fmt.Fprintf(os.Stderr, "Stream 服务器启动失败: %v\n", err)
+				a.logger.Error().Err(err).Msg("Stream 服务器启动失败")
 			}
 		}()
 	}
@@ -230,7 +235,7 @@ func (a *App) Run() int {
 	// 启动 HTTP 服务器
 	errChan := make(chan error, 1)
 	go func() {
-		fmt.Println("HTTP 服务器启动中...")
+		a.logger.LogStartup("HTTP 服务器启动中", nil)
 		if err := a.srv.Start(); err != nil {
 			errChan <- err
 		}
@@ -240,12 +245,12 @@ func (a *App) Run() int {
 	for {
 		select {
 		case err := <-errChan:
-			fmt.Fprintf(os.Stderr, "服务器启动失败: %v\n", err)
+			a.logger.Error().Err(err).Msg("服务器启动失败")
 			return 1
 		case sig := <-sigChan:
 			if !a.handleSignal(sig) {
 				// 返回 false 表示退出
-				fmt.Println("服务器已停止")
+				a.logger.LogShutdown("服务器已停止")
 				return 0
 			}
 			// 返回 true 表示继续运行（如重载配置）
@@ -270,36 +275,36 @@ func (a *App) handleSignal(sig os.Signal) bool {
 	switch sig {
 	case syscall.SIGQUIT:
 		// 优雅停止：等待请求完成
-		fmt.Printf("\n收到 SIGQUIT，优雅停止（等待 %v）...\n", shutdownTimeout)
+		a.logger.LogSignal("SIGQUIT", fmt.Sprintf("优雅停止（等待 %v）", shutdownTimeout))
 		a.srv.GracefulStop(shutdownTimeout)
 		return false
 
 	case syscall.SIGTERM, syscall.SIGINT:
 		// 快速停止
-		fmt.Printf("\n收到 %v，停止服务器...\n", sigName(sig.(syscall.Signal)))
+		a.logger.LogSignal(sigName(sig.(syscall.Signal)), "停止服务器")
 		a.srv.Stop()
 		return false
 
 	case syscall.SIGHUP:
 		// 重载配置
-		fmt.Println("\n收到 SIGHUP，重载配置...")
+		a.logger.LogSignal("SIGHUP", "重载配置")
 		a.reloadConfig()
 		return true
 
 	case syscall.SIGUSR1:
 		// 重新打开日志
-		fmt.Println("\n收到 SIGUSR1，重新打开日志...")
+		a.logger.LogSignal("SIGUSR1", "重新打开日志")
 		a.reopenLogs()
 		return true
 
 	case syscall.SIGUSR2:
 		// 热升级
-		fmt.Println("\n收到 SIGUSR2，执行热升级...")
+		a.logger.LogSignal("SIGUSR2", "执行热升级")
 		a.gracefulUpgrade()
 		return true
 
 	default:
-		fmt.Printf("\n收到未知信号: %v\n", sig)
+		a.logger.Info().Str("signal", sig.String()).Msg("收到未知信号")
 		return true
 	}
 }
@@ -308,17 +313,14 @@ func (a *App) handleSignal(sig os.Signal) bool {
 func (a *App) reloadConfig() {
 	newCfg, err := config.Load(a.cfgPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "重载配置失败: %v\n", err)
+		a.logger.Error().Err(err).Msg("重载配置失败")
 		return
 	}
 
 	// 更新配置
 	a.cfg = newCfg
-	fmt.Println("配置重载成功")
-
-	// 注意：当前实现不重启服务器，仅更新配置
-	// 如需应用新配置，需要重启服务器或实现热更新
-	fmt.Println("配置已重新加载")
+	a.logger = logging.NewAppLogger(&newCfg.Logging)
+	a.logger.LogStartup("配置重载成功", nil)
 }
 
 // reopenLogs 重新打开日志文件。
@@ -326,8 +328,9 @@ func (a *App) reopenLogs() {
 	// 重新初始化日志系统
 	if a.cfg != nil {
 		logging.Init(a.cfg.Logging.Error.Level, false)
+		a.logger = logging.NewAppLogger(&a.cfg.Logging)
 	}
-	fmt.Println("日志已重新打开")
+	a.logger.LogStartup("日志已重新打开", nil)
 }
 
 // gracefulUpgrade 执行热升级。
@@ -335,15 +338,15 @@ func (a *App) gracefulUpgrade() {
 	// 获取当前可执行文件路径
 	execPath, err := os.Executable()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "获取可执行文件路径失败: %v\n", err)
+		a.logger.Error().Err(err).Msg("获取可执行文件路径失败")
 		return
 	}
 
 	// 尝试从服务器获取监听器
 	listeners := a.srv.GetListeners()
 	if len(listeners) == 0 {
-		fmt.Fprintf(os.Stderr, "热升级失败: 服务器未保存监听器（热升级当前未完全实现）\n")
-		fmt.Fprintf(os.Stderr, "提示: 热升级需要服务器使用手动监听器管理模式\n")
+		a.logger.Error().Msg("热升级失败: 服务器未保存监听器（热升级当前未完全实现）")
+		a.logger.Info().Msg("提示: 热升级需要服务器使用手动监听器管理模式")
 		return
 	}
 
@@ -352,11 +355,11 @@ func (a *App) gracefulUpgrade() {
 
 	// 执行升级
 	if err := a.upgradeMgr.GracefulUpgrade(execPath); err != nil {
-		fmt.Fprintf(os.Stderr, "热升级失败: %v\n", err)
+		a.logger.Error().Err(err).Msg("热升级失败")
 		return
 	}
 
-	fmt.Println("热升级已启动，新进程正在接管")
+	a.logger.LogStartup("热升级已启动，新进程正在接管", nil)
 
 	// 当前进程优雅停止
 	a.srv.GracefulStop(shutdownTimeout)
