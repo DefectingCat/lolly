@@ -250,6 +250,12 @@ func (h *StatusHandler) collectStatus() *Status {
 				MaxSize:    stats.MaxSize,
 			},
 		}
+
+		// 收集代理缓存统计
+		proxyCacheStats := h.server.getProxyCacheStats()
+		if proxyCacheStats.Entries > 0 || proxyCacheStats.Pending > 0 {
+			status.Cache.ProxyCache = proxyCacheStats
+		}
 	}
 
 	// 收集 Goroutine 池统计

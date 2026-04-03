@@ -234,12 +234,45 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// 修改请求头
 	p.modifyRequestHeaders(ctx, target)
 
+	// 尝试从缓存获取（如果启用）
+	if p.cache != nil {
+		cacheKey := p.buildCacheKey(ctx)
+		if entry, ok, stale := p.cache.Get(cacheKey); ok {
+			// 缓存命中
+			if !stale {
+				// 新鲜缓存，直接返回
+				p.writeCachedResponse(ctx, entry)
+				return
+			}
+			// 过期缓存，尝试后台刷新，同时返回旧数据
+			go p.backgroundRefresh(ctx, target, cacheKey)
+			p.writeCachedResponse(ctx, entry)
+			return
+		}
+
+		// 检查是否需要缓存锁（防止缓存击穿）
+		if done := p.cache.AcquireLock(cacheKey); done != nil {
+			// 有其他请求正在生成缓存，等待
+			<-done
+			// 重新尝试获取缓存
+			if entry, ok, _ := p.cache.Get(cacheKey); ok {
+				p.writeCachedResponse(ctx, entry)
+				return
+			}
+		}
+	}
+
 	// 执行代理请求
 	err := client.Do(req, &ctx.Response)
 	if err != nil {
 		// 被动健康检查：标记目标为不健康
 		if p.healthChecker != nil {
 			p.healthChecker.MarkUnhealthy(target)
+		}
+
+		// 释放缓存锁
+		if p.cache != nil {
+			p.cache.ReleaseLock(p.buildCacheKey(ctx), err)
 		}
 
 		// 处理不同类型的错误
@@ -253,12 +286,28 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	// 存入缓存（如果启用且响应可缓存）
+	if p.cache != nil {
+		cacheKey := p.buildCacheKey(ctx)
+		status := ctx.Response.StatusCode()
+		if status >= 200 && status < 300 {
+			// 提取响应头
+			headers := make(map[string]string)
+			ctx.Response.Header.VisitAll(func(key, value []byte) {
+				headers[string(key)] = string(value)
+			})
+			p.cache.Set(cacheKey, ctx.Response.Body(), headers, status, p.config.Cache.MaxAge)
+		}
+		p.cache.ReleaseLock(cacheKey, nil)
+	}
+
 	// 修改响应头
 	p.modifyResponseHeaders(ctx)
 }
 
 // selectTarget 使用配置的负载均衡器选择后端目标。
 // 对于 IP 哈希负载均衡，从请求中提取客户端 IP。
+// 对于一致性哈希，根据配置的 hash_key 选择目标。
 // 如果没有可用的健康目标则返回 nil。
 func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 	p.mu.RLock()
@@ -276,7 +325,33 @@ func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 		return ipHash.SelectByIP(targets, clientIP)
 	}
 
+	// 对于一致性哈希，根据 hash_key 配置选择
+	if ch, ok := balancer.(*loadbalance.ConsistentHash); ok {
+		hashKey := ch.GetHashKey()
+		key := p.extractHashKey(ctx, hashKey)
+		return ch.SelectByKey(targets, key)
+	}
+
 	return balancer.Select(targets)
+}
+
+// extractHashKey 根据配置提取哈希键值。
+func (p *Proxy) extractHashKey(ctx *fasthttp.RequestCtx, hashKey string) string {
+	switch {
+	case hashKey == "ip" || hashKey == "":
+		return getClientIP(ctx)
+	case hashKey == "uri":
+		return string(ctx.RequestURI())
+	case strings.HasPrefix(hashKey, "header:"):
+		headerName := strings.TrimPrefix(hashKey, "header:")
+		value := ctx.Request.Header.Peek(headerName)
+		if len(value) > 0 {
+			return string(value)
+		}
+		return getClientIP(ctx) // fallback to IP
+	default:
+		return getClientIP(ctx)
+	}
 }
 
 // getClientIP 从请求上下文中提取客户端 IP 地址。
@@ -436,4 +511,64 @@ func (p *Proxy) GetConfig() *config.ProxyConfig {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.config
+}
+
+// buildCacheKey 构建缓存键。
+func (p *Proxy) buildCacheKey(ctx *fasthttp.RequestCtx) string {
+	// 使用请求方法和路径作为缓存键
+	return string(ctx.Request.Header.Method()) + ":" + string(ctx.Request.URI().RequestURI())
+}
+
+// writeCachedResponse 写入缓存的响应。
+func (p *Proxy) writeCachedResponse(ctx *fasthttp.RequestCtx, entry *cache.ProxyCacheEntry) {
+	ctx.Response.SetBody(entry.Data)
+	ctx.Response.SetStatusCode(entry.Status)
+	for key, value := range entry.Headers {
+		ctx.Response.Header.Set(key, value)
+	}
+	ctx.Response.Header.Set("X-Cache", "HIT")
+}
+
+// backgroundRefresh 后台刷新缓存。
+func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.Target, cacheKey string) {
+	// 创建新的请求上下文副本
+	req := fasthttp.AcquireRequest()
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseRequest(req)
+	defer fasthttp.ReleaseResponse(resp)
+
+	// 复制原始请求
+	ctx.Request.CopyTo(req)
+
+	// 获取客户端
+	client := p.getClient(target.URL)
+	if client == nil {
+		return
+	}
+
+	// 执行请求
+	err := client.Do(req, resp)
+	if err != nil {
+		p.cache.ReleaseLock(cacheKey, err)
+		return
+	}
+
+	// 提取响应头
+	headers := make(map[string]string)
+	resp.Header.VisitAll(func(key, value []byte) {
+		headers[string(key)] = string(value)
+	})
+
+	// 更新缓存
+	p.cache.Set(cacheKey, resp.Body(), headers, resp.StatusCode(), p.config.Cache.MaxAge)
+}
+
+// GetCacheStats 返回代理缓存的统计信息。
+// 如果缓存未启用，返回 nil。
+func (p *Proxy) GetCacheStats() *cache.ProxyCacheStats {
+	if p.cache == nil {
+		return nil
+	}
+	stats := p.cache.Stats()
+	return &stats
 }

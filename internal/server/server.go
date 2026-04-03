@@ -69,6 +69,9 @@ type Server struct {
 	// healthCheckers 健康检查器列表，用于检查代理目标健康状态
 	healthCheckers []*proxy.HealthChecker
 
+	// proxies 代理实例列表，用于收集缓存统计
+	proxies []*proxy.Proxy
+
 	// accessLogMiddleware 访问日志中间件，记录请求详细信息
 	accessLogMiddleware *accesslog.AccessLog
 
@@ -217,6 +220,15 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 		middlewares = append(middlewares, rl)
 	}
 
+	// 3.5 Security: ConnLimiter (连接数限制)
+	if serverCfg.Security.RateLimit.ConnLimit > 0 {
+		cl, err := security.NewConnLimiter(serverCfg.Security.RateLimit.ConnLimit, true, serverCfg.Security.RateLimit.Key)
+		if err != nil {
+			return nil, fmt.Errorf("创建连接限制中间件失败: %w", err)
+		}
+		middlewares = append(middlewares, cl.Middleware())
+	}
+
 	// 4. Security: BasicAuth (认证)
 	if len(serverCfg.Security.Auth.Users) > 0 {
 		auth, err := security.NewBasicAuth(&serverCfg.Security.Auth)
@@ -339,6 +351,10 @@ func (s *Server) startSingleMode() error {
 	if s.fileCache != nil {
 		staticHandler.SetFileCache(s.fileCache)
 	}
+	// 设置预压缩文件支持
+	if s.config.Server.Compression.GzipStatic {
+		staticHandler.SetGzipStatic(true, s.config.Server.Compression.GzipStaticExtensions)
+	}
 	router.GET("/{filepath:*}", staticHandler.Handle)
 	router.HEAD("/{filepath:*}", staticHandler.Handle)
 
@@ -417,6 +433,10 @@ func (s *Server) startVHostMode() error {
 		if s.fileCache != nil {
 			staticHandler.SetFileCache(s.fileCache)
 		}
+		// 设置预压缩文件支持
+		if s.config.Servers[i].Compression.GzipStatic {
+			staticHandler.SetGzipStatic(true, s.config.Servers[i].Compression.GzipStaticExtensions)
+		}
 		router.GET("/{filepath:*}", staticHandler.Handle)
 		router.HEAD("/{filepath:*}", staticHandler.Handle)
 
@@ -456,6 +476,10 @@ func (s *Server) startVHostMode() error {
 		)
 		if s.fileCache != nil {
 			staticHandler.SetFileCache(s.fileCache)
+		}
+		// 设置预压缩文件支持
+		if s.config.Server.Compression.GzipStatic {
+			staticHandler.SetGzipStatic(true, s.config.Server.Compression.GzipStaticExtensions)
 		}
 		router.GET("/{filepath:*}", staticHandler.Handle)
 
@@ -549,6 +573,9 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 			// 设置被动健康检查
 			p.SetHealthChecker(hc)
 		}
+
+		// 保存代理实例用于缓存统计
+		s.proxies = append(s.proxies, p)
 
 		router.GET(proxyCfg.Path, p.ServeHTTP)
 		router.POST(proxyCfg.Path, p.ServeHTTP)
@@ -652,4 +679,16 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 		}
 	}
 	return nil
+}
+
+// getProxyCacheStats 收集所有代理缓存的统计信息。
+func (s *Server) getProxyCacheStats() ProxyCacheStats {
+	var total ProxyCacheStats
+	for _, p := range s.proxies {
+		if stats := p.GetCacheStats(); stats != nil {
+			total.Entries += stats.Entries
+			total.Pending += stats.Pending
+		}
+	}
+	return total
 }
