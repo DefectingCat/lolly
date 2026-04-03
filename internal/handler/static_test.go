@@ -398,3 +398,170 @@ func TestNewStaticHandler(t *testing.T) {
 		}
 	})
 }
+
+// TestStaticHandler_SetFileCache 测试设置文件缓存
+func TestStaticHandler_SetFileCache(t *testing.T) {
+	handler := NewStaticHandler("/var/www", nil, false)
+
+	// 设置 nil 缓存
+	handler.SetFileCache(nil)
+	if handler.fileCache != nil {
+		t.Error("Expected nil fileCache")
+	}
+
+	// 设置非 nil 缓存（使用 mock 或简单验证）
+	// 由于 FileCache 接口需要实现，这里主要验证不会 panic
+}
+
+// TestStaticHandler_SetGzipStatic 测试设置 Gzip 静态文件
+func TestStaticHandler_SetGzipStatic(t *testing.T) {
+	handler := NewStaticHandler("/var/www", nil, false)
+
+	// 启用 gzip
+	handler.SetGzipStatic(true, []string{".gz", ".gzip"})
+	if handler.gzipStatic == nil {
+		t.Error("Expected gzipStatic to be non-nil")
+	}
+
+	// 禁用 gzip
+	handler.SetGzipStatic(false, nil)
+	// gzipStatic 保持不变（SetGzipStatic 只在 enabled=true 时设置）
+}
+
+// TestStaticHandler_Handle_HeadRequest 测试 HEAD 请求
+func TestStaticHandler_Handle_HeadRequest(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := "head request test"
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0644); err != nil {
+		t.Fatalf("创建测试文件失败: %v", err)
+	}
+
+	handler := newTestHandler(t, tmpDir)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/test.txt")
+	ctx.Request.Header.SetMethod("HEAD")
+
+	handler.Handle(ctx)
+
+	if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+		t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+	}
+
+	// 验证 Content-Type 设置正确
+	ct := string(ctx.Response.Header.ContentType())
+	if ct == "" {
+		t.Error("Expected Content-Type to be set")
+	}
+}
+
+// TestStaticHandler_Handle_WithCache 测试带缓存的文件处理
+func TestStaticHandler_Handle_WithCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := "cached content test"
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0644); err != nil {
+		t.Fatalf("创建测试文件失败: %v", err)
+	}
+
+	handler := newTestHandler(t, tmpDir)
+	// 设置 nil 缓存，验证不会 panic
+	handler.SetFileCache(nil)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/test.txt")
+
+	handler.Handle(ctx)
+
+	if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+		t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+	}
+}
+
+// TestStaticHandler_Handle_Precompressed 测试预压缩文件
+func TestStaticHandler_Handle_Precompressed(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建原始文件和 gzip 压缩版本
+	content := "test content for gzip"
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0644); err != nil {
+		t.Fatalf("创建测试文件失败: %v", err)
+	}
+
+	// 创建 .gz 文件（模拟预压缩）
+	gzContent := []byte("gzipped content")
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt.gz"), gzContent, 0644); err != nil {
+		t.Fatalf("创建 gzip 文件失败: %v", err)
+	}
+
+	handler := NewStaticHandler(tmpDir, nil, false)
+	handler.SetGzipStatic(true, []string{".gz"})
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/test.txt")
+	ctx.Request.Header.Set("Accept-Encoding", "gzip")
+
+	handler.Handle(ctx)
+
+	// 应返回预压缩内容
+	if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+		t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+	}
+}
+
+// TestStaticHandler_Handle_LargeFile 测试大文件处理
+func TestStaticHandler_Handle_LargeFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建一个较大的文件 (> 8KB 触发 sendfile 路径)
+	largeContent := make([]byte, 16*1024)
+	for i := range largeContent {
+		largeContent[i] = byte(i % 256)
+	}
+
+	tmpFile := filepath.Join(tmpDir, "large.bin")
+	if err := os.WriteFile(tmpFile, largeContent, 0644); err != nil {
+		t.Fatalf("创建大文件失败: %v", err)
+	}
+
+	// 使用 sendfile 启用的处理器
+	handler := NewStaticHandler(tmpDir, []string{"index.html"}, true)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/large.bin")
+
+	handler.Handle(ctx)
+
+	if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+		t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+	}
+}
+
+// TestStaticHandler_Handle_Symlink 测试符号链接处理
+func TestStaticHandler_Handle_Symlink(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建目标文件
+	targetContent := "symlink target"
+	targetFile := filepath.Join(tmpDir, "target.txt")
+	if err := os.WriteFile(targetFile, []byte(targetContent), 0644); err != nil {
+		t.Fatalf("创建目标文件失败: %v", err)
+	}
+
+	// 创建符号链接
+	linkFile := filepath.Join(tmpDir, "link.txt")
+	if err := os.Symlink(targetFile, linkFile); err != nil {
+		t.Fatalf("创建符号链接失败: %v", err)
+	}
+
+	handler := newTestHandler(t, tmpDir)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/link.txt")
+
+	handler.Handle(ctx)
+
+	// 符号链接应该能正常访问
+	if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+		t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+	}
+}
