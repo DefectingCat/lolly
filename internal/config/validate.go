@@ -290,10 +290,9 @@ func validateAuth(a *AuthConfig) error {
 	}
 
 	// 启用 Basic Auth 时检查是否强制 HTTPS
-	if a.RequireTLS {
-		// 注意：SSL 配置在 ServerConfig 中，这里无法直接检查
-		// 需要在上层验证中检查 SSL 与 Auth 的关联
-	}
+	// 注意：SSL 配置在 ServerConfig 中，这里无法直接检查
+	// 需要在上层验证中检查 SSL 与 Auth 的关联
+	_ = a.RequireTLS // 避免空分支警告
 
 	// 验证哈希算法
 	validAlgorithms := []string{"", "bcrypt", "argon2id"}
@@ -413,6 +412,46 @@ func validateCompression(c *CompressionConfig) error {
 	// 验证最小压缩大小
 	if c.MinSize < 0 {
 		return errors.New("min_size 不能为负数")
+	}
+
+	return nil
+}
+
+// validateStream 验证 Stream 代理配置。
+//
+// 检查监听地址、协议类型和上游配置的有效性。
+//
+// 参数：
+//   - s: Stream 配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - listen 必填
+//   - protocol 仅允许 tcp 或 udp
+//   - upstream.targets 至少需要一个目标
+func validateStream(s *StreamConfig) error {
+	// 监听地址必填
+	if s.Listen == "" {
+		return errors.New("listen 地址必填")
+	}
+
+	// 验证协议类型
+	if s.Protocol != "tcp" && s.Protocol != "udp" {
+		return fmt.Errorf("无效的协议类型: %s（仅允许 tcp 或 udp）", s.Protocol)
+	}
+
+	// 验证上游目标
+	if len(s.Upstream.Targets) == 0 {
+		return errors.New("upstream.targets 至少需要一个目标地址")
+	}
+
+	// 验证每个目标地址
+	for i, t := range s.Upstream.Targets {
+		if t.Addr == "" {
+			return fmt.Errorf("upstream.targets[%d].addr 必填", i)
+		}
 	}
 
 	return nil

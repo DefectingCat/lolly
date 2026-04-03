@@ -811,3 +811,98 @@ func TestValidateSecurity(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateStream(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  StreamConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "valid tcp stream",
+			config: StreamConfig{
+				Listen:   ":3306",
+				Protocol: "tcp",
+				Upstream: StreamUpstream{
+					Targets:     []StreamTarget{{Addr: "db1:3306"}},
+					LoadBalance: "round_robin",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid udp stream",
+			config: StreamConfig{
+				Listen:   ":53",
+				Protocol: "udp",
+				Upstream: StreamUpstream{
+					Targets:     []StreamTarget{{Addr: "dns1:53"}},
+					LoadBalance: "least_conn",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty listen",
+			config: StreamConfig{
+				Listen:   "",
+				Protocol: "tcp",
+			},
+			wantErr: true,
+			errMsg:  "listen 地址必填",
+		},
+		{
+			name: "invalid protocol",
+			config: StreamConfig{
+				Listen:   ":3306",
+				Protocol: "http",
+			},
+			wantErr: true,
+			errMsg:  "无效的协议类型",
+		},
+		{
+			name: "no targets",
+			config: StreamConfig{
+				Listen:   ":3306",
+				Protocol: "tcp",
+				Upstream: StreamUpstream{
+					Targets: []StreamTarget{},
+				},
+			},
+			wantErr: true,
+			errMsg:  "upstream.targets 至少需要一个目标地址",
+		},
+		{
+			name: "empty target addr",
+			config: StreamConfig{
+				Listen:   ":3306",
+				Protocol: "tcp",
+				Upstream: StreamUpstream{
+					Targets: []StreamTarget{{Addr: ""}},
+				},
+			},
+			wantErr: true,
+			errMsg:  "addr 必填",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateStream(&tt.config)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateStream() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateStream() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateStream() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}

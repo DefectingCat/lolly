@@ -11,7 +11,7 @@ import (
 func TestNewServer(t *testing.T) {
 	s := NewServer()
 	if s == nil {
-		t.Error("Expected non-nil server")
+		t.Fatal("Expected non-nil server")
 	}
 	if s.listeners == nil {
 		t.Error("Expected initialized listeners map")
@@ -46,7 +46,7 @@ func TestAddUpstream(t *testing.T) {
 
 	up := s.upstreams["test"]
 	if up == nil {
-		t.Error("Expected non-nil upstream")
+		t.Fatal("Expected non-nil upstream")
 	}
 	if len(up.targets) != 2 {
 		t.Errorf("Expected 2 targets, got %d", len(up.targets))
@@ -121,6 +121,67 @@ func TestBalancerNoHealthyTargets(t *testing.T) {
 	selected = lc.Select(targets)
 	if selected != nil {
 		t.Error("Expected nil for no healthy targets")
+	}
+}
+
+func TestWeightedRoundRobinBalancer(t *testing.T) {
+	targets := []*Target{
+		{addr: "localhost:8001", weight: 3},
+		{addr: "localhost:8002", weight: 1},
+	}
+	for _, target := range targets {
+		target.healthy.Store(true)
+	}
+
+	wrr := newWeightedRoundRobin()
+
+	// 测试加权分布：3:1 比例
+	results := make(map[string]int)
+	for i := 0; i < 8; i++ {
+		selected := wrr.Select(targets)
+		if selected == nil {
+			t.Error("Expected non-nil target")
+			continue
+		}
+		results[selected.addr]++
+	}
+
+	// localhost:8001 应被选中 6 次，localhost:8002 应被选中 2 次
+	if results["localhost:8001"] != 6 {
+		t.Errorf("Expected localhost:8001 to be selected 6 times, got %d", results["localhost:8001"])
+	}
+	if results["localhost:8002"] != 2 {
+		t.Errorf("Expected localhost:8002 to be selected 2 times, got %d", results["localhost:8002"])
+	}
+}
+
+func TestIPHashBalancer(t *testing.T) {
+	targets := []*Target{
+		{addr: "localhost:8001"},
+		{addr: "localhost:8002"},
+		{addr: "localhost:8003"},
+	}
+	for _, target := range targets {
+		target.healthy.Store(true)
+	}
+
+	ih := newIPHash()
+
+	// 相同 IP 应始终选择同一目标
+	ip1 := "192.168.1.1"
+	selected1 := ih.(*ipHash).SelectByIP(targets, ip1)
+	selected2 := ih.(*ipHash).SelectByIP(targets, ip1)
+
+	if selected1 != selected2 {
+		t.Error("Same IP should select same target")
+	}
+
+	// 不同 IP 可能选择不同目标
+	ip2 := "10.0.0.1"
+	selected3 := ih.(*ipHash).SelectByIP(targets, ip2)
+	// 验证返回非空
+	if selected3 == nil {
+		t.Error("Expected non-nil target for different IP")
 	}
 }
 
@@ -231,7 +292,7 @@ func TestConcurrentConnections(t *testing.T) {
 	targets := []TargetSpec{
 		{Addr: "localhost:8001", Weight: 1},
 	}
-	s.AddUpstream("test", targets, "round_robin", HealthCheckSpec{})
+	_ = s.AddUpstream("test", targets, "round_robin", HealthCheckSpec{})
 
 	// 并发增加连接数
 	var wg sync.WaitGroup
@@ -298,7 +359,7 @@ func TestUDPServerStartAndStop(t *testing.T) {
 	targets := []TargetSpec{
 		{Addr: "127.0.0.1:19001", Weight: 1},
 	}
-	s.AddUpstream("udp_stop_test", targets, "round_robin", HealthCheckSpec{})
+	_ = s.AddUpstream("udp_stop_test", targets, "round_robin", HealthCheckSpec{})
 
 	// 监听 UDP
 	err := s.ListenUDP("127.0.0.1:19000", "udp_stop_test", 500*time.Millisecond)
@@ -344,7 +405,7 @@ func TestNewUDPServer(t *testing.T) {
 	// 创建 UDP 连接
 	udpAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	conn, _ := net.ListenUDP("udp", udpAddr)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// 创建上游
 	upstream := &Upstream{
@@ -395,7 +456,7 @@ func TestServerStartStopWithTCP(t *testing.T) {
 	targets := []TargetSpec{
 		{Addr: "127.0.0.1:19003", Weight: 1},
 	}
-	s.AddUpstream("tcp_test", targets, "round_robin", HealthCheckSpec{})
+	_ = s.AddUpstream("tcp_test", targets, "round_robin", HealthCheckSpec{})
 
 	// 监听 TCP
 	err := s.ListenTCP("127.0.0.1:19004")
@@ -535,7 +596,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	// 创建 UDP 连接
 	udpAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	conn, _ := net.ListenUDP("udp", udpAddr)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// 创建上游
 	upstream := &Upstream{
@@ -603,12 +664,12 @@ func TestUDPSessionOperations(t *testing.T) {
 	// 创建 UDP 连接
 	udpAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	conn, _ := net.ListenUDP("udp", udpAddr)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// 创建目标服务器（用于模拟连接）
 	targetAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:19007")
 	targetConn, _ := net.ListenUDP("udp", targetAddr)
-	defer targetConn.Close()
+	defer func() { _ = targetConn.Close() }()
 
 	// 创建上游
 	upstream := &Upstream{
@@ -670,7 +731,7 @@ func TestUDPSessionClose(t *testing.T) {
 	// 第二次调用 close 不应该出错（使用 sync.Once）
 	session.close()
 
-	conn1.Close()
+	_ = conn1.Close()
 }
 
 func TestHealthCheckerCheckWithHealthyTarget(t *testing.T) {
@@ -679,7 +740,7 @@ func TestHealthCheckerCheckWithHealthyTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	// 在后台运行服务器
 	go func() {

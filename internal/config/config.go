@@ -432,5 +432,12 @@ func Validate(cfg *Config) error {
 		}
 	}
 
+	// 验证 Stream 配置
+	for i := range cfg.Stream {
+		if err := validateStream(&cfg.Stream[i]); err != nil {
+			return fmt.Errorf("stream[%d]: %w", i, err)
+		}
+	}
+
 	return nil
 }

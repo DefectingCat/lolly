@@ -29,6 +29,7 @@
 package stream
 
 import (
+	"hash/fnv"
 	"io"
 	"net"
 	"sync"
@@ -90,6 +91,92 @@ func (l *leastConn) Select(targets []*Target) *Target {
 		}
 	}
 	return selected
+}
+
+// weightedRoundRobin 加权轮询。
+type weightedRoundRobin struct {
+	counter uint64
+}
+
+// newWeightedRoundRobin 创建加权轮询均衡器。
+func newWeightedRoundRobin() Balancer {
+	return &weightedRoundRobin{}
+}
+
+// Select 基于权重分布选择目标。
+func (w *weightedRoundRobin) Select(targets []*Target) *Target {
+	healthy := make([]*Target, 0)
+	for _, t := range targets {
+		if t.healthy.Load() {
+			healthy = append(healthy, t)
+		}
+	}
+	if len(healthy) == 0 {
+		return nil
+	}
+
+	// 计算总权重
+	totalWeight := 0
+	for _, t := range healthy {
+		if t.weight <= 0 {
+			totalWeight += 1 // 最小权重为 1
+		} else {
+			totalWeight += t.weight
+		}
+	}
+
+	// 使用原子计数器确定位置
+	idx := atomic.AddUint64(&w.counter, 1) - 1
+	pos := int(idx % uint64(totalWeight))
+
+	// 找到对应位置的目标
+	currentWeight := 0
+	for _, t := range healthy {
+		weight := t.weight
+		if weight <= 0 {
+			weight = 1
+		}
+		currentWeight += weight
+		if pos < currentWeight {
+			return t
+		}
+	}
+
+	return healthy[len(healthy)-1]
+}
+
+// ipHash IP 哈希。
+type ipHash struct{}
+
+// newIPHash 创建 IP 哈希均衡器。
+func newIPHash() Balancer {
+	return &ipHash{}
+}
+
+// Select 默认选择（IP Hash 需要具体 IP）。
+func (i *ipHash) Select(targets []*Target) *Target {
+	return i.SelectByIP(targets, "")
+}
+
+// SelectByIP 基于客户端 IP 哈希选择目标。
+func (i *ipHash) SelectByIP(targets []*Target, clientIP string) *Target {
+	healthy := make([]*Target, 0)
+	for _, t := range targets {
+		if t.healthy.Load() {
+			healthy = append(healthy, t)
+		}
+	}
+	if len(healthy) == 0 {
+		return nil
+	}
+
+	// 使用 FNV-64a 哈希
+	h := fnv.New64a()
+	h.Write([]byte(clientIP))
+	hash := h.Sum64()
+
+	idx := hash % uint64(len(healthy))
+	return healthy[idx]
 }
 
 // Server TCP/UDP Stream 代理服务器。
@@ -213,10 +300,14 @@ func (s *Server) AddUpstream(name string, targets []TargetSpec, lbType string, h
 	// 创建负载均衡器
 	var balancer Balancer
 	switch lbType {
-	case "round_robin":
+	case "round_robin", "":
 		balancer = newRoundRobin()
+	case "weighted_round_robin":
+		balancer = newWeightedRoundRobin()
 	case "least_conn":
 		balancer = newLeastConn()
+	case "ip_hash":
+		balancer = newIPHash()
 	default:
 		balancer = newRoundRobin()
 	}
@@ -324,7 +415,7 @@ func (s *Server) acceptLoop(addr string, listener net.Listener) {
 // handleConnection 处理单个连接。
 func (s *Server) handleConnection(clientConn net.Conn, addr string) {
 	defer func() {
-		clientConn.Close()
+		_ = clientConn.Close()
 		s.connCount--
 	}()
 
@@ -356,11 +447,11 @@ func (s *Server) handleConnection(clientConn net.Conn, addr string) {
 		target.healthy.Store(false)
 		return
 	}
-	defer targetConn.Close()
+	defer func() { _ = targetConn.Close() }()
 
 	// 双向数据转发
-	go io.Copy(targetConn, clientConn)
-	io.Copy(clientConn, targetConn)
+	go func() { _, _ = io.Copy(targetConn, clientConn) }()
+	_, _ = io.Copy(clientConn, targetConn)
 }
 
 // Select 选择健康的上游目标。
@@ -406,7 +497,7 @@ func (h *HealthChecker) check() {
 		if err != nil {
 			target.healthy.Store(false)
 		} else {
-			conn.Close()
+			_ = conn.Close()
 			target.healthy.Store(true)
 		}
 	}
@@ -426,7 +517,7 @@ func (s *Server) Stop() error {
 
 	// 关闭所有 TCP 监听器
 	for _, listener := range s.listeners {
-		listener.Close()
+		_ = listener.Close()
 	}
 
 	// 停止所有 UDP 服务器
@@ -594,7 +685,7 @@ func (s *udpServer) removeSession(clientAddr *net.UDPAddr) {
 func (sess *udpSession) close() {
 	sess.closeOnce.Do(func() {
 		if sess.targetConn != nil {
-			sess.targetConn.Close()
+			_ = sess.targetConn.Close()
 		}
 	})
 }
@@ -606,7 +697,7 @@ func (sess *udpSession) handleBackendResponse() {
 	buf := make([]byte, 65535)
 	for {
 		// 设置读取超时
-		sess.targetConn.SetReadDeadline(time.Now().Add(sess.srv.timeout))
+		_ = sess.targetConn.SetReadDeadline(time.Now().Add(sess.srv.timeout))
 
 		n, err := sess.targetConn.Read(buf)
 		if err != nil {
@@ -650,7 +741,7 @@ func (s *udpServer) serve() {
 	buf := make([]byte, 65535)
 	for s.running.Load() {
 		// 设置读取超时，以便定期检查 stopCh
-		s.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		_ = s.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 
 		n, clientAddr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
@@ -731,5 +822,5 @@ func (s *udpServer) stop() {
 	s.wg.Wait()
 
 	// 关闭连接
-	s.conn.Close()
+	_ = s.conn.Close()
 }
