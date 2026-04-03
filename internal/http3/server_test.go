@@ -88,7 +88,7 @@ func TestNewServer_Success(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	if server == nil {
-		t.Error("Expected non-nil server")
+		t.Fatal("Expected non-nil server")
 	}
 
 	if server.config != cfg {

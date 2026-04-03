@@ -749,7 +749,7 @@ func TestHealthCheckerCheckWithHealthyTarget(t *testing.T) {
 			if err != nil {
 				return
 			}
-			conn.Close()
+			_ = conn.Close()
 		}
 	}()
 

@@ -19,7 +19,7 @@ func TestNewGoroutinePool(t *testing.T) {
 
 	p := NewGoroutinePool(cfg)
 	if p == nil {
-		t.Error("Expected non-nil pool")
+		t.Fatal("Expected non-nil pool")
 	}
 
 	// 检查配置

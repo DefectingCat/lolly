@@ -14,7 +14,7 @@ import (
 func TestNewAdapter(t *testing.T) {
 	adapter := NewAdapter()
 	if adapter == nil {
-		t.Error("Expected non-nil adapter")
+		t.Fatal("Expected non-nil adapter")
 	}
 
 	// 测试 ctxPool 是否初始化

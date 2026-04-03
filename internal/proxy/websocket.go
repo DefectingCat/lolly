@@ -288,8 +288,8 @@ func buildWebSocketUpgradeRequest(ctx *fasthttp.RequestCtx, targetHost string) s
 
 	// 构建请求头
 	var req strings.Builder
-	req.WriteString(fmt.Sprintf("GET %s HTTP/1.1\r\n", path))
-	req.WriteString(fmt.Sprintf("Host: %s\r\n", targetHost))
+	fmt.Fprintf(&req, "GET %s HTTP/1.1\r\n", path)
+	fmt.Fprintf(&req, "Host: %s\r\n", targetHost)
 
 	// 复制原始请求的关键头
 	copyHeaders := []string{
@@ -304,27 +304,27 @@ func buildWebSocketUpgradeRequest(ctx *fasthttp.RequestCtx, targetHost string) s
 
 	for _, header := range copyHeaders {
 		if value := ctx.Request.Header.Peek(header); len(value) > 0 {
-			req.WriteString(fmt.Sprintf("%s: %s\r\n", header, string(value)))
+			fmt.Fprintf(&req, "%s: %s\r\n", header, string(value))
 		}
 	}
 
 	// 添加 X-Forwarded 头
 	clientIP := getClientIP(ctx)
 	if clientIP != "" {
-		req.WriteString(fmt.Sprintf("X-Forwarded-For: %s\r\n", clientIP))
-		req.WriteString(fmt.Sprintf("X-Real-IP: %s\r\n", clientIP))
+		fmt.Fprintf(&req, "X-Forwarded-For: %s\r\n", clientIP)
+		fmt.Fprintf(&req, "X-Real-IP: %s\r\n", clientIP)
 	}
 
 	host := string(ctx.Host())
 	if host != "" {
-		req.WriteString(fmt.Sprintf("X-Forwarded-Host: %s\r\n", host))
+		fmt.Fprintf(&req, "X-Forwarded-Host: %s\r\n", host)
 	}
 
 	proto := "http"
 	if ctx.IsTLS() {
 		proto = "https"
 	}
-	req.WriteString(fmt.Sprintf("X-Forwarded-Proto: %s\r\n", proto))
+	fmt.Fprintf(&req, "X-Forwarded-Proto: %s\r\n", proto)
 
 	// 结束请求头
 	req.WriteString("\r\n")
@@ -486,12 +486,12 @@ func extractHost(url string) string {
 func writeUpgradeResponse(conn net.Conn, resp *http.Response) error {
 	// 构建响应行
 	var respStr strings.Builder
-	respStr.WriteString(fmt.Sprintf("HTTP/%d.%d %s\r\n", resp.ProtoMajor, resp.ProtoMinor, resp.Status))
+	fmt.Fprintf(&respStr, "HTTP/%d.%d %s\r\n", resp.ProtoMajor, resp.ProtoMinor, resp.Status)
 
 	// 写入响应头
 	for key, values := range resp.Header {
 		for _, value := range values {
-			respStr.WriteString(fmt.Sprintf("%s: %s\r\n", key, value))
+			fmt.Fprintf(&respStr, "%s: %s\r\n", key, value)
 		}
 	}
 

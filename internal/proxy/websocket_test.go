@@ -17,9 +17,8 @@ func TestNewWebSocketBridge(t *testing.T) {
 	defer func() { _ = targetConn.Close() }()
 
 	bridge := NewWebSocketBridge(clientConn, targetConn)
-
 	if bridge == nil {
-		t.Error("Expected non-nil bridge")
+		t.Fatal("Expected non-nil bridge")
 	}
 	if bridge.clientConn != clientConn {
 		t.Error("Expected clientConn to be set")
@@ -27,7 +26,7 @@ func TestNewWebSocketBridge(t *testing.T) {
 	if bridge.targetConn != targetConn {
 		t.Error("Expected targetConn to be set")
 	}
-	if bridge.closed != false {
+	if bridge.closed {
 		t.Error("Expected closed to be false initially")
 	}
 }

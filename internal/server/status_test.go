@@ -54,7 +54,7 @@ func TestNewStatusHandler_CIDR(t *testing.T) {
 					t.Errorf("unexpected error: %v", err)
 				}
 				if h == nil {
-					t.Error("expected non-nil handler")
+					t.Fatal("expected non-nil handler")
 				}
 			}
 		})
@@ -101,7 +101,7 @@ func TestNewStatusHandler_SingleIP(t *testing.T) {
 					t.Errorf("unexpected error: %v", err)
 				}
 				if h == nil {
-					t.Error("expected non-nil handler")
+					t.Fatal("expected non-nil handler")
 				}
 				if len(h.allowed) != len(tt.allow) {
 					t.Errorf("expected %d allowed networks, got %d", len(tt.allow), len(h.allowed))

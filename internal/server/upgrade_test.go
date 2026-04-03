@@ -10,9 +10,8 @@ import (
 func TestNewUpgradeManager(t *testing.T) {
 	srv := New(nil)
 	mgr := NewUpgradeManager(srv)
-
 	if mgr == nil {
-		t.Error("Expected non-nil manager")
+		t.Fatal("Expected non-nil manager")
 	}
 	if mgr.server != srv {
 		t.Error("Expected server to be set")
