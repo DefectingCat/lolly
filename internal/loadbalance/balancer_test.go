@@ -650,3 +650,131 @@ func TestBalancerInterface(t *testing.T) {
 		})
 	}
 }
+
+// TestConsistentHash 测试一致性哈希负载均衡器。
+func TestConsistentHash(t *testing.T) {
+	t.Run("创建默认配置", func(t *testing.T) {
+		ch := NewConsistentHash(0, "ip")
+		if ch == nil {
+			t.Fatal("NewConsistentHash() = nil")
+		}
+		if ch.GetVirtualNodes() != 150 {
+			t.Errorf("GetVirtualNodes() = %d, want 150", ch.GetVirtualNodes())
+		}
+		if ch.GetHashKey() != "ip" {
+			t.Errorf("GetHashKey() = %q, want %q", ch.GetHashKey(), "ip")
+		}
+	})
+
+	t.Run("自定义虚拟节点数", func(t *testing.T) {
+		ch := NewConsistentHash(200, "uri")
+		if ch.GetVirtualNodes() != 200 {
+			t.Errorf("GetVirtualNodes() = %d, want 200", ch.GetVirtualNodes())
+		}
+	})
+
+	t.Run("SelectByKey 空目标", func(t *testing.T) {
+		ch := NewConsistentHash(150, "ip")
+		got := ch.SelectByKey([]*Target{}, "192.168.1.1")
+		if got != nil {
+			t.Errorf("SelectByKey() = %v, want nil", got)
+		}
+	})
+
+	t.Run("SelectByKey 单目标", func(t *testing.T) {
+		ch := NewConsistentHash(150, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+		}
+
+		got := ch.SelectByKey(targets, "192.168.1.1")
+		if got == nil {
+			t.Fatal("SelectByKey() = nil")
+		}
+		if got.URL != "http://backend1:8080" {
+			t.Errorf("SelectByKey() = %q, want %q", got.URL, "http://backend1:8080")
+		}
+	})
+
+	t.Run("SelectByKey 多目标相同键", func(t *testing.T) {
+		ch := NewConsistentHash(150, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+
+		// 相同的键应该选择相同的目标
+		key := "192.168.1.100"
+		first := ch.SelectByKey(targets, key)
+		for i := 0; i < 10; i++ {
+			got := ch.SelectByKey(targets, key)
+			if got == nil {
+				t.Fatal("SelectByKey() = nil")
+			}
+			if got.URL != first.URL {
+				t.Errorf("相同键选择不同目标: first=%q, got=%q", first.URL, got.URL)
+			}
+		}
+	})
+
+	t.Run("GetStats", func(t *testing.T) {
+		ch := NewConsistentHash(100, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+
+		ch.Rebuild(targets)
+		stats := ch.GetStats()
+
+		if stats.VirtualNodes != 100 {
+			t.Errorf("VirtualNodes = %d, want 100", stats.VirtualNodes)
+		}
+		if stats.CircleSize != 200 { // 2 targets * 100 nodes
+			t.Errorf("CircleSize = %d, want 200", stats.CircleSize)
+		}
+	})
+
+	t.Run("Rebuild 跳过不健康目标", func(t *testing.T) {
+		ch := NewConsistentHash(10, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", false),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+
+		ch.Rebuild(targets)
+		stats := ch.GetStats()
+
+		if stats.CircleSize != 10 { // 只有1个健康目标 * 10 nodes
+			t.Errorf("CircleSize = %d, want 10", stats.CircleSize)
+		}
+	})
+}
+
+// TestIsValidAlgorithm 测试算法验证函数。
+func TestIsValidAlgorithm(t *testing.T) {
+	tests := []struct {
+		name      string
+		algorithm string
+		want      bool
+	}{
+		{"round_robin", "round_robin", true},
+		{"weighted_round_robin", "weighted_round_robin", true},
+		{"least_conn", "least_conn", true},
+		{"ip_hash", "ip_hash", true},
+		{"consistent_hash", "consistent_hash", true},
+		{"invalid", "invalid", false},
+		{"empty", "", true}, // 空字符串有效（使用默认值）
+		{"unknown", "unknown-algorithm", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsValidAlgorithm(tt.algorithm)
+			if got != tt.want {
+				t.Errorf("IsValidAlgorithm(%q) = %v, want %v", tt.algorithm, got, tt.want)
+			}
+		})
+	}
+}
