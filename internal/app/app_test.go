@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -53,7 +54,109 @@ func captureStderr(t *testing.T) (func() string, func()) {
 		}
 }
 
-// TestRun 测试 Run 函数的各种场景。
+// TestNewApp 测试 NewApp 构造器。
+func TestNewApp(t *testing.T) {
+	cfgPath := "/path/to/config.yaml"
+	app := NewApp(cfgPath)
+
+	if app.cfgPath != cfgPath {
+		t.Errorf("cfgPath = %q, want %q", app.cfgPath, cfgPath)
+	}
+
+	if app.cfg != nil {
+		t.Error("新创建的 App cfg 应为 nil")
+	}
+
+	if app.srv != nil {
+		t.Error("新创建的 App srv 应为 nil")
+	}
+
+	if app.pidFile != "" {
+		t.Errorf("pidFile = %q, want empty", app.pidFile)
+	}
+
+	if app.logFile != "" {
+		t.Errorf("logFile = %q, want empty", app.logFile)
+	}
+}
+
+// TestSetPidFile 测试 SetPidFile setter 方法。
+func TestSetPidFile(t *testing.T) {
+	app := NewApp("/test/config.yaml")
+	pidPath := "/var/run/lolly.pid"
+
+	app.SetPidFile(pidPath)
+
+	if app.pidFile != pidPath {
+		t.Errorf("pidFile = %q, want %q", app.pidFile, pidPath)
+	}
+}
+
+// TestSetLogFile 测试 SetLogFile setter 方法。
+func TestSetLogFile(t *testing.T) {
+	app := NewApp("/test/config.yaml")
+	logPath := "/var/log/lolly.log"
+
+	app.SetLogFile(logPath)
+
+	if app.logFile != logPath {
+		t.Errorf("logFile = %q, want %q", app.logFile, logPath)
+	}
+}
+
+// TestSigName 测试信号名称辅助函数。
+func TestSigName(t *testing.T) {
+	tests := []struct {
+		name     string
+		sig      syscall.Signal
+		expected string
+	}{
+		{
+			name:     "SIGTERM",
+			sig:      syscall.SIGTERM,
+			expected: "SIGTERM",
+		},
+		{
+			name:     "SIGINT",
+			sig:      syscall.SIGINT,
+			expected: "SIGINT",
+		},
+		{
+			name:     "SIGQUIT",
+			sig:      syscall.SIGQUIT,
+			expected: "SIGQUIT",
+		},
+		{
+			name:     "SIGHUP",
+			sig:      syscall.SIGHUP,
+			expected: "SIGHUP",
+		},
+		{
+			name:     "SIGUSR1",
+			sig:      syscall.SIGUSR1,
+			expected: "SIGUSR1",
+		},
+		{
+			name:     "SIGUSR2",
+			sig:      syscall.SIGUSR2,
+			expected: "SIGUSR2",
+		},
+		{
+			name:     "未知信号",
+			sig:      syscall.Signal(999),
+			expected: "Signal(999)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sigName(tt.sig)
+			if result != tt.expected {
+				t.Errorf("sigName(%d) = %q, want %q", tt.sig, result, tt.expected)
+			}
+		})
+	}
+}
 func TestRun(t *testing.T) {
 	tests := []struct {
 		name            string

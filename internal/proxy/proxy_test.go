@@ -902,6 +902,206 @@ func TestHandleWebSocket(t *testing.T) {
 	}
 }
 
+// TestSetHealthChecker 测试健康检查器设置
+// 注意：SetHealthChecker 是公开方法，但 healthChecker 是私有字段
+// 此测试验证方法可以正常调用
+func TestSetHealthChecker(t *testing.T) {
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
+	}
+
+	targets := []*loadbalance.Target{
+		{URL: "http://localhost:8081"},
+	}
+
+	p, err := NewProxy(cfg, targets)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	// 创建健康检查器
+	hcCfg := &config.HealthCheckConfig{
+		Interval: 10 * time.Second,
+		Path:     "/health",
+		Timeout:  5 * time.Second,
+	}
+	hc := NewHealthChecker(targets, hcCfg)
+
+	// 设置健康检查器 - 验证方法存在且可调用
+	p.SetHealthChecker(hc)
+
+	// 测试被动健康检查：标记目标为不健康
+	targets[0].Healthy.Store(true)
+	hc.MarkUnhealthy(targets[0])
+
+	if targets[0].Healthy.Load() {
+		t.Error("MarkUnhealthy() target should be unhealthy after marking")
+	}
+}
+
+// TestGetClient 测试客户端获取
+func TestGetClient(t *testing.T) {
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
+	}
+
+	targets := []*loadbalance.Target{
+		{URL: "http://localhost:8081"},
+		{URL: "http://localhost:8082"},
+	}
+
+	p, err := NewProxy(cfg, targets)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	// 测试获取存在的客户端
+	client1 := p.getClient("http://localhost:8081")
+	if client1 == nil {
+		t.Error("getClient() returned nil for existing client")
+	}
+
+	client2 := p.getClient("http://localhost:8082")
+	if client2 == nil {
+		t.Error("getClient() returned nil for existing client")
+	}
+
+	// 测试获取不存在的客户端
+	client3 := p.getClient("http://localhost:9999")
+	if client3 != nil {
+		t.Error("getClient() should return nil for non-existent client")
+	}
+}
+
+// TestProxyCache 测试代理缓存功能
+func TestProxyCache(t *testing.T) {
+	// 创建内存监听器作为后端服务器
+	ln := fasthttputil.NewInmemoryListener()
+	defer ln.Close()
+
+	requestCount := 0
+	go func() {
+		s := &fasthttp.Server{
+			Handler: func(ctx *fasthttp.RequestCtx) {
+				requestCount++
+				ctx.SetStatusCode(fasthttp.StatusOK)
+				ctx.SetBodyString("Cached response")
+				ctx.Response.Header.Set("X-Request-Count", string(rune(requestCount)))
+			},
+		}
+		s.Serve(ln)
+	}()
+
+	// 等待服务器启动
+	time.Sleep(50 * time.Millisecond)
+
+	addr := ln.Addr().String()
+
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
+		Cache: config.ProxyCacheConfig{
+			Enabled:              true,
+			MaxAge:               1 * time.Second,
+			CacheLock:            true,
+			StaleWhileRevalidate: 500 * time.Millisecond,
+		},
+	}
+
+	targets := []*loadbalance.Target{
+		{URL: "http://" + addr},
+	}
+	targets[0].Healthy.Store(true)
+
+	p, err := NewProxy(cfg, targets)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	// 验证缓存已初始化
+	if p.cache == nil {
+		t.Fatal("Proxy cache should be initialized when enabled")
+	}
+
+	// 测试缓存设置和获取
+	p.cache.Set("/api/test", []byte("test data"), map[string]string{"Content-Type": "text/plain"}, 200, 1*time.Second)
+
+	entry, found, stale := p.cache.Get("/api/test")
+	if !found {
+		t.Error("Cache should find existing entry")
+	}
+	if stale {
+		t.Error("Cache entry should not be stale immediately after setting")
+	}
+	if string(entry.Data) != "test data" {
+		t.Errorf("Cache entry data = %q, want %q", string(entry.Data), "test data")
+	}
+
+	// 测试缓存统计
+	stats := p.cache.Stats()
+	if stats.Entries != 1 {
+		t.Errorf("Cache stats.Entries = %d, want %d", stats.Entries, 1)
+	}
+
+	// 测试缓存清除
+	p.cache.Clear()
+	stats = p.cache.Stats()
+	if stats.Entries != 0 {
+		t.Errorf("Cache stats.Entries after Clear = %d, want %d", stats.Entries, 0)
+	}
+}
+
+// TestServeHTTP_WithPassiveHealthCheck 测试带有被动健康检查的请求转发
+func TestServeHTTP_WithPassiveHealthCheck(t *testing.T) {
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 100 * time.Millisecond, Read: 100 * time.Millisecond, Write: 100 * time.Millisecond},
+	}
+
+	targets := []*loadbalance.Target{
+		{URL: "http://127.0.0.1:59999"}, // 不存在的后端
+	}
+	targets[0].Healthy.Store(true)
+
+	p, err := NewProxy(cfg, targets)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	// 设置健康检查器
+	hcCfg := &config.HealthCheckConfig{
+		Interval: 10 * time.Second,
+		Path:     "/health",
+		Timeout:  5 * time.Second,
+	}
+	hc := NewHealthChecker(targets, hcCfg)
+	p.SetHealthChecker(hc)
+
+	// 创建测试请求
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+	ctx.Request.SetRequestURI("/api/test")
+
+	// 执行请求 - 应该会失败并触发被动健康检查
+	p.ServeHTTP(ctx)
+
+	// 验证返回502错误
+	if ctx.Response.StatusCode() != fasthttp.StatusBadGateway {
+		t.Errorf("ServeHTTP() status code = %d, want %d", ctx.Response.StatusCode(), fasthttp.StatusBadGateway)
+	}
+
+	// 验证目标已被标记为不健康
+	if targets[0].Healthy.Load() {
+		t.Error("Target should be marked unhealthy after failed request")
+	}
+}
+
 // 辅助函数
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr, 0))

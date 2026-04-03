@@ -408,3 +408,469 @@ func containsString(s, substr string) bool {
 	}
 	return false
 }
+
+// TestGetTLSConfig 测试 TLS 配置获取
+func TestGetTLSConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	// 生成自签名证书
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert: certPath,
+		Key:  keyPath,
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	// 验证返回非 nil 配置
+	tlsCfg := manager.GetTLSConfig()
+	if tlsCfg == nil {
+		t.Fatal("Expected non-nil TLS config")
+	}
+
+	// 验证 TLS 版本设置
+	if tlsCfg.MinVersion != tls.VersionTLS12 {
+		t.Errorf("Expected MinVersion TLS 1.2, got %v", tlsCfg.MinVersion)
+	}
+}
+
+// TestGetTLSConfig_WithProtocols 测试带协议配置的 TLS 配置获取
+func TestGetTLSConfig_WithProtocols(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert:      certPath,
+		Key:       keyPath,
+		Protocols: []string{"TLSv1.3"},
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	tlsCfg := manager.GetTLSConfig()
+	if tlsCfg == nil {
+		t.Fatal("Expected non-nil TLS config")
+	}
+
+	// 验证 TLS 1.3 设置
+	if tlsCfg.MinVersion != tls.VersionTLS13 {
+		t.Errorf("Expected MinVersion TLS 1.3, got %v", tlsCfg.MinVersion)
+	}
+	if tlsCfg.MaxVersion != tls.VersionTLS13 {
+		t.Errorf("Expected MaxVersion TLS 1.3, got %v", tlsCfg.MaxVersion)
+	}
+}
+
+// TestClose 测试 TLS 管理器关闭
+func TestClose(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert: certPath,
+		Key:  keyPath,
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+
+	// 第一次关闭
+	manager.Close()
+
+	// 验证多次调用 Close 是安全的
+	manager.Close()
+	manager.Close()
+}
+
+// TestNewTLSManager_Errors 测试错误场景
+func TestNewTLSManager_Errors(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     *config.SSLConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "nil config",
+			cfg:     nil,
+			wantErr: true,
+			errMsg:  "ssl config is nil",
+		},
+		{
+			name: "缺少证书路径",
+			cfg: &config.SSLConfig{
+				Key: "key.pem",
+			},
+			wantErr: true,
+			errMsg:  "certificate and key paths are required",
+		},
+		{
+			name: "缺少密钥路径",
+			cfg: &config.SSLConfig{
+				Cert: "cert.pem",
+			},
+			wantErr: true,
+			errMsg:  "certificate and key paths are required",
+		},
+		{
+			name: "无效证书文件",
+			cfg: &config.SSLConfig{
+				Cert: "/nonexistent/cert.pem",
+				Key:  "/nonexistent/key.pem",
+			},
+			wantErr: true,
+			errMsg:  "failed to load certificate",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewTLSManager(tt.cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewTLSManager() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.errMsg != "" {
+				if !containsString(err.Error(), tt.errMsg) {
+					t.Errorf("NewTLSManager() error = %v, want errMsg containing %v", err, tt.errMsg)
+				}
+			}
+		})
+	}
+}
+
+// TestNewTLSManager_InvalidCipher 测试无效加密套件
+func TestNewTLSManager_InvalidCipher(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert:    certPath,
+		Key:     keyPath,
+		Ciphers: []string{"TLS_UNKNOWN_CIPHER"},
+	}
+
+	_, err := NewTLSManager(cfg)
+	if err == nil {
+		t.Error("Expected error for invalid cipher suite")
+	}
+}
+
+// TestNewTLSManager_InsecureCipher 测试不安全加密套件
+func TestNewTLSManager_InsecureCipher(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert:    certPath,
+		Key:     keyPath,
+		Ciphers: []string{"TLS_ECDHE_RSA_WITH_RC4_128_SHA"},
+	}
+
+	_, err := NewTLSManager(cfg)
+	if err == nil {
+		t.Error("Expected error for insecure cipher suite")
+	}
+}
+
+// TestNewMultiTLSManager 测试多证书 TLS 管理器
+func TestNewMultiTLSManager(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	configs := map[string]*config.SSLConfig{
+		"example.com": {
+			Cert: certPath,
+			Key:  keyPath,
+		},
+	}
+
+	manager, err := NewMultiTLSManager(configs, nil)
+	if err != nil {
+		t.Fatalf("NewMultiTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	// 验证配置已加载
+	cfg := manager.GetTLSConfigForHost("example.com")
+	if cfg == nil {
+		t.Fatal("Expected non-nil config for example.com")
+	}
+}
+
+// TestNewMultiTLSManager_EmptyConfigs 测试空配置
+func TestNewMultiTLSManager_EmptyConfigs(t *testing.T) {
+	_, err := NewMultiTLSManager(map[string]*config.SSLConfig{}, nil)
+	if err == nil {
+		t.Error("Expected error for empty configs")
+	}
+}
+
+// TestNewMultiTLSManager_NilConfig 测试 nil 配置项
+func TestNewMultiTLSManager_NilConfig(t *testing.T) {
+	configs := map[string]*config.SSLConfig{
+		"example.com": nil,
+	}
+
+	_, err := NewMultiTLSManager(configs, nil)
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+}
+
+// TestGetCertificate 测试证书获取回调
+func TestGetCertificate(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	configs := map[string]*config.SSLConfig{
+		"example.com": {
+			Cert: certPath,
+			Key:  keyPath,
+		},
+	}
+
+	manager, err := NewMultiTLSManager(configs, nil)
+	if err != nil {
+		t.Fatalf("NewMultiTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	getCert := manager.GetCertificate()
+	if getCert == nil {
+		t.Fatal("Expected non-nil GetCertificate function")
+	}
+
+	// 测试获取存在的证书
+	testHello := &tls.ClientHelloInfo{
+		ServerName: "example.com",
+	}
+	certResult, err := getCert(testHello)
+	if err != nil {
+		t.Errorf("GetCertificate() error = %v", err)
+	}
+	if certResult == nil {
+		t.Error("Expected non-nil certificate")
+	}
+}
+
+// TestAddCertificate 测试添加证书
+func TestAddCertificate(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	// 创建带默认配置的管理器
+	cfg := &config.SSLConfig{
+		Cert: certPath,
+		Key:  keyPath,
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	// 测试添加新证书
+	err = manager.AddCertificate("newhost.com", cfg)
+	if err != nil {
+		t.Errorf("AddCertificate() error = %v", err)
+	}
+
+	// 验证新证书已添加
+	hostCfg := manager.GetTLSConfigForHost("newhost.com")
+	if hostCfg == nil {
+		t.Error("Expected config for newhost.com")
+	}
+}
+
+// TestAddCertificate_Error 测试添加证书错误
+func TestAddCertificate_Error(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert: certPath,
+		Key:  keyPath,
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	// 测试 nil 配置
+	err = manager.AddCertificate("test.com", nil)
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+}
+
+// TestRemoveCertificate 测试移除证书
+func TestRemoveCertificate(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	configs := map[string]*config.SSLConfig{
+		"example.com": {
+			Cert: certPath,
+			Key:  keyPath,
+		},
+	}
+
+	// 创建一个默认配置
+	defaultCfg := &config.SSLConfig{
+		Cert: certPath,
+		Key:  keyPath,
+	}
+
+	manager, err := NewMultiTLSManager(configs, defaultCfg)
+	if err != nil {
+		t.Fatalf("NewMultiTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	// 移除证书
+	manager.RemoveCertificate("example.com")
+
+	// 验证证书已移除（应返回默认配置）
+	cfg := manager.GetTLSConfigForHost("example.com")
+	if cfg == nil {
+		t.Error("Expected default config after removal")
+	}
+}
+
+// TestGetOCSPStatus_NoManager 测试无 OCSP 管理器时的状态
+func TestGetOCSPStatus_NoManager(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert:         certPath,
+		Key:          keyPath,
+		OCSPStapling: false, // 禁用 OCSP
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	status := manager.GetOCSPStatus()
+	if status == nil {
+		t.Error("Expected non-nil status map")
+	}
+	if len(status) != 0 {
+		t.Errorf("Expected empty status, got %d entries", len(status))
+	}
+}
