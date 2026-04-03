@@ -31,6 +31,10 @@
 | 23 | [特殊功能模块](./23-nginx-special-modules.md) | WebDAV/图像过滤/FLV/MP4/HLS 流媒体/XSLT 转换 |
 | 24 | [核心与事件模块](./24-nginx-core-events.md) | worker_processes/events/epoll/kqueue/连接数计算 |
 | 25 | [内置变量速查表](./25-nginx-variables-reference.md) | HTTP/Stream/SSL/Upstream 变量完整列表（150+个） |
+| 26 | [Lua 模块深度指南](./26-nginx-lua-guide.md) | OpenResty、ngx_lua 指令、共享字典、cosocket API |
+| 27 | [安全深度指南](./27-nginx-security-deep-dive.md) | WAF/ModSecurity、DDoS 防护、OWASP Top 10、安全头部 |
+| 28 | [API 网关配置](./28-nginx-api-gateway.md) | API 路由设计、JWT 验证、限流配额、版本控制 |
+| 29 | [动态配置与服务发现](./29-nginx-dynamic-config.md) | 动态 upstream、etcd/Consul、dyups、nginx-unit |
 
 ---
 
@@ -63,6 +67,15 @@
 
 ### 扩展与第三方
 - [第三方扩展模块](./22-nginx-third-party-modules.md) - NJS, Lua, Brotli, RTMP 等
+- [Lua 模块深度指南](./26-nginx-lua-guide.md) - OpenResty、ngx_lua、cosocket
+
+### 安全深度
+- [安全与访问控制](./09-nginx-security.md) - 综合安全配置
+- [安全深度指南](./27-nginx-security-deep-dive.md) - WAF、DDoS、OWASP
+
+### API 与动态配置
+- [API 网关配置](./28-nginx-api-gateway.md) - API 路由、JWT、限流配额
+- [动态配置与服务发现](./29-nginx-dynamic-config.md) - 动态 upstream、etcd/Consul
 
 ### 参考手册
 - [内置变量速查表](./25-nginx-variables-reference.md) - 150+ 个变量完整列表
