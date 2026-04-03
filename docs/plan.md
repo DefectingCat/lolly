@@ -1850,18 +1850,615 @@ Phase 8:
 
 ---
 
+## 第九阶段：HTTP/3 支持与性能优化扩展
+
+### 目标
+
+实现 HTTP/3 (QUIC) 协议支持，扩展负载均衡算法和限流机制，提升项目协议完整性和性能优化能力。
+
+### 背景分析
+
+通过与 nginx 功能对比分析，发现以下功能缺失：
+
+| 功能 | 当前状态 | 优先级 | 说明 |
+|------|----------|--------|------|
+| HTTP/3 (QUIC) | ❌ 未实现 | P0 | 新一代 HTTP 协议，性能提升 20-30% |
+| 一致性哈希负载均衡 | ❌ 未实现 | P1 | 缓存代理场景关键功能 |
+| gzip_static 预压缩 | ❌ 未实现 | P2 | 静态资源优化，减少 CPU 开销 |
+| 滑动窗口限流 | ❌ 未实现 | P2 | 更精确的限流算法 |
+
+### 技术选型
+
+**HTTP/3 库**：使用 [quic-go](https://github.com/quic-go/quic-go)。
+
+**选择理由**：
+- **官方支持**：Go 生态系统中最成熟的 QUIC 实现
+- **HTTP/3 完整实现**：支持 http3.Server，与标准库接口兼容
+- **活跃维护**：定期更新，跟进 IETF QUIC 规范
+- **性能优秀**：0-RTT、连接迁移等特性支持完善
+
+**版本要求**：`github.com/quic-go/quic-go v0.48.2`（支持 Go 1.21+）
+
+**关键挑战**：
+
+| 挑战 | 说明 | 解决方案 |
+|------|------|----------|
+| 接口不兼容 | fasthttp 与 quic-go 接口不同 | 编写适配层转换请求格式 |
+| Handler 复用 | 需让 HTTP/3 使用现有 handler 链 | adapter.go 将 http.Handler 转换为 fasthttp.RequestCtx |
+| TLS 配置共享 | QUIC 内置 TLS，需复用现有证书 | 从 ssl 模块获取 tls.Config |
+
+### 任务列表
+
+#### 9.1 HTTP/3 服务器核心 (P0)
+
+**实现**：
+
+```go
+// internal/http3/server.go
+
+import (
+    "github.com/quic-go/quic-go"
+    "github.com/quic-go/quic-go/http3"
+)
+
+// Server HTTP/3 服务器。
+type Server struct {
+    config     *config.HTTP3Config
+    http3Server *http3.Server
+    handler    fasthttp.RequestHandler
+    adapter    *Adapter
+}
+
+// Start 启动 HTTP/3 服务器。
+func (s *Server) Start() error {
+    // 1. 创建 UDP 监听器
+    listener, err := quic.ListenAddrEarly(s.config.Listen, s.tlsConfig, s.quicConfig)
+    if err != nil {
+        return fmt.Errorf("failed to listen QUIC: %w", err)
+    }
+
+    // 2. 创建 HTTP/3 服务器
+    s.http3Server = &http3.Server{
+        Handler: s.adapter.Wrap(s.handler),
+    }
+
+    return s.http3Server.Serve(listener)
+}
+
+// Stop 停止 HTTP/3 服务器。
+func (s *Server) Stop() error {
+    if s.http3Server != nil {
+        return s.http3Server.Close()
+    }
+    return nil
+}
+```
+
+**实现要点**：
+
+- 使用 `quic.ListenAddrEarly` 支持 0-RTT
+- 复用 `internal/ssl` 模块的 TLS 配置
+- 配置 `Alt-Svc` 响应头告知客户端可用 HTTP/3
+- 支持优雅关闭
+
+#### 9.2 HTTP/3 请求适配层 (P0)
+
+**实现**：
+
+```go
+// internal/http3/adapter.go
+
+// Adapter 将 fasthttp.RequestHandler 适配为 http.Handler。
+type Adapter struct{}
+
+// Wrap 包装 fasthttp handler 为 http.Handler。
+func (a *Adapter) Wrap(handler fasthttp.RequestHandler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // 1. 创建 fasthttp.RequestCtx
+        ctx := &fasthttp.RequestCtx{}
+
+        // 2. 转换请求
+        a.convertRequest(r, ctx)
+
+        // 3. 调用 fasthttp handler
+        handler(ctx)
+
+        // 4. 转换响应
+        a.convertResponse(ctx, w)
+    })
+}
+
+// convertRequest 将 net/http.Request 转换为 fasthttp.RequestCtx。
+func (a *Adapter) convertRequest(r *http.Request, ctx *fasthttp.RequestCtx) {
+    // 方法
+    ctx.Request.Header.SetMethod(r.Method)
+
+    // URI
+    ctx.Request.SetRequestURI(r.URL.String())
+
+    // 头部
+    for k, v := range r.Header {
+        for _, vv := range v {
+            ctx.Request.Header.Add(k, vv)
+        }
+    }
+
+    // 请求体
+    if r.Body != nil {
+        body, _ := io.ReadAll(r.Body)
+        ctx.Request.SetBody(body)
+    }
+
+    // 远程地址
+    ctx.SetRemoteAddr(r.RemoteAddr)
+}
+
+// convertResponse 将 fasthttp.RequestCtx 响应写入 http.ResponseWriter。
+func (a *Adapter) convertResponse(ctx *fasthttp.RequestCtx, w http.ResponseWriter) {
+    // 状态码
+    w.WriteHeader(ctx.Response.StatusCode())
+
+    // 头部
+    ctx.Response.Header.VisitAll(func(k, v []byte) {
+        w.Header().Add(string(k), string(v))
+    })
+
+    // 响应体
+    w.Write(ctx.Response.Body())
+}
+```
+
+**性能优化**：
+
+- 使用 sync.Pool 复用 RequestCtx 对象
+- 避免不必要的内存分配
+- 流式处理大请求体
+
+#### 9.3 一致性哈希负载均衡 (P1)
+
+**实现**：
+
+```go
+// internal/loadbalance/consistent_hash.go
+
+// ConsistentHash 一致性哈希负载均衡器。
+type ConsistentHash struct {
+    // virtualNodes 虚拟节点数，默认 150
+    virtualNodes int
+
+    // circle 哈希环，key 为哈希值，value 为目标
+    circle map[uint64]*Target
+
+    // sortedHashes 排序后的哈希值列表，用于二分查找
+    sortedHashes []uint64
+
+    // hashKey 哈希键来源
+    hashKey string // "ip", "uri", "header:xxx"
+
+    // mu 读写锁
+    mu sync.RWMutex
+}
+
+// Select 根据哈希键选择目标。
+func (c *ConsistentHash) Select(targets []*Target) *Target {
+    return c.SelectByKey(targets, "")
+}
+
+// SelectByKey 根据指定键选择目标。
+func (c *ConsistentHash) SelectByKey(targets []*Target, key string) *Target {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+
+    // 1. 计算键的哈希值
+    hash := c.hashKey(key)
+
+    // 2. 二分查找最近的节点
+    idx := sort.Search(len(c.sortedHashes), func(i int) bool {
+        return c.sortedHashes[i] >= hash
+    })
+
+    // 3. 环形回绕
+    if idx >= len(c.sortedHashes) {
+        idx = 0
+    }
+
+    return c.circle[c.sortedHashes[idx]]
+}
+
+// AddTarget 添加目标到哈希环。
+func (c *ConsistentHash) AddTarget(target *Target) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+
+    for i := 0; i < c.virtualNodes; i++ {
+        key := fmt.Sprintf("%s#%d", target.URL, i)
+        hash := c.hashKey(key)
+        c.circle[hash] = target
+        c.sortedHashes = append(c.sortedHashes, hash)
+    }
+
+    sort.Slice(c.sortedHashes, func(i, j int) bool {
+        return c.sortedHashes[i] < c.sortedHashes[j]
+    })
+}
+
+// hashKey 计算哈希值（使用 FNV-64a）。
+func (c *ConsistentHash) hashKey(key string) uint64 {
+    h := fnv.New64a()
+    h.Write([]byte(key))
+    return h.Sum64()
+}
+```
+
+**配置示例**：
+
+```yaml
+proxy:
+  - path: /api
+    targets:
+      - url: http://backend1:8080
+      - url: http://backend2:8080
+      - url: http://backend3:8080
+    load_balance: consistent_hash
+    hash_key: ip  # ip / uri / header:X-User-ID
+    virtual_nodes: 150
+```
+
+#### 9.4 gzip_static 预压缩支持 (P2)
+
+**实现**：
+
+```go
+// internal/middleware/compression/gzip_static.go
+
+// GzipStatic 预压缩文件支持。
+type GzipStatic struct {
+    // enabled 是否启用
+    enabled bool
+
+    // root 静态文件根目录
+    root string
+
+    // extensions 支持的扩展名
+    extensions []string // 默认 [".html", ".css", ".js", ".json", ".xml"]
+}
+
+// ServeFile 发送预压缩文件（如果存在）。
+func (g *GzipStatic) ServeFile(ctx *fasthttp.RequestCtx, filePath string) bool {
+    if !g.enabled {
+        return false
+    }
+
+    // 1. 检查客户端是否支持 gzip
+    if !bytes.Contains(ctx.Request.Header.Peek("Accept-Encoding"), []byte("gzip")) {
+        return false
+    }
+
+    // 2. 检查扩展名
+    if !g.matchExtension(filePath) {
+        return false
+    }
+
+    // 3. 检查预压缩文件是否存在
+    gzPath := filePath + ".gz"
+    if _, err := os.Stat(filepath.Join(g.root, gzPath)); err != nil {
+        return false
+    }
+
+    // 4. 发送预压缩文件
+    ctx.Response.Header.Set("Content-Encoding", "gzip")
+    ctx.Response.Header.Set("Vary", "Accept-Encoding")
+    fasthttp.ServeFile(ctx, filepath.Join(g.root, gzPath))
+    return true
+}
+```
+
+**配置示例**：
+
+```yaml
+compression:
+  gzip_static: on  # on / off
+  gzip_static_extensions: [".html", ".css", ".js", ".json", ".xml", ".svg"]
+```
+
+**与现有压缩中间件集成**：
+
+```go
+// compression.go 中添加预压缩检查
+func (m *CompressionMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+    return func(ctx *fasthttp.RequestCtx) {
+        // 1. 尝试发送预压缩文件
+        if m.gzipStatic.ServeFile(ctx, string(ctx.Path())) {
+            return
+        }
+
+        // 2. 回退到实时压缩
+        // ... 现有逻辑
+    }
+}
+```
+
+#### 9.5 滑动窗口限流算法 (P2)
+
+**实现**：
+
+```go
+// internal/middleware/security/sliding_window.go
+
+// SlidingWindowLimiter 滑动窗口限流器。
+type SlidingWindowLimiter struct {
+    // window 窗口大小
+    window time.Duration
+
+    // limit 窗口内最大请求数
+    limit int
+
+    // precise 是否使用精确模式
+    precise bool
+
+    // counters 窗口计数器，key 为窗口起始时间
+    counters map[int64]*windowCounter
+
+    // mu 读写锁
+    mu sync.RWMutex
+}
+
+// windowCounter 窗口计数器。
+type windowCounter struct {
+    count int64
+    // precise 模式下记录每个请求时间
+    timestamps []time.Time
+}
+
+// Allow 检查是否允许请求。
+func (s *SlidingWindowLimiter) Allow(key string) bool {
+    if s.precise {
+        return s.allowPrecise(key)
+    }
+    return s.allowApproximate(key)
+}
+
+// allowApproximate 近似滑动窗口（推荐，内存 O(1)）。
+func (s *SlidingWindowLimiter) allowApproximate(key string) bool {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    now := time.Now()
+    currentWindow := now.UnixNano() / int64(s.window)
+    prevWindow := currentWindow - 1
+
+    // 获取当前窗口计数
+    current, ok := s.counters[currentWindow]
+    if !ok {
+        current = &windowCounter{}
+        s.counters[currentWindow] = current
+    }
+
+    // 获取上一个窗口计数
+    prev, ok := s.counters[prevWindow]
+
+    // 计算滑动窗口内的请求数
+    // 公式：当前窗口计数 × 1.0 + 上一窗口计数 × (1 - 当前窗口已过比例)
+    var count int64
+    if ok {
+        elapsed := float64(now.UnixNano()%int64(s.window)) / float64(s.window)
+        count = current.count + int64(float64(prev.count)*(1-elapsed))
+    } else {
+        count = current.count
+    }
+
+    if count >= int64(s.limit) {
+        return false
+    }
+
+    current.count++
+    return true
+}
+
+// allowPrecise 精确滑动窗口（内存 O(n)，精确限流）。
+func (s *SlidingWindowLimiter) allowPrecise(key string) bool {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+
+    now := time.Now()
+    windowStart := now.Add(-s.window)
+
+    // 清理过期的时间戳
+    valid := make([]time.Time, 0, len(s.timestamps))
+    for _, t := range s.timestamps {
+        if t.After(windowStart) {
+            valid = append(valid, t)
+        }
+    }
+    s.timestamps = valid
+
+    // 检查是否超过限制
+    if len(s.timestamps) >= s.limit {
+        return false
+    }
+
+    s.timestamps = append(s.timestamps, now)
+    return true
+}
+```
+
+**配置示例**：
+
+```yaml
+security:
+  rate_limit:
+    request_rate: 100
+    burst: 20
+    algorithm: sliding_window  # token_bucket / sliding_window
+    sliding_window_mode: approximate  # approximate / precise
+```
+
+#### 9.6 配置扩展
+
+**新增配置结构**：
+
+```go
+// internal/config/config.go
+
+// HTTP3Config HTTP/3 配置。
+type HTTP3Config struct {
+    Enabled       bool          `yaml:"enabled"`         // 是否启用 HTTP/3
+    Listen        string        `yaml:"listen"`          // UDP 监听地址，如 ":443"
+    MaxStreams    int           `yaml:"max_streams"`     // 最大并发流
+    IdleTimeout   time.Duration `yaml:"idle_timeout"`    // 空闲超时
+    Enable0RTT    bool          `yaml:"enable_0rtt"`     // 启用 0-RTT
+}
+
+// LoadBalanceConfig 负载均衡扩展配置。
+type LoadBalanceConfig struct {
+    HashKey       string `yaml:"hash_key"`        // 一致性哈希键：ip / uri / header:xxx
+    VirtualNodes  int    `yaml:"virtual_nodes"`   // 虚拟节点数，默认 150
+}
+
+// CompressionConfig 扩展。
+type CompressionConfig struct {
+    // ... 现有字段
+    GzipStatic          bool     `yaml:"gzip_static"`            // 启用预压缩
+    GzipStaticExtensions []string `yaml:"gzip_static_extensions"` // 预压缩扩展名
+}
+
+// RateLimitConfig 扩展。
+type RateLimitConfig struct {
+    // ... 现有字段
+    Algorithm         string `yaml:"algorithm"`          // token_bucket / sliding_window
+    SlidingWindowMode string `yaml:"sliding_window_mode"` // approximate / precise
+}
+```
+
+#### 9.7 app.go 集成
+
+**修改文件**：`internal/app/app.go`
+
+**修改内容**：
+
+```go
+// Run 启动应用（修改后）。
+func (a *App) Run() error {
+    // 1. 启动 TCP Server (HTTP/1.1/2)
+    go func() {
+        if err := a.srv.Start(); err != nil {
+            logging.Error().Msgf("HTTP server error: %v", err)
+        }
+    }()
+
+    // 2. 如果启用 HTTP/3，启动 UDP Server
+    if a.config.HTTP3.Enabled {
+        go func() {
+            if err := a.http3Server.Start(); err != nil {
+                logging.Error().Msgf("HTTP/3 server error: %v", err)
+            }
+        }()
+    }
+
+    // 3. 如果配置了 Stream，启动 Stream Server
+    // ... 现有逻辑
+
+    return nil
+}
+
+// Shutdown 关闭应用（修改后）。
+func (a *App) Shutdown() error {
+    var errs []error
+
+    // 关闭 HTTP/3 Server
+    if a.http3Server != nil {
+        if err := a.http3Server.Stop(); err != nil {
+            errs = append(errs, err)
+        }
+    }
+
+    // 关闭 TCP Server
+    if err := a.srv.Stop(); err != nil {
+        errs = append(errs, err)
+    }
+
+    // ... 其他关闭逻辑
+
+    if len(errs) > 0 {
+        return fmt.Errorf("shutdown errors: %v", errs)
+    }
+    return nil
+}
+```
+
+### 验证方法
+
+```bash
+# 1. HTTP/3 测试
+# 启动服务器（配置 http3.enabled: true）
+./lolly -c config.yaml
+
+# 使用 curl 测试 HTTP/3
+curl --http3 https://localhost:8443/
+
+# 检查 Alt-Svc 头
+curl -I https://localhost:8443/
+# 应返回 Alt-Svc: h3=":443"
+
+# 2. 一致性哈希测试
+# 配置 load_balance: consistent_hash
+for i in {1..10}; do
+    curl http://localhost:8080/api/test
+done
+# 相同 IP 的请求应路由到同一后端
+
+# 3. gzip_static 测试
+# 创建预压缩文件
+gzip -k static/index.html
+
+# 测试请求
+curl -H "Accept-Encoding: gzip" -I http://localhost:8080/index.html
+# 应返回 Content-Encoding: gzip，且响应时间更快
+
+# 4. 滑动窗口限流测试
+# 配置 algorithm: sliding_window
+for i in {1..120}; do
+    curl http://localhost:8080/
+done
+# 应有部分请求返回 429
+
+# 5. 完整测试
+go test ./... -race
+go build ./...
+```
+
+### 文件依赖关系图
+
+```
+Phase 9:
+  internal/http3/server.go → internal/http3/adapter.go（新增）
+  internal/http3/server.go → internal/ssl/ssl.go（TLS 配置复用）
+  internal/app/app.go → internal/http3/server.go（集成）
+
+  internal/loadbalance/balancer.go → internal/loadbalance/consistent_hash.go（新增）
+
+  internal/middleware/compression/compression.go → internal/middleware/compression/gzip_static.go（新增）
+
+  internal/middleware/security/ratelimit.go → internal/middleware/security/sliding_window.go（新增）
+
+  internal/config/config.go → 扩展配置结构
+```
+
+---
+
 ## 总体进度追踪（更新）
 
-| 阶段    | 状态   | 主要功能                  |
-| ------- | ------ | ------------------------- |
-| Phase 1 | ✅ 完成 | 项目骨架、配置系统        |
-| Phase 2 | ✅ 完成 | HTTP 核心、静态文件、路由 |
-| Phase 3 | ✅ 完成 | 反向代理、负载均衡        |
-| Phase 4 | ✅ 完成 | SSL/TLS、安全控制         |
-| Phase 5 | ✅ 完成 | 重写、压缩、缓存、日志    |
-| Phase 6 | ✅ 完成 | Stream、性能优化、热升级  |
-| Phase 7 | ✅ 完成 | 功能完善                  |
-| Phase 8 | ✅ 完成 | 问题修复（WebSocket集成、UDP清理、热升级修复）|
+| 阶段    | 状态     | 主要功能                  |
+| ------- | -------- | ------------------------- |
+| Phase 1 | ✅ 完成  | 项目骨架、配置系统        |
+| Phase 2 | ✅ 完成  | HTTP 核心、静态文件、路由 |
+| Phase 3 | ✅ 完成  | 反向代理、负载均衡        |
+| Phase 4 | ✅ 完成  | SSL/TLS、安全控制         |
+| Phase 5 | ✅ 完成  | 重写、压缩、缓存、日志    |
+| Phase 6 | ✅ 完成  | Stream、性能优化、热升级  |
+| Phase 7 | ✅ 完成  | 功能完善                  |
+| Phase 8 | ✅ 完成  | 问题修复（WebSocket集成、UDP清理、热升级修复）|
+| Phase 9 | 🔄 计划中| HTTP/3、一致性哈希、gzip_static、滑动窗口限流 |
 
 **Phase 8 完成日期**：2026-04-03
 
@@ -1869,3 +2466,9 @@ Phase 8:
 1. WebSocket 代理集成 - `handleWebSocket` 现调用 `ProxyWebSocket`
 2. UDP Stream 冗余代码 - 删除 `udpListener` 类型及相关测试
 3. 热升级监听器继承 - 改用 `net.Listen` + `Serve` 模式，支持监听器继承
+
+**Phase 9 计划内容**：
+1. HTTP/3 (QUIC) 支持 - 使用 quic-go，双栈并行架构
+2. 一致性哈希负载均衡 - 支持可配置哈希键（ip/uri/header）
+3. gzip_static 预压缩 - 静态资源优化
+4. 滑动窗口限流 - 近似和精确两种模式

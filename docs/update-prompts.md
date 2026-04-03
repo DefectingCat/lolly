@@ -7,9 +7,13 @@
 
 /ultrawork 深度分析 https://nginx.org/en/docs/ nginx 的功能，@docs/ 目录下已经有一些分析过的文档了，看看有没有能完善的
 
+/ultrawork 深度分析下当前的配置文件，是否有配置文件描述了，但代码未实现的功能
+
 ## 单元测试
 
 /ultrawork 分析下当前测试覆盖率
+
+/plan 分析一个完善测试的方案
 
 ## 注释
 
