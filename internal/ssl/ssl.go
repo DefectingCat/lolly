@@ -132,31 +132,31 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 		issuers:      make(map[string]*x509.Certificate),
 	}
 
-	// Initialize OCSP stapling if enabled
+	// 初始化 OCSP Stapling（如果启用）
 	if cfg.OCSPStapling {
 		ocspMgr := NewOCSPManager(DefaultOCSPConfig())
 		manager.ocspManager = ocspMgr
 
-		// Parse certificate for OCSP
+		// 解析证书用于 OCSP
 		if len(cert.Certificate) > 0 {
 			parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
 			if err == nil && len(parsedCert.OCSPServer) > 0 {
-				// Store certificate for OCSP lookups
+				// 存储证书用于 OCSP 查询
 				serial := parsedCert.SerialNumber.String()
 				manager.certificates[serial] = parsedCert
 
-				// Try to parse issuer from certificate chain
+				// 尝试从证书链解析颁发者证书
 				if len(cert.Certificate) > 1 {
 					issuerCert, err := x509.ParseCertificate(cert.Certificate[1])
 					if err == nil {
 						manager.issuers[serial] = issuerCert
-						// Register certificate for OCSP stapling
-						// Errors are logged but don't prevent TLS from working
+						// 注册证书用于 OCSP Stapling
+						// 错误会记录日志但不会阻止 TLS 工作
 						ocspMgr.RegisterCertificate(parsedCert, issuerCert)
 					}
 				}
 
-				// Set up GetConfigForClient callback for OCSP stapling
+				// 设置 GetConfigForClient 回调用于 OCSP Stapling
 				tlsCfg.GetConfigForClient = manager.getConfigForClientWithOCSP
 			}
 		}
@@ -164,7 +164,7 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 		ocspMgr.Start()
 	}
 
-	// Set as default config
+	// 设置为默认配置
 	manager.defaultCfg = tlsCfg
 
 	return manager, nil

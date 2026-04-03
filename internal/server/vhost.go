@@ -43,14 +43,21 @@ type VirtualHost struct {
 	handler fasthttp.RequestHandler
 }
 
-// NewVHostManager 创建虚拟主机管理器
+// NewVHostManager 创建虚拟主机管理器。
+//
+// 返回值：
+//   - *VHostManager: 新创建的管理器实例
 func NewVHostManager() *VHostManager {
 	return &VHostManager{
 		hosts: make(map[string]*VirtualHost),
 	}
 }
 
-// AddHost 添加虚拟主机
+// AddHost 添加虚拟主机。
+//
+// 参数：
+//   - name: 虚拟主机名称（域名）
+//   - handler: 请求处理器
 func (v *VHostManager) AddHost(name string, handler fasthttp.RequestHandler) {
 	v.hosts[name] = &VirtualHost{
 		name:    name,
@@ -58,7 +65,10 @@ func (v *VHostManager) AddHost(name string, handler fasthttp.RequestHandler) {
 	}
 }
 
-// SetDefault 设置默认主机
+// SetDefault 设置默认主机。
+//
+// 参数：
+//   - handler: 默认主机的请求处理器
 func (v *VHostManager) SetDefault(handler fasthttp.RequestHandler) {
 	v.defaultHost = &VirtualHost{
 		name:    "default",
@@ -66,7 +76,10 @@ func (v *VHostManager) SetDefault(handler fasthttp.RequestHandler) {
 	}
 }
 
-// Handler 返回虚拟主机选择器
+// Handler 返回虚拟主机选择器。
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 根据 Host 头分发请求的处理器
 func (v *VHostManager) Handler() fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		host := stripPort(string(ctx.Host()))

@@ -157,13 +157,13 @@ func (p *GoroutinePool) Submit(ctx *fasthttp.RequestCtx, task Task) error {
 	case p.taskQueue <- task:
 		// 任务入队成功
 		// 如果有空闲 worker 不足，可能需要启动新 worker
-		if p.idleWorkers == 0 && p.workers < p.maxWorkers {
+		if atomic.LoadInt32(&p.idleWorkers) == 0 && atomic.LoadInt32(&p.workers) < p.maxWorkers {
 			p.startWorker()
 		}
 		return nil
 	default:
 		// 队列满，需要启动新 worker 或直接执行
-		if p.workers < p.maxWorkers {
+		if atomic.LoadInt32(&p.workers) < p.maxWorkers {
 			p.startWorker()
 			// 重新尝试入队
 			p.taskQueue <- task
@@ -180,7 +180,7 @@ func (p *GoroutinePool) Submit(ctx *fasthttp.RequestCtx, task Task) error {
 //
 // worker 从任务队列获取任务执行，空闲超时后自动退出（保持最小数量）。
 func (p *GoroutinePool) startWorker() {
-	p.workers++
+	atomic.AddInt32(&p.workers, 1)
 	p.wg.Add(1)
 
 	go func() {
@@ -201,12 +201,14 @@ func (p *GoroutinePool) startWorker() {
 				idleTimer.Reset(p.idleTimeout)
 
 				// 执行任务
-				task(nil) // 注意：fasthttp.RequestCtx 需要在任务中传入
+				// 注意：task 通过闭包捕获了 *fasthttp.RequestCtx，
+				// 所以参数传 nil 是安全的，handler 使用闭包中的 ctx
+				task(nil)
 
 			case <-idleTimer.C:
 				// 穴闲超时，退出 worker（保持最小数量）
 				atomic.AddInt32(&p.idleWorkers, -1)
-				if p.workers > p.minWorkers {
+				if atomic.LoadInt32(&p.workers) > p.minWorkers {
 					return
 				}
 				idleTimer.Reset(p.idleTimeout)

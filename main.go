@@ -1,3 +1,17 @@
+// Package main 提供 Lolly 服务器的入口程序。
+//
+// 该文件包含命令行参数解析和应用程序启动逻辑：
+//   - 配置文件路径指定（-c/--config）
+//   - 默认配置生成（--generate-config）
+//   - 版本信息显示（-v）
+//
+// 使用示例：
+//
+//	lolly -c /etc/lolly.yaml        # 使用指定配置启动
+//	lolly --generate-config -o config.yaml  # 生成默认配置
+//	lolly -v                        # 显示版本信息
+//
+// 作者：xfy
 package main
 
 import (

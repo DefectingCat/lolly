@@ -4,6 +4,7 @@
 //   - 静态文件请求处理
 //   - 目录索引文件支持
 //   - 文件缓存和零拷贝传输优化
+//   - 预压缩文件支持
 //
 // 主要用途：
 //
@@ -12,6 +13,7 @@
 // 注意事项：
 //   - 自动处理目录遍历攻击防护
 //   - 支持多索引文件（如 index.html、index.htm）
+//   - 支持预压缩 .gz 文件
 //
 // 作者：xfy
 package handler
@@ -24,6 +26,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/cache"
+	"rua.plus/lolly/internal/middleware/compression"
 )
 
 // StaticHandler 静态文件处理器。
@@ -41,6 +44,9 @@ type StaticHandler struct {
 
 	// fileCache 文件缓存实例（可选）
 	fileCache *cache.FileCache
+
+	// gzipStatic 预压缩文件支持（可选）
+	gzipStatic *compression.GzipStatic
 }
 
 // NewStaticHandler 创建静态文件处理器
@@ -55,6 +61,13 @@ func NewStaticHandler(root string, index []string, useSendfile bool) *StaticHand
 // SetFileCache 设置文件缓存
 func (h *StaticHandler) SetFileCache(fc *cache.FileCache) {
 	h.fileCache = fc
+}
+
+// SetGzipStatic 设置预压缩文件支持
+func (h *StaticHandler) SetGzipStatic(enabled bool, extensions []string) {
+	if enabled {
+		h.gzipStatic = compression.NewGzipStatic(true, h.root, extensions)
+	}
 }
 
 // Handle 处理静态文件请求
@@ -96,6 +109,14 @@ func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 
 // serveFile 提供文件服务，支持缓存和零拷贝传输
 func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, info os.FileInfo) {
+	// 尝试发送预压缩文件
+	if h.gzipStatic != nil {
+		relPath := strings.TrimPrefix(filePath, h.root)
+		if h.gzipStatic.ServeFile(ctx, relPath) {
+			return // 预压缩文件已发送
+		}
+	}
+
 	// 尝试从缓存获取
 	if h.fileCache != nil {
 		if entry, ok := h.fileCache.Get(filePath); ok {

@@ -94,65 +94,96 @@ func (l *leastConn) Select(targets []*Target) *Target {
 
 // Server TCP/UDP Stream 代理服务器。
 type Server struct {
-	listeners  map[string]net.Listener
+	// listeners TCP 监听器映射，按 upstream 名称索引
+	listeners map[string]net.Listener
+	// udpServers UDP 服务器映射
 	udpServers map[string]*udpServer
-	upstreams  map[string]*Upstream
-	connCount  int64 // 当前连接数
-	mu         sync.RWMutex
-	running    atomic.Bool
+	// upstreams 上游配置映射
+	upstreams map[string]*Upstream
+	// connCount 当前连接数
+	connCount int64
+	// mu 读写锁，保护并发访问
+	mu sync.RWMutex
+	// running 运行状态标志
+	running atomic.Bool
 }
 
 // Upstream Stream 上游配置。
 type Upstream struct {
-	name      string
-	targets   []*Target
-	balancer  Balancer
+	// name 上游名称
+	name string
+	// targets 目标服务器列表
+	targets []*Target
+	// balancer 负载均衡器
+	balancer Balancer
+	// healthChk 健康检查器
 	healthChk *HealthChecker
-	mu        sync.RWMutex
+	// mu 读写锁，保护并发访问
+	mu sync.RWMutex
 }
 
 // Target Stream 目标服务器。
 type Target struct {
-	addr    string
-	weight  int
+	// addr 目标地址（host:port）
+	addr string
+	// weight 权重
+	weight int
+	// healthy 健康状态
 	healthy atomic.Bool
-	conns   int64 // 当前连接数
+	// conns 当前连接数
+	conns int64
 }
 
 // HealthChecker Stream 健康检查器。
 type HealthChecker struct {
+	// upstream 所属上游
 	upstream *Upstream
+	// interval 检查间隔
 	interval time.Duration
-	timeout  time.Duration
-	stopCh   chan struct{}
+	// timeout 检查超时
+	timeout time.Duration
+	// stopCh 停止信号通道
+	stopCh chan struct{}
 }
 
 // Config Stream 配置。
 type Config struct {
-	Listen   string       // 监听地址
-	Protocol string       // tcp 或 udp
-	Upstream UpstreamSpec // 上游配置
+	// Listen 监听地址
+	Listen string
+	// Protocol 协议类型（tcp 或 udp）
+	Protocol string
+	// Upstream 上游配置
+	Upstream UpstreamSpec
 }
 
 // UpstreamSpec 上游配置规格。
 type UpstreamSpec struct {
-	Name        string
-	Targets     []TargetSpec
+	// Name 上游名称
+	Name string
+	// Targets 目标服务器列表
+	Targets []TargetSpec
+	// LoadBalance 负载均衡算法
 	LoadBalance string
+	// HealthCheck 健康检查配置
 	HealthCheck HealthCheckSpec
 }
 
 // TargetSpec 目标配置规格。
 type TargetSpec struct {
-	Addr   string
+	// Addr 目标地址（host:port）
+	Addr string
+	// Weight 权重
 	Weight int
 }
 
 // HealthCheckSpec 健康检查配置规格。
 type HealthCheckSpec struct {
+	// Interval 检查间隔
 	Interval time.Duration
-	Timeout  time.Duration
-	Enabled  bool
+	// Timeout 检查超时
+	Timeout time.Duration
+	// Enabled 是否启用
+	Enabled bool
 }
 
 // NewServer 创建 Stream 服务器。

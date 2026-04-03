@@ -1,4 +1,17 @@
-// Package loadbalance 负载均衡包为 Lolly HTTP 服务器提供负载均衡算法。
+// Package loadbalance 负载均衡包，提供多种负载均衡算法实现。
+//
+// 该文件包含负载均衡相关的核心逻辑，包括：
+//   - 轮询算法（Round Robin）
+//   - 加权轮询算法（Weighted Round Robin）
+//   - 最少连接算法（Least Connections）
+//   - IP 哈希算法（IP Hash）
+//   - 一致性哈希算法（Consistent Hash）
+//
+// 主要用途：
+//
+//	用于在后端服务器之间分发请求，提高服务可用性和性能。
+//
+// 作者：xfy
 package loadbalance
 
 // ValidAlgorithms 是支持的负载均衡算法列表。
