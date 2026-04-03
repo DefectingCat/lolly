@@ -14,6 +14,7 @@
 | `cache/` | 文件缓存模块（缓存存储、过期管理） |
 | `config/` | 配置解析、验证和默认值生成 |
 | `handler/` | HTTP 请求处理器（路由、静态文件、Sendfile） |
+| `http3/` | HTTP/3 (QUIC) 协议支持（fasthttp 适配、0-RTT） |
 | `loadbalance/` | 负载均衡策略（轮询、最少连接、健康检查） |
 | `logging/` | 日志系统（zerolog 初始化、访问日志） |
 | `middleware/` | 中间件框架（接口定义、链式组合） |

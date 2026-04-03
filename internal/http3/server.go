@@ -268,10 +268,10 @@ func (s *Server) GetAltSvcHeader() string {
 
 // Stats 返回服务器统计信息。
 type Stats struct {
-	Running   bool          // 是否运行中
-	Listen    string        // 监听地址
-	Enable0RTT bool         // 是否启用 0-RTT
-	MaxStreams int          // 最大并发流
+	Running    bool   // 是否运行中
+	Listen     string // 监听地址
+	Enable0RTT bool   // 是否启用 0-RTT
+	MaxStreams int    // 最大并发流
 }
 
 // GetStats 返回服务器统计信息。

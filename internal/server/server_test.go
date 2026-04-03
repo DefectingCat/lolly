@@ -1,9 +1,11 @@
 package server
 
 import (
+	"net"
 	"testing"
 	"time"
 
+	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
 )
 
@@ -277,5 +279,212 @@ func TestBuildMiddlewareChain_AllMiddlewares(t *testing.T) {
 	}
 	if chain == nil {
 		t.Error("Expected non-nil chain")
+	}
+}
+
+// TestTrackStats 测试请求统计追踪
+func TestTrackStats(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	// 初始统计应该为 0
+	if s.requests.Load() != 0 {
+		t.Error("Initial requests should be 0")
+	}
+	if s.bytesSent.Load() != 0 {
+		t.Error("Initial bytesSent should be 0")
+	}
+	if s.bytesReceived.Load() != 0 {
+		t.Error("Initial bytesReceived should be 0")
+	}
+
+	// 创建测试 handler
+	handler := func(ctx *fasthttp.RequestCtx) {
+		ctx.SetBodyString("response body")
+	}
+
+	// 包装 handler
+	wrappedHandler := s.trackStats(handler)
+
+	// 创建测试请求上下文
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+	ctx.Request.SetBody([]byte("request body"))
+
+	// 执行
+	wrappedHandler(ctx)
+
+	// 验证统计
+	if s.requests.Load() != 1 {
+		t.Errorf("Expected 1 request, got %d", s.requests.Load())
+	}
+
+	if s.bytesReceived.Load() != int64(len("request body")) {
+		t.Errorf("Expected bytesReceived %d, got %d", len("request body"), s.bytesReceived.Load())
+	}
+
+	if s.bytesSent.Load() != int64(len("response body")) {
+		t.Errorf("Expected bytesSent %d, got %d", len("response body"), s.bytesSent.Load())
+	}
+}
+
+// TestTrackStats_MultipleRequests 测试多次请求统计
+func TestTrackStats_MultipleRequests(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	handler := func(ctx *fasthttp.RequestCtx) {
+		ctx.SetBodyString("ok")
+	}
+
+	wrappedHandler := s.trackStats(handler)
+
+	// 执行多次请求
+	for i := 0; i < 10; i++ {
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Init(&fasthttp.Request{}, nil, nil)
+		wrappedHandler(ctx)
+	}
+
+	if s.requests.Load() != 10 {
+		t.Errorf("Expected 10 requests, got %d", s.requests.Load())
+	}
+}
+
+// TestGetListeners_Empty 测试空监听器列表
+func TestGetListeners_Empty(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	listeners := s.GetListeners()
+	if listeners != nil {
+		t.Errorf("Expected nil listeners, got %v", listeners)
+	}
+}
+
+// TestSetListeners 测试设置监听器
+func TestSetListeners(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	// 创建模拟监听器
+	listener1, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer listener1.Close()
+
+	listener2, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer listener2.Close()
+
+	listeners := []net.Listener{listener1, listener2}
+	s.SetListeners(listeners)
+
+	// 验证设置成功
+	got := s.GetListeners()
+	if len(got) != 2 {
+		t.Errorf("Expected 2 listeners, got %d", len(got))
+	}
+}
+
+// TestGetTLSConfig_NotConfigured 测试未配置 TLS
+func TestGetTLSConfig_NotConfigured(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	tlsConfig, err := s.GetTLSConfig()
+	if err == nil {
+		t.Error("Expected error for unconfigured TLS")
+	}
+	if tlsConfig != nil {
+		t.Error("Expected nil TLS config")
+	}
+	if err.Error() != "TLS not configured" {
+		t.Errorf("Expected error 'TLS not configured', got: %v", err)
+	}
+}
+
+// TestGetHandler 测试获取 handler
+func TestGetHandler(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	// 初始 handler 应该为 nil
+	handler := s.GetHandler()
+	if handler != nil {
+		t.Error("Expected nil handler initially")
+	}
+
+	// 设置一个 handler
+	testHandler := func(ctx *fasthttp.RequestCtx) {
+		ctx.SetBodyString("test")
+	}
+	s.handler = testHandler
+
+	// 验证获取成功
+	got := s.GetHandler()
+	if got == nil {
+		t.Error("Expected non-nil handler after setting")
+	}
+}
+
+// TestServer_Connections 测试连接统计
+func TestServer_Connections(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	// 初始连接数应该为 0
+	if s.connections.Load() != 0 {
+		t.Error("Initial connections should be 0")
+	}
+
+	// 增加
+	s.connections.Add(1)
+	if s.connections.Load() != 1 {
+		t.Errorf("Expected 1 connection, got %d", s.connections.Load())
+	}
+
+	// 减少
+	s.connections.Add(-1)
+	if s.connections.Load() != 0 {
+		t.Errorf("Expected 0 connections, got %d", s.connections.Load())
 	}
 }

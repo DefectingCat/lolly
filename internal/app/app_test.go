@@ -8,6 +8,10 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/logging"
+	"rua.plus/lolly/internal/server"
 )
 
 // captureStdout 捕获 stdout 输出，返回捕获的内容和恢复函数。
@@ -336,5 +340,200 @@ func TestPrintVersion(t *testing.T) {
 		if !strings.Contains(stdout, line) {
 			t.Errorf("版本输出应包含 %q, 实际输出: %q", line, stdout)
 		}
+	}
+}
+
+// TestHandleSignal_SIGQUIT 测试 SIGQUIT 信号处理（优雅停止）
+func TestHandleSignal_SIGQUIT(t *testing.T) {
+	// 创建一个简单的 App
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0", // 使用随机端口
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	// 创建 mock server
+	app.srv = server.New(app.cfg)
+
+	// 测试 SIGQUIT 处理
+	result := app.handleSignal(syscall.SIGQUIT)
+
+	if result != false {
+		t.Error("Expected handleSignal(SIGQUIT) to return false (stop)")
+	}
+}
+
+// TestHandleSignal_SIGTERM 测试 SIGTERM 信号处理（快速停止）
+func TestHandleSignal_SIGTERM(t *testing.T) {
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0",
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.srv = server.New(app.cfg)
+
+	result := app.handleSignal(syscall.SIGTERM)
+
+	if result != false {
+		t.Error("Expected handleSignal(SIGTERM) to return false (stop)")
+	}
+}
+
+// TestHandleSignal_SIGINT 测试 SIGINT 信号处理（快速停止）
+func TestHandleSignal_SIGINT(t *testing.T) {
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0",
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.srv = server.New(app.cfg)
+
+	result := app.handleSignal(syscall.SIGINT)
+
+	if result != false {
+		t.Error("Expected handleSignal(SIGINT) to return false (stop)")
+	}
+}
+
+// TestHandleSignal_SIGHUP 测试 SIGHUP 信号处理（重载配置）
+func TestHandleSignal_SIGHUP(t *testing.T) {
+	// 创建临时配置文件
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+	cfgContent := `
+server:
+  listen: ":8080"
+logging:
+  error:
+    level: "info"
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	app := NewApp(cfgPath)
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	result := app.handleSignal(syscall.SIGHUP)
+
+	if result != true {
+		t.Error("Expected handleSignal(SIGHUP) to return true (continue)")
+	}
+}
+
+// TestHandleSignal_SIGUSR1 测试 SIGUSR1 信号处理（重开日志）
+func TestHandleSignal_SIGUSR1(t *testing.T) {
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+		Logging: config.LoggingConfig{
+			Error: config.ErrorLogConfig{
+				Level: "info",
+			},
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	result := app.handleSignal(syscall.SIGUSR1)
+
+	if result != true {
+		t.Error("Expected handleSignal(SIGUSR1) to return true (continue)")
+	}
+}
+
+// TestHandleSignal_Unknown 测试未知信号处理
+func TestHandleSignal_Unknown(t *testing.T) {
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	// 使用一个未处理的信号
+	result := app.handleSignal(syscall.SIGCHLD)
+
+	if result != true {
+		t.Error("Expected handleSignal(unknown) to return true (continue)")
+	}
+}
+
+// TestShutdownHTTP3_NilServer 测试 HTTP/3 服务器为 nil 时关闭
+func TestShutdownHTTP3_NilServer(t *testing.T) {
+	app := NewApp("")
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	// 不应 panic
+	app.shutdownHTTP3()
+}
+
+// TestReopenLogs 测试重开日志
+func TestReopenLogs(t *testing.T) {
+	app := NewApp("")
+	app.cfg = &config.Config{
+		Logging: config.LoggingConfig{
+			Error: config.ErrorLogConfig{
+				Level: "info",
+			},
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	// 不应 panic
+	app.reopenLogs()
+}
+
+// TestReloadConfig_FileNotFound 测试重载不存在的配置
+func TestReloadConfig_FileNotFound(t *testing.T) {
+	app := NewApp("/nonexistent/config.yaml")
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	// 不应 panic，只是记录错误
+	app.reloadConfig()
+}
+
+// TestReloadConfig_Success 测试成功重载配置
+func TestReloadConfig_Success(t *testing.T) {
+	// 创建临时配置文件
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+	cfgContent := `
+server:
+  listen: ":9090"
+logging:
+  error:
+    level: "debug"
+`
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	app := NewApp(cfgPath)
+	app.cfg = &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+
+	app.reloadConfig()
+
+	// 验证配置已更新
+	if app.cfg.Server.Listen != ":9090" {
+		t.Errorf("Expected listen ':9090', got '%s'", app.cfg.Server.Listen)
 	}
 }

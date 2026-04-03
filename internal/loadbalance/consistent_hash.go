@@ -163,9 +163,9 @@ func (c *ConsistentHash) GetVirtualNodes() int {
 
 // Stats 返回一致性哈希统计信息。
 type ConsistentHashStats struct {
-	VirtualNodes  int // 虚拟节点数
-	CircleSize    int // 哈希环大小
-	SortedHashes  int // 排序哈希值数量
+	VirtualNodes int // 虚拟节点数
+	CircleSize   int // 哈希环大小
+	SortedHashes int // 排序哈希值数量
 }
 
 // GetStats 返回统计信息。
@@ -174,9 +174,9 @@ func (c *ConsistentHash) GetStats() ConsistentHashStats {
 	defer c.mu.RUnlock()
 
 	return ConsistentHashStats{
-		VirtualNodes:  c.virtualNodes,
-		CircleSize:    len(c.circle),
-		SortedHashes:  len(c.sortedHashes),
+		VirtualNodes: c.virtualNodes,
+		CircleSize:   len(c.circle),
+		SortedHashes: len(c.sortedHashes),
 	}
 }
 

@@ -40,9 +40,9 @@ type SlidingWindowLimiter struct {
 
 // windowCounter 窗口计数器。
 type windowCounter struct {
-	count     int64
+	count      int64
 	timestamps []time.Time // precise 模式下记录每个请求时间
-	mu        sync.Mutex
+	mu         sync.Mutex
 }
 
 // NewSlidingWindowLimiter 创建滑动窗口限流器。

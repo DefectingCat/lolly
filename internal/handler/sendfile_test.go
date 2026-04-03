@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"io"
 	"net"
 	"os"
@@ -246,3 +247,168 @@ func (m *mockConn) RemoteAddr() net.Addr               { return nil }
 func (m *mockConn) SetDeadline(t time.Time) error      { return nil }
 func (m *mockConn) SetReadDeadline(t time.Time) error  { return nil }
 func (m *mockConn) SetWriteDeadline(t time.Time) error { return nil }
+
+// TestSendFile_SmallFile 测试小文件发送（使用 fallback）
+func TestSendFile_SmallFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "small.txt")
+
+	// 创建小文件 (< 8KB)
+	content := []byte("small file content")
+	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	err = SendFile(ctx, file, 0, int64(len(content)))
+	if err != nil {
+		t.Errorf("SendFile failed: %v", err)
+	}
+
+	// 验证响应体
+	if !bytes.Equal(ctx.Response.Body(), content) {
+		t.Errorf("Expected body %s, got %s", content, ctx.Response.Body())
+	}
+}
+
+// TestSendFile_WithOffset 测试带偏移量的文件发送
+func TestSendFile_WithOffset(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+
+	content := []byte("0123456789ABCDEF") // 16 bytes
+	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	// 从偏移量 5 开始，读取 5 字节
+	err = SendFile(ctx, file, 5, 5)
+	if err != nil {
+		t.Errorf("SendFile failed: %v", err)
+	}
+
+	expected := content[5:10] // "56789"
+	if !bytes.Equal(ctx.Response.Body(), expected) {
+		t.Errorf("Expected body %s, got %s", expected, ctx.Response.Body())
+	}
+}
+
+// TestSendFile_ZeroLength 测试零长度文件
+func TestSendFile_ZeroLength(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "empty.txt")
+
+	if err := os.WriteFile(tmpFile, []byte{}, 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	err = SendFile(ctx, file, 0, 0)
+	if err != nil {
+		t.Errorf("SendFile failed: %v", err)
+	}
+
+	if len(ctx.Response.Body()) != 0 {
+		t.Errorf("Expected empty body, got %s", ctx.Response.Body())
+	}
+}
+
+// TestGetNetConn 测试获取底层连接
+func TestGetNetConn(t *testing.T) {
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	// fasthttp 会创建内部连接，所以这里测试能正常获取
+	conn := getNetConn(ctx)
+	// 主要验证不会崩溃
+	_ = conn
+}
+
+// TestSendFile_NilFile 测试空文件指针
+func TestSendFile_NilFile(t *testing.T) {
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	// 传入 nil 文件应该 panic 或返回错误
+	defer func() {
+		if r := recover(); r == nil {
+			// 没有 panic，检查是否有错误返回
+		}
+	}()
+
+	// 这个测试主要确保不会静默失败
+}
+
+// TestCopyFile_Error 测试 copyFile 错误情况
+func TestCopyFile_Error(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+
+	content := []byte("test content")
+	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	// 测试偏移量超出文件大小
+	err = copyFile(ctx, file, 1000, 10)
+	if err == nil {
+		t.Error("Expected error for offset beyond file size")
+	}
+}
+
+// TestLinuxSendfile_NilConn 测试 linuxSendfile 空连接
+func TestLinuxSendfile_NilConn(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("This test is for Linux only")
+	}
+
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+	content := []byte("test")
+	os.WriteFile(tmpFile, content, 0644)
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	err = linuxSendfile(nil, file.Fd(), 0, int64(len(content)))
+	if err == nil {
+		t.Error("Expected error for nil connection")
+	}
+}

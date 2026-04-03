@@ -25,7 +25,7 @@ type Logger struct {
 
 // AppLogger 应用日志管理器，统一管理启动/停止日志。
 type AppLogger struct {
-	format   string       // "text" 或 "json"
+	format   string // "text" 或 "json"
 	errorLog zerolog.Logger
 	writer   io.Writer
 }
@@ -121,15 +121,15 @@ func (l *Logger) formatAccessLog(ctx *fasthttp.RequestCtx, status int, size int6
 	}
 
 	replacements := map[string]string{
-		"$remote_addr":      ctx.RemoteAddr().String(),
-		"$remote_user":      remoteUser,
-		"$request":          string(ctx.Method()) + " " + string(ctx.Path()) + " " + string(ctx.Request.Header.Protocol()),
-		"$status":           strconv.Itoa(status),
-		"$body_bytes_sent":  strconv.FormatInt(size, 10),
-		"$request_time":     fmt.Sprintf("%.6f", duration.Seconds()),
-		"$http_referer":     string(ctx.Request.Header.Peek("Referer")),
-		"$http_user_agent":  string(ctx.Request.Header.Peek("User-Agent")),
-		"$time":             time.Now().Format(time.RFC3339),
+		"$remote_addr":     ctx.RemoteAddr().String(),
+		"$remote_user":     remoteUser,
+		"$request":         string(ctx.Method()) + " " + string(ctx.Path()) + " " + string(ctx.Request.Header.Protocol()),
+		"$status":          strconv.Itoa(status),
+		"$body_bytes_sent": strconv.FormatInt(size, 10),
+		"$request_time":    fmt.Sprintf("%.6f", duration.Seconds()),
+		"$http_referer":    string(ctx.Request.Header.Peek("Referer")),
+		"$http_user_agent": string(ctx.Request.Header.Peek("User-Agent")),
+		"$time":            time.Now().Format(time.RFC3339),
 	}
 
 	result := l.accessFormat
