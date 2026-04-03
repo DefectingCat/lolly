@@ -411,11 +411,160 @@ quic_retry on;
 quic_max_udp_payload_size 1200;
 ```
 
+### 6.6 http3_stream_buffer_size
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `http3_stream_buffer_size size;` | `64k` | `http`, `server` |
+
+设置 HTTP/3 流缓冲区大小，用于控制单个流的内存使用。
+
+```nginx
+# 大文件传输场景
+http3_stream_buffer_size 128k;
+```
+
+### 6.7 http3_max_concurrent_streams
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `http3_max_concurrent_streams number;` | `128` | `http`, `server` |
+
+设置单个 HTTP/3 连接中最大并发流数量。
+
+```nginx
+# 高并发场景
+http3_max_concurrent_streams 256;
+```
+
+### 6.8 http3_max_field_size
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `http3_max_field_size size;` | `4k` | `http`, `server` |
+
+设置 QPACK 压缩后的请求头字段最大大小。
+
+```nginx
+# 支持较大的 Cookie 头部
+http3_max_field_size 16k;
+```
+
+### 6.9 http3_max_table_size
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `http3_max_table_size size;` | `16k` | `http`, `server` |
+
+设置 QPACK 动态表最大大小，影响头部压缩效率。
+
+```nginx
+# 提升压缩率
+http3_max_table_size 32k;
+```
+
 ---
 
-## 7. 0-RTT 连接配置
+## 7. ngx_http_quic_module 指令详解
 
-### 7.1 ssl_early_data 指令
+### 7.1 quic_bpf
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `quic_bpf on \| off;` | `off` | `http`, `server` |
+
+启用 eBPF 加速 QUIC 连接路由，提升多 worker 场景性能。
+
+**要求**：Linux 5.6+ 内核和 eBPF 支持。
+
+```nginx
+# 高流量场景启用 eBPF 加速
+quic_bpf on;
+```
+
+### 7.2 quic_cc_algorithm
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `quic_cc_algorithm algorithm;` | `cubic` | `http`, `server` |
+
+设置 QUIC 拥塞控制算法。
+
+| 算法 | 说明 |
+|------|------|
+| `cubic` | 默认，适合大多数场景 |
+| `reno` | 经典 TCP 拥塞控制 |
+| `bbr` | Google BBR，高延迟网络推荐 |
+
+```nginx
+# 高延迟网络优化
+quic_cc_algorithm bbr;
+```
+
+### 7.3 quic_mtu
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `quic_mtu size;` | `—` | `http`, `server` |
+
+设置 QUIC MTU 大小，影响数据包分片。
+
+```nginx
+# 以太网标准 MTU
+quic_mtu 1200;
+
+# 数据中心内部网络
+quic_mtu 1400;
+```
+
+### 7.4 quic_active_connection_id_limit
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `quic_active_connection_id_limit number;` | `8` | `http`, `server` |
+
+设置活跃连接 ID 数量限制，影响连接迁移能力。
+
+```nginx
+# 增强连接迁移能力
+quic_active_connection_id_limit 16;
+```
+
+### 7.5 quic_stack
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `quic_stack ngx \| boringssl;` | `ngx` | `http`, `server` |
+
+选择 QUIC 协议栈实现。
+
+| 值 | 说明 |
+|------|------|
+| `ngx` | nginx 原生实现（推荐） |
+| `boringssl` | BoringSSL QUIC 实现 |
+
+```nginx
+quic_stack ngx;
+```
+
+### 7.6 quic_socket_options
+
+| 语法 | 默认值 | 上下文 |
+|------|--------|--------|
+| `quic_socket_options option ...;` | `—` | `http`, `server` |
+
+设置 QUIC socket 选项，用于优化 UDP 性能。
+
+```nginx
+# 优化 socket 缓冲区
+quic_socket_options receive_buffer=1m send_buffer=1m;
+```
+
+---
+
+## 9. 0-RTT 连接配置
+
+### 9.1 ssl_early_data 指令
 
 | 语法 | 默认值 | 上下文 |
 |------|--------|--------|
@@ -438,7 +587,7 @@ server {
 }
 ```
 
-### 7.2 0-RTT 安全注意事项
+### 9.2 0-RTT 安全注意事项
 
 ```nginx
 # 限制 0-RTT 请求（防止重放攻击）
@@ -463,9 +612,9 @@ server {
 
 ---
 
-## 8. HTTP/3 完整配置示例
+## 10. HTTP/3 完整配置示例
 
-### 8.1 基础配置
+### 10.1 基础配置
 
 ```nginx
 http {
@@ -493,7 +642,7 @@ http {
 }
 ```
 
-### 8.2 生产环境配置
+### 10.2 生产环境配置
 
 ```nginx
 http {
@@ -553,9 +702,9 @@ http {
 
 ---
 
-## 9. HTTP/1.1 vs HTTP/2 vs HTTP/3 对比
+## 11. HTTP/1.1 vs HTTP/2 vs HTTP/3 对比
 
-### 9.1 特性对比表
+### 11.1 特性对比表
 
 | 特性 | HTTP/1.1 | HTTP/2 | HTTP/3 |
 |------|----------|--------|--------|
@@ -570,7 +719,7 @@ http {
 | **握手延迟** | 高 | 中 | 低 |
 | **NAT 友好** | 是 | 是 | 需特殊处理 |
 
-### 9.2 性能对比
+### 11.2 性能对比
 
 | 场景 | HTTP/1.1 | HTTP/2 | HTTP/3 |
 |------|----------|--------|--------|
@@ -579,7 +728,7 @@ http {
 | **丢包网络** | 基准 | 轻微下降 | 显著提升 |
 | **移动网络切换** | 需重连 | 需重连 | 无缝迁移 |
 
-### 9.3 适用场景
+### 11.3 适用场景
 
 | 协议 | 推荐场景 |
 |------|----------|
@@ -589,9 +738,9 @@ http {
 
 ---
 
-## 10. 迁移指南和兼容性
+## 12. 迁移指南和兼容性
 
-### 10.1 渐进式迁移策略
+### 12.1 渐进式迁移策略
 
 ```nginx
 http {
@@ -622,7 +771,7 @@ http {
 }
 ```
 
-### 10.2 Alt-Svc 头部详解
+### 12.2 Alt-Svc 头部详解
 
 ```nginx
 # 基础声明
@@ -640,7 +789,7 @@ add_header Alt-Svc 'h3=":8443"; ma=3600' always;
 - `h3-29`：HTTP/3 草案版本（兼容旧客户端）
 - `ma`：最大有效期（秒）
 
-### 10.3 浏览器兼容性
+### 12.3 浏览器兼容性
 
 | 浏览器 | HTTP/2 | HTTP/3 |
 |--------|--------|--------|
@@ -649,7 +798,7 @@ add_header Alt-Svc 'h3=":8443"; ma=3600' always;
 | Safari 11+ | 支持 | 14+ 实验性，后续稳定 |
 | Edge 79+ | 支持 | 87+ 实验性，后续稳定 |
 
-### 10.4 回退策略
+### 12.4 回退策略
 
 ```nginx
 map $http_user_agent $supports_http3 {
@@ -674,9 +823,9 @@ server {
 
 ---
 
-## 11. 性能优化建议
+## 13. 性能优化建议
 
-### 11.1 HTTP/2 优化
+### 13.1 HTTP/2 优化
 
 ```nginx
 http {
@@ -713,7 +862,7 @@ http {
 }
 ```
 
-### 11.2 HTTP/3 优化
+### 13.2 HTTP/3 优化
 
 ```nginx
 http {
@@ -746,7 +895,7 @@ http {
 }
 ```
 
-### 11.3 内核参数优化
+### 13.3 内核参数优化
 
 ```bash
 # /etc/sysctl.conf
@@ -770,7 +919,7 @@ net.netfilter.nf_conntrack_udp_timeout_stream = 120
 sysctl -p
 ```
 
-### 11.4 监控指标
+### 13.4 监控指标
 
 ```nginx
 # 在日志中记录协议版本
@@ -784,7 +933,7 @@ server {
 }
 ```
 
-### 11.5 调试检查
+### 13.5 调试检查
 
 ```bash
 # 检查 HTTP/2 支持
@@ -805,9 +954,9 @@ curl -I https://www.example.com | grep -i alt-svc
 
 ---
 
-## 12. 常见问题排查
+## 14. 常见问题排查
 
-### 12.1 HTTP/2 问题
+### 14.1 HTTP/2 问题
 
 | 问题 | 原因 | 解决 |
 |------|------|------|
@@ -815,7 +964,7 @@ curl -I https://www.example.com | grep -i alt-svc
 | 大量 STREAM_CLOSED 错误 | 客户端提前关闭 | 正常行为，无需处理 |
 | 内存占用高 | 流数量过多 | 减少 http2_max_concurrent_streams |
 
-### 12.2 HTTP/3 问题
+### 14.2 HTTP/3 问题
 
 | 问题 | 原因 | 解决 |
 |------|------|------|
@@ -826,7 +975,7 @@ curl -I https://www.example.com | grep -i alt-svc
 
 ---
 
-## 13. 参考链接
+## 15. 参考链接
 
 - [NGINX HTTP/2 文档](https://nginx.org/en/docs/http/ngx_http_v2_module.html)
 - [NGINX HTTP/3 文档](https://nginx.org/en/docs/http/ngx_http_v3_module.html)

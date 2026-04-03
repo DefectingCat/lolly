@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/http3"
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/server"
 	"rua.plus/lolly/internal/stream"
@@ -55,7 +56,7 @@ var (
 
 // App 应用程序结构。
 //
-// 管理服务器的完整生命周期，包括 HTTP 服务器、Stream 服务器
+// 管理服务器的完整生命周期，包括 HTTP 服务器、HTTP/3 服务器、Stream 服务器
 // 和热升级管理器。
 type App struct {
 	// cfgPath 配置文件路径
@@ -66,6 +67,9 @@ type App struct {
 
 	// srv HTTP 服务器实例
 	srv *server.Server
+
+	// http3Srv HTTP/3 服务器实例（可选）
+	http3Srv *http3.Server
 
 	// streamSrv Stream 服务器实例（可选）
 	streamSrv *stream.Server
@@ -221,6 +225,26 @@ func (a *App) Run() int {
 		}()
 	}
 
+	// 创建并启动 HTTP/3 服务器（如果启用）
+	if a.cfg.HTTP3.Enabled && a.cfg.Server.SSL.Cert != "" {
+		tlsConfig, err := a.srv.GetTLSConfig()
+		if err != nil {
+			a.logger.Error().Err(err).Msg("获取 TLS 配置失败，跳过 HTTP/3")
+		} else {
+			a.http3Srv, err = http3.NewServer(&a.cfg.HTTP3, a.srv.GetHandler(), tlsConfig)
+			if err != nil {
+				a.logger.Error().Err(err).Msg("创建 HTTP/3 服务器失败")
+			} else {
+				go func() {
+					a.logger.LogStartup("HTTP/3 服务器启动中", map[string]string{"listen": a.cfg.HTTP3.Listen})
+					if err := a.http3Srv.Start(); err != nil {
+						a.logger.Error().Err(err).Msg("HTTP/3 服务器启动失败")
+					}
+				}()
+			}
+		}
+	}
+
 	// 创建升级管理器
 	a.upgradeMgr = server.NewUpgradeManager(a.srv)
 	if a.pidFile != "" {
@@ -276,12 +300,14 @@ func (a *App) handleSignal(sig os.Signal) bool {
 	case syscall.SIGQUIT:
 		// 优雅停止：等待请求完成
 		a.logger.LogSignal("SIGQUIT", fmt.Sprintf("优雅停止（等待 %v）", shutdownTimeout))
+		a.shutdownHTTP3()
 		a.srv.GracefulStop(shutdownTimeout)
 		return false
 
 	case syscall.SIGTERM, syscall.SIGINT:
 		// 快速停止
 		a.logger.LogSignal(sigName(sig.(syscall.Signal)), "停止服务器")
+		a.shutdownHTTP3()
 		a.srv.Stop()
 		return false
 
@@ -306,6 +332,15 @@ func (a *App) handleSignal(sig os.Signal) bool {
 	default:
 		a.logger.Info().Str("signal", sig.String()).Msg("收到未知信号")
 		return true
+	}
+}
+
+// shutdownHTTP3 关闭 HTTP/3 服务器。
+func (a *App) shutdownHTTP3() {
+	if a.http3Srv != nil {
+		if err := a.http3Srv.Stop(); err != nil {
+			a.logger.Error().Err(err).Msg("HTTP/3 服务器关闭失败")
+		}
 	}
 }
 
@@ -362,6 +397,7 @@ func (a *App) gracefulUpgrade() {
 	a.logger.LogStartup("热升级已启动，新进程正在接管", nil)
 
 	// 当前进程优雅停止
+	a.shutdownHTTP3()
 	a.srv.GracefulStop(shutdownTimeout)
 }
 

@@ -32,6 +32,7 @@ http {
 | `$remote_addr` | 客户端 IP 地址（文本格式） |
 | `zone=name:size` | 共享内存区域名称和大小 |
 | `rate=Nr/s` 或 `rate=Nr/m` | 限流速率（每秒/每分钟请求数） |
+| `sync` | 多 worker 间同步限流状态（1.15.2+） |
 
 **内存使用估算**：
 - 1MB 共享内存约可存储 16,000 个 IP 地址状态（使用 `$binary_remote_addr`）
@@ -86,7 +87,54 @@ server {
 
 **可选级别**：`info`, `notice`, `warn`, `error`
 
-### 1.5 burst 和 nodelay 参数详解
+### 1.5 limit_req_dry_run 试运行模式
+
+```
+语法: limit_req_dry_run on | off;
+默认: off
+上下文: http, server, location
+版本: 1.19.1+
+```
+
+**功能**: 试运行模式，只记录限流事件但不实际拒绝请求。用于测试限流配置效果。
+
+```nginx
+http {
+    limit_req_zone $binary_remote_addr zone=prod:10m rate=100r/s;
+    
+    server {
+        location /api/ {
+            limit_req zone=prod burst=200 nodelay;
+            limit_req_dry_run on;  # 试运行模式，不影响用户
+            
+            proxy_pass http://backend;
+        }
+    }
+}
+```
+
+**应用场景**:
+- 生产环境测试新限流策略
+- 验证限流阈值是否合理
+- 收集真实流量数据
+
+### 1.6 $limit_req 变量
+
+```
+变量: $limit_req
+功能: 存储请求因限流被延迟的时间（毫秒）
+```
+
+**用途**: 在日志中记录限流延迟，用于监控分析。
+
+```nginx
+log_format limit '$remote_addr - $limit_req ms - $request_uri';
+access_log /var/log/nginx/limit.log limit;
+```
+
+**说明**: 如果请求未被限流延迟，变量值为空。
+
+### 1.7 burst 和 nodelay 参数详解
 
 **令牌桶算法原理**：
 
@@ -132,7 +180,7 @@ limit_req zone=ip_limit burst=20 delay=10;
 - 第 11-20 个请求延迟处理
 - 超过 20 个请求返回 503
 
-### 1.6 多区域限流配置
+### 1.8 多区域限流配置
 
 **分层限流策略**：
 
@@ -174,6 +222,26 @@ http {
 - 任一区域超限即触发限流
 - 可实现更精细的控制策略
 
+### 1.9 动态试运行控制
+
+```nginx
+# 通过请求头控制试运行模式
+map $http_x_dry_run $dry_run_mode {
+    default off;
+    test    on;
+}
+
+server {
+    location /api/ {
+        limit_req zone=api burst=200;
+        limit_req_dry_run $dry_run_mode;
+        proxy_pass http://backend;
+    }
+}
+```
+
+**说明**: `limit_req_dry_run` 支持使用变量动态控制，可根据请求头、Cookie 等条件灵活开启/关闭试运行模式。
+
 ---
 
 ## 2. ngx_http_limit_conn_module (连接限制)
@@ -198,6 +266,20 @@ http {
 **与 limit_req_zone 的区别**：
 - 不需要 `rate` 参数（只计数，不限速）
 - 统计的是并发连接数，不是请求速率
+
+**sync 参数**（1.15.2+）：
+
+在多 worker 环境下（worker_processes > 1），默认各 worker 独立计数。sync 参数使所有 worker 共享计数，实现精确的全局限流。
+
+```nginx
+limit_conn_zone $binary_remote_addr zone=addr:10m sync;
+limit_req_zone $binary_remote_addr zone=one:10m rate=10r/s sync;
+```
+
+**适用场景**:
+- 多 worker 部署需要精确统计
+- 分布式限流场景
+- 高并发环境防止计数偏差
 
 ### 2.2 limit_conn 应用连接限制
 
@@ -231,7 +313,32 @@ server {
 }
 ```
 
-### 2.3 limit_conn_status 设置拒绝状态码
+### 2.3 limit_conn_dry_run 试运行模式
+
+```
+语法: limit_conn_dry_run on | off;
+默认: off
+上下文: http, server, location
+版本: 1.19.1+
+```
+
+**功能**: 连接限制试运行模式。
+
+```nginx
+http {
+    limit_conn_zone $binary_remote_addr zone=addr:10m;
+    
+    server {
+        location /download/ {
+            limit_conn addr 10;
+            limit_conn_dry_run on;
+            proxy_pass http://backend;
+        }
+    }
+}
+```
+
+### 2.4 limit_conn_status 设置拒绝状态码
 
 ```nginx
 server {
@@ -242,7 +349,7 @@ server {
 }
 ```
 
-### 2.4 limit_conn_log_level 设置日志级别
+### 2.5 limit_conn_log_level 设置日志级别
 
 ```nginx
 server {

@@ -355,7 +355,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString(fmt.Sprintf("  format: \"%s\"           # 全局日志格式（有效值: text, json），控制启动/停止日志格式\n", cfg.Logging.Format))
 	buf.WriteString("  access:\n")
 	buf.WriteString("    path: \"\"                   # 日志文件路径（空表示输出到 stdout）\n")
-	buf.WriteString(fmt.Sprintf("    format: \"%s\"  # 访问日志格式，近似 nginx combined\n", cfg.Logging.Access.Format))
+	buf.WriteString(fmt.Sprintf("    format: '%s'  # 访问日志格式，近似 nginx combined\n", cfg.Logging.Access.Format))
 	buf.WriteString("    # 支持变量: $remote_addr, $remote_user, $request, $status, $body_bytes_sent, $request_time, $http_referer, $http_user_agent, $time\n")
 	buf.WriteString("    # 特殊值 \"json\" 输出结构化 JSON\n")
 	buf.WriteString("  error:\n")

@@ -21,6 +21,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"sync/atomic"
@@ -149,6 +150,30 @@ func (s *Server) GetListeners() []net.Listener {
 //   - listeners: 要设置的监听器列表
 func (s *Server) SetListeners(listeners []net.Listener) {
 	s.listeners = listeners
+}
+
+// GetTLSConfig 获取 TLS 配置。
+//
+// 返回服务器的 TLS 配置，用于 HTTP/3 等需要 TLS 的协议。
+//
+// 返回值：
+//   - *tls.Config: TLS 配置对象
+//   - error: 未配置 TLS 或配置无效时返回错误
+func (s *Server) GetTLSConfig() (*tls.Config, error) {
+	if s.tlsManager == nil {
+		return nil, fmt.Errorf("TLS not configured")
+	}
+	return s.tlsManager.GetTLSConfig(), nil
+}
+
+// GetHandler 获取请求处理器。
+//
+// 返回服务器的请求处理器，用于 HTTP/3 等需要复用处理器的场景。
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 请求处理器
+func (s *Server) GetHandler() fasthttp.RequestHandler {
+	return s.handler
 }
 
 // buildMiddlewareChain 构建中间件链。

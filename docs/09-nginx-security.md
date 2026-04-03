@@ -41,7 +41,235 @@ http {
 
 ---
 
-## 2. HTTP 基础认证
+## 2. 外部认证 (ngx_http_auth_request_module)
+
+NGINX 的 `ngx_http_auth_request_module` 模块（从 NGINX 1.5.4+ 开始支持，需编译时启用）提供外部认证功能，允许通过发送子请求到认证服务来决定是否允许访问。
+
+### 2.1 指令说明
+
+| 指令 | 语法 | 默认值 | 上下文 |
+|------|------|--------|--------|
+| `auth_request` | `auth_request uri \| off;` | `off` | http, server, location |
+| `auth_request_set` | `auth_request_set $variable value;` | — | http, server, location |
+
+### 2.2 工作原理
+
+1. **NGINX 发送子请求**：当收到客户端请求时，NGINX 向指定的认证 URI 发送子请求
+2. **认证服务响应**：认证服务返回 HTTP 状态码（200 表示通过，401/403 表示拒绝）
+3. **结果判定**：
+   - 返回 200：NGINX 继续处理原请求
+   - 返回 401/403：NGINX 拒绝访问并返回相应状态码
+   - 其他状态码：视为错误，返回 500
+
+**流程图**：
+```
+Client → NGINX → auth_request (子请求)
+                    ↓
+              认证服务
+                    ↓
+              200 OK? → 是 → 处理原请求 → 后端服务
+                    ↓
+                   否
+                    ↓
+              返回 401/403 → Client
+```
+
+### 2.3 基础配置示例
+
+```nginx
+server {
+    listen 80;
+    server_name api.example.com;
+
+    location /protected/ {
+        auth_request /auth;
+        proxy_pass http://backend;
+    }
+
+    # 认证子请求 location
+    location = /auth {
+        internal;                    # 仅限内部子请求访问
+        proxy_pass http://auth-server/verify;
+        proxy_pass_request_body off; # 不传递请求体到认证服务
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header X-Client-IP $remote_addr;
+    }
+}
+```
+
+### 2.4 带变量提取的认证
+
+从认证服务响应中提取自定义头部到变量：
+
+```nginx
+server {
+    location /api/ {
+        auth_request /auth;
+        auth_request_set $auth_user $upstream_http_x_user;
+        auth_request_set $auth_role $upstream_http_x_role;
+
+        proxy_pass http://backend;
+        proxy_set_header X-User $auth_user;
+        proxy_set_header X-Role $auth_role;
+    }
+
+    location = /auth {
+        internal;
+        proxy_pass http://auth-service/verify;
+        proxy_pass_request_body off;
+        proxy_set_header Authorization $http_authorization;
+    }
+}
+```
+
+**可用变量**：
+- `$upstream_http_*`：从认证服务响应中提取任意 HTTP 头部
+- `$upstream_status`：认证服务返回的状态码
+- `$upstream_response_time`：认证响应时间
+
+### 2.5 JWT/OAuth2 集成示例
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name api.example.com;
+
+    location /api/ {
+        auth_request /auth_jwt;
+        auth_request_set $jwt_claims $upstream_http_x_jwt_claims;
+        auth_request_set $jwt_sub $upstream_http_x_jwt_sub;
+
+        proxy_pass http://api_backend;
+        proxy_set_header X-JWT-Claims $jwt_claims;
+        proxy_set_header X-User-Id $jwt_sub;
+
+        # 自定义 401 响应
+        error_page 401 = @unauthorized;
+    }
+
+    location = /auth_jwt {
+        internal;
+        proxy_pass http://jwt-validator/verify;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_pass_request_body off;
+    }
+
+    location @unauthorized {
+        default_type application/json;
+        return 401 '{"error":"Unauthorized","code":"INVALID_TOKEN"}';
+    }
+}
+```
+
+### 2.6 多级认证组合
+
+结合 `auth_request` 与 `auth_basic`：
+
+```nginx
+server {
+    location /admin/ {
+        # 先进行基础认证
+        auth_basic "Admin Access";
+        auth_basic_user_file /etc/nginx/.htpasswd;
+
+        # 再进行外部权限校验
+        auth_request /auth_admin;
+
+        proxy_pass http://admin_backend;
+    }
+
+    location = /auth_admin {
+        internal;
+        proxy_pass http://permission-service/check-admin;
+        proxy_set_header X-User $remote_user;
+    }
+}
+```
+
+### 2.7 错误处理
+
+```nginx
+server {
+    location /api/ {
+        auth_request /auth;
+
+        # 认证失败重定向到登录页
+        error_page 401 = @login;
+
+        proxy_pass http://backend;
+    }
+
+    location @login {
+        return 302 https://auth.example.com/login?redirect=$request_uri;
+    }
+
+    # 认证服务不可用时
+    error_page 500 = @auth_error;
+
+    location @auth_error {
+        return 503 '{"error":"Authentication service unavailable"}';
+    }
+}
+```
+
+### 2.8 应用场景
+
+| 场景 | 实现方式 |
+|------|----------|
+| **OAuth2/OIDC 集成** | 认证服务验证 access_token，返回用户信息 |
+| **JWT Token 验证** | 验证 JWT 签名和过期时间，提取 claims |
+| **统一认证网关** | 集中处理多个服务的认证逻辑 |
+| **权限分级验证** | 根据路径或资源进行细粒度权限检查 |
+| **多因素认证** | 组合多种认证方式（密码 + 短信/邮件） |
+| **API Key 验证** | 验证请求中的 API Key 有效性 |
+
+### 2.9 最佳实践
+
+**1. 认证服务高可用**
+```nginx
+upstream auth_backend {
+    server 192.168.1.10:8080;
+    server 192.168.1.11:8080 backup;
+    keepalive 32;
+}
+
+location = /auth {
+    internal;
+    proxy_pass http://auth_backend/verify;
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 5s;
+    proxy_read_timeout 5s;
+}
+```
+
+**2. 缓存认证结果**（减少重复验证）
+```nginx
+location /api/ {
+    auth_request /auth;
+
+    # 启用缓存（需配合 proxy_cache）
+    proxy_cache auth_cache;
+    proxy_cache_valid 200 1m;
+
+    proxy_pass http://backend;
+}
+```
+
+**3. 调试认证流程**
+```nginx
+# 记录认证请求日志
+log_format auth_log '$remote_addr - $time_local '
+                    'auth_status=$auth_request_status '
+                    'user=$auth_user';
+
+access_log /var/log/nginx/auth.log auth_log;
+```
+
+---
+
+## 3. HTTP 基础认证
 
 ### 配置认证
 
@@ -93,7 +321,7 @@ location /admin/ {
 
 ---
 
-## 3. 请求限制
+## 4. 请求限制
 
 ### 请求速率限制
 
@@ -168,9 +396,34 @@ http {
 }
 ```
 
+### Dry Run 模式（限流测试）
+
+NGINX 支持限流 dry run 模式，用于测试限流配置而不实际拒绝请求：
+
+```nginx
+server {
+    location /api/ {
+        limit_req zone=req_limit burst=20 nodelay;
+        limit_req_dry_run on;       # 请求不被拒绝，但记录日志
+
+        limit_conn conn_limit 10;
+        limit_conn_dry_run on;      # 连接不被拒绝，但记录日志
+
+        proxy_pass http://backend;
+    }
+}
+```
+
+**Dry Run 作用**：
+- 限流判断正常执行，但不返回 503/429 错误
+- 记录 `limiting requests/connections, dry run` 到错误日志
+- 用于评估限流阈值是否设置合理
+
+> **注意**：详细限流配置请参考 [20-nginx-rate-limiting.md](./20-nginx-rate-limiting.md)
+
 ---
 
-## 4. 安全头部
+## 5. 安全头部
 
 ### 基础安全头部
 
@@ -212,7 +465,7 @@ server {
 
 ---
 
-## 5. 防盗链
+## 6. 防盗链
 
 ### 基础防盗链
 
@@ -240,7 +493,7 @@ location ~* \.(jpg|jpeg|png|gif|webp|flv|mp4|swf)$ {
 
 ---
 
-## 6. SSL/TLS 安全
+## 7. SSL/TLS 安全
 
 ### 协议配置
 
@@ -278,7 +531,7 @@ openssl dhparam -out /etc/nginx/ssl/dhparam.pem 2048
 
 ---
 
-## 7. 防止常见攻击
+## 8. 防止常见攻击
 
 ### SQL 注入防护
 
@@ -337,7 +590,7 @@ http {
 
 ---
 
-## 8. 限制特定 User-Agent
+## 9. 限制特定 User-Agent
 
 ```nginx
 # 阻止恶意爬虫
@@ -365,7 +618,7 @@ if ($block_ua) {
 
 ---
 
-## 9. WAF 配置（ModSecurity）
+## 10. WAF 配置（ModSecurity）
 
 ### 安装 ModSecurity
 
@@ -392,7 +645,7 @@ modsecurity_rules '
 
 ---
 
-## 10. fail2ban 集成
+## 11. fail2ban 集成
 
 ### 创建 filter
 
@@ -419,7 +672,7 @@ maxretry = 10
 
 ---
 
-## 11. 安全配置检查清单
+## 12. 安全配置检查清单
 
 ### 基础安全
 
@@ -459,7 +712,7 @@ maxretry = 10
 
 ---
 
-## 12. 安全测试工具
+## 13. 安全测试工具
 
 ### 在线测试
 

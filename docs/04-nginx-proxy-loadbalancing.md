@@ -436,7 +436,207 @@ http {
 
 ---
 
-## 12. FastCGI 代理
+## 12. 高级代理指令
+
+### proxy_bind
+
+指定连接后端时使用的源地址，用于多网卡服务器选择出口IP。
+
+```nginx
+语法: proxy_bind address [transparent];
+默认: —
+上下文: http, server, location
+```
+
+```nginx
+proxy_bind $server_addr;              # 使用服务器IP
+proxy_bind 192.168.1.1 transparent;   # 透明代理（需要root权限）
+```
+
+### proxy_intercept_errors
+
+拦截后端错误响应，配合 error_page 自定义错误页面。
+
+```nginx
+语法: proxy_intercept_errors on | off;
+默认: off
+上下文: http, server, location
+```
+
+```nginx
+proxy_intercept_errors on;
+error_page 500 502 503 504 /50x.html;
+```
+
+### proxy_hide_header / proxy_pass_header
+
+控制后端响应头的传递行为：
+
+```nginx
+# 隐藏后端返回的特定头
+proxy_hide_header X-Powered-By;
+proxy_hide_header X-Runtime;
+
+# 传递被默认隐藏的头
+proxy_pass_header X-Accel-Redirect;
+proxy_pass_header X-Accel-Limit-Rate;
+```
+
+### proxy_ignore_headers
+
+忽略后端的特定响应头（如缓存控制），允许NGINX处理这些头：
+
+```nginx
+proxy_ignore_headers Cache-Control Expires X-Accel-Redirect X-Accel-Expires;
+```
+
+### proxy_cookie_* 系列
+
+修改后端返回的 Set-Cookie 头：
+
+```nginx
+# 修改域名
+proxy_cookie_domain localhost example.com;
+proxy_cookie_domain off;              # 禁用域名修改
+
+# 修改路径
+proxy_cookie_path /foo/ /bar/;
+proxy_cookie_path off;                # 禁用路径修改
+
+# 添加安全标志
+proxy_cookie_flags session httponly secure samesite=strict;
+proxy_cookie_flags * samesite=lax;    # 应用到所有cookie
+```
+
+### proxy_limit_rate
+
+限制从后端读取响应的传输速率：
+
+```nginx
+proxy_limit_rate 100k;                # 100KB/s
+```
+
+### proxy_request_buffering
+
+控制请求是否先完整缓冲再发送到后端：
+
+```nginx
+proxy_request_buffering on;           # 默认，完整缓冲
+proxy_request_buffering off;          # 流式传输，支持上传进度
+```
+
+### proxy_redirect
+
+修改后端返回的重定向头 Location 和 Refresh：
+
+```nginx
+proxy_redirect default;                                    # 使用默认替换
+proxy_redirect off;                                        # 禁用替换
+proxy_redirect http://localhost:8080/ http://$host/;       # 自定义替换
+proxy_redirect ~^http://([^/]+)/(.+)$ http://$host/$2;      # 使用正则
+```
+
+---
+
+## 13. SSL 客户端证书认证 (proxy_ssl_*)
+
+用于 mTLS 双向认证场景，NGINX 作为客户端向后端提供证书：
+
+```nginx
+location / {
+    proxy_pass https://backend.example.com;
+
+    # mTLS 双向认证
+    proxy_ssl_certificate /path/to/client.crt;
+    proxy_ssl_certificate_key /path/to/client.key;
+
+    # 验证后端证书
+    proxy_ssl_verify on;
+    proxy_ssl_trusted_certificate /path/to/ca.crt;
+    proxy_ssl_verify_depth 2;
+
+    # SSL协议和加密套件
+    proxy_ssl_protocols TLSv1.2 TLSv1.3;
+    proxy_ssl_ciphers HIGH:!aNULL;
+
+    # 会话复用
+    proxy_ssl_session_reuse on;
+
+    # SNI支持
+    proxy_ssl_server_name on;
+    proxy_ssl_name backend.example.com;
+}
+```
+
+| 指令 | 说明 | 默认值 |
+|------|------|--------|
+| `proxy_ssl_certificate` | 客户端证书路径 | — |
+| `proxy_ssl_certificate_key` | 客户端私钥路径 | — |
+| `proxy_ssl_verify` | 验证后端证书 | off |
+| `proxy_ssl_trusted_certificate` | 受信任CA证书 | — |
+| `proxy_ssl_verify_depth` | 验证深度 | 1 |
+| `proxy_ssl_protocols` | 启用的协议 | TLSv1.2 TLSv1.3 |
+| `proxy_ssl_ciphers` | 加密套件 | DEFAULT |
+| `proxy_ssl_session_reuse` | 会话复用 | on |
+| `proxy_ssl_name` | SNI名称 | — |
+
+---
+
+## 14. 高级缓存指令
+
+### proxy_cache_methods
+
+指定可缓存的请求方法：
+
+```nginx
+proxy_cache_methods GET HEAD POST;    # 可缓存 POST 请求
+```
+
+### proxy_cache_min_uses
+
+设置最小访问次数才开始缓存，避免缓存低频请求：
+
+```nginx
+proxy_cache_min_uses 3;               # 第3次访问才开始缓存
+```
+
+### proxy_cache_background_update
+
+后台异步更新过期缓存（类似 stale-while-revalidate）：
+
+```nginx
+proxy_cache_background_update on;
+```
+
+### proxy_cache_revalidate
+
+使用 If-Modified-Since 和 If-None-Match 重新验证缓存：
+
+```nginx
+proxy_cache_revalidate on;            # 减少数据传输
+```
+
+### proxy_cache_convert_head
+
+自动将 HEAD 请求转为 GET 以获取响应体：
+
+```nginx
+proxy_cache_convert_head on;          # 默认启用
+```
+
+### proxy_cache_purge
+
+支持 PURGE 方法清除缓存（需编译时启用）：
+
+```nginx
+location ~ /purge(/.*) {
+    proxy_cache_purge cache_zone $1;
+}
+```
+
+---
+
+## 15. FastCGI 代理
 
 ### 基础配置
 
@@ -449,22 +649,113 @@ location ~ \.php$ {
 }
 ```
 
-### 常用 FastCGI 指令
+### FastCGI 指令完整列表
 
-| 指令 | 说明 |
-|------|------|
-| `fastcgi_pass` | FastCGI 服务器地址 |
-| `fastcgi_index` | URI 以斜杠结尾时追加的文件名 |
-| `fastcgi_param` | 传递参数给 FastCGI 服务器 |
-| `fastcgi_split_path_info` | 分离 SCRIPT_NAME 和 PATH_INFO |
-| `fastcgi_connect_timeout` | 连接超时 |
-| `fastcgi_read_timeout` | 读取超时 |
-| `fastcgi_buffer_size` | 响应头缓冲区大小 |
-| `fastcgi_buffers` | 响应体缓冲区 |
+| 指令 | 语法 | 默认值 | 上下文 |
+|------|------|--------|--------|
+| `fastcgi_pass` | fastcgi_pass address; | — | location |
+| `fastcgi_index` | fastcgi_index name; | — | http, server, location |
+| `fastcgi_param` | fastcgi_param parameter value [if_not_empty]; | — | http, server, location |
+| `fastcgi_split_path_info` | fastcgi_split_path_info regex; | — | location |
+| `fastcgi_buffer_size` | fastcgi_buffer_size size; | 4k/8k | http, server, location |
+| `fastcgi_buffers` | fastcgi_buffers number size; | 8 4k/8k | http, server, location |
+| `fastcgi_busy_buffers_size` | fastcgi_busy_buffers_size size; | 8k/16k | http, server, location |
+| `fastcgi_temp_file_write_size` | fastcgi_temp_file_write_size size; | 8k/16k | http, server, location |
+| `fastcgi_temp_path` | fastcgi_temp_path path [level1 [level2 [level3]]]; | — | http, server, location |
+| `fastcgi_cache` | fastcgi_cache zone; | — | http, server, location |
+| `fastcgi_cache_key` | fastcgi_cache_key string; | — | http, server, location |
+| `fastcgi_cache_valid` | fastcgi_cache_valid [code...] time; | — | http, server, location |
+| `fastcgi_cache_methods` | fastcgi_cache_methods method...; | GET HEAD | http, server, location |
+| `fastcgi_cache_min_uses` | fastcgi_cache_min_uses number; | 1 | http, server, location |
+| `fastcgi_cache_bypass` | fastcgi_cache_bypass string...; | — | http, server, location |
+| `fastcgi_no_cache` | fastcgi_no_cache string...; | — | http, server, location |
+| `fastcgi_cache_use_stale` | fastcgi_cache_use_stale condition...; | — | http, server, location |
+| `fastcgi_cache_background_update` | fastcgi_cache_background_update on/off; | off | http, server, location |
+| `fastcgi_cache_revalidate` | fastcgi_cache_revalidate on/off; | off | http, server, location |
+| `fastcgi_cache_lock` | fastcgi_cache_lock on/off; | off | http, server, location |
+| `fastcgi_cache_lock_timeout` | fastcgi_cache_lock_timeout time; | 5s | http, server, location |
+| `fastcgi_cache_convert_head` | fastcgi_cache_convert_head on/off; | on | http, server, location |
+| `fastcgi_connect_timeout` | fastcgi_connect_timeout time; | 60s | http, server, location |
+| `fastcgi_send_timeout` | fastcgi_send_timeout time; | 60s | http, server, location |
+| `fastcgi_read_timeout` | fastcgi_read_timeout time; | 60s | http, server, location |
+| `fastcgi_send_lowat` | fastcgi_send_lowat size; | 0 | http, server, location |
+| `fastcgi_request_buffering` | fastcgi_request_buffering on/off; | on | http, server, location |
+| `fastcgi_intercept_errors` | fastcgi_intercept_errors on/off; | off | http, server, location |
+| `fastcgi_hide_header` | fastcgi_hide_header field; | — | http, server, location |
+| `fastcgi_pass_header` | fastcgi_pass_header field; | — | http, server, location |
+| `fastcgi_ignore_headers` | fastcgi_ignore_headers field...; | — | http, server, location |
+| `fastcgi_limit_rate` | fastcgi_limit_rate rate; | 0 | http, server, location |
+
+### FastCGI 缓存完整配置示例
+
+```nginx
+http {
+    # 缓存路径定义
+    fastcgi_cache_path /var/cache/nginx/php
+        levels=1:2
+        keys_zone=php:10m
+        max_size=100m
+        inactive=60m
+        use_temp_path=off;
+
+    server {
+        listen 80;
+        server_name example.com;
+
+        location ~ \.php$ {
+            # 启用缓存
+            fastcgi_cache php;
+            fastcgi_cache_key "$scheme$request_method$host$request_uri";
+
+            # 缓存有效期
+            fastcgi_cache_valid 200 302 1h;
+            fastcgi_cache_valid 404 1m;
+            fastcgi_cache_valid any 5m;
+
+            # 使用过期缓存
+            fastcgi_cache_use_stale error timeout updating http_500 http_503;
+
+            # 后台更新
+            fastcgi_cache_background_update on;
+
+            # 重新验证
+            fastcgi_cache_revalidate on;
+
+            # 缓存锁
+            fastcgi_cache_lock on;
+            fastcgi_cache_lock_timeout 5s;
+
+            # 绕过缓存条件
+            fastcgi_cache_bypass $cookie_nocache $arg_nocache;
+            fastcgi_no_cache $http_pragma $http_authorization;
+
+            # FastCGI 后端
+            fastcgi_pass unix:/run/php/php-fpm.sock;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+
+            # 超时设置
+            fastcgi_connect_timeout 5s;
+            fastcgi_send_timeout 60s;
+            fastcgi_read_timeout 60s;
+
+            # 缓冲配置
+            fastcgi_buffer_size 16k;
+            fastcgi_buffers 8 16k;
+            fastcgi_busy_buffers_size 32k;
+
+            # 错误处理
+            fastcgi_intercept_errors on;
+
+            include fastcgi_params;
+        }
+    }
+}
+```
 
 ---
 
-## 13. 内置变量
+## 16. 内置变量
 
 | 变量 | 说明 |
 |------|------|
@@ -474,7 +765,7 @@ location ~ \.php$ {
 
 ---
 
-## 14. 综合配置示例
+## 17. 综合配置示例
 
 ```nginx
 http {

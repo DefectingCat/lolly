@@ -30,6 +30,7 @@
 | 22 | [第三方扩展模块](./22-nginx-third-party-modules.md) | NJS/Lua/Brotli/Cache Purge/Headers More/RTMP/Sticky 模块 |
 | 23 | [特殊功能模块](./23-nginx-special-modules.md) | WebDAV/图像过滤/FLV/MP4/HLS 流媒体/XSLT 转换 |
 | 24 | [核心与事件模块](./24-nginx-core-events.md) | worker_processes/events/epoll/kqueue/连接数计算 |
+| 25 | [内置变量速查表](./25-nginx-variables-reference.md) | HTTP/Stream/SSL/Upstream 变量完整列表（150+个） |
 
 ---
 
@@ -62,6 +63,9 @@
 
 ### 扩展与第三方
 - [第三方扩展模块](./22-nginx-third-party-modules.md) - NJS, Lua, Brotli, RTMP 等
+
+### 参考手册
+- [内置变量速查表](./25-nginx-variables-reference.md) - 150+ 个变量完整列表
 
 ## 快速参考
 

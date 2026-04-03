@@ -175,6 +175,21 @@ func Error() *zerolog.Event {
 	return log.Error()
 }
 
+// Info 返回 Info 级别日志记录器（全局实例）。
+func Info() *zerolog.Event {
+	return log.Info()
+}
+
+// Warn 返回 Warn 级别日志记录器（全局实例）。
+func Warn() *zerolog.Event {
+	return log.Warn()
+}
+
+// Debug 返回 Debug 级别日志记录器（全局实例）。
+func Debug() *zerolog.Event {
+	return log.Debug()
+}
+
 // parseLevel 解析日志级别。
 func parseLevel(level string) zerolog.Level {
 	switch strings.ToLower(level) {

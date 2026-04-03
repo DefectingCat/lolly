@@ -49,7 +49,7 @@ worker_processes 8;
 worker_cpu_affinity 00000001 00000010 00000100 00001000 00010000 00100000 01000000 10000000;
 
 # 使用 auto 模式（自动绑定）
-worker_cpu affinity auto;
+worker_cpu_affinity auto;
 ```
 
 **位掩码说明**：
@@ -63,6 +63,31 @@ worker_cpu affinity auto;
 - 减少 CPU 缓存失效（cache miss）
 - 避免进程在不同核心间迁移
 - 提升缓存命中率
+
+---
+
+#### worker_priority
+
+设置 worker 进程的调度优先级（类似 nice 命令）。
+
+**语法**：`worker_priority number;`
+
+**默认值**：`worker_priority 0;`
+
+**上下文**：main
+
+```nginx
+# 高优先级（关键服务）
+worker_priority -5;
+
+# 低优先级（后台任务）
+worker_priority 10;
+```
+
+**说明**：
+- 负数表示更高优先级（-20 为最高）
+- 正数表示更低优先级（19 为最低）
+- 需要 root 权限才能设置为负值
 
 ---
 
@@ -338,7 +363,66 @@ include /etc/nginx/conf.d/stream.conf;
 
 ---
 
-### 1.7 系统相关指令
+### 1.7 动态模块加载指令
+
+#### load_module
+
+动态加载 NGINX 模块（.so 文件）。
+
+**语法**：`load_module file;`
+
+**默认值**：无
+
+**上下文**：main
+
+**版本**：1.9.11+
+
+```nginx
+# 加载动态模块
+load_module modules/ngx_http_geoip_module.so;
+load_module modules/ngx_stream_module.so;
+load_module modules/ngx_http_image_filter_module.so;
+
+worker_processes auto;
+events { ... }
+```
+
+**编译动态模块**：
+
+```bash
+./configure --with-compat --add-dynamic-module=/path/to/module
+make modules
+```
+
+**说明**：
+- `load_module` 指令必须在 `events` 和 `http` 块之前
+- 模块文件路径可以是绝对路径或相对于前缀目录的路径
+- 需要 `--with-compat` 选项确保模块兼容性
+
+---
+
+### 1.8 系统相关指令
+
+#### ssl_engine
+
+指定硬件 SSL 加速设备。
+
+**语法**：`ssl_engine device;`
+
+**默认值**：无
+
+**上下文**：main
+
+```nginx
+ssl_engine /dev/crypto;  # 使用硬件加密设备
+```
+
+**说明**：
+- 用于启用硬件 SSL 加速卡（如 OpenSSL 硬件引擎）
+- 需要系统支持相应的加密硬件设备
+- 可以显著提升 SSL/TLS 加密解密性能
+
+---
 
 #### timer_resolution
 
@@ -605,9 +689,90 @@ events {
 
 ---
 
-## 3. 连接处理方法详解
+### 2.5 哈希表优化指令
 
-### 3.1 epoll (Linux)
+#### types_hash_max_size 与 types_hash_bucket_size
+
+控制 MIME 类型哈希表的内存分配。
+
+**语法**：
+- `types_hash_max_size size;`
+- `types_hash_bucket_size size;`
+
+**默认值**：
+- `types_hash_max_size 1024;`
+- `types_hash_bucket_size 64;`
+
+**上下文**：http, server, location
+
+```nginx
+# 大量 MIME 类型时调整
+http {
+    types_hash_max_size 2048;
+    types_hash_bucket_size 128;
+}
+```
+
+**说明**：
+- `types_hash_max_size`：设置 MIME 类型哈希表的最大条目数
+- `types_hash_bucket_size`：设置每个哈希桶的大小（必须是 2 的幂）
+- 当配置大量自定义 MIME 类型时需要调整
+
+---
+
+#### variables_hash_max_size 与 variables_hash_bucket_size
+
+控制变量哈希表的大小。
+
+**语法**：
+- `variables_hash_max_size size;`
+- `variables_hash_bucket_size size;`
+
+**默认值**：
+- `variables_hash_max_size 1024;`
+- `variables_hash_bucket_size 64;`
+
+**上下文**：http
+
+```nginx
+# 大量自定义变量
+http {
+    variables_hash_max_size 2048;
+    variables_hash_bucket_size 128;
+}
+```
+
+**说明**：
+- 当使用大量 `map` 指令或自定义变量时需要增大
+- 如果启动时报 "could not build variables_hash" 错误，需要调整这些值
+
+---
+
+## 3. 事件模型深入对比
+
+| 模型 | 平台 | 内核要求 | FD 限制 | 触发模式 | 特性 |
+|------|------|----------|---------|----------|------|
+| epoll | Linux | 2.6+ | 内存限制 | ET/LT | EPOLLEXCLUSIVE (2.6.39+) |
+| kqueue | FreeBSD/macOS | 4.1+ | 内存限制 | ET | EVFILT_TIMER/SIGNAL/PROC |
+| eventport | Solaris | 10+ | 内存限制 | — | 多事件源支持 |
+| /dev/poll | Solaris | — | 内存限制 | — | 状态持久化 |
+| select | POSIX | — | 1024 | — | 不推荐生产使用 |
+| poll | POSIX | — | 内存限制 | — | 不推荐生产使用 |
+
+**epoll vs kqueue 性能对比**：
+
+- **epoll**：Linux 标准，ET 模式需要循环读取直到 EAGAIN，支持 `EPOLLEXCLUSIVE`（2.6.39+）解决惊群问题
+- **kqueue**：FreeBSD/macOS 标准，API 更优雅统一，支持定时器/信号/进程事件过滤，天然无惊群问题
+
+**触发模式说明**：
+- **ET（Edge Triggered，边缘触发）**：仅在状态变化时通知，需一次性处理所有数据
+- **LT（Level Triggered，水平触发）**：只要就绪就通知，不需要一次性读完
+
+---
+
+## 4. 连接处理方法详解
+
+### 4.1 epoll (Linux)
 
 `epoll` 是 Linux 2.6 内核引入的高效 I/O 多路复用机制。
 
@@ -659,7 +824,7 @@ NGINX 使用边缘触发模式，要求：
 
 ---
 
-### 3.2 kqueue (FreeBSD/macOS)
+### 4.2 kqueue (FreeBSD/macOS)
 
 `kqueue` 是 FreeBSD 引入的高性能事件通知机制，macOS 也支持。
 
@@ -706,7 +871,7 @@ NGINX 使用边缘触发模式，要求：
 
 ---
 
-### 3.3 /dev/poll (Solaris)
+### 4.3 /dev/poll (Solaris)
 
 Solaris 特有的 I/O 多路复用机制。
 
@@ -731,7 +896,7 @@ ioctl(dpfd, DP_POLL, &dvpoll);
 
 ---
 
-### 3.4 eventport (Solaris)
+### 4.4 eventport (Solaris)
 
 Solaris 10+ 引入的高性能事件端口机制。
 
@@ -756,7 +921,7 @@ port_get(port, &event, NULL);
 
 ---
 
-### 3.5 select/poll (通用)
+### 4.5 select/poll (通用)
 
 标准的 POSIX I/O 多路复用机制，几乎所有平台都支持。
 
@@ -793,9 +958,9 @@ poll(fds, nfds, timeout);
 
 ---
 
-## 4. 各平台最佳配置
+## 5. 各平台最佳配置
 
-### 4.1 Linux (2.6.39+)
+### 5.1 Linux (2.6.39+)
 
 ```nginx
 # /etc/nginx/nginx.conf
@@ -822,7 +987,7 @@ http {
 }
 ```
 
-### 4.2 FreeBSD
+### 5.2 FreeBSD
 
 ```nginx
 # /usr/local/etc/nginx/nginx.conf
@@ -838,7 +1003,7 @@ events {
 }
 ```
 
-### 4.3 macOS (开发环境)
+### 5.3 macOS (开发环境)
 
 ```nginx
 # /usr/local/etc/nginx/nginx.conf
@@ -853,7 +1018,7 @@ events {
 }
 ```
 
-### 4.4 Solaris
+### 5.4 Solaris
 
 ```nginx
 # /etc/nginx/nginx.conf
@@ -870,9 +1035,9 @@ events {
 
 ---
 
-## 5. 性能调优建议
+## 6. 性能调优建议
 
-### 5.1 Worker 进程优化
+### 6.1 Worker 进程优化
 
 ```nginx
 # 匹配 CPU 核心数
@@ -887,7 +1052,7 @@ worker_rlimit_nofile 65535;
 # daemon off;                 # 前台运行（Docker/systemd）
 ```
 
-### 5.2 事件处理优化
+### 6.2 事件处理优化
 
 ```nginx
 events {
@@ -907,7 +1072,7 @@ events {
 }
 ```
 
-### 5.3 内核参数优化
+### 6.3 内核参数优化
 
 ```bash
 # /etc/sysctl.conf
@@ -932,7 +1097,7 @@ fs.file-max = 2097152
 fs.nr_open = 2097152
 ```
 
-### 5.4 文件描述符限制
+### 6.4 文件描述符限制
 
 ```bash
 # /etc/security/limits.conf
@@ -947,15 +1112,15 @@ LimitNOFILE=65535
 
 ---
 
-## 6. 连接数计算公式
+## 7. 连接数计算公式
 
-### 6.1 基本公式
+### 7.1 基本公式
 
 ```
 总并发连接数 = worker_processes × worker_connections
 ```
 
-### 6.2 详细计算
+### 7.2 详细计算
 
 #### Web 服务器场景
 
@@ -983,7 +1148,7 @@ LimitNOFILE=65535
 # worker_connections = (50000 + 64) / 4 × 2 ≈ 25,032
 ```
 
-### 6.3 系统限制检查
+### 7.3 系统限制检查
 
 ```bash
 # 检查系统文件描述符限制
@@ -997,7 +1162,7 @@ ss -s
 cat /proc/$(pgrep -o nginx)/limits | grep "Max open files"
 ```
 
-### 6.4 配置示例
+### 7.4 配置示例
 
 ```nginx
 # 支持 100,000 并发连接的完整配置
@@ -1029,7 +1194,7 @@ http {
 }
 ```
 
-### 6.5 监控指标
+### 7.5 监控指标
 
 ```nginx
 # 启用 stub_status 监控
@@ -1058,9 +1223,9 @@ Reading: 6 Writing: 128 Waiting: 157 # 读/写/等待状态连接数
 
 ---
 
-## 7. 完整配置示例
+## 8. 完整配置示例
 
-### 7.1 高性能 Web 服务器
+### 8.1 高性能 Web 服务器
 
 ```nginx
 user nginx;
@@ -1117,7 +1282,7 @@ http {
 }
 ```
 
-### 7.2 高性能反向代理
+### 8.2 高性能反向代理
 
 ```nginx
 user nginx;
@@ -1180,9 +1345,9 @@ http {
 
 ---
 
-## 8. 常见问题排查
+## 9. 常见问题排查
 
-### 8.1 "too many open files" 错误
+### 9.1 "too many open files" 错误
 
 **原因**：
 - `worker_rlimit_nofile` 设置过低
@@ -1202,7 +1367,7 @@ sysctl -p
 ulimit -n
 ```
 
-### 8.2 "worker_connections are not enough" 错误
+### 9.2 "worker_connections are not enough" 错误
 
 **原因**：并发连接数超过 `worker_connections` 限制
 
@@ -1213,7 +1378,7 @@ events {
 }
 ```
 
-### 8.3 性能下降排查
+### 9.3 性能下降排查
 
 ```bash
 # 检查 worker 进程是否均匀分布
@@ -1229,7 +1394,7 @@ top -p $(pgrep -d',' nginx)
 cat /proc/$(pgrep -o nginx)/limits
 ```
 
-### 8.4 热升级失败
+### 9.4 热升级失败
 
 **原因**：
 - PID 文件路径错误

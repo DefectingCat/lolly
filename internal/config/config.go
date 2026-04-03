@@ -31,9 +31,19 @@ type Config struct {
 	Server      ServerConfig      `yaml:"server"`      // 单服务器模式配置
 	Servers     []ServerConfig    `yaml:"servers"`     // 多虚拟主机模式配置
 	Stream      []StreamConfig    `yaml:"stream"`      // TCP/UDP Stream 代理配置
+	HTTP3       HTTP3Config       `yaml:"http3"`       // HTTP/3 (QUIC) 配置
 	Logging     LoggingConfig     `yaml:"logging"`     // 日志配置
 	Performance PerformanceConfig `yaml:"performance"` // 性能配置
 	Monitoring  MonitoringConfig  `yaml:"monitoring"`  // 监控配置
+}
+
+// HTTP3Config HTTP/3 (QUIC) 配置。
+type HTTP3Config struct {
+	Enabled     bool          `yaml:"enabled"`      // 是否启用 HTTP/3
+	Listen      string        `yaml:"listen"`       // UDP 监听地址，如 ":443"
+	MaxStreams  int           `yaml:"max_streams"`  // 最大并发流
+	IdleTimeout time.Duration `yaml:"idle_timeout"` // 空闲超时
+	Enable0RTT  bool          `yaml:"enable_0rtt"`  // 启用 0-RTT
 }
 
 // ServerConfig 服务器配置，包含监听地址、静态文件、代理、SSL 等设置。
@@ -62,13 +72,15 @@ type StaticConfig struct {
 
 // ProxyConfig 反向代理配置，支持负载均衡和健康检查。
 type ProxyConfig struct {
-	Path        string            `yaml:"path"`         // 匹配路径前缀
-	Targets     []ProxyTarget     `yaml:"targets"`      // 后端目标列表
-	LoadBalance string            `yaml:"load_balance"` // 负载均衡算法：round_robin, weighted_round_robin, least_conn, ip_hash
-	HealthCheck HealthCheckConfig `yaml:"health_check"` // 健康检查配置
-	Timeout     ProxyTimeout      `yaml:"timeout"`      // 超时配置
-	Headers     ProxyHeaders      `yaml:"headers"`      // 请求/响应头修改
-	Cache       ProxyCacheConfig  `yaml:"cache"`        // 代理缓存配置
+	Path          string            `yaml:"path"`           // 匹配路径前缀
+	Targets       []ProxyTarget     `yaml:"targets"`        // 后端目标列表
+	LoadBalance   string            `yaml:"load_balance"`   // 负载均衡算法：round_robin, weighted_round_robin, least_conn, ip_hash, consistent_hash
+	HashKey       string            `yaml:"hash_key"`       // 一致性哈希键：ip, uri, header:X-Name
+	VirtualNodes  int               `yaml:"virtual_nodes"`  // 一致性哈希虚拟节点数，默认 150
+	HealthCheck   HealthCheckConfig `yaml:"health_check"`   // 健康检查配置
+	Timeout       ProxyTimeout      `yaml:"timeout"`        // 超时配置
+	Headers       ProxyHeaders      `yaml:"headers"`        // 请求/响应头修改
+	Cache         ProxyCacheConfig  `yaml:"cache"`          // 代理缓存配置
 }
 
 // ProxyTarget 后端目标配置。
@@ -141,10 +153,13 @@ type AccessConfig struct {
 
 // RateLimitConfig 速率限制配置。
 type RateLimitConfig struct {
-	RequestRate int    `yaml:"request_rate"` // 每秒请求数限制
-	Burst       int    `yaml:"burst"`        // 突发流量上限
-	ConnLimit   int    `yaml:"conn_limit"`   // 连接数限制
-	Key         string `yaml:"key"`          // 限流 key 来源：ip, header
+	RequestRate        int    `yaml:"request_rate"`         // 每秒请求数限制
+	Burst              int    `yaml:"burst"`                // 突发流量上限
+	ConnLimit          int    `yaml:"conn_limit"`           // 连接数限制
+	Key                string `yaml:"key"`                  // 限流 key 来源：ip, header
+	Algorithm          string `yaml:"algorithm"`            // 限流算法：token_bucket, sliding_window
+	SlidingWindowMode  string `yaml:"sliding_window_mode"`  // 滑动窗口模式：approximate, precise
+	SlidingWindow      int    `yaml:"sliding_window"`       // 滑动窗口大小（秒）
 }
 
 // AuthConfig 认证配置。
@@ -181,10 +196,12 @@ type RewriteRule struct {
 
 // CompressionConfig 响应压缩配置。
 type CompressionConfig struct {
-	Type    string   `yaml:"type"`     // 压缩类型：gzip, brotli, both
-	Level   int      `yaml:"level"`    // 压缩级别：1-9
-	MinSize int      `yaml:"min_size"` // 最小压缩大小（字节）
-	Types   []string `yaml:"types"`    // 可压缩的 MIME 类型
+	Type                string   `yaml:"type"`                  // 压缩类型：gzip, brotli, both
+	Level               int      `yaml:"level"`                 // 压缩级别：1-9
+	MinSize             int      `yaml:"min_size"`              // 最小压缩大小（字节）
+	Types               []string `yaml:"types"`                 // 可压缩的 MIME 类型
+	GzipStatic          bool     `yaml:"gzip_static"`           // 启用预压缩文件支持
+	GzipStaticExtensions []string `yaml:"gzip_static_extensions"` // 预压缩文件扩展名
 }
 
 // LoggingConfig 日志配置。
