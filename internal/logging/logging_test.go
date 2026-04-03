@@ -183,3 +183,251 @@ func TestLoggerDebug(t *testing.T) {
 		t.Error("Expected info message to be logged")
 	}
 }
+
+func TestLoggerWarn(t *testing.T) {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	logger := New(&config.LoggingConfig{Error: config.ErrorLogConfig{Level: "warn"}})
+
+	logger.Warn().Msg("warn message")
+	logger.Error().Msg("error message")
+
+	_ = w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+
+	output := buf.String()
+	if !strings.Contains(output, "warn message") {
+		t.Error("Expected warn message to be logged")
+	}
+	if !strings.Contains(output, "error message") {
+		t.Error("Expected error message to be logged")
+	}
+}
+
+func TestInit(t *testing.T) {
+	tests := []struct {
+		name   string
+		level  string
+		pretty bool
+	}{
+		{"debug pretty", "debug", true},
+		{"info not pretty", "info", false},
+		{"warn pretty", "warn", true},
+		{"error not pretty", "error", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			Init(tt.level, tt.pretty)
+			// 验证全局 logger 已初始化
+			Debug().Msg("test debug")
+			Info().Msg("test info")
+			Warn().Msg("test warn")
+			Error().Msg("test error")
+		})
+	}
+}
+
+func TestGlobalLogFunctions(t *testing.T) {
+	Init("debug", false)
+
+	// 测试全局日志函数
+	Debug().Str("key", "value").Msg("global debug")
+	Info().Str("key", "value").Msg("global info")
+	Warn().Str("key", "value").Msg("global warn")
+	Error().Str("key", "value").Msg("global error")
+}
+
+func TestLogAccessGlobal(t *testing.T) {
+	Init("info", false)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/global-test")
+	ctx.Request.Header.SetMethod("GET")
+
+	LogAccess(ctx, 200, 100, 50*time.Millisecond)
+}
+
+func TestFormatAccessLog(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "access.log")
+
+	cfg := &config.LoggingConfig{
+		Access: config.AccessLogConfig{
+			Path:   logPath,
+			Format: "$remote_addr - $remote_user [$time] $request $status $body_bytes_sent $request_time",
+		},
+	}
+
+	logger := New(cfg)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/formatted")
+	ctx.Request.Header.SetMethod("POST")
+	ctx.Request.Header.Set("Referer", "http://referer.com/")
+	ctx.Request.Header.Set("User-Agent", "test-agent")
+
+	logger.LogAccess(ctx, 200, 512, 100*time.Millisecond)
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Errorf("Failed to read log file: %v", err)
+		return
+	}
+
+	output := string(data)
+	if !strings.Contains(output, "POST /formatted") {
+		t.Error("Expected request in log output")
+	}
+	if !strings.Contains(output, "200") {
+		t.Error("Expected status in log output")
+	}
+	if !strings.Contains(output, "512") {
+		t.Error("Expected size in log output")
+	}
+}
+
+func TestFormatAccessLogWithUser(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "access.log")
+
+	cfg := &config.LoggingConfig{
+		Access: config.AccessLogConfig{
+			Path:   logPath,
+			Format: "$remote_addr - $remote_user",
+		},
+	}
+
+	logger := New(cfg)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/test")
+	ctx.Request.Header.SetMethod("GET")
+	ctx.SetUserValue("remote_user", "testuser")
+
+	logger.LogAccess(ctx, 200, 0, 0)
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Errorf("Failed to read log file: %v", err)
+		return
+	}
+
+	output := string(data)
+	if !strings.Contains(output, "testuser") {
+		t.Error("Expected remote_user in log output")
+	}
+}
+
+func TestNewAppLogger(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *config.LoggingConfig
+	}{
+		{"nil config", nil},
+		{"empty config", &config.LoggingConfig{}},
+		{"text format", &config.LoggingConfig{Format: "text"}},
+		{"json format", &config.LoggingConfig{Format: "json"}},
+		{"with error level", &config.LoggingConfig{Error: config.ErrorLogConfig{Level: "debug"}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := NewAppLogger(tt.cfg)
+			if logger == nil {
+				t.Error("Expected non-nil AppLogger")
+			}
+		})
+	}
+}
+
+func TestAppLoggerLogStartup(t *testing.T) {
+	tests := []struct {
+		name   string
+		format string
+		fields map[string]string
+	}{
+		{"text no fields", "text", nil},
+		{"text with fields", "text", map[string]string{"version": "1.0", "port": "8080"}},
+		{"json no fields", "json", nil},
+		{"json with fields", "json", map[string]string{"version": "1.0"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := NewAppLogger(&config.LoggingConfig{Format: tt.format})
+			logger.LogStartup("server started", tt.fields)
+		})
+	}
+}
+
+func TestAppLoggerLogShutdown(t *testing.T) {
+	tests := []struct {
+		name   string
+		format string
+	}{
+		{"text format", "text"},
+		{"json format", "json"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := NewAppLogger(&config.LoggingConfig{Format: tt.format})
+			logger.LogShutdown("server stopped")
+		})
+	}
+}
+
+func TestAppLoggerLogSignal(t *testing.T) {
+	tests := []struct {
+		name   string
+		format string
+		sig    string
+		action string
+	}{
+		{"text SIGTERM", "text", "SIGTERM", "正在关闭服务器"},
+		{"json SIGINT", "json", "SIGINT", "正在重新加载配置"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := NewAppLogger(&config.LoggingConfig{Format: tt.format})
+			logger.LogSignal(tt.sig, tt.action)
+		})
+	}
+}
+
+func TestAppLoggerMethods(t *testing.T) {
+	logger := NewAppLogger(&config.LoggingConfig{Format: "json", Error: config.ErrorLogConfig{Level: "debug"}})
+
+	logger.Info().Str("test", "value").Msg("app info")
+	logger.Error().Str("test", "value").Msg("app error")
+}
+
+func TestLoggerClose(t *testing.T) {
+	// 测试无文件情况
+	logger := New(nil)
+	if err := logger.Close(); err != nil {
+		t.Errorf("Unexpected error on Close: %v", err)
+	}
+
+	// 测试有文件情况
+	tmpDir := t.TempDir()
+	accessPath := filepath.Join(tmpDir, "access.log")
+	errorPath := filepath.Join(tmpDir, "error.log")
+
+	cfg := &config.LoggingConfig{
+		Access: config.AccessLogConfig{Path: accessPath},
+		Error:  config.ErrorLogConfig{Path: errorPath},
+	}
+
+	logger2 := New(cfg)
+	if err := logger2.Close(); err != nil {
+		t.Errorf("Unexpected error on Close: %v", err)
+	}
+}
