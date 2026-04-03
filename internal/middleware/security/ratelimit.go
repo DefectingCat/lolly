@@ -35,6 +35,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -603,13 +604,12 @@ func (m *connLimiterMiddleware) Process(next fasthttp.RequestHandler) fasthttp.R
 }
 
 // 连接数原子操作辅助函数
-// 连接数原子操作辅助函数
 func loadInt64(ptr *int64) int64 {
-	return *ptr // 生产环境应使用 sync/atomic
+	return atomic.LoadInt64(ptr)
 }
 
 func addInt64(ptr *int64, delta int64) {
-	*ptr += delta // 简化实现；生产环境应使用 atomic.AddInt64
+	atomic.AddInt64(ptr, delta)
 }
 
 // 验证接口实现

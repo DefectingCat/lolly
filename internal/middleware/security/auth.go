@@ -28,6 +28,7 @@
 package security
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -559,10 +560,11 @@ func HashPasswordBcrypt(password string, cost int) (string, error) {
 //   - string: Argon2id 哈希字符串
 //   - error: 生成失败时返回错误
 func HashPasswordArgon2id(password string, params argon2Params) (string, error) {
-	// 生成随机盐值
+	// 使用加密安全的随机数生成盐值
 	salt := make([]byte, params.saltLen)
-	// 注意：生产环境应使用 crypto/rand 生成盐值
-	// 此工具函数使用占位符方法
+	if _, err := rand.Read(salt); err != nil {
+		return "", fmt.Errorf("failed to generate salt: %w", err)
+	}
 
 	// 生成哈希
 	hash := argon2.IDKey([]byte(password), salt,

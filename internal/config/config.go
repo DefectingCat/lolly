@@ -146,9 +146,10 @@ type SecurityConfig struct {
 
 // AccessConfig IP 访问控制配置。
 type AccessConfig struct {
-	Allow   []string `yaml:"allow"`   // 允许的 IP/CIDR 列表
-	Deny    []string `yaml:"deny"`    // 拒绝的 IP/CIDR 列表
-	Default string   `yaml:"default"` // 默认动作：allow 或 deny
+	Allow          []string `yaml:"allow"`           // 允许的 IP/CIDR 列表
+	Deny           []string `yaml:"deny"`            // 拒绝的 IP/CIDR 列表
+	Default        string   `yaml:"default"`         // 默认动作：allow 或 deny
+	TrustedProxies []string `yaml:"trusted_proxies"` // 可信代理 CIDR 列表，用于 X-Forwarded-For 解析
 }
 
 // RateLimitConfig 速率限制配置。

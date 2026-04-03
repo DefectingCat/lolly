@@ -59,6 +59,9 @@ type AccessControl struct {
 	// defaultAction 默认操作，当无规则匹配时执行
 	defaultAction Action
 
+	// trustedProxies 可信代理 CIDR 列表，用于安全解析 X-Forwarded-For
+	trustedProxies []net.IPNet
+
 	// mu 保护并发访问的读写锁
 	mu sync.RWMutex
 }
@@ -98,6 +101,15 @@ func NewAccessControl(cfg *config.AccessConfig) (*AccessControl, error) {
 		ac.denyList = append(ac.denyList, *network)
 	}
 
+	// 解析可信代理列表
+	for _, cidr := range cfg.TrustedProxies {
+		network, err := parseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid trusted_proxy CIDR %s: %w", cidr, err)
+		}
+		ac.trustedProxies = append(ac.trustedProxies, *network)
+	}
+
 	// 设置默认操作
 	switch strings.ToLower(cfg.Default) {
 	case "allow", "":
@@ -130,7 +142,7 @@ func (ac *AccessControl) Name() string {
 //   - fasthttp.RequestHandler: 包装后的处理器
 func (ac *AccessControl) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
-		clientIP := getClientIP(ctx)
+		clientIP := ac.getClientIP(ctx)
 
 		// 检查访问权限
 		if !ac.Check(clientIP) {
@@ -287,37 +299,83 @@ func parseCIDR(cidr string) (*net.IPNet, error) {
 	return network, nil
 }
 
-// getClientIP 从请求上下文提取客户端 IP。
+// getClientIP 从请求上下文安全提取客户端 IP。
 //
-// 按优先级依次检查：X-Forwarded-For、X-Real-IP、RemoteAddr。
+// 仅当请求来自可信代理时，才解析 X-Forwarded-For 头部。
+// 使用右侧（最接近客户端）的非可信 IP 作为真实客户端 IP。
 //
 // 参数：
 //   - ctx: FastHTTP 请求上下文
 //
 // 返回值：
 //   - net.IP: 客户端 IP 地址，无法获取时返回 nil
-func getClientIP(ctx *fasthttp.RequestCtx) net.IP {
-	// 优先检查 X-Forwarded-For 头部
-	if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
-		ips := strings.Split(string(xff), ",")
-		if len(ips) > 0 {
-			ipStr := strings.TrimSpace(ips[0])
-			ip := net.ParseIP(ipStr)
-			if ip != nil {
-				return ip
+func (ac *AccessControl) getClientIP(ctx *fasthttp.RequestCtx) net.IP {
+	remoteIP := getRemoteAddrIP(ctx)
+
+	// 仅当配置了可信代理且请求来自可信代理时，才解析 X-Forwarded-For
+	if len(ac.trustedProxies) > 0 && remoteIP != nil {
+		isTrusted := false
+		for _, network := range ac.trustedProxies {
+			if network.Contains(remoteIP) {
+				isTrusted = true
+				break
+			}
+		}
+
+		if isTrusted {
+			// 使用右侧（最接近客户端）的非可信 IP
+			if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
+				ips := strings.Split(string(xff), ",")
+				for i := len(ips) - 1; i >= 0; i-- {
+					ipStr := strings.TrimSpace(ips[i])
+					if ip := net.ParseIP(ipStr); ip != nil {
+						// 检查该 IP 是否在可信代理列表中
+						trusted := false
+						for _, network := range ac.trustedProxies {
+							if network.Contains(ip) {
+								trusted = true
+								break
+							}
+						}
+						if !trusted {
+							return ip
+						}
+					}
+				}
 			}
 		}
 	}
 
-	// 检查 X-Real-IP 头部
-	if xri := ctx.Request.Header.Peek("X-Real-IP"); len(xri) > 0 {
-		ip := net.ParseIP(string(xri))
-		if ip != nil {
-			return ip
+	// 检查 X-Real-IP 头部（仅来自可信代理时）
+	if len(ac.trustedProxies) > 0 && remoteIP != nil {
+		isTrusted := false
+		for _, network := range ac.trustedProxies {
+			if network.Contains(remoteIP) {
+				isTrusted = true
+				break
+			}
+		}
+
+		if isTrusted {
+			if xri := ctx.Request.Header.Peek("X-Real-IP"); len(xri) > 0 {
+				if ip := net.ParseIP(string(xri)); ip != nil {
+					return ip
+				}
+			}
 		}
 	}
 
-	// 回退到 RemoteAddr
+	return remoteIP
+}
+
+// getRemoteAddrIP 从 RemoteAddr 提取 IP。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//
+// 返回值：
+//   - net.IP: 客户端 IP 地址，无法获取时返回 nil
+func getRemoteAddrIP(ctx *fasthttp.RequestCtx) net.IP {
 	if addr := ctx.RemoteAddr(); addr != nil {
 		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
 			return tcpAddr.IP
@@ -331,7 +389,6 @@ func getClientIP(ctx *fasthttp.RequestCtx) net.IP {
 		ipStr = strings.TrimPrefix(strings.TrimSuffix(ipStr, "]"), "[")
 		return net.ParseIP(ipStr)
 	}
-
 	return nil
 }
 
