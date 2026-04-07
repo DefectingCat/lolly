@@ -1,3 +1,13 @@
+// Package security 提供安全头部功能的测试。
+//
+// 该文件测试安全头部模块的各项功能，包括：
+//   - 安全头部中间件创建
+//   - 各种安全头部设置（CSP、HSTS、X-Frame-Options等）
+//   - 配置更新
+//   - 默认和严格配置
+//   - HSTS 值格式化
+//
+// 作者：xfy
 package security
 
 import (

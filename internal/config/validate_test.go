@@ -1,4 +1,17 @@
 // Package config 提供 YAML 配置文件的解析、验证和默认配置生成功能。
+//
+// 该文件测试配置验证模块的各项功能，包括：
+//   - 服务器配置验证
+//   - 代理配置验证
+//   - SSL 配置验证
+//   - 认证配置验证
+//   - 速率限制验证
+//   - 压缩配置验证
+//   - 访问控制验证
+//   - Stream 配置验证
+//   - 性能配置验证
+//
+// 作者：xfy
 package config
 
 import (
@@ -7,6 +20,7 @@ import (
 )
 
 func TestValidateServer(t *testing.T) {
+	// TestValidateServer 测试服务器配置验证。
 	tests := []struct {
 		name      string
 		config    ServerConfig
@@ -85,6 +99,7 @@ func TestValidateServer(t *testing.T) {
 }
 
 func TestValidateProxy(t *testing.T) {
+	// TestValidateProxy 测试代理配置验证。
 	tests := []struct {
 		name    string
 		config  ProxyConfig
@@ -176,6 +191,7 @@ func TestValidateProxy(t *testing.T) {
 }
 
 func TestValidateSSL(t *testing.T) {
+	// TestValidateSSL 测试 SSL 配置验证。
 	tests := []struct {
 		name    string
 		config  SSLConfig
@@ -287,6 +303,7 @@ func TestValidateSSL(t *testing.T) {
 }
 
 func TestValidateAuth(t *testing.T) {
+	// TestValidateAuth 测试认证配置验证。
 	tests := []struct {
 		name    string
 		config  AuthConfig
@@ -387,6 +404,7 @@ func TestValidateAuth(t *testing.T) {
 }
 
 func TestValidateRateLimit(t *testing.T) {
+	// TestValidateRateLimit 测试速率限制配置验证。
 	tests := []struct {
 		name    string
 		config  RateLimitConfig
@@ -471,6 +489,7 @@ func TestValidateRateLimit(t *testing.T) {
 }
 
 func TestValidateCompression(t *testing.T) {
+	// TestValidateCompression 测试压缩配置验证。
 	tests := []struct {
 		name    string
 		config  CompressionConfig
@@ -574,6 +593,7 @@ func TestValidateCompression(t *testing.T) {
 }
 
 func TestValidateAccess(t *testing.T) {
+	// TestValidateAccess 测试访问控制配置验证。
 	tests := []struct {
 		name    string
 		config  AccessConfig
@@ -675,6 +695,7 @@ func TestValidateAccess(t *testing.T) {
 }
 
 func TestValidateStatic(t *testing.T) {
+	// TestValidateStatic 测试静态文件配置验证。
 	tests := []struct {
 		name    string
 		config  StaticConfig
@@ -732,6 +753,7 @@ func TestValidateStatic(t *testing.T) {
 }
 
 func TestValidateSecurity(t *testing.T) {
+	// TestValidateSecurity 测试安全配置验证。
 	tests := []struct {
 		name    string
 		config  SecurityConfig
@@ -813,6 +835,7 @@ func TestValidateSecurity(t *testing.T) {
 }
 
 func TestValidateStream(t *testing.T) {
+	// TestValidateStream 测试 Stream 代理配置验证。
 	tests := []struct {
 		name    string
 		config  StreamConfig
@@ -820,7 +843,7 @@ func TestValidateStream(t *testing.T) {
 		errMsg  string
 	}{
 		{
-			name: "valid tcp stream",
+			name: "有效 TCP Stream",
 			config: StreamConfig{
 				Listen:   ":3306",
 				Protocol: "tcp",
@@ -832,7 +855,7 @@ func TestValidateStream(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid udp stream",
+			name: "有效 UDP Stream",
 			config: StreamConfig{
 				Listen:   ":53",
 				Protocol: "udp",
@@ -844,7 +867,7 @@ func TestValidateStream(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "empty listen",
+			name: "监听地址为空",
 			config: StreamConfig{
 				Listen:   "",
 				Protocol: "tcp",
@@ -853,7 +876,7 @@ func TestValidateStream(t *testing.T) {
 			errMsg:  "listen 地址必填",
 		},
 		{
-			name: "invalid protocol",
+			name: "无效协议类型",
 			config: StreamConfig{
 				Listen:   ":3306",
 				Protocol: "http",
@@ -862,7 +885,7 @@ func TestValidateStream(t *testing.T) {
 			errMsg:  "无效的协议类型",
 		},
 		{
-			name: "no targets",
+			name: "无目标地址",
 			config: StreamConfig{
 				Listen:   ":3306",
 				Protocol: "tcp",
@@ -874,7 +897,7 @@ func TestValidateStream(t *testing.T) {
 			errMsg:  "upstream.targets 至少需要一个目标地址",
 		},
 		{
-			name: "empty target addr",
+			name: "目标地址为空",
 			config: StreamConfig{
 				Listen:   ":3306",
 				Protocol: "tcp",
@@ -908,6 +931,7 @@ func TestValidateStream(t *testing.T) {
 }
 
 func TestValidatePerformance(t *testing.T) {
+	// TestValidatePerformance 测试性能配置验证。
 	tests := []struct {
 		name    string
 		config  PerformanceConfig

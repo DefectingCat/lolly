@@ -1,6 +1,21 @@
-// Package proxy provides reverse proxy functionality for the Lolly HTTP server.
+// Package proxy 提供反向代理功能的测试。
 //
-//go:generate go test -v ./...
+// 该文件测试代理模块的各项功能，包括：
+//   - 代理创建和配置
+//   - 目标选择
+//   - 请求转发
+//   - 请求头修改
+//   - 响应头修改
+//   - 客户端 IP 提取
+//   - 目标更新
+//   - WebSocket 请求检测
+//   - 负载均衡器创建
+//   - HostClient 创建
+//   - 健康检查器设置
+//   - 代理缓存功能
+//   - 被动健康检查
+//
+// 作者：xfy
 package proxy
 
 import (

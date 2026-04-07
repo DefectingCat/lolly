@@ -1,3 +1,18 @@
+// Package handler 提供 Sendfile 功能的测试。
+//
+// 该文件测试 Sendfile 模块的各项功能，包括：
+//   - 最小 Sendfile 大小
+//   - 平台 Sendfile 行为
+//   - 文件复制功能
+//   - 非 Linux 平台行为
+//   - 套接字文件描述符获取
+//   - 小文件发送
+//   - 带偏移量发送
+//   - 零长度文件
+//   - 网络连接获取
+//   - 错误处理
+//
+// 作者：xfy
 package handler
 
 import (

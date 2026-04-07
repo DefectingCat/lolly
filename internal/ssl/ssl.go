@@ -190,7 +190,7 @@ func NewMultiTLSManager(configs map[string]*config.SSLConfig, defaultCfg *config
 		configs: make(map[string]*tls.Config),
 	}
 
-	// Load each certificate
+	// 加载每个证书
 	for name, cfg := range configs {
 		tlsCfg, err := createTLSConfig(cfg)
 		if err != nil {
@@ -199,7 +199,7 @@ func NewMultiTLSManager(configs map[string]*config.SSLConfig, defaultCfg *config
 		manager.configs[name] = tlsCfg
 	}
 
-	// Load default config if provided
+	// 如果提供了默认配置，则加载
 	if defaultCfg != nil {
 		tlsCfg, err := createTLSConfig(defaultCfg)
 		if err != nil {
@@ -236,7 +236,7 @@ func (m *TLSManager) GetTLSConfigForHost(host string) *tls.Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Remove port from host if present
+	// 从主机名中移除端口（如果存在）
 	for i := 0; i < len(host); i++ {
 		if host[i] == ':' {
 			host = host[:i]
@@ -261,14 +261,14 @@ func (m *TLSManager) GetCertificate() func(*tls.ClientHelloInfo) (*tls.Certifica
 		m.mu.RLock()
 		defer m.mu.RUnlock()
 
-		// Look for matching server name
+		// 查找匹配的服务器名称
 		if cfg, ok := m.configs[hello.ServerName]; ok {
 			if len(cfg.Certificates) > 0 {
 				return &cfg.Certificates[0], nil
 			}
 		}
 
-		// Fall back to default
+		// 回退到默认配置
 		if m.defaultCfg != nil && len(m.defaultCfg.Certificates) > 0 {
 			return &m.defaultCfg.Certificates[0], nil
 		}
@@ -331,7 +331,7 @@ func (m *TLSManager) getConfigForClientWithOCSP(hello *tls.ClientHelloInfo) (*tl
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	// Get the base config
+	// 获取基础配置
 	var baseCfg *tls.Config
 	if hello.ServerName != "" {
 		if cfg, ok := m.configs[hello.ServerName]; ok {
@@ -347,13 +347,13 @@ func (m *TLSManager) getConfigForClientWithOCSP(hello *tls.ClientHelloInfo) (*tl
 		return baseCfg, nil
 	}
 
-	// Create a copy of the config with OCSP response attached
+	// 创建配置副本并附加 OCSP 响应
 	cfgCopy := baseCfg.Clone()
 
 	// Attach OCSP response to the certificate
 	cert := &cfgCopy.Certificates[0]
 	if len(cert.Certificate) > 0 {
-		// Parse the leaf certificate to get serial number
+		// 解析叶子证书以获取序列号
 		leafCert, err := x509.ParseCertificate(cert.Certificate[0])
 		if err == nil {
 			serial := leafCert.SerialNumber.String()
@@ -487,7 +487,7 @@ func extractPEMBlock(data []byte) ([]byte, []byte) {
 		return nil, nil
 	}
 
-	// Extract and decode the PEM block
+	// 提取并解码 PEM 块
 	blockData := data[start : start+end+len(endMarker)]
 	rest := data[start+end+len(endMarker):]
 
@@ -629,7 +629,7 @@ func parseCipherSuites(ciphers []string) ([]uint16, error) {
 		if !ok {
 			return nil, fmt.Errorf("unknown cipher suite: %s", c)
 		}
-		// Check for insecure cipher suites
+		// 检查不安全的加密套件
 		if isInsecureCipher(id) {
 			return nil, fmt.Errorf("insecure cipher suite %s is not allowed", c)
 		}
@@ -735,7 +735,7 @@ func ValidateKey(keyPath string) error {
 		return fmt.Errorf("failed to read key: %w", err)
 	}
 
-	// Key validation happens during tls.LoadX509KeyPair
+	// 密钥验证在 tls.LoadX509KeyPair 期间进行
 	// This is a preliminary check that the file exists and is readable
 	return nil
 }

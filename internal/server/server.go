@@ -678,7 +678,13 @@ func (s *Server) getProxyCacheStats() ProxyCacheStats {
 	return total
 }
 
-// registerStaticHandler registers static file handler.
+// registerStaticHandler 注册静态文件处理器。
+//
+// 为路由器注册静态文件服务，支持文件缓存和预压缩文件。
+//
+// 参数：
+//   - router: 路由器实例，用于注册路由规则
+//   - cfg: 服务器配置，包含静态文件和压缩设置
 func (s *Server) registerStaticHandler(router *handler.Router, cfg *config.ServerConfig) {
 	staticHandler := handler.NewStaticHandler(
 		cfg.Static.Root,

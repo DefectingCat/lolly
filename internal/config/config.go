@@ -27,263 +27,1158 @@ import (
 )
 
 // Config 根配置结构，支持单服务器和多虚拟主机两种模式。
+//
+// 包含服务器配置、日志配置、性能配置和监控配置等模块。
+// 是配置文件的顶级结构体，所有其他配置都作为其子结构。
+//
+// 注意事项：
+//   - 必须配置 server 或 servers 中的至少一个
+//   - 加载后会自动进行配置验证
+//   - Stream 配置为可选，用于 TCP/UDP 层代理
+//   - HTTP/3 配置为可选，需 SSL 配置配合才能生效
+//
+// 使用示例：
+//
+//	cfg, err := config.Load("config.yaml")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	server := cfg.Server
+//	// 或使用多虚拟主机
+//	for _, s := range cfg.Servers {
+//	    // 处理每个服务器配置
+//	}
 type Config struct {
-	Server      ServerConfig      `yaml:"server"`      // 单服务器模式配置
-	Servers     []ServerConfig    `yaml:"servers"`     // 多虚拟主机模式配置
-	Stream      []StreamConfig    `yaml:"stream"`      // TCP/UDP Stream 代理配置
-	HTTP3       HTTP3Config       `yaml:"http3"`       // HTTP/3 (QUIC) 配置
-	Logging     LoggingConfig     `yaml:"logging"`     // 日志配置
-	Performance PerformanceConfig `yaml:"performance"` // 性能配置
-	Monitoring  MonitoringConfig  `yaml:"monitoring"`  // 监控配置
+	// Server 单服务器模式配置
+	// 用于单一服务监听场景，与 Servers 二选一配置
+	Server ServerConfig `yaml:"server"`
+
+	// Servers 多虚拟主机模式配置
+	// 用于同时监听多个地址或提供不同服务场景
+	Servers []ServerConfig `yaml:"servers"`
+
+	// Stream TCP/UDP Stream 代理配置
+	// 用于四层网络代理，如数据库、缓存等 TCP 服务
+	Stream []StreamConfig `yaml:"stream"`
+
+	// HTTP3 HTTP/3 (QUIC) 配置
+	// 启用 HTTP/3 协议支持，需要配合 SSL 配置使用
+	HTTP3 HTTP3Config `yaml:"http3"`
+
+	// Logging 日志配置
+	// 控制访问日志和错误日志的输出格式与位置
+	Logging LoggingConfig `yaml:"logging"`
+
+	// Performance 性能配置
+	// 包含 Goroutine 池、文件缓存、连接池等性能优化选项
+	Performance PerformanceConfig `yaml:"performance"`
+
+	// Monitoring 监控配置
+	// 包含状态端点等监控相关配置
+	Monitoring MonitoringConfig `yaml:"monitoring"`
 }
 
 // HTTP3Config HTTP/3 (QUIC) 配置。
+//
+// HTTP/3 基于 QUIC 协议，提供更快的连接建立和更低的延迟。
+// 需要服务器配置 SSL/TLS 证书才能正常工作。
+//
+// 注意事项：
+//   - 必须配置有效的 SSL 证书
+//   - UDP 监听地址不能与 HTTP/1.1 或 HTTP/2 冲突
+//   - 0-RTT 特性可能带来重放攻击风险，需评估安全性
+//   - 部分网络环境可能限制 UDP 流量
+//
+// 使用示例：
+//
+//	http3:
+//	  enabled: true
+//	  listen: ":443"
+//	  max_streams: 1000
+//	  idle_timeout: 30s
+//	  enable_0rtt: true
 type HTTP3Config struct {
-	Enabled     bool          `yaml:"enabled"`      // 是否启用 HTTP/3
-	Listen      string        `yaml:"listen"`       // UDP 监听地址，如 ":443"
-	MaxStreams  int           `yaml:"max_streams"`  // 最大并发流
-	IdleTimeout time.Duration `yaml:"idle_timeout"` // 空闲超时
-	Enable0RTT  bool          `yaml:"enable_0rtt"`  // 启用 0-RTT
+	// Enabled 是否启用 HTTP/3
+	Enabled bool `yaml:"enabled"`
+
+	// Listen UDP 监听地址，如 ":443"
+	// 通常与 HTTPS 端口一致
+	Listen string `yaml:"listen"`
+
+	// MaxStreams 最大并发流
+	// 控制单个连接允许的最大并发流数量
+	MaxStreams int `yaml:"max_streams"`
+
+	// IdleTimeout 空闲超时
+	// 连接无活动时的最大保持时间
+	IdleTimeout time.Duration `yaml:"idle_timeout"`
+
+	// Enable0RTT 启用 0-RTT 特性
+	// 允许在首次握手时发送数据，降低延迟但可能存在安全风险
+	Enable0RTT bool `yaml:"enable_0rtt"`
 }
 
 // ServerConfig 服务器配置，包含监听地址、静态文件、代理、SSL 等设置。
+//
+// 用于定义单个服务器的完整行为，包括网络监听、请求处理、
+// 安全防护和性能控制等方面。
+//
+// 注意事项：
+//   - Listen 字段为必填项，格式为 "host:port" 或 ":port"
+//   - Name 字段用于虚拟主机匹配，多服务器模式下建议配置
+//   - SSL 配置为可选，但生产环境强烈建议启用
+//   - 超时设置需根据实际业务场景调整
+//
+// 使用示例：
+//
+//	server:
+//	  listen: ":8080"
+//	  name: "api.example.com"
+//	  read_timeout: 30s
+//	  write_timeout: 30s
 type ServerConfig struct {
-	Listen      string            `yaml:"listen"`      // 监听地址，如 ":8080"
-	Name        string            `yaml:"name"`        // 服务器名称，用于虚拟主机匹配
-	Static      StaticConfig      `yaml:"static"`      // 静态文件服务配置
-	Proxy       []ProxyConfig     `yaml:"proxy"`       // 反向代理规则列表
-	SSL         SSLConfig         `yaml:"ssl"`         // SSL/TLS 配置
-	Security    SecurityConfig    `yaml:"security"`    // 安全配置
-	Rewrite     []RewriteRule     `yaml:"rewrite"`     // URL 重写规则
-	Compression CompressionConfig `yaml:"compression"` // 响应压缩配置
-	// 新增字段
-	ReadTimeout        time.Duration `yaml:"read_timeout"`          // 读取超时
-	WriteTimeout       time.Duration `yaml:"write_timeout"`         // 写入超时
-	IdleTimeout        time.Duration `yaml:"idle_timeout"`          // 空闲超时
-	MaxConnsPerIP      int           `yaml:"max_conns_per_ip"`      // 每 IP 最大连接数
-	MaxRequestsPerConn int           `yaml:"max_requests_per_conn"` // 每连接最大请求数
+	// Listen 监听地址，如 ":8080" 或 "127.0.0.1:8080"
+	// 必填字段，决定服务器在哪个地址和端口接收请求
+	Listen string `yaml:"listen"`
+
+	// Name 服务器名称，用于虚拟主机匹配
+	// 多个服务器可通过 Name 区分不同域名或服务
+	Name string `yaml:"name"`
+
+	// Static 静态文件服务配置
+	// 用于提供静态资源，如 HTML、CSS、JS、图片等
+	Static StaticConfig `yaml:"static"`
+
+	// Proxy 反向代理规则列表
+	// 按顺序匹配，首个匹配的规则生效
+	Proxy []ProxyConfig `yaml:"proxy"`
+
+	// SSL SSL/TLS 配置
+	// HTTPS 必需配置，包含证书和加密设置
+	SSL SSLConfig `yaml:"ssl"`
+
+	// Security 安全配置
+	// 包含访问控制、限流、认证等安全功能
+	Security SecurityConfig `yaml:"security"`
+
+	// Rewrite URL 重写规则
+	// 在代理或静态文件服务前执行 URL 转换
+	Rewrite []RewriteRule `yaml:"rewrite"`
+
+	// Compression 响应压缩配置
+	// 控制 gzip/brotli 压缩行为
+	Compression CompressionConfig `yaml:"compression"`
+
+	// ReadTimeout 读取超时
+	// 读取完整请求（包括 body）的最大时间
+	ReadTimeout time.Duration `yaml:"read_timeout"`
+
+	// WriteTimeout 写入超时
+	// 写入响应的最大时间
+	WriteTimeout time.Duration `yaml:"write_timeout"`
+
+	// IdleTimeout 空闲超时
+	// Keep-Alive 连接的最大空闲时间
+	IdleTimeout time.Duration `yaml:"idle_timeout"`
+
+	// MaxConnsPerIP 每 IP 最大连接数
+	// 防止单个 IP 占用过多连接资源
+	MaxConnsPerIP int `yaml:"max_conns_per_ip"`
+
+	// MaxRequestsPerConn 每连接最大请求数
+	// 达到后连接将被优雅关闭
+	MaxRequestsPerConn int `yaml:"max_requests_per_conn"`
 }
 
 // StaticConfig 静态文件服务配置。
+//
+// 用于配置静态文件服务器的行为，包括根目录和索引文件。
+//
+// 注意事项：
+//   - Root 路径可以是相对路径或绝对路径
+//   - 索引文件按顺序查找，第一个存在的文件将被使用
+//   - 目录路径需要确保有读取权限
+//
+// 使用示例：
+//
+//	static:
+//	  root: "/var/www/html"
+//	  index: ["index.html", "index.htm", "default.html"]
 type StaticConfig struct {
-	Root  string   `yaml:"root"`  // 静态文件根目录
-	Index []string `yaml:"index"` // 索引文件列表，默认 ["index.html", "index.htm"]
+	// Root 静态文件根目录
+	// 所有静态文件请求都将以此目录为基础解析
+	Root string `yaml:"root"`
+
+	// Index 索引文件列表
+	// 访问目录时依次查找这些文件作为默认页面
+	// 默认为 ["index.html", "index.htm"]
+	Index []string `yaml:"index"`
 }
 
 // ProxyConfig 反向代理配置，支持负载均衡和健康检查。
+//
+// 用于将请求转发到后端服务器，支持多种负载均衡算法
+// 和健康检查机制。
+//
+// 注意事项：
+//   - Path 使用前缀匹配，较长路径优先匹配
+//   - 至少配置一个 Target 才能正常工作
+//   - 负载均衡算法支持：round_robin、weighted_round_robin、least_conn、ip_hash、consistent_hash
+//   - 一致性哈希需要配置 HashKey
+//
+// 使用示例：
+//
+//	proxy:
+//	  - path: "/api/"
+//	    targets:
+//	      - url: "http://backend1:8080"
+//	        weight: 3
+//	      - url: "http://backend2:8080"
+//	        weight: 1
+//	    load_balance: "weighted_round_robin"
+//	    health_check:
+//	      interval: 10s
+//	      path: "/health"
 type ProxyConfig struct {
-	Path         string            `yaml:"path"`          // 匹配路径前缀
-	Targets      []ProxyTarget     `yaml:"targets"`       // 后端目标列表
-	LoadBalance  string            `yaml:"load_balance"`  // 负载均衡算法：round_robin, weighted_round_robin, least_conn, ip_hash, consistent_hash
-	HashKey      string            `yaml:"hash_key"`      // 一致性哈希键：ip, uri, header:X-Name
-	VirtualNodes int               `yaml:"virtual_nodes"` // 一致性哈希虚拟节点数，默认 150
-	HealthCheck  HealthCheckConfig `yaml:"health_check"`  // 健康检查配置
-	Timeout      ProxyTimeout      `yaml:"timeout"`       // 超时配置
-	Headers      ProxyHeaders      `yaml:"headers"`       // 请求/响应头修改
-	Cache        ProxyCacheConfig  `yaml:"cache"`         // 代理缓存配置
+	// Path 匹配路径前缀
+	// 以此前缀开头的请求将被转发到该代理
+	Path string `yaml:"path"`
+
+	// Targets 后端目标列表
+	// 支持配置多个后端服务器实现负载均衡
+	Targets []ProxyTarget `yaml:"targets"`
+
+	// LoadBalance 负载均衡算法
+	// 可选值：round_robin、weighted_round_robin、least_conn、ip_hash、consistent_hash
+	LoadBalance string `yaml:"load_balance"`
+
+	// HashKey 一致性哈希键
+	// 可选值：ip、uri、header:X-Name
+	HashKey string `yaml:"hash_key"`
+
+	// VirtualNodes 一致性哈希虚拟节点数
+	// 影响哈希分布的均匀性，默认为 150
+	VirtualNodes int `yaml:"virtual_nodes"`
+
+	// HealthCheck 健康检查配置
+	// 定期检查后端服务健康状态
+	HealthCheck HealthCheckConfig `yaml:"health_check"`
+
+	// Timeout 超时配置
+	// 控制代理连接和读写超时
+	Timeout ProxyTimeout `yaml:"timeout"`
+
+	// Headers 请求/响应头修改
+	// 可以在转发前后添加、修改或删除 HTTP 头
+	Headers ProxyHeaders `yaml:"headers"`
+
+	// Cache 代理缓存配置
+	// 启用后缓存后端响应减少重复请求
+	Cache ProxyCacheConfig `yaml:"cache"`
 }
 
 // ProxyTarget 后端目标配置。
+//
+// 定义单个后端服务器的地址和权重。
+//
+// 注意事项：
+//   - URL 必须包含协议（http:// 或 https://）
+//   - Weight 仅在 weighted_round_robin 算法下生效
+//
+// 使用示例：
+//
+//	targets:
+//	  - url: "http://backend1:8080"
+//	    weight: 3
+//	  - url: "http://backend2:8080"
+//	    weight: 1
 type ProxyTarget struct {
-	URL    string `yaml:"url"`    // 后端地址，如 "http://backend1:8080"
-	Weight int    `yaml:"weight"` // 权重，用于加权轮询算法
+	// URL 后端地址
+	// 格式："http://host:port" 或 "https://host:port"
+	URL string `yaml:"url"`
+
+	// Weight 权重
+	// 用于加权轮询算法，值越大分配的请求越多
+	Weight int `yaml:"weight"`
 }
 
 // HealthCheckConfig 健康检查配置。
+//
+// 定期检查后端服务器的健康状态，自动剔除不健康的节点。
+//
+// 注意事项：
+//   - Interval 不宜设置过小，避免增加后端负担
+//   - Path 应该是轻量级的健康检查端点
+//   - 超时时间应小于检查间隔
+//
+// 使用示例：
+//
+//	health_check:
+//	  interval: 10s
+//	  path: "/health"
+//	  timeout: 5s
 type HealthCheckConfig struct {
-	Interval time.Duration `yaml:"interval"` // 检查间隔
-	Path     string        `yaml:"path"`     // 健康检查路径
-	Timeout  time.Duration `yaml:"timeout"`  // 检查超时时间
+	// Interval 检查间隔
+	// 每次健康检查之间的时间间隔
+	Interval time.Duration `yaml:"interval"`
+
+	// Path 健康检查路径
+	// 发送 HTTP GET 请求的路径
+	Path string `yaml:"path"`
+
+	// Timeout 检查超时时间
+	// 超过此时间未响应视为不健康
+	Timeout time.Duration `yaml:"timeout"`
 }
 
 // ProxyTimeout 代理超时配置。
+//
+// 控制代理请求的各个阶段超时。
+//
+// 注意事项：
+//   - Connect 超时包括 DNS 解析和 TCP 连接建立
+//   - Read 和 Write 超时分别控制响应读取和请求发送
+//   - 超时时间需要根据后端服务响应时间调整
+//
+// 使用示例：
+//
+//	timeout:
+//	  connect: 5s
+//	  read: 30s
+//	  write: 30s
 type ProxyTimeout struct {
-	Connect time.Duration `yaml:"connect"` // 连接超时
-	Read    time.Duration `yaml:"read"`    // 读取超时
-	Write   time.Duration `yaml:"write"`   // 写入超时
+	// Connect 连接超时
+	// 建立到后端服务器的连接超时
+	Connect time.Duration `yaml:"connect"`
+
+	// Read 读取超时
+	// 从后端读取响应的超时
+	Read time.Duration `yaml:"read"`
+
+	// Write 写入超时
+	// 向后端发送请求的超时
+	Write time.Duration `yaml:"write"`
 }
 
 // ProxyHeaders 代理请求/响应头配置。
+//
+// 在代理转发过程中修改 HTTP 头部。
+//
+// 注意事项：
+//   - SetRequest 添加/修改发送到后端的请求头
+//   - SetResponse 添加/修改返回给客户端的响应头
+//   - Remove 会删除指定的请求头（在发送到后端之前）
+//
+// 使用示例：
+//
+//	headers:
+//	  set_request:
+//	    X-Forwarded-For: "$remote_addr"
+//	    X-Real-IP: "$remote_addr"
+//	  set_response:
+//	    X-Proxy-By: "lolly"
+//	  remove:
+//	    - "X-Internal-Header"
 type ProxyHeaders struct {
-	SetRequest  map[string]string `yaml:"set_request"`  // 设置请求头
-	SetResponse map[string]string `yaml:"set_response"` // 设置响应头
-	Remove      []string          `yaml:"remove"`       // 移除的头部
+	// SetRequest 设置请求头
+	// 发送到后端的请求中添加或覆盖的头部
+	SetRequest map[string]string `yaml:"set_request"`
+
+	// SetResponse 设置响应头
+	// 返回给客户端的响应中添加或覆盖的头部
+	SetResponse map[string]string `yaml:"set_response"`
+
+	// Remove 移除的头部
+	// 从发送到后端的请求中移除的头部列表
+	Remove []string `yaml:"remove"`
 }
 
 // ProxyCacheConfig 代理缓存配置。
+//
+// 缓存后端响应，减少重复请求，提高响应速度。
+//
+// 注意事项：
+//   - 仅缓存 GET 和 HEAD 请求
+//   - 后端响应中 Cache-Control 头会覆盖 MaxAge 设置
+//   - CacheLock 可防止缓存击穿，但会增加首次请求延迟
+//   - 谨慎缓存动态内容，避免返回过期数据
+//
+// 使用示例：
+//
+//	cache:
+//	  enabled: true
+//	  max_age: 5m
+//	  cache_lock: true
+//	  stale_while_revalidate: 1m
 type ProxyCacheConfig struct {
-	Enabled              bool          `yaml:"enabled"`                // 是否启用缓存
-	MaxAge               time.Duration `yaml:"max_age"`                // 缓存有效期
-	CacheLock            bool          `yaml:"cache_lock"`             // 缓存锁，防止击穿
-	StaleWhileRevalidate time.Duration `yaml:"stale_while_revalidate"` // 过期缓存复用时间
+	// Enabled 是否启用缓存
+	Enabled bool `yaml:"enabled"`
+
+	// MaxAge 缓存有效期
+	// 缓存内容的最大存活时间
+	MaxAge time.Duration `yaml:"max_age"`
+
+	// CacheLock 缓存锁
+	// 防止缓存击穿，同一资源同时只有一个后端请求
+	CacheLock bool `yaml:"cache_lock"`
+
+	// StaleWhileRevalidate 过期缓存复用时间
+	// 在重新验证期间返回过期缓存的最大时间
+	StaleWhileRevalidate time.Duration `yaml:"stale_while_revalidate"`
 }
 
 // SSLConfig SSL/TLS 配置。
+//
+// 用于配置 HTTPS 服务所需的证书和加密参数。
+// 支持 TLS 1.2 和 TLS 1.3 协议，可自定义加密套件。
+//
+// 注意事项：
+//   - Cert 和 Key 为必需字段，分别指向证书和私钥文件
+//   - CertChain 可选，用于配置完整的证书链
+//   - Protocols 建议使用默认值，避免使用不安全的 TLS 1.0/1.1
+//   - Ciphers 仅对 TLS 1.2 有效，TLS 1.3 有固定加密套件
+//   - 启用 OCSPStapling 可提升握手性能
+//
+// 使用示例：
+//
+//	ssl:
+//	  cert: "/etc/ssl/certs/server.crt"
+//	  key: "/etc/ssl/private/server.key"
+//	  cert_chain: "/etc/ssl/certs/chain.crt"
+//	  protocols: ["TLSv1.2", "TLSv1.3"]
+//	  ocsp_stapling: true
+//	  hsts:
+//	    max_age: 31536000
+//	    include_sub_domains: true
 type SSLConfig struct {
-	Cert         string     `yaml:"cert"`          // 证书文件路径
-	Key          string     `yaml:"key"`           // 私钥文件路径
-	CertChain    string     `yaml:"cert_chain"`    // 证书链文件路径
-	Protocols    []string   `yaml:"protocols"`     // TLS 版本，默认 ["TLSv1.2", "TLSv1.3"]
-	Ciphers      []string   `yaml:"ciphers"`       // 加密套件（仅 TLS 1.2 有效）
-	OCSPStapling bool       `yaml:"ocsp_stapling"` // OCSP Stapling 支持
-	HSTS         HSTSConfig `yaml:"hsts"`          // HSTS 配置
+	// Cert 证书文件路径
+	// PEM 格式的服务器证书文件
+	Cert string `yaml:"cert"`
+
+	// Key 私钥文件路径
+	// PEM 格式的私钥文件
+	Key string `yaml:"key"`
+
+	// CertChain 证书链文件路径
+	// 可选，包含中间证书以支持完整证书链验证
+	CertChain string `yaml:"cert_chain"`
+
+	// Protocols TLS 版本列表
+	// 默认 ["TLSv1.2", "TLSv1.3"]
+	Protocols []string `yaml:"protocols"`
+
+	// Ciphers 加密套件列表
+	// 仅对 TLS 1.2 有效，建议使用默认值
+	Ciphers []string `yaml:"ciphers"`
+
+	// OCSPStapling OCSP Stapling 支持
+	// 启用后可在 TLS 握手时提供证书状态信息
+	OCSPStapling bool `yaml:"ocsp_stapling"`
+
+	// HSTS HSTS 配置
+	// HTTP Strict Transport Security 安全策略
+	HSTS HSTSConfig `yaml:"hsts"`
 }
 
 // HSTSConfig HTTP Strict Transport Security 配置。
+//
+// 强制浏览器使用 HTTPS 访问，防止中间人攻击和协议降级攻击。
+//
+// 注意事项：
+//   - MaxAge 单位为秒，建议至少设置为 1 年（31536000）
+//   - IncludeSubDomains 为 true 时策略应用于所有子域名
+//   - Preload 为 true 表示申请加入浏览器预加载列表
+//   - 启用前确保所有站点资源都支持 HTTPS
+//
+// 使用示例：
+//
+//	hsts:
+//	  max_age: 31536000
+//	  include_sub_domains: true
+//	  preload: false
 type HSTSConfig struct {
-	MaxAge            int  `yaml:"max_age"`             // 过期时间（秒），默认 31536000（1年）
-	IncludeSubDomains bool `yaml:"include_sub_domains"` // 包含子域名，默认 true
-	Preload           bool `yaml:"preload"`             // 加入 HSTS 预加载列表
+	// MaxAge 过期时间（秒）
+	// 默认 31536000（1年），建议至少 6 个月
+	MaxAge int `yaml:"max_age"`
+
+	// IncludeSubDomains 包含子域名
+	// 为 true 时策略应用于当前域名及其所有子域名
+	IncludeSubDomains bool `yaml:"include_sub_domains"`
+
+	// Preload 加入 HSTS 预加载列表
+	// 申请加入浏览器内置的 HSTS 列表
+	Preload bool `yaml:"preload"`
 }
 
 // SecurityConfig 安全配置，包含访问控制、限流、认证和安全头部。
+//
+// 用于保护服务器免受各种网络攻击和滥用。
+//
+// 注意事项：
+//   - Access 配置 IP 黑白名单控制访问来源
+//   - RateLimit 配置请求频率限制防止 DDoS 攻击
+//   - Auth 配置 HTTP Basic 认证保护敏感资源
+//   - Headers 配置安全响应头部增强浏览器安全
+//   - 各项配置可以组合使用，增强安全性
+//
+// 使用示例：
+//
+//	security:
+//	  access:
+//	    allow: ["192.168.1.0/24"]
+//	    deny: ["10.0.0.0/8"]
+//	  rate_limit:
+//	    request_rate: 100
+//	    burst: 150
+//	  auth:
+//	    type: "basic"
+//	    users:
+//	      - name: "admin"
+//	        password: "$2y$10$..."
+//	  headers:
+//	    x_frame_options: "DENY"
 type SecurityConfig struct {
-	Access    AccessConfig    `yaml:"access"`     // IP 访问控制
-	RateLimit RateLimitConfig `yaml:"rate_limit"` // 速率限制
-	Auth      AuthConfig      `yaml:"auth"`       // 认证配置
-	Headers   SecurityHeaders `yaml:"headers"`    // 安全头部
+	// Access IP 访问控制
+	// 配置允许或拒绝的 IP 地址/CIDR 范围
+	Access AccessConfig `yaml:"access"`
+
+	// RateLimit 速率限制
+	// 控制请求频率防止滥用
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
+
+	// Auth 认证配置
+	// HTTP Basic 认证设置
+	Auth AuthConfig `yaml:"auth"`
+
+	// Headers 安全头部
+	// 添加安全相关的 HTTP 响应头
+	Headers SecurityHeaders `yaml:"headers"`
 }
 
 // AccessConfig IP 访问控制配置。
+//
+// 通过 IP 地址或 CIDR 范围控制访问权限。
+//
+// 注意事项：
+//   - Allow 和 Deny 列表按配置顺序匹配
+//   - Default 指定未匹配时的默认动作
+//   - TrustedProxies 用于正确获取客户端真实 IP
+//   - 支持 IPv4 和 IPv6 地址格式
+//
+// 使用示例：
+//
+//	access:
+//	  allow: ["192.168.1.0/24", "10.0.0.0/8"]
+//	  deny: ["192.168.1.100"]
+//	  default: "deny"
+//	  trusted_proxies: ["172.16.0.0/16"]
 type AccessConfig struct {
-	Allow          []string `yaml:"allow"`           // 允许的 IP/CIDR 列表
-	Deny           []string `yaml:"deny"`            // 拒绝的 IP/CIDR 列表
-	Default        string   `yaml:"default"`         // 默认动作：allow 或 deny
-	TrustedProxies []string `yaml:"trusted_proxies"` // 可信代理 CIDR 列表，用于 X-Forwarded-For 解析
+	// Allow 允许的 IP/CIDR 列表
+	// 配置允许访问的 IP 地址或网段
+	Allow []string `yaml:"allow"`
+
+	// Deny 拒绝的 IP/CIDR 列表
+	// 配置拒绝访问的 IP 地址或网段
+	Deny []string `yaml:"deny"`
+
+	// Default 默认动作
+	// 未匹配任何规则时的处理方式：allow 或 deny
+	Default string `yaml:"default"`
+
+	// TrustedProxies 可信代理 CIDR 列表
+	// 用于正确解析 X-Forwarded-For 头部获取真实客户端 IP
+	TrustedProxies []string `yaml:"trusted_proxies"`
 }
 
 // RateLimitConfig 速率限制配置。
+//
+// 限制请求频率防止 DDoS 攻击和资源滥用。
+//
+// 注意事项：
+//   - RequestRate 为每秒允许的最大请求数
+//   - Burst 为突发流量允许的最大请求数
+//   - ConnLimit 为单个 IP 的最大并发连接数
+//   - Algorithm 支持 token_bucket 和 sliding_window 两种算法
+//   - SlidingWindow 仅在 sliding_window 算法下生效
+//
+// 使用示例：
+//
+//	rate_limit:
+//	  request_rate: 100
+//	  burst: 150
+//	  conn_limit: 50
+//	  algorithm: "token_bucket"
+//	  key: "ip"
 type RateLimitConfig struct {
-	RequestRate       int    `yaml:"request_rate"`        // 每秒请求数限制
-	Burst             int    `yaml:"burst"`               // 突发流量上限
-	ConnLimit         int    `yaml:"conn_limit"`          // 连接数限制
-	Key               string `yaml:"key"`                 // 限流 key 来源：ip, header
-	Algorithm         string `yaml:"algorithm"`           // 限流算法：token_bucket, sliding_window
-	SlidingWindowMode string `yaml:"sliding_window_mode"` // 滑动窗口模式：approximate, precise
-	SlidingWindow     int    `yaml:"sliding_window"`      // 滑动窗口大小（秒）
+	// RequestRate 每秒请求数限制
+	// 超过此速率的请求将被拒绝
+	RequestRate int `yaml:"request_rate"`
+
+	// Burst 突发流量上限
+	// 允许短时间内超出 RequestRate 的最大请求数
+	Burst int `yaml:"burst"`
+
+	// ConnLimit 连接数限制
+	// 单个 IP 的最大并发连接数
+	ConnLimit int `yaml:"conn_limit"`
+
+	// Key 限流 key 来源
+	// 可选值：ip、header，决定限流键的生成方式
+	Key string `yaml:"key"`
+
+	// Algorithm 限流算法
+	// 可选值：token_bucket、sliding_window
+	Algorithm string `yaml:"algorithm"`
+
+	// SlidingWindowMode 滑动窗口模式
+	// 可选值：approximate（近似）、precise（精确）
+	SlidingWindowMode string `yaml:"sliding_window_mode"`
+
+	// SlidingWindow 滑动窗口大小（秒）
+	// 滑动窗口算法的时间窗口大小
+	SlidingWindow int `yaml:"sliding_window"`
 }
 
 // AuthConfig 认证配置。
+//
+// 配置 HTTP Basic 认证保护敏感资源。
+//
+// 注意事项：
+//   - Type 目前仅支持 basic
+//   - RequireTLS 默认为 true，强制 HTTPS 传输
+//   - Algorithm 支持 bcrypt 和 argon2id
+//   - Users 中 Password 字段存储的是密码哈希而非明文
+//   - MinPasswordLength 控制密码最小长度要求
+//
+// 使用示例：
+//
+//	auth:
+//	  type: "basic"
+//	  require_tls: true
+//	  algorithm: "bcrypt"
+//	  realm: "Secure Area"
+//	  min_password_length: 8
+//	  users:
+//	    - name: "admin"
+//	      password: "$2y$10$..."
 type AuthConfig struct {
-	Type              string `yaml:"type"`                // 认证类型：basic
-	RequireTLS        bool   `yaml:"require_tls"`         // 强制 HTTPS，默认 true
-	Algorithm         string `yaml:"algorithm"`           // 哈希算法：bcrypt, argon2id
-	Users             []User `yaml:"users"`               // 用户列表
-	Realm             string `yaml:"realm"`               // 认证域
-	MinPasswordLength int    `yaml:"min_password_length"` // 密码最小长度
+	// Type 认证类型
+	// 目前仅支持 basic
+	Type string `yaml:"type"`
+
+	// RequireTLS 强制 HTTPS
+	// 为 true 时只有通过 HTTPS 的请求才允许认证
+	RequireTLS bool `yaml:"require_tls"`
+
+	// Algorithm 哈希算法
+	// 可选值：bcrypt、argon2id
+	Algorithm string `yaml:"algorithm"`
+
+	// Users 用户列表
+	// 配置允许访问的用户及其密码哈希
+	Users []User `yaml:"users"`
+
+	// Realm 认证域
+	// 显示在浏览器认证对话框中的描述信息
+	Realm string `yaml:"realm"`
+
+	// MinPasswordLength 密码最小长度
+	// 密码验证时的最小长度要求
+	MinPasswordLength int `yaml:"min_password_length"`
 }
 
 // User 认证用户配置。
+//
+// 定义单个认证用户的凭据。
+//
+// 注意事项：
+//   - Name 为用户标识，区分大小写
+//   - Password 存储的是哈希值而非明文密码
+//   - 支持的哈希格式取决于 Algorithm 设置
+//
+// 使用示例：
+//
+//	users:
+//	  - name: "admin"
+//	    password: "$2y$10$N9qo8uLOickgx2ZMRZoMy..."
 type User struct {
-	Name     string `yaml:"name"`     // 用户名
-	Password string `yaml:"password"` // 密码哈希
+	// Name 用户名
+	// 认证时使用的用户标识
+	Name string `yaml:"name"`
+
+	// Password 密码哈希
+	// bcrypt 或 argon2id 哈希值，非明文密码
+	Password string `yaml:"password"`
 }
 
 // SecurityHeaders 安全头部配置。
+//
+// 配置 HTTP 安全响应头部增强浏览器安全。
+//
+// 注意事项：
+//   - XFrameOptions 防止点击劫持攻击
+//   - XContentTypeOptions 防止 MIME 类型嗅探
+//   - ContentSecurityPolicy 控制资源加载策略
+//   - ReferrerPolicy 控制 Referer 头发送策略
+//   - PermissionsPolicy 控制浏览器功能权限
+//
+// 使用示例：
+//
+//	headers:
+//	  x_frame_options: "DENY"
+//	  x_content_type_options: "nosniff"
+//	  content_security_policy: "default-src 'self'"
+//	  referrer_policy: "strict-origin-when-cross-origin"
 type SecurityHeaders struct {
-	XFrameOptions         string `yaml:"x_frame_options"`         // X-Frame-Options: DENY, SAMEORIGIN
-	XContentTypeOptions   string `yaml:"x_content_type_options"`  // X-Content-Type-Options: nosniff
-	ContentSecurityPolicy string `yaml:"content_security_policy"` // Content-Security-Policy
-	ReferrerPolicy        string `yaml:"referrer_policy"`         // Referrer-Policy
-	PermissionsPolicy     string `yaml:"permissions_policy"`      // Permissions-Policy
+	// XFrameOptions X-Frame-Options 头部
+	// 可选值：DENY、SAMEORIGIN，防止页面被嵌入 iframe
+	XFrameOptions string `yaml:"x_frame_options"`
+
+	// XContentTypeOptions X-Content-Type-Options 头部
+	// 建议值：nosniff，防止浏览器 MIME 类型嗅探
+	XContentTypeOptions string `yaml:"x_content_type_options"`
+
+	// ContentSecurityPolicy Content-Security-Policy 头部
+	// 控制页面可以加载的资源来源
+	ContentSecurityPolicy string `yaml:"content_security_policy"`
+
+	// ReferrerPolicy Referrer-Policy 头部
+	// 控制 Referer 头的发送策略
+	ReferrerPolicy string `yaml:"referrer_policy"`
+
+	// PermissionsPolicy Permissions-Policy 头部
+	// 控制浏览器功能权限（原 Feature-Policy）
+	PermissionsPolicy string `yaml:"permissions_policy"`
 }
 
 // RewriteRule URL 重写规则。
+//
+// 用于在代理或静态文件服务前修改请求 URL。
+//
+// 注意事项：
+//   - Pattern 为正则表达式，用于匹配原始 URL
+//   - Replacement 为替换后的目标 URL，支持捕获组
+//   - Flag 控制重写行为：last、redirect、permanent、break
+//   - 规则按顺序执行，匹配后根据 Flag 决定是否继续
+//
+// 使用示例：
+//
+//	rewrite:
+//	  - pattern: "^/old/(.*)$"
+//	    replacement: "/new/$1"
+//	    flag: "permanent"
+//	  - pattern: "^/api/(.*)$"
+//	    replacement: "/v1/$1"
+//	    flag: "last"
 type RewriteRule struct {
-	Pattern     string `yaml:"pattern"`     // 匹配模式（正则表达式）
-	Replacement string `yaml:"replacement"` // 替换目标
-	Flag        string `yaml:"flag"`        // 标志：last, redirect, permanent, break
+	// Pattern 匹配模式
+	// 正则表达式，用于匹配请求 URL
+	Pattern string `yaml:"pattern"`
+
+	// Replacement 替换目标
+	// 替换后的 URL 路径，支持 $1、$2 等捕获组引用
+	Replacement string `yaml:"replacement"`
+
+	// Flag 标志
+	// 可选值：
+	//   - last：停止后续规则匹配
+	//   - redirect：返回 302 临时重定向
+	//   - permanent：返回 301 永久重定向
+	//   - break：停止规则匹配但继续处理
+	Flag string `yaml:"flag"`
 }
 
 // CompressionConfig 响应压缩配置。
+//
+// 配置响应内容压缩，减少传输数据量。
+//
+// 注意事项：
+//   - Type 支持 gzip、brotli 或 both（同时使用两种）
+//   - Level 压缩级别 1-9，越高压缩率越好但 CPU 消耗越大
+//   - MinSize 低于此大小的响应不压缩
+//   - Types 指定哪些 MIME 类型进行压缩
+//   - GzipStatic 启用后优先使用预压缩文件
+//
+// 使用示例：
+//
+//	compression:
+//	  type: "gzip"
+//	  level: 6
+//	  min_size: 1024
+//	  types: ["text/html", "text/css", "application/json"]
+//	  gzip_static: true
+//	  gzip_static_extensions: [".gz"]
 type CompressionConfig struct {
-	Type                 string   `yaml:"type"`                   // 压缩类型：gzip, brotli, both
-	Level                int      `yaml:"level"`                  // 压缩级别：1-9
-	MinSize              int      `yaml:"min_size"`               // 最小压缩大小（字节）
-	Types                []string `yaml:"types"`                  // 可压缩的 MIME 类型
-	GzipStatic           bool     `yaml:"gzip_static"`            // 启用预压缩文件支持
-	GzipStaticExtensions []string `yaml:"gzip_static_extensions"` // 预压缩文件扩展名
+	// Type 压缩类型
+	// 可选值：gzip、brotli、both
+	Type string `yaml:"type"`
+
+	// Level 压缩级别
+	// 范围 1-9，1 最快，9 压缩率最高
+	Level int `yaml:"level"`
+
+	// MinSize 最小压缩大小（字节）
+	// 低于此大小的响应不进行压缩
+	MinSize int `yaml:"min_size"`
+
+	// Types 可压缩的 MIME 类型
+	// 只有这些类型的响应会被压缩
+	Types []string `yaml:"types"`
+
+	// GzipStatic 启用预压缩文件支持
+	// 为 true 时优先返回 .gz 预压缩文件
+	GzipStatic bool `yaml:"gzip_static"`
+
+	// GzipStaticExtensions 预压缩文件扩展名
+	// 查找预压缩文件时附加的扩展名列表
+	GzipStaticExtensions []string `yaml:"gzip_static_extensions"`
 }
 
 // LoggingConfig 日志配置。
+//
+// 配置访问日志和错误日志的输出行为。
+//
+// 注意事项：
+//   - Format 控制日志格式：text 或 json
+//   - Access 配置访问日志（记录每个请求）
+//   - Error 配置错误日志（记录错误信息）
+//   - Path 为空时日志输出到标准输出/标准错误
+//
+// 使用示例：
+//
+//	logging:
+//	  format: "json"
+//	  access:
+//	    path: "/var/log/lolly/access.log"
+//	    format: "combined"
+//	  error:
+//	    path: "/var/log/lolly/error.log"
+//	    level: "warn"
 type LoggingConfig struct {
-	Format string          `yaml:"format"` // 全局格式：text（默认）或 json，控制启动/停止日志
-	Access AccessLogConfig `yaml:"access"` // 访问日志
-	Error  ErrorLogConfig  `yaml:"error"`  // 错误日志
+	// Format 全局格式
+	// 可选值：text（默认）、json
+	Format string `yaml:"format"`
+
+	// Access 访问日志配置
+	Access AccessLogConfig `yaml:"access"`
+
+	// Error 错误日志配置
+	Error ErrorLogConfig `yaml:"error"`
 }
 
 // AccessLogConfig 访问日志配置。
+//
+// 配置访问日志的输出位置和格式。
+//
+// 注意事项：
+//   - Path 为日志文件路径，为空则输出到 stdout
+//   - Format 支持预设格式或自定义格式
+//   - 常用预设格式：common、combined
+//
+// 使用示例：
+//
+//	access:
+//	  path: "/var/log/lolly/access.log"
+//	  format: "combined"
 type AccessLogConfig struct {
-	Path   string `yaml:"path"`   // 日志文件路径
-	Format string `yaml:"format"` // 日志格式
+	// Path 日志文件路径
+	// 访问日志的输出文件，为空则输出到标准输出
+	Path string `yaml:"path"`
+
+	// Format 日志格式
+	// 预设格式或自定义日志格式字符串
+	Format string `yaml:"format"`
 }
 
 // ErrorLogConfig 错误日志配置。
+//
+// 配置错误日志的输出位置和级别。
+//
+// 注意事项：
+//   - Path 为日志文件路径，为空则输出到 stderr
+//   - Level 控制记录的日志级别阈值
+//   - 可选级别：debug、info、warn、error
+//
+// 使用示例：
+//
+//	error:
+//	  path: "/var/log/lolly/error.log"
+//	  level: "error"
 type ErrorLogConfig struct {
-	Path  string `yaml:"path"`  // 日志文件路径
-	Level string `yaml:"level"` // 日志级别：debug, info, warn, error
+	// Path 日志文件路径
+	// 错误日志的输出文件，为空则输出到标准错误
+	Path string `yaml:"path"`
+
+	// Level 日志级别
+	// 可选值：debug、info、warn、error
+	Level string `yaml:"level"`
 }
 
 // PerformanceConfig 性能配置。
+//
+// 配置服务器性能优化相关参数。
+//
+// 注意事项：
+//   - GoroutinePool 复用 goroutine 减少创建开销
+//   - FileCache 缓存静态文件内容提升响应速度
+//   - Transport 配置代理连接的连接池参数
+//
+// 使用示例：
+//
+//	performance:
+//	  goroutine_pool:
+//	    enabled: true
+//	    max_workers: 1000
+//	  file_cache:
+//	    max_entries: 10000
+//	    max_size: 1073741824
+//	  transport:
+//	    max_idle_conns: 100
 type PerformanceConfig struct {
-	GoroutinePool GoroutinePoolConfig `yaml:"goroutine_pool"` // Goroutine 池
-	FileCache     FileCacheConfig     `yaml:"file_cache"`     // 文件缓存
-	Transport     TransportConfig     `yaml:"transport"`      // HTTP Transport
+	// GoroutinePool Goroutine 池配置
+	// 控制 worker goroutine 的复用行为
+	GoroutinePool GoroutinePoolConfig `yaml:"goroutine_pool"`
+
+	// FileCache 文件缓存配置
+	// 缓存静态文件内容避免重复磁盘 IO
+	FileCache FileCacheConfig `yaml:"file_cache"`
+
+	// Transport HTTP Transport 配置
+	// 代理连接池的参数设置
+	Transport TransportConfig `yaml:"transport"`
 }
 
 // GoroutinePoolConfig Goroutine 池配置。
+//
+// 复用 goroutine 减少创建和销毁开销。
+//
+// 注意事项：
+//   - Enabled 为 true 时启用 goroutine 池
+//   - MaxWorkers 限制最大并发 worker 数
+//   - MinWorkers 预热 worker 数量
+//   - IdleTimeout 空闲 worker 回收时间
+//
+// 使用示例：
+//
+//	goroutine_pool:
+//	  enabled: true
+//	  max_workers: 1000
+//	  min_workers: 100
+//	  idle_timeout: 60s
 type GoroutinePoolConfig struct {
-	Enabled     bool          `yaml:"enabled"`      // 是否启用
-	MaxWorkers  int           `yaml:"max_workers"`  // 最大 worker 数
-	MinWorkers  int           `yaml:"min_workers"`  // 最小 worker 数（预热）
-	IdleTimeout time.Duration `yaml:"idle_timeout"` // 空闲超时
+	// Enabled 是否启用
+	Enabled bool `yaml:"enabled"`
+
+	// MaxWorkers 最大 worker 数
+	// 限制同时运行的最大 goroutine 数量
+	MaxWorkers int `yaml:"max_workers"`
+
+	// MinWorkers 最小 worker 数（预热）
+	// 启动时预创建的 goroutine 数量
+	MinWorkers int `yaml:"min_workers"`
+
+	// IdleTimeout 空闲超时
+	// 空闲 worker 超过此时间将被回收
+	IdleTimeout time.Duration `yaml:"idle_timeout"`
 }
 
 // FileCacheConfig 文件缓存配置。
+//
+// 缓存静态文件内容减少磁盘 IO。
+//
+// 注意事项：
+//   - MaxEntries 限制最大缓存文件数量
+//   - MaxSize 限制缓存总内存使用量（字节）
+//   - Inactive 超过此时间未访问的文件将被淘汰
+//   - LRUEviction 已废弃，请使用 MaxSize
+//
+// 使用示例：
+//
+//	file_cache:
+//	  max_entries: 10000
+//	  max_size: 1073741824
+//	  inactive: 60s
 type FileCacheConfig struct {
-	MaxEntries  int64         `yaml:"max_entries"`  // 最大缓存条目数
-	MaxSize     int64         `yaml:"max_size"`     // 内存上限（字节）
-	Inactive    time.Duration `yaml:"inactive"`     // 未访问淘汰时间
+	// MaxEntries 最大缓存条目数
+	// 缓存文件的最大数量限制
+	MaxEntries int64 `yaml:"max_entries"`
+
+	// MaxSize 内存上限（字节）
+	// 缓存占用的最大内存限制
+	MaxSize int64 `yaml:"max_size"`
+
+	// Inactive 未访问淘汰时间
+	// 超过此时间未被访问的缓存将被清除
+	Inactive time.Duration `yaml:"inactive"`
+
+	// LRUEviction 启用 LRU 淘汰
 	// Deprecated: 该字段已废弃，将在未来版本中移除，请使用 MaxSize 代替
-	LRUEviction bool          `yaml:"lru_eviction"` // 启用 LRU 淘汰（已废弃）
+	LRUEviction bool `yaml:"lru_eviction"`
 }
 
 // TransportConfig HTTP Transport 配置。
+//
+// 配置代理后端连接的连接池参数。
+//
+// 注意事项：
+//   - MaxIdleConns 控制所有主机的总空闲连接数
+//   - MaxIdleConnsPerHost 控制每个后端主机的空闲连接
+//   - IdleConnTimeout 控制空闲连接的保持时间
+//   - MaxConnsPerHost 限制每个后端主机的总连接数
+//
+// 使用示例：
+//
+//	transport:
+//	  max_idle_conns: 100
+//	  max_idle_conns_per_host: 10
+//	  idle_conn_timeout: 90s
+//	  max_conns_per_host: 100
 type TransportConfig struct {
-	MaxIdleConns        int           `yaml:"max_idle_conns"`          // 最大空闲连接数
-	MaxIdleConnsPerHost int           `yaml:"max_idle_conns_per_host"` // 每主机最大空闲连接
-	IdleConnTimeout     time.Duration `yaml:"idle_conn_timeout"`       // 空闲连接超时
-	MaxConnsPerHost     int           `yaml:"max_conns_per_host"`      // 每主机最大连接数
+	// MaxIdleConns 最大空闲连接数
+	// 所有后端主机的总空闲连接上限
+	MaxIdleConns int `yaml:"max_idle_conns"`
+
+	// MaxIdleConnsPerHost 每主机最大空闲连接
+	// 单个后端主机的最大空闲连接数
+	MaxIdleConnsPerHost int `yaml:"max_idle_conns_per_host"`
+
+	// IdleConnTimeout 空闲连接超时
+	// 空闲连接的最大存活时间
+	IdleConnTimeout time.Duration `yaml:"idle_conn_timeout"`
+
+	// MaxConnsPerHost 每主机最大连接数
+	// 单个后端主机的总连接数上限
+	MaxConnsPerHost int `yaml:"max_conns_per_host"`
 }
 
 // MonitoringConfig 监控配置。
+//
+// 配置服务状态监控和健康检查端点。
+//
+// 注意事项：
+//   - Status 配置状态检查端点
+//   - 监控端点建议限制访问 IP 防止信息泄露
+//
+// 使用示例：
+//
+//	monitoring:
+//	  status:
+//	    path: "/status"
+//	    allow: ["127.0.0.1", "10.0.0.0/8"]
 type MonitoringConfig struct {
-	Status StatusConfig `yaml:"status"` // 状态端点配置
+	// Status 状态端点配置
+	// 服务健康状态检查端点
+	Status StatusConfig `yaml:"status"`
 }
 
 // StatusConfig 状态监控端点配置。
+//
+// 配置服务状态检查端点的路径和访问控制。
+//
+// 注意事项：
+//   - Path 为状态端点的 URL 路径
+//   - Allow 限制可访问的 IP 地址列表
+//   - 生产环境建议严格限制访问来源
+//
+// 使用示例：
+//
+//	status:
+//	  path: "/status"
+//	  allow: ["127.0.0.1", "192.168.0.0/16"]
 type StatusConfig struct {
-	Path  string   `yaml:"path"`  // 端点路径
-	Allow []string `yaml:"allow"` // 允许访问的 IP 列表
+	// Path 端点路径
+	// 状态检查端点的 URL 路径
+	Path string `yaml:"path"`
+
+	// Allow 允许访问的 IP 列表
+	// 可访问状态端点的 IP 地址或 CIDR
+	Allow []string `yaml:"allow"`
 }
 
 // StreamConfig TCP/UDP Stream 代理配置。
+//
+// 用于四层网络代理，如数据库、Redis 等 TCP/UDP 服务。
+//
+// 注意事项：
+//   - Listen 配置监听地址
+//   - Protocol 支持 tcp 或 udp
+//   - Upstream 配置后端目标列表
+//   - Stream 代理工作在传输层，不解析应用层协议
+//
+// 使用示例：
+//
+//	stream:
+//	  - listen: ":3306"
+//	    protocol: "tcp"
+//	    upstream:
+//	      targets:
+//	        - addr: "mysql1:3306"
+//	          weight: 3
+//	        - addr: "mysql2:3306"
+//	          weight: 1
+//	      load_balance: "round_robin"
 type StreamConfig struct {
-	Listen   string         `yaml:"listen"`   // 监听地址，如 ":3306"
-	Protocol string         `yaml:"protocol"` // 协议：tcp 或 udp
-	Upstream StreamUpstream `yaml:"upstream"` // 上游配置
+	// Listen 监听地址
+	// TCP/UDP 监听地址，如 ":3306" 或 "0.0.0.0:6379"
+	Listen string `yaml:"listen"`
+
+	// Protocol 协议类型
+	// 可选值：tcp、udp
+	Protocol string `yaml:"protocol"`
+
+	// Upstream 上游配置
+	// 后端服务器列表和负载均衡设置
+	Upstream StreamUpstream `yaml:"upstream"`
 }
 
 // StreamUpstream Stream 上游配置。
+//
+// 配置 Stream 代理的后端服务器列表。
+//
+// 注意事项：
+//   - Targets 配置后端服务器地址
+//   - LoadBalance 配置负载均衡算法
+//
+// 使用示例：
+//
+//	upstream:
+//	  targets:
+//	    - addr: "backend1:3306"
+//	      weight: 3
+//	  load_balance: "round_robin"
 type StreamUpstream struct {
-	Targets     []StreamTarget `yaml:"targets"`      // 目标列表
-	LoadBalance string         `yaml:"load_balance"` // 负载均衡算法
+	// Targets 目标列表
+	// 后端服务器地址列表
+	Targets []StreamTarget `yaml:"targets"`
+
+	// LoadBalance 负载均衡算法
+	// 可选值：round_robin、least_conn
+	LoadBalance string `yaml:"load_balance"`
 }
 
 // StreamTarget Stream 目标配置。
+//
+// 定义单个 Stream 后端服务器。
+//
+// 注意事项：
+//   - Addr 为后端服务器地址
+//   - Weight 在加权轮询算法下生效
+//
+// 使用示例：
+//
+//	targets:
+//	  - addr: "mysql1:3306"
+//	    weight: 3
+//	  - addr: "mysql2:3306"
+//	    weight: 1
 type StreamTarget struct {
-	Addr   string `yaml:"addr"`   // 目标地址，如 "mysql1:3306"
-	Weight int    `yaml:"weight"` // 权重
+	// Addr 目标地址
+	// 后端服务器地址，如 "host:port"
+	Addr string `yaml:"addr"`
+
+	// Weight 权重
+	// 用于加权轮询负载均衡
+	Weight int `yaml:"weight"`
 }
 
 // Load 从文件加载配置。

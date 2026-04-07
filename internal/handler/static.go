@@ -32,6 +32,11 @@ import (
 // StaticHandler 静态文件处理器。
 //
 // 提供静态文件服务，支持目录索引、文件缓存和零拷贝传输。
+//
+// 注意事项：
+//   - 自动处理目录遍历攻击防护（拒绝包含 ".." 的路径）
+//   - 并发安全，可在多个 goroutine 中使用
+//   - 大文件（>= 8KB）自动启用零拷贝传输
 type StaticHandler struct {
 	// root 静态文件根目录
 	root string
@@ -49,7 +54,21 @@ type StaticHandler struct {
 	gzipStatic *compression.GzipStatic
 }
 
-// NewStaticHandler 创建静态文件处理器
+// NewStaticHandler 创建静态文件处理器。
+//
+// 初始化并返回一个新的静态文件处理器实例。
+//
+// 参数：
+//   - root: 静态文件根目录路径
+//   - index: 索引文件列表，当请求目录时依次查找（如 ["index.html", "index.htm"]）
+//   - useSendfile: 是否启用零拷贝传输（大文件优化）
+//
+// 返回值：
+//   - *StaticHandler: 新创建的静态文件处理器
+//
+// 使用示例：
+//
+//	handler := handler.NewStaticHandler("/var/www", []string{"index.html"}, true)
 func NewStaticHandler(root string, index []string, useSendfile bool) *StaticHandler {
 	return &StaticHandler{
 		root:        root,
@@ -58,19 +77,54 @@ func NewStaticHandler(root string, index []string, useSendfile bool) *StaticHand
 	}
 }
 
-// SetFileCache 设置文件缓存
+// SetFileCache 设置文件缓存。
+//
+// 为静态文件处理器启用文件缓存功能。
+// 缓存可以显著提升小文件的访问性能。
+//
+// 参数：
+//   - fc: 文件缓存实例
+//
+// 注意事项：
+//   - 仅对小于 1MB 的文件启用缓存
+//   - 缓存会自动检测文件修改并更新
 func (h *StaticHandler) SetFileCache(fc *cache.FileCache) {
 	h.fileCache = fc
 }
 
-// SetGzipStatic 设置预压缩文件支持
+// SetGzipStatic 设置预压缩文件支持。
+//
+// 启用后，对于匹配扩展名的请求，优先发送 .gz 预压缩文件。
+//
+// 参数：
+//   - enabled: 是否启用预压缩支持
+//   - extensions: 需要支持预压缩的文件扩展名列表（如 [".html", ".css", ".js"]）
+//
+// 使用示例：
+//
+//	handler.SetGzipStatic(true, []string{".html", ".css", ".js"})
 func (h *StaticHandler) SetGzipStatic(enabled bool, extensions []string) {
 	if enabled {
 		h.gzipStatic = compression.NewGzipStatic(true, h.root, extensions)
 	}
 }
 
-// Handle 处理静态文件请求
+// Handle 处理静态文件请求。
+//
+// 根据请求路径查找并返回对应的静态文件。
+// 支持目录索引文件、缓存查找和零拷贝传输。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 处理流程：
+//  1. 安全检查：防止目录遍历攻击
+//  2. 检查文件/目录是否存在
+//  3. 如果是目录，尝试查找索引文件
+//  4. 尝试发送预压缩文件
+//  5. 尝试从缓存获取
+//  6. 大文件使用零拷贝传输
+//  7. 读取文件并存入缓存
 func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 	path := string(ctx.Path())
 
@@ -107,7 +161,14 @@ func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 	h.serveFile(ctx, filePath, info)
 }
 
-// serveFile 提供文件服务，支持缓存和零拷贝传输
+// serveFile 提供文件服务，支持缓存和零拷贝传输。
+//
+// 内部方法，负责实际的文件发送逻辑。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//   - filePath: 文件绝对路径
+//   - info: 文件信息（用于判断文件大小和修改时间）
 func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, info os.FileInfo) {
 	// 尝试发送预压缩文件
 	if h.gzipStatic != nil {

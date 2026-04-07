@@ -23,10 +23,17 @@ import (
 
 // AccessLog 访问日志中间件，记录请求方法、路径、状态码、响应大小和处理时间。
 type AccessLog struct {
+	// logger 日志记录器实例，用于输出访问日志
 	logger *logging.Logger
 }
 
 // New 创建访问日志中间件。
+//
+// 参数：
+//   - cfg: 日志配置，包含输出路径、格式等设置
+//
+// 返回值：
+//   - *AccessLog: 访问日志中间件实例
 func New(cfg *config.LoggingConfig) *AccessLog {
 	return &AccessLog{
 		logger: logging.New(cfg),
@@ -34,11 +41,20 @@ func New(cfg *config.LoggingConfig) *AccessLog {
 }
 
 // Name 返回中间件名称。
+//
+// 返回值：
+//   - string: 中间件名称 "accesslog"
 func (a *AccessLog) Name() string {
 	return "accesslog"
 }
 
 // Process 包装 handler，在请求处理后记录访问日志。
+//
+// 参数：
+//   - next: 下一个请求处理器
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 包装后的请求处理器
 func (a *AccessLog) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		start := time.Now()
@@ -49,6 +65,9 @@ func (a *AccessLog) Process(next fasthttp.RequestHandler) fasthttp.RequestHandle
 }
 
 // Close 关闭日志文件。
+//
+// 返回值：
+//   - error: 关闭失败时返回错误，成功返回 nil
 func (a *AccessLog) Close() error {
 	return a.logger.Close()
 }

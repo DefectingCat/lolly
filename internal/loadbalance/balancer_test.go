@@ -1,4 +1,13 @@
-// Package loadbalance provides load balancing algorithms for the Lolly HTTP server.
+// Package loadbalance 提供负载均衡算法的测试。
+//
+// 该文件测试负载均衡模块的各项功能，包括：
+//   - 轮询算法
+//   - 加权轮询算法
+//   - 最少连接算法
+//   - IP 哈希算法
+//   - 一致性哈希算法
+//
+// 作者：xfy
 package loadbalance
 
 import (

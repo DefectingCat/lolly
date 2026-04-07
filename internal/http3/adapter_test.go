@@ -1,3 +1,13 @@
+// Package http3 提供 HTTP/3 适配器功能的测试。
+//
+// 该文件测试 HTTP/3 适配器模块的各项功能，包括：
+//   - 适配器创建和初始化
+//   - HTTP 请求到 fasthttp 请求的转换
+//   - fasthttp 响应到 HTTP 响应的转换
+//   - 请求方法、URI、头部、请求体的转换
+//   - 完整请求响应流程
+//
+// 作者：xfy
 package http3
 
 import (

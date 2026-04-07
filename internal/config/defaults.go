@@ -120,10 +120,9 @@ func DefaultConfig() *Config {
 				IdleTimeout: 60 * time.Second,
 			},
 			FileCache: FileCacheConfig{
-				MaxEntries:  10000,
-				MaxSize:     256 * 1024 * 1024, // 256MB
-				Inactive:    20 * time.Second,
-				LRUEviction: true,
+				MaxEntries: 10000,
+				MaxSize:    256 * 1024 * 1024, // 256MB
+				Inactive:   20 * time.Second,
 			},
 			Transport: TransportConfig{
 				MaxIdleConns:        100,
@@ -234,7 +233,12 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	for _, proto := range cfg.Server.SSL.Protocols {
 		fmt.Fprintf(&buf, "  #     - \"%s\"\n", proto)
 	}
-	buf.WriteString("  #   ciphers: []                    # 加密套件（仅 TLS 1.2 有效）\n")
+	buf.WriteString("  #   ciphers:                       # 加密套件（仅 TLS 1.2 有效，TLS 1.3 使用内置套件）\n")
+	buf.WriteString("  #     - ECDHE-ECDSA-AES256-GCM-SHA384\n")
+	buf.WriteString("  #     - ECDHE-RSA-AES256-GCM-SHA384\n")
+	buf.WriteString("  #     - ECDHE-ECDSA-CHACHA20-POLY1305\n")
+	buf.WriteString("  #     - ECDHE-RSA-CHACHA20-POLY1305\n")
+	buf.WriteString("  #   # 拒绝不安全套件：含 RC4、DES、3DES、CBC 的配置将报错\n")
 	fmt.Fprintf(&buf, "  #   ocsp_stapling: %v              # OCSP Stapling\n", cfg.Server.SSL.OCSPStapling)
 	buf.WriteString("  #   hsts:                          # HTTP Strict Transport Security\n")
 	fmt.Fprintf(&buf, "  #     max_age: %d                  # 过期时间（秒）\n", cfg.Server.SSL.HSTS.MaxAge)
@@ -274,7 +278,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    # 安全头部\n")
 	buf.WriteString("    headers:\n")
 	fmt.Fprintf(&buf, "      x_frame_options: \"%s\"        # 防止点击劫持（有效值: DENY, SAMEORIGIN, 空表示禁用）\n", cfg.Server.Security.Headers.XFrameOptions)
-	fmt.Fprintf(&buf, "      x_content_type_options: \"%s\" # 防止 MIME 嗅探\n", cfg.Server.Security.Headers.XContentTypeOptions)
+	fmt.Fprintf(&buf, "      x_content_type_options: \"%s\" # 防止 MIME 嗅探（有效值：nosniff，空表示禁用）\n", cfg.Server.Security.Headers.XContentTypeOptions)
 	fmt.Fprintf(&buf, "      referrer_policy: \"%s\"        # 引用策略（有效值: no-referrer, no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url）\n", cfg.Server.Security.Headers.ReferrerPolicy)
 	buf.WriteString("      # content_security_policy: \"default-src 'self'\"  # 内容安全策略 CSP\n")
 	buf.WriteString("      # permissions_policy: \"geolocation=(), microphone=()\"  # 权限策略\n")
@@ -292,7 +296,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("  # 响应压缩配置\n")
 	buf.WriteString("  compression:\n")
 	fmt.Fprintf(&buf, "    type: \"%s\"            # 压缩类型（有效值: gzip, brotli, both，空表示禁用）\n", cfg.Server.Compression.Type)
-	fmt.Fprintf(&buf, "    level: %d              # 压缩级别（范围 1-9，值越大压缩率越高但速度越慢）\n", cfg.Server.Compression.Level)
+	fmt.Fprintf(&buf, "    level: %d              # 压缩级别（范围 0-9，0=不压缩，1=最快，9=最高压缩率）\n", cfg.Server.Compression.Level)
 	fmt.Fprintf(&buf, "    min_size: %d        # 最小压缩大小（字节，小于此值不压缩）\n", cfg.Server.Compression.MinSize)
 	fmt.Fprintf(&buf, "    gzip_static: %v        # 启用预压缩文件支持（自动查找 .gz/.br 文件）\n", cfg.Server.Compression.GzipStatic)
 	buf.WriteString("    gzip_static_extensions:  # 预压缩文件扩展名\n")
@@ -398,8 +402,6 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "    max_entries: %d          # 最大缓存条目\n", cfg.Performance.FileCache.MaxEntries)
 	fmt.Fprintf(&buf, "    max_size: %d              # 内存上限（字节，%dMB）\n", cfg.Performance.FileCache.MaxSize, cfg.Performance.FileCache.MaxSize/1024/1024)
 	fmt.Fprintf(&buf, "    inactive: %ds             # 未访问淘汰时间\n", int(cfg.Performance.FileCache.Inactive.Seconds()))
-	buf.WriteString("    # Deprecated: lru_eviction 已废弃，将在未来版本中移除\n")
-	fmt.Fprintf(&buf, "    lru_eviction: %v          # 启用 LRU 淘汰\n", cfg.Performance.FileCache.LRUEviction)
 	buf.WriteString("  transport:                   # HTTP Transport 连接池\n")
 	fmt.Fprintf(&buf, "    max_idle_conns: %d            # 最大空闲连接\n", cfg.Performance.Transport.MaxIdleConns)
 	fmt.Fprintf(&buf, "    max_idle_conns_per_host: %d   # 每主机空闲连接\n", cfg.Performance.Transport.MaxIdleConnsPerHost)

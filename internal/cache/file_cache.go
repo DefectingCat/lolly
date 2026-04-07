@@ -205,6 +205,9 @@ func (c *FileCache) removeEntry(entry *FileEntry) {
 }
 
 // evictIfNeeded 根据限制淘汰条目。
+//
+// 检查当前缓存是否超过条目数或内存大小限制，
+// 如果超过则调用 evictLRU 淘汰最久未使用的条目。
 func (c *FileCache) evictIfNeeded() {
 	// 按条目数淘汰
 	for c.lruList.Len() > int(c.maxEntries) && c.maxEntries > 0 {
@@ -218,6 +221,9 @@ func (c *FileCache) evictIfNeeded() {
 }
 
 // evictLRU 淘汰最久未使用的条目。
+//
+// 从 LRU 链表尾部移除条目并删除。
+// 如果链表为空则不执行任何操作。
 func (c *FileCache) evictLRU() {
 	if c.lruList.Len() == 0 {
 		return
@@ -257,10 +263,17 @@ func (c *FileCache) Stats() FileCacheStats {
 
 // FileCacheStats 文件缓存统计。
 type FileCacheStats struct {
-	Entries    int64
+	// Entries 当前缓存条目数量
+	Entries int64
+
+	// MaxEntries 最大缓存条目数限制
 	MaxEntries int64
-	Size       int64
-	MaxSize    int64
+
+	// Size 当前缓存使用的内存大小（字节）
+	Size int64
+
+	// MaxSize 最大内存使用限制（字节）
+	MaxSize int64
 }
 
 // ProxyCacheRule 代理缓存规则。
@@ -423,7 +436,20 @@ func (c *ProxyCache) MatchRule(path, method string, status int) *ProxyCacheRule 
 	return nil
 }
 
-// pathMatch 路径匹配（支持前缀和精确匹配）。
+// pathMatch 检查路径是否匹配指定模式。
+//
+// 支持以下匹配模式：
+//   - "*"：匹配所有路径
+//   - 以 "*" 结尾：前缀匹配（如 "/api/*" 匹配 "/api/xxx"）
+//   - 以 "/" 结尾：目录前缀匹配
+//   - 其他：精确匹配
+//
+// 参数：
+//   - pattern: 匹配模式，支持通配符
+//   - path: 待检查的路径
+//
+// 返回值：
+//   - bool: true 表示匹配，false 表示不匹配
 func pathMatch(pattern, path string) bool {
 	if pattern == "*" {
 		return true
@@ -442,6 +468,13 @@ func pathMatch(pattern, path string) bool {
 }
 
 // contains 检查字符串切片是否包含某值。
+//
+// 参数：
+//   - slice: 字符串切片
+//   - val: 待查找的值
+//
+// 返回值：
+//   - bool: true 表示包含，false 表示不包含
 func contains(slice []string, val string) bool {
 	for _, s := range slice {
 		if s == val {
@@ -452,6 +485,13 @@ func contains(slice []string, val string) bool {
 }
 
 // containsInt 检查整数切片是否包含某值。
+//
+// 参数：
+//   - slice: 整数切片
+//   - val: 待查找的值
+//
+// 返回值：
+//   - bool: true 表示包含，false 表示不包含
 func containsInt(slice []int, val int) bool {
 	for _, i := range slice {
 		if i == val {
@@ -489,6 +529,9 @@ func (c *ProxyCache) Stats() ProxyCacheStats {
 
 // ProxyCacheStats 代理缓存统计。
 type ProxyCacheStats struct {
+	// Entries 当前缓存条目数量
 	Entries int
+
+	// Pending 正在等待缓存生成的请求数量
 	Pending int
 }

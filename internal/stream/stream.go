@@ -42,17 +42,34 @@ type Balancer interface {
 	Select(targets []*Target) *Target
 }
 
-// roundRobin 简单轮询。
+// roundRobin 简单轮询负载均衡器。
+//
+// 使用原子计数器实现线程安全的轮询选择，每次选择后计数器递增，
+// 确保请求均匀分布到所有健康目标。
 type roundRobin struct {
 	counter uint64
 }
 
 // newRoundRobin 创建轮询均衡器。
+//
+// 返回实现了简单轮询算法的 Balancer 接口实例。
+//
+// 返回值：
+//   - Balancer: 轮询负载均衡器实例
 func newRoundRobin() Balancer {
 	return &roundRobin{}
 }
 
 // Select 选择下一个目标。
+//
+// 从健康目标列表中按轮询顺序选择一个目标。
+// 只选择标记为健康的目标，如果无健康目标则返回 nil。
+//
+// 参数：
+//   - targets: 目标服务器列表
+//
+// 返回值：
+//   - *Target: 选中的目标服务器，无可用目标时返回 nil
 func (r *roundRobin) Select(targets []*Target) *Target {
 	// 过滤健康目标
 	healthy := make([]*Target, 0)
@@ -68,15 +85,32 @@ func (r *roundRobin) Select(targets []*Target) *Target {
 	return healthy[idx%uint64(len(healthy))]
 }
 
-// leastConn 最少连接。
+// leastConn 最少连接负载均衡器。
+//
+// 跟踪每个目标服务器的活跃连接数，总是选择连接数最少的目标。
+// 适合连接持续时间差异较大的场景。
 type leastConn struct{}
 
 // newLeastConn 创建最少连接均衡器。
+//
+// 返回实现了最少连接算法的 Balancer 接口实例。
+//
+// 返回值：
+//   - Balancer: 最少连接负载均衡器实例
 func newLeastConn() Balancer {
 	return &leastConn{}
 }
 
 // Select 选择连接最少的目标。
+//
+// 遍历所有健康目标，选择当前连接数最少的目标服务器。
+// 只选择标记为健康的目标，如果无健康目标则返回 nil。
+//
+// 参数：
+//   - targets: 目标服务器列表
+//
+// 返回值：
+//   - *Target: 选中的目标服务器，无可用目标时返回 nil
 func (l *leastConn) Select(targets []*Target) *Target {
 	var selected *Target
 	var minConns int64 = -1
@@ -93,17 +127,35 @@ func (l *leastConn) Select(targets []*Target) *Target {
 	return selected
 }
 
-// weightedRoundRobin 加权轮询。
+// weightedRoundRobin 加权轮询负载均衡器。
+//
+// 根据目标服务器的权重分配请求，权重高的目标获得更多请求。
+// 使用原子计数器确保线程安全，支持不同权重的目标混合使用。
 type weightedRoundRobin struct {
 	counter uint64
 }
 
 // newWeightedRoundRobin 创建加权轮询均衡器。
+//
+// 返回实现了加权轮询算法的 Balancer 接口实例。
+//
+// 返回值：
+//   - Balancer: 加权轮询负载均衡器实例
 func newWeightedRoundRobin() Balancer {
 	return &weightedRoundRobin{}
 }
 
 // Select 基于权重分布选择目标。
+//
+// 根据目标服务器的权重进行轮询选择，权重决定被选中的概率。
+// 权重为 0 或负数的目标按权重 1 处理。
+// 只选择标记为健康的目标，如果无健康目标则返回 nil。
+//
+// 参数：
+//   - targets: 目标服务器列表
+//
+// 返回值：
+//   - *Target: 选中的目标服务器，无可用目标时返回 nil
 func (w *weightedRoundRobin) Select(targets []*Target) *Target {
 	healthy := make([]*Target, 0)
 	for _, t := range targets {
@@ -145,20 +197,48 @@ func (w *weightedRoundRobin) Select(targets []*Target) *Target {
 	return healthy[len(healthy)-1]
 }
 
-// ipHash IP 哈希。
+// ipHash IP 哈希负载均衡器。
+//
+// 基于客户端 IP 地址计算哈希值，将同一 IP 的请求分配到固定目标。
+// 适合需要会话保持的场景，确保相同客户端总是被路由到同一服务器。
 type ipHash struct{}
 
 // newIPHash 创建 IP 哈希均衡器。
+//
+// 返回实现了 IP 哈希算法的 Balancer 接口实例。
+//
+// 返回值：
+//   - Balancer: IP 哈希负载均衡器实例
 func newIPHash() Balancer {
 	return &ipHash{}
 }
 
 // Select 默认选择（IP Hash 需要具体 IP）。
+//
+// 当无客户端 IP 时，使用空字符串进行哈希计算。
+// 通常应使用 SelectByIP 方法指定客户端 IP。
+//
+// 参数：
+//   - targets: 目标服务器列表
+//
+// 返回值：
+//   - *Target: 选中的目标服务器，无可用目标时返回 nil
 func (i *ipHash) Select(targets []*Target) *Target {
 	return i.SelectByIP(targets, "")
 }
 
 // SelectByIP 基于客户端 IP 哈希选择目标。
+//
+// 使用 FNV-64a 算法计算客户端 IP 的哈希值，对目标数取模选择目标。
+// 同一 IP 总是映射到同一目标（除非目标列表变化）。
+// 只选择标记为健康的目标，如果无健康目标则返回 nil。
+//
+// 参数：
+//   - targets: 目标服务器列表
+//   - clientIP: 客户端 IP 地址字符串
+//
+// 返回值：
+//   - *Target: 选中的目标服务器，无可用目标时返回 nil
 func (i *ipHash) SelectByIP(targets []*Target, clientIP string) *Target {
 	healthy := make([]*Target, 0)
 	for _, t := range targets {
@@ -397,6 +477,13 @@ func (s *Server) Start() error {
 }
 
 // acceptLoop 接受连接循环。
+//
+// 在单独的 goroutine 中运行，持续接受 TCP 连接。
+// 当服务器停止时，该函数返回。
+//
+// 参数：
+//   - addr: 监听地址
+//   - listener: TCP 监听器实例
 func (s *Server) acceptLoop(addr string, listener net.Listener) {
 	for s.running.Load() {
 		conn, err := listener.Accept()
@@ -413,6 +500,16 @@ func (s *Server) acceptLoop(addr string, listener net.Listener) {
 }
 
 // handleConnection 处理单个连接。
+//
+// 处理客户端连接的完整生命周期：
+// 1. 选择上游目标
+// 2. 建立到目标服务器的连接
+// 3. 在客户端和目标之间双向转发数据
+// 4. 处理连接关闭和错误
+//
+// 参数：
+//   - clientConn: 客户端连接
+//   - addr: 监听地址
 func (s *Server) handleConnection(clientConn net.Conn, addr string) {
 	defer func() {
 		_ = clientConn.Close()
@@ -491,6 +588,9 @@ func (h *HealthChecker) Start() {
 }
 
 // check 执行健康检查。
+//
+// 尝试 TCP 连接到所有目标，根据连接结果更新健康状态。
+// 连接成功标记为健康，连接失败标记为不健康。
 func (h *HealthChecker) check() {
 	for _, target := range h.upstream.targets {
 		conn, err := net.DialTimeout("tcp", target.addr, h.timeout)
@@ -549,34 +649,71 @@ func (s *Server) Stats() Stats {
 
 // Stats Stream 服务器统计。
 type Stats struct {
+	// Connections 当前活跃连接数量
 	Connections int64
-	Listeners   int
-	Upstreams   int
+
+	// Listeners 当前监听器数量（TCP + UDP）
+	Listeners int
+
+	// Upstreams 上游配置数量
+	Upstreams int
 }
 
-// udpSession UDP 会话，管理客户端到后端的映射
+// udpSession UDP 会话，管理客户端到后端的映射。
+//
+// 每个 UDP 会话代表一个客户端与一个后端目标的映射关系。
+// 会话包含客户端地址、后端连接、最后活跃时间等信息。
+// 会话在空闲超时后自动清理。
 type udpSession struct {
+	// clientAddr 客户端 UDP 地址
 	clientAddr *net.UDPAddr
+	// targetConn 到后端目标的连接
 	targetConn net.Conn
+	// lastActive 最后活跃时间
 	lastActive time.Time
-	mu         sync.RWMutex
-	srv        *udpServer
-	closeOnce  sync.Once
+	// mu 保护 lastActive 的读写锁
+	mu sync.RWMutex
+	// srv 所属的 UDP 服务器
+	srv *udpServer
+	// closeOnce 确保只关闭一次
+	closeOnce sync.Once
 }
 
-// udpServer UDP 服务器，管理多个客户端会话
+// udpServer UDP 服务器，管理多个客户端会话。
+//
+// 负责监听 UDP 端口，管理客户端会话的生命周期。
+// 支持会话自动过期清理和优雅停止。
 type udpServer struct {
-	conn     *net.UDPConn
+	// conn UDP 连接
+	conn *net.UDPConn
+	// sessions 客户端会话映射，键为 sessionKey
 	sessions map[string]*udpSession
-	mu       sync.RWMutex
-	running  atomic.Bool
+	// mu 保护 sessions 的读写锁
+	mu sync.RWMutex
+	// running 运行状态标志
+	running atomic.Bool
+	// upstream 上游配置
 	upstream *Upstream
-	timeout  time.Duration
-	stopCh   chan struct{}
-	wg       sync.WaitGroup
+	// timeout 会话空闲超时时间
+	timeout time.Duration
+	// stopCh 停止信号通道
+	stopCh chan struct{}
+	// wg 等待 goroutine 结束
+	wg sync.WaitGroup
 }
 
-// newUDPServer 创建新的 UDP 服务器
+// newUDPServer 创建新的 UDP 服务器。
+//
+// 根据 UDP 连接、上游配置和超时时间创建 UDP 服务器实例。
+// 如果超时时间小于等于 0，使用默认 60 秒。
+//
+// 参数：
+//   - conn: UDP 连接
+//   - upstream: 上游配置
+//   - timeout: 会话空闲超时时间
+//
+// 返回值：
+//   - *udpServer: 创建的 UDP 服务器实例
 func newUDPServer(conn *net.UDPConn, upstream *Upstream, timeout time.Duration) *udpServer {
 	if timeout <= 0 {
 		timeout = 60 * time.Second // 默认 60 秒超时
@@ -590,12 +727,29 @@ func newUDPServer(conn *net.UDPConn, upstream *Upstream, timeout time.Duration) 
 	}
 }
 
-// sessionKey 从 UDP 地址生成会话键
+// sessionKey 从 UDP 地址生成会话键。
+//
+// 使用 UDP 地址的字符串表示作为会话映射的唯一键。
+//
+// 参数：
+//   - addr: UDP 地址
+//
+// 返回值：
+//   - string: 会话键字符串
 func sessionKey(addr *net.UDPAddr) string {
 	return addr.String()
 }
 
-// getSession 获取现有会话（线程安全）
+// getSession 获取现有会话（线程安全）。
+//
+// 根据客户端地址查找现有会话，如果找到则更新最后活跃时间。
+// 如果会话不存在返回 nil。
+//
+// 参数：
+//   - clientAddr: 客户端 UDP 地址
+//
+// 返回值：
+//   - *udpSession: 找到的会话，不存在时返回 nil
 func (s *udpServer) getSession(clientAddr *net.UDPAddr) *udpSession {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -613,7 +767,21 @@ func (s *udpServer) getSession(clientAddr *net.UDPAddr) *udpSession {
 	return session
 }
 
-// getOrCreateSession 获取或创建会话（线程安全）
+// getOrCreateSession 获取或创建会话（线程安全）。
+//
+// 首先尝试获取现有会话，如果不存在则创建新会话：
+// 1. 选择后端目标
+// 2. 建立到目标的 UDP 连接
+// 3. 创建会话并启动响应监听 goroutine
+//
+// 使用双重检查锁定模式避免重复创建会话。
+//
+// 参数：
+//   - clientAddr: 客户端 UDP 地址
+//
+// 返回值：
+//   - *udpSession: 获取或创建的会话
+//   - error: 创建失败时返回错误
 func (s *udpServer) getOrCreateSession(clientAddr *net.UDPAddr) (*udpSession, error) {
 	// 先尝试获取现有会话
 	session := s.getSession(clientAddr)
@@ -669,7 +837,12 @@ func (s *udpServer) getOrCreateSession(clientAddr *net.UDPAddr) (*udpSession, er
 	return session, nil
 }
 
-// removeSession 移除会话（线程安全）
+// removeSession 移除会话（线程安全）。
+//
+// 关闭会话并删除会话映射。
+//
+// 参数：
+//   - clientAddr: 客户端 UDP 地址
 func (s *udpServer) removeSession(clientAddr *net.UDPAddr) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -681,7 +854,10 @@ func (s *udpServer) removeSession(clientAddr *net.UDPAddr) {
 	}
 }
 
-// close 关闭会话
+// close 关闭会话。
+//
+// 使用 sync.Once 确保会话只关闭一次。
+// 关闭后端目标连接。
 func (sess *udpSession) close() {
 	sess.closeOnce.Do(func() {
 		if sess.targetConn != nil {
@@ -690,7 +866,14 @@ func (sess *udpSession) close() {
 	})
 }
 
-// handleBackendResponse 处理后端响应并转发回客户端
+// handleBackendResponse 处理后端响应并转发回客户端。
+//
+// 在单独的 goroutine 中运行，持续监听后端响应：
+// 1. 读取后端数据
+// 2. 转发到客户端
+// 3. 处理超时和错误
+//
+// 当会话超时、连接错误或服务器停止时返回。
 func (sess *udpSession) handleBackendResponse() {
 	defer sess.srv.wg.Done()
 
@@ -734,7 +917,14 @@ func (sess *udpSession) handleBackendResponse() {
 	}
 }
 
-// serve 启动 UDP 服务循环
+// serve 启动 UDP 服务循环。
+//
+// 在单独的 goroutine 中运行，持续监听 UDP 数据报：
+// 1. 接收客户端数据报
+// 2. 获取或创建会话
+// 3. 转发数据到后端
+//
+// 当服务器停止时返回。
 func (s *udpServer) serve() {
 	s.running.Store(true)
 
@@ -772,7 +962,10 @@ func (s *udpServer) serve() {
 	}
 }
 
-// startCleanupTicker 启动定期清理过期会话的 ticker
+// startCleanupTicker 启动定期清理过期会话的 ticker。
+//
+// 每 10 秒执行一次清理，移除空闲超时的会话。
+// 当服务器停止时返回。
 func (s *udpServer) startCleanupTicker() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -787,7 +980,10 @@ func (s *udpServer) startCleanupTicker() {
 	}
 }
 
-// cleanupExpiredSessions 清理过期会话
+// cleanupExpiredSessions 清理过期会话。
+//
+// 遍历所有会话，移除空闲时间超过 timeout 的会话。
+// 必须在持有写锁的情况下调用。
 func (s *udpServer) cleanupExpiredSessions() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -805,7 +1001,9 @@ func (s *udpServer) cleanupExpiredSessions() {
 	}
 }
 
-// stop 停止 UDP 服务器
+// stop 停止 UDP 服务器。
+//
+// 设置停止标志，关闭所有会话，等待 goroutine 结束，关闭连接。
 func (s *udpServer) stop() {
 	s.running.Store(false)
 	close(s.stopCh)

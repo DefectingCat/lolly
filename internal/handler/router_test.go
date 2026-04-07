@@ -1,4 +1,16 @@
-// Package handler 提供路由器的测试。
+// Package handler 提供路由器功能的测试。
+//
+// 该文件测试路由器模块的各项功能，包括：
+//   - GET 路由注册
+//   - POST 路由注册
+//   - PUT 路由注册
+//   - DELETE 路由注册
+//   - HEAD 路由注册
+//   - 多方法路由区分
+//   - 多路由注册
+//   - 未匹配路由处理
+//
+// 作者：xfy
 package handler
 
 import (

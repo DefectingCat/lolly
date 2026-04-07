@@ -1,3 +1,12 @@
+// Package netutil 提供网络工具功能的测试。
+//
+// 该文件测试网络工具模块的 IP 相关功能，包括：
+//   - 客户端 IP 提取
+//   - X-Forwarded-For 头解析
+//   - X-Real-IP 头解析
+//   - 远程地址解析
+//
+// 作者：xfy
 package netutil
 
 import (

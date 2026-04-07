@@ -206,7 +206,7 @@ func (p *GoroutinePool) startWorker() {
 				task(nil)
 
 			case <-idleTimer.C:
-				// 穴闲超时，退出 worker（保持最小数量）
+				// 空闲超时，退出 worker（保持最小数量）
 				atomic.AddInt32(&p.idleWorkers, -1)
 				if atomic.LoadInt32(&p.workers) > p.minWorkers {
 					return
@@ -243,12 +243,23 @@ func (p *GoroutinePool) Stats() PoolStats {
 //
 // 用于监控池的运行状态，包括 worker 数量和队列状态。
 type PoolStats struct {
-	Workers     int32 // 当前活跃 worker 数量
-	IdleWorkers int32 // 当前空闲 worker 数量
-	MaxWorkers  int32 // 最大 worker 数量上限
-	MinWorkers  int32 // 最小 worker 数量下限
-	QueueLen    int32 // 当前队列中的任务数
-	QueueCap    int32 // 队列容量上限
+	// Workers 当前活跃 worker 数量
+	Workers int32
+
+	// IdleWorkers 当前空闲 worker 数量
+	IdleWorkers int32
+
+	// MaxWorkers 最大 worker 数量上限
+	MaxWorkers int32
+
+	// MinWorkers 最小 worker 数量下限
+	MinWorkers int32
+
+	// QueueLen 当前队列中的任务数
+	QueueLen int32
+
+	// QueueCap 队列容量上限
+	QueueCap int32
 }
 
 // WrapHandler 使用 Goroutine 池包装 fasthttp 处理器。

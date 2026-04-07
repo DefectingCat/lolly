@@ -1,4 +1,14 @@
-// Package compression 提供 gzip_static 预压缩文件测试。
+// Package compression 提供 gzip_static 预压缩文件功能的测试。
+//
+// 该文件测试 gzip_static 模块的各项功能，包括：
+//   - Brotli 和 Gzip 文件优先级
+//   - Gzip 回退机制
+//   - Accept-Encoding 头解析
+//   - 扩展名检查
+//   - 路径遍历防护
+//   - Vary 头设置
+//
+// 作者：xfy
 package compression
 
 import (

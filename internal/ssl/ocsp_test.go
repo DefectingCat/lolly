@@ -1,3 +1,13 @@
+// Package ssl 提供 OCSP（在线证书状态协议）功能的测试。
+//
+// 该文件测试 OCSP 模块的各项功能，包括：
+//   - OCSP 管理器创建和配置
+//   - OCSP 响应获取
+//   - 证书状态检查
+//   - 过期响应处理
+//   - OCSP 配置默认值
+//
+// 作者：xfy
 package ssl
 
 import (
@@ -380,7 +390,7 @@ func TestOCSPManagerRegisterCertificate(t *testing.T) {
 	// If it fails, that's also OK - graceful degradation
 }
 
-// generateTestCertWithOCSP generates a self-signed certificate for testing.
+// generateTestCertWithOCSP 生成用于测试的自签名证书。
 // If ocspServer is provided, it will be included in the certificate.
 func generateTestCertWithOCSP(t *testing.T, ocspServer []string) ([]byte, []byte) {
 	t.Helper()

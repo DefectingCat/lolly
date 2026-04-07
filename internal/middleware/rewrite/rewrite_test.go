@@ -1,3 +1,13 @@
+// Package rewrite 提供 URL 重写功能的测试。
+//
+// 该文件测试 URL 重写模块的各项功能，包括：
+//   - 重写规则解析
+//   - 正则表达式匹配
+//   - 重定向和重写
+//   - 规则链执行
+//   - ReDoS 防护
+//
+// 作者：xfy
 package rewrite
 
 import (

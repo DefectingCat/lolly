@@ -1,8 +1,15 @@
-// Package proxy provides reverse proxy functionality for the Lolly HTTP server.
+// Package proxy 提供反向代理功能，支持 HTTP、WebSocket 和流式代理。
 //
 // 此文件实现了针对后端目标的健康检查功能，支持
 // 主动健康检查（定期 HTTP 探测）和被动健康检查
 // （基于观察到的失败标记目标为不健康）。
+//
+// 主要功能：
+//   - 定期向后端发送健康检查请求
+//   - 根据响应状态更新目标健康状态
+//   - 支持被动健康检查（基于请求失败）
+//
+// 作者：xfy
 //
 //go:generate go test -v ./...
 package proxy
@@ -27,7 +34,7 @@ import (
 // 返回 2xx 状态码的目标被标记为健康；
 // 超时、连接失败或非 2xx 响应将其标记为不健康。
 //
-// Example usage:
+// 使用示例：
 //
 //	targets := []*loadbalance.Target{
 //	    {URL: "http://backend1:8080"},
@@ -46,13 +53,26 @@ import (
 //	checker.Start()
 //	defer checker.Stop()
 type HealthChecker struct {
-	targets  []*loadbalance.Target
+	// targets 需要检查的后端目标列表
+	targets []*loadbalance.Target
+
+	// interval 健康检查间隔时间
 	interval time.Duration
-	timeout  time.Duration
-	path     string
-	stopCh   chan struct{}
-	running  atomic.Bool
-	client   *fasthttp.Client
+
+	// timeout 单次检查超时时间
+	timeout time.Duration
+
+	// path 健康检查请求路径
+	path string
+
+	// stopCh 停止信号通道
+	stopCh chan struct{}
+
+	// running 运行状态标志
+	running atomic.Bool
+
+	// client HTTP 客户端，用于发送健康检查请求
+	client *fasthttp.Client
 }
 
 // NewHealthChecker 使用指定的目标和配置创建一个新的 HealthChecker。

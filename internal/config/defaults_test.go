@@ -1,3 +1,11 @@
+// Package config 提供默认配置生成功能的测试。
+//
+// 该文件测试默认配置模块的各项功能，包括：
+//   - DefaultConfig 默认值验证
+//   - GenerateConfigYAML YAML 生成测试
+//   - 性能配置默认值测试
+//
+// 作者：xfy
 package config
 
 import (
@@ -7,6 +15,7 @@ import (
 )
 
 func TestDefaultConfig(t *testing.T) {
+	// TestDefaultConfig 测试默认配置生成。
 	cfg := DefaultConfig()
 
 	// 验证 Listen 默认值
@@ -55,6 +64,7 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestGenerateConfigYAML(t *testing.T) {
+	// TestGenerateConfigYAML 测试 YAML 配置生成。
 	cfg := DefaultConfig()
 
 	yamlData, err := GenerateConfigYAML(cfg)
@@ -82,6 +92,7 @@ func TestGenerateConfigYAML(t *testing.T) {
 }
 
 func TestDefaultConfigPerformance(t *testing.T) {
+	// TestDefaultConfigPerformance 测试性能配置默认值。
 	cfg := DefaultConfig()
 
 	// 验证 GoroutinePool 默认值
@@ -108,9 +119,7 @@ func TestDefaultConfigPerformance(t *testing.T) {
 	if cfg.Performance.FileCache.Inactive != 20*time.Second {
 		t.Errorf("FileCache.Inactive 期望 20s, 实际 %v", cfg.Performance.FileCache.Inactive)
 	}
-	if !cfg.Performance.FileCache.LRUEviction {
-		t.Errorf("FileCache.LRUEviction 期望 true, 实际 %v", cfg.Performance.FileCache.LRUEviction)
-	}
+	// 注意: LRUEviction 已废弃，不再验证
 
 	// 验证 Transport 默认值
 	if cfg.Performance.Transport.MaxIdleConns != 100 {

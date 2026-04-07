@@ -1,3 +1,14 @@
+// Package server 提供 Goroutine 池功能的测试。
+//
+// 该文件测试 Goroutine 池的各项功能，包括：
+//   - 池的创建和配置
+//   - 启动和停止控制
+//   - 任务提交和执行
+//   - 并发提交处理
+//   - Handler 包装功能
+//   - 统计信息收集
+//
+// 作者：xfy
 package server
 
 import (

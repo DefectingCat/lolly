@@ -78,6 +78,17 @@ func New(cfg *config.LoggingConfig) *Logger {
 }
 
 // getOutput 获取输出目标（stdout/stderr/文件）。
+//
+// 根据路径返回对应的输出 writer：
+//   - "stdout" 或空字符串：返回 os.Stdout
+//   - "stderr"：返回 os.Stderr
+//   - 其他：尝试打开文件，失败返回 os.Stdout
+//
+// 参数：
+//   - path: 输出路径
+//
+// 返回值：
+//   - io.Writer: 输出 writer
 func getOutput(path string) io.Writer {
 	path = strings.TrimSpace(path)
 	if path == "" || path == "stdout" {
@@ -128,6 +139,26 @@ func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, dur
 }
 
 // formatAccessLog 根据模板格式化访问日志。
+//
+// 支持以下变量替换：
+//   - $remote_addr: 客户端地址
+//   - $remote_user: 认证用户
+//   - $request: 请求方法和路径
+//   - $status: HTTP 状态码
+//   - $body_bytes_sent: 响应体大小
+//   - $request_time: 请求处理时间
+//   - $http_referer: Referer 头
+//   - $http_user_agent: User-Agent 头
+//   - $time: 当前时间
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//   - status: HTTP 状态码
+//   - size: 响应体大小
+//   - duration: 请求处理时间
+//
+// 返回值：
+//   - string: 格式化后的日志字符串
 func (l *Logger) formatAccessLog(ctx *fasthttp.RequestCtx, status int, size int64, duration time.Duration) string {
 	// 获取认证用户名，无认证时为 "-"
 	remoteUser := "-"
@@ -208,6 +239,16 @@ func Debug() *zerolog.Event {
 }
 
 // parseLevel 解析日志级别。
+//
+// 将字符串级别转换为 zerolog.Level。
+// 支持的级别：debug, info, warn, error（不区分大小写）。
+// 未知级别默认返回 info。
+//
+// 参数：
+//   - level: 日志级别字符串
+//
+// 返回值：
+//   - zerolog.Level: 解析后的日志级别
 func parseLevel(level string) zerolog.Level {
 	switch strings.ToLower(level) {
 	case "debug":

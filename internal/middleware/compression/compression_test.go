@@ -1,3 +1,13 @@
+// Package compression 提供压缩功能的测试。
+//
+// 该文件测试压缩中间件模块的各项功能，包括：
+//   - 压缩中间件创建
+//   - gzip 和 brotli 压缩
+//   - 可压缩类型检查
+//   - 压缩级别配置
+//   - 响应处理
+//
+// 作者：xfy
 package compression
 
 import (

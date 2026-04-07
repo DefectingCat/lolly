@@ -163,9 +163,14 @@ func (c *ConsistentHash) GetVirtualNodes() int {
 
 // Stats 返回一致性哈希统计信息。
 type ConsistentHashStats struct {
-	VirtualNodes int // 虚拟节点数
-	CircleSize   int // 哈希环大小
-	SortedHashes int // 排序哈希值数量
+	// VirtualNodes 每个目标的虚拟节点数量
+	VirtualNodes int
+
+	// CircleSize 哈希环中的节点总数
+	CircleSize int
+
+	// SortedHashes 排序后的哈希值数量
+	SortedHashes int
 }
 
 // GetStats 返回统计信息。

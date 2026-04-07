@@ -1,3 +1,13 @@
+// Package security 提供基本认证功能的测试。
+//
+// 该文件测试基本认证模块的各项功能，包括：
+//   - 基本认证创建和配置
+//   - 用户认证验证
+//   - 密码哈希（bcrypt/argon2id）
+//   - 用户添加和删除
+//   - 凭据提取
+//
+// 作者：xfy
 package security
 
 import (

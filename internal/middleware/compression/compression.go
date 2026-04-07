@@ -56,6 +56,13 @@ type CompressionMiddleware struct {
 }
 
 // New 创建压缩中间件。
+//
+// 参数：
+//   - cfg: 压缩配置，包含算法类型、压缩级别、最小压缩大小等
+//
+// 返回值：
+//   - *CompressionMiddleware: 压缩中间件实例
+//   - error: 配置无效时返回错误
 func New(cfg *config.CompressionConfig) (*CompressionMiddleware, error) {
 	if cfg == nil {
 		cfg = &config.CompressionConfig{
@@ -139,6 +146,12 @@ func (m *CompressionMiddleware) Name() string {
 }
 
 // Process 应用压缩中间件。
+//
+// 参数：
+//   - next: 下一个请求处理器
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 包装后的请求处理器
 func (m *CompressionMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		// 检查客户端是否支持压缩
@@ -203,6 +216,12 @@ func (m *CompressionMiddleware) Process(next fasthttp.RequestHandler) fasthttp.R
 }
 
 // isCompressible 检查 MIME 类型是否可压缩。
+//
+// 参数：
+//   - contentType: 内容类型（MIME 类型）
+//
+// 返回值：
+//   - bool: 是否可压缩
 func (m *CompressionMiddleware) isCompressible(contentType string) bool {
 	// 移除 charset 等参数
 	ct := contentType
@@ -227,6 +246,12 @@ func (m *CompressionMiddleware) isCompressible(contentType string) bool {
 }
 
 // compressGzip 使用 gzip 压缩数据。
+//
+// 参数：
+//   - data: 待压缩的原始数据
+//
+// 返回值：
+//   - []byte: 压缩后的数据
 func (m *CompressionMiddleware) compressGzip(data []byte) []byte {
 	w := m.gzipPool.Get().(*gzip.Writer)
 	defer m.gzipPool.Put(w)
@@ -240,6 +265,12 @@ func (m *CompressionMiddleware) compressGzip(data []byte) []byte {
 }
 
 // compressBrotli 使用 brotli 压缩数据。
+//
+// 参数：
+//   - data: 待压缩的原始数据
+//
+// 返回值：
+//   - []byte: 压缩后的数据
 func (m *CompressionMiddleware) compressBrotli(data []byte) []byte {
 	w := m.brotliPool.Get().(*brotli.Writer)
 	defer m.brotliPool.Put(w)
@@ -253,16 +284,25 @@ func (m *CompressionMiddleware) compressBrotli(data []byte) []byte {
 }
 
 // Types 返回可压缩的 MIME 类型列表。
+//
+// 返回值：
+//   - []string: 可压缩的 MIME 类型列表
 func (m *CompressionMiddleware) Types() []string {
 	return m.types
 }
 
 // Level 返回压缩级别。
+//
+// 返回值：
+//   - int: 压缩级别（1-9）
 func (m *CompressionMiddleware) Level() int {
 	return m.level
 }
 
 // MinSize 返回最小压缩大小。
+//
+// 返回值：
+//   - int: 最小压缩大小（字节）
 func (m *CompressionMiddleware) MinSize() int {
 	return m.minSize
 }

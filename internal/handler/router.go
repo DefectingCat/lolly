@@ -29,39 +29,91 @@ type Router struct {
 	router *router.Router
 }
 
-// NewRouter 创建路由器
+// NewRouter 创建路由器。
+//
+// 初始化并返回一个新的 Router 实例，底层使用 fasthttp/router 实现。
+//
+// 返回值：
+//   - *Router: 新创建的路由器实例
+//
+// 使用示例：
+//
+//	r := handler.NewRouter()
+//	r.GET("/api", myHandler)
 func NewRouter() *Router {
 	return &Router{
 		router: router.New(),
 	}
 }
 
-// GET 注册 GET 路由
+// GET 注册 GET 路由。
+//
+// 将指定路径映射到对应的处理器函数。
+//
+// 参数：
+//   - path: 路由路径，支持参数化路径如 /user/{id}
+//   - handler: 请求处理函数
 func (r *Router) GET(path string, handler fasthttp.RequestHandler) {
 	r.router.GET(path, handler)
 }
 
-// POST 注册 POST 路由
+// POST 注册 POST 路由。
+//
+// 将指定路径映射到对应的处理器函数。
+//
+// 参数：
+//   - path: 路由路径，支持参数化路径
+//   - handler: 请求处理函数
 func (r *Router) POST(path string, handler fasthttp.RequestHandler) {
 	r.router.POST(path, handler)
 }
 
-// PUT 注册 PUT 路由
+// PUT 注册 PUT 路由。
+//
+// 将指定路径映射到对应的处理器函数。
+//
+// 参数：
+//   - path: 路由路径
+//   - handler: 请求处理函数
 func (r *Router) PUT(path string, handler fasthttp.RequestHandler) {
 	r.router.PUT(path, handler)
 }
 
-// DELETE 注册 DELETE 路由
+// DELETE 注册 DELETE 路由。
+//
+// 将指定路径映射到对应的处理器函数。
+//
+// 参数：
+//   - path: 路由路径
+//   - handler: 请求处理函数
 func (r *Router) DELETE(path string, handler fasthttp.RequestHandler) {
 	r.router.DELETE(path, handler)
 }
 
-// HEAD 注册 HEAD 路由
+// HEAD 注册 HEAD 路由。
+//
+// 将指定路径映射到对应的处理器函数。
+//
+// 参数：
+//   - path: 路由路径
+//   - handler: 请求处理函数
 func (r *Router) HEAD(path string, handler fasthttp.RequestHandler) {
 	r.router.HEAD(path, handler)
 }
 
-// Handler 返回路由处理器
+// Handler 返回路由处理器。
+//
+// 获取可用于 fasthttp.Server 的请求处理器。
+// 该处理器会根据注册的路由规则分发请求。
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 请求处理器函数
+//
+// 使用示例：
+//
+//	server := &fasthttp.Server{
+//	    Handler: r.Handler(),
+//	}
 func (r *Router) Handler() fasthttp.RequestHandler {
 	return r.router.Handler
 }

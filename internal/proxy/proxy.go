@@ -47,15 +47,33 @@ import (
 )
 
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
+//
 // 它为每个后端目标管理连接池，并提供负载均衡功能。
+//
+// 注意事项：
+//   - 所有公开方法均为并发安全
+//   - 使用前需确保 targets 中至少有一个健康目标
 type Proxy struct {
-	targets       []*loadbalance.Target
-	clients       map[string]*fasthttp.HostClient // key: target URL
-	balancer      loadbalance.Balancer
-	config        *config.ProxyConfig
-	cache         *cache.ProxyCache // 代理缓存（可选）
-	healthChecker *HealthChecker    // 健康检查器（用于被动检查）
-	mu            sync.RWMutex
+	// targets 后端目标列表，用于负载均衡选择
+	targets []*loadbalance.Target
+
+	// clients 每个目标对应的 HostClient 连接池映射（key: target URL）
+	clients map[string]*fasthttp.HostClient
+
+	// balancer 负载均衡器实例
+	balancer loadbalance.Balancer
+
+	// config 代理配置，包含超时、请求头等设置
+	config *config.ProxyConfig
+
+	// cache 代理缓存实例，用于缓存响应（可选）
+	cache *cache.ProxyCache
+
+	// healthChecker 健康检查器，用于被动健康检查
+	healthChecker *HealthChecker
+
+	// mu 保护并发访问的读写锁
+	mu sync.RWMutex
 }
 
 // NewProxy 使用给定的配置和后台目标创建一个新的反向代理实例。
@@ -171,7 +189,7 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 		MaxIdleConnDuration:    maxIdleConnDuration,
 		MaxConns:               maxConns,
 		MaxConnWaitTimeout:     timeout.Connect,
-		RetryIf:                nil, // Disable automatic retries
+		RetryIf:                nil, // 禁用自动重试
 		DisablePathNormalizing: false,
 		SecureErrorLogMessage:  false,
 	}

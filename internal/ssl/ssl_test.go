@@ -1,3 +1,13 @@
+// Package ssl 提供 SSL/TLS 功能的测试。
+//
+// 该文件测试 SSL 模块的各项功能，包括：
+//   - TLS 管理器创建和配置
+//   - TLS 版本和加密套件解析
+//   - 证书验证
+//   - 多证书管理
+//   - TLS 配置获取
+//
+// 作者：xfy
 package ssl
 
 import (
