@@ -109,6 +109,16 @@ func (s *Server) Start() error {
 		MaxIncomingStreams: int64(s.config.MaxStreams),
 		MaxIdleTimeout:     s.config.IdleTimeout,
 		KeepAlivePeriod:    30 * time.Second,
+		Allow0RTT:          s.config.Enable0RTT,
+	}
+
+	// 如果启用了 0-RTT，输出安全警告
+	if s.config.Enable0RTT {
+		logging.Warn().
+			Msg("HTTP/3 0-RTT is enabled. " +
+				"For 0-RTT to work, TLS session tickets must be configured " +
+				"(TLSConfig.ClientSessionCache and TLSConfig.SessionTicketKey). " +
+				"See documentation for details.")
 	}
 
 	// 设置默认值

@@ -906,3 +906,126 @@ func TestValidateStream(t *testing.T) {
 		})
 	}
 }
+
+func TestValidatePerformance(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  PerformanceConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "空配置有效",
+			config: PerformanceConfig{
+				FileCache: FileCacheConfig{},
+				Transport: TransportConfig{},
+			},
+			wantErr: false,
+		},
+		{
+			name: "有效的 file_cache 配置",
+			config: PerformanceConfig{
+				FileCache: FileCacheConfig{
+					MaxEntries: 1000,
+					MaxSize:    1024 * 1024 * 100,
+				},
+				GoroutinePool: GoroutinePoolConfig{
+					Enabled: true,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "有效的 transport 配置（零值）",
+			config: PerformanceConfig{
+				Transport: TransportConfig{
+					MaxIdleConns:        0,
+					MaxIdleConnsPerHost: 0,
+					MaxConnsPerHost:     0,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "有效的 transport 配置（正值）",
+			config: PerformanceConfig{
+				Transport: TransportConfig{
+					MaxIdleConns:        100,
+					MaxIdleConnsPerHost: 10,
+					MaxConnsPerHost:     50,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "LRUEviction=true（废弃警告）",
+			config: PerformanceConfig{
+				FileCache: FileCacheConfig{
+					LRUEviction: true,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "MaxIdleConns 负数",
+			config: PerformanceConfig{
+				Transport: TransportConfig{
+					MaxIdleConns: -1,
+				},
+			},
+			wantErr: true,
+			errMsg:  "transport.max_idle_conns 不能为负数",
+		},
+		{
+			name: "MaxIdleConnsPerHost 负数",
+			config: PerformanceConfig{
+				Transport: TransportConfig{
+					MaxIdleConnsPerHost: -1,
+				},
+			},
+			wantErr: true,
+			errMsg:  "transport.max_idle_conns_per_host 不能为负数",
+		},
+		{
+			name: "MaxConnsPerHost 负数",
+			config: PerformanceConfig{
+				Transport: TransportConfig{
+					MaxConnsPerHost: -1,
+				},
+			},
+			wantErr: true,
+			errMsg:  "transport.max_conns_per_host 不能为负数",
+		},
+		{
+			name: "多个 transport 字段为负",
+			config: PerformanceConfig{
+				Transport: TransportConfig{
+					MaxIdleConns:        -1,
+					MaxIdleConnsPerHost: -2,
+					MaxConnsPerHost:     -3,
+				},
+			},
+			wantErr: true,
+			errMsg:  "transport.max_idle_conns 不能为负数",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePerformance(&tt.config)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validatePerformance() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validatePerformance() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validatePerformance() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}

@@ -244,7 +244,8 @@ type FileCacheConfig struct {
 	MaxEntries  int64         `yaml:"max_entries"`  // 最大缓存条目数
 	MaxSize     int64         `yaml:"max_size"`     // 内存上限（字节）
 	Inactive    time.Duration `yaml:"inactive"`     // 未访问淘汰时间
-	LRUEviction bool          `yaml:"lru_eviction"` // 启用 LRU 淘汰
+	// Deprecated: 该字段已废弃，将在未来版本中移除，请使用 MaxSize 代替
+	LRUEviction bool          `yaml:"lru_eviction"` // 启用 LRU 淘汰（已废弃）
 }
 
 // TransportConfig HTTP Transport 配置。
@@ -442,6 +443,11 @@ func Validate(cfg *Config) error {
 	// 验证日志配置
 	if err := validateLogging(&cfg.Logging); err != nil {
 		return err
+	}
+
+	// 验证性能配置
+	if err := validatePerformance(&cfg.Performance); err != nil {
+		return fmt.Errorf("performance: %w", err)
 	}
 
 	return nil

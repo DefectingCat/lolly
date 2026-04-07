@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 
 	"rua.plus/lolly/internal/loadbalance"
@@ -630,6 +631,35 @@ func validateStream(s *StreamConfig) error {
 		if t.Addr == "" {
 			return fmt.Errorf("upstream.targets[%d].addr 必填", i)
 		}
+	}
+
+	return nil
+}
+
+// validatePerformance 验证性能配置。
+//
+// 检查性能配置中的废弃选项和潜在问题，输出警告信息。
+//
+// 参数：
+//   - p: 性能配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+func validatePerformance(p *PerformanceConfig) error {
+	// 检查废弃的 LRUEviction 字段
+	if p.FileCache.LRUEviction {
+		fmt.Fprintln(os.Stderr, "[警告] performance.file_cache.lru_eviction 已废弃，请使用 max_size 代替")
+	}
+
+	// 检查 Transport 配置（可能导致性能问题）
+	if p.Transport.MaxIdleConns < 0 {
+		return errors.New("transport.max_idle_conns 不能为负数")
+	}
+	if p.Transport.MaxIdleConnsPerHost < 0 {
+		return errors.New("transport.max_idle_conns_per_host 不能为负数")
+	}
+	if p.Transport.MaxConnsPerHost < 0 {
+		return errors.New("transport.max_conns_per_host 不能为负数")
 	}
 
 	return nil

@@ -90,7 +90,7 @@ func DefaultConfig() *Config {
 				Level:                6,
 				MinSize:              1024,
 				GzipStatic:           false,
-				GzipStaticExtensions: []string{".gz", ".br"},
+				GzipStaticExtensions: []string{".br", ".gz"},
 				Types: []string{
 					"text/html",
 					"text/css",
@@ -398,6 +398,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "    max_entries: %d          # 最大缓存条目\n", cfg.Performance.FileCache.MaxEntries)
 	fmt.Fprintf(&buf, "    max_size: %d              # 内存上限（字节，%dMB）\n", cfg.Performance.FileCache.MaxSize, cfg.Performance.FileCache.MaxSize/1024/1024)
 	fmt.Fprintf(&buf, "    inactive: %ds             # 未访问淘汰时间\n", int(cfg.Performance.FileCache.Inactive.Seconds()))
+	buf.WriteString("    # Deprecated: lru_eviction 已废弃，将在未来版本中移除\n")
 	fmt.Fprintf(&buf, "    lru_eviction: %v          # 启用 LRU 淘汰\n", cfg.Performance.FileCache.LRUEviction)
 	buf.WriteString("  transport:                   # HTTP Transport 连接池\n")
 	fmt.Fprintf(&buf, "    max_idle_conns: %d            # 最大空闲连接\n", cfg.Performance.Transport.MaxIdleConns)
