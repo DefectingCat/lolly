@@ -190,6 +190,45 @@ upstream backend {
 }
 ```
 
+**随机负载均衡（1.15.1+）**：
+```nginx
+upstream backend {
+    random;                              # 纯随机选择
+    server srv1.example.com;
+    server srv2.example.com;
+    server srv3.example.com;
+}
+
+# Power of Two Choices 算法（更智能）
+upstream backend {
+    random two;                          # 随机选两台，按权重择优
+    server srv1.example.com;
+    server srv2.example.com;
+    server srv3.example.com;
+}
+
+# 结合最少连接策略
+upstream backend {
+    random two least_conn;               # 随机选两台，选连接数少的
+    server srv1.example.com;
+    server srv2.example.com;
+}
+```
+
+**random 算法参数说明**：
+
+| 参数 | 说明 |
+|------|------|
+| `two` | 随机选择两台服务器，再根据策略择优 |
+| `least_conn` | 与 `two` 配合，选择连接数较少的服务器 |
+| `least_time=header` | 与 `two` 配合，选择响应头时间最短的服务器（NGINX Plus）|
+| `least_time=last_byte` | 与 `two` 配合，选择完整响应时间最短的服务器（NGINX Plus）|
+
+**适用场景**：
+- 多个负载均衡器共享后端时避免锁竞争
+- 对一致性要求不高但需要低延迟的场景
+- 配合 `zone` 实现无锁负载均衡
+
 ### server 指令参数
 
 | 参数 | 说明 | 默认值 |
@@ -757,11 +796,82 @@ http {
 
 ## 16. 内置变量
 
+### 代理相关变量
+
 | 变量 | 说明 |
 |------|------|
 | `$proxy_host` | proxy_pass 中的服务器名称和端口 |
 | `$proxy_port` | proxy_pass 中的端口 |
 | `$proxy_add_x_forwarded_for` | X-Forwarded-For 头 + 客户端 IP |
+
+### Upstream 响应时间变量（用于性能监控）
+
+| 变量 | 说明 | 单位 |
+|------|------|------|
+| `$upstream_addr` | 上游服务器地址（IP:端口）| - |
+| `$upstream_connect_time` | 与上游建立连接的时间（含 SSL 握手）| 秒 |
+| `$upstream_header_time` | 接收到上游响应头的时间 | 秒 |
+| `$upstream_response_time` | 完整响应时间（从建立连接到接收完成）| 秒 |
+| `$upstream_response_length` | 上游响应体长度 | 字节 |
+| `$upstream_bytes_received` | 从上游接收的总字节数 | 字节 |
+| `$upstream_bytes_sent` | 发送到上游的总字节数 | 字节 |
+| `$upstream_status` | 上游返回的 HTTP 状态码 | - |
+| `$upstream_cache_status` | 缓存命中状态（HIT/MISS/EXPIRED 等）| - |
+| `$upstream_queue_time` | 请求在队列中等待的时间（NGINX Plus）| 秒 |
+
+**日志格式中使用响应时间变量**：
+
+```nginx
+log_format detailed '$remote_addr - $remote_user [$time_local] '
+                    '"$request" $status $body_bytes_sent '
+                    '"$http_referer" "$http_user_agent" '
+                    'rt=$request_time '
+                    'uct="$upstream_connect_time" '
+                    'uht="$upstream_header_time" '
+                    'urt="$upstream_response_time" '
+                    'upstream=$upstream_addr '
+                    'upstream_status=$upstream_status '
+                    'upstream_bytes=$upstream_response_length';
+
+access_log /var/log/nginx/access.log detailed;
+```
+
+**响应时间变量解读**：
+
+```
+请求时间线:
+客户端 ──▶ NGINX ──▶ 连接上游 ──▶ 发送请求 ──▶ 接收响应头 ──▶ 接收响应体 ──▶ 客户端
+              │           │              │                │                │
+              │           │              │                │                │
+              └───────────┴──────────────┴────────────────┴────────────────┘
+                          │              │                │
+                    $upstream_     $upstream_       $upstream_
+                    connect_time   header_time      response_time
+```
+
+- `$upstream_connect_time`：TCP 连接 + SSL 握手时间
+- `$upstream_header_time`：从开始到收到响应头
+- `$upstream_response_time`：完整请求处理时间
+- `$request_time`：从客户端发起请求到响应完成（包含所有上游）
+
+**基于响应时间的告警配置示例**：
+
+```nginx
+# 慢请求日志
+map $upstream_response_time $slow_log {
+    default 0;
+    "~^[2-9]\." 1;    # 2秒以上
+    "~^[0-9]{2,}" 1;  # 10秒以上
+}
+
+server {
+    location /api/ {
+        # 记录慢请求
+        access_log /var/log/nginx/slow.log detailed if=$slow_log;
+        proxy_pass http://backend;
+    }
+}
+```
 
 ---
 

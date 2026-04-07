@@ -35,6 +35,9 @@
 | 27 | [安全深度指南](./27-nginx-security-deep-dive.md) | WAF/ModSecurity、DDoS 防护、OWASP Top 10、安全头部 |
 | 28 | [API 网关配置](./28-nginx-api-gateway.md) | API 路由设计、JWT 验证、限流配额、版本控制 |
 | 29 | [动态配置与服务发现](./29-nginx-dynamic-config.md) | 动态 upstream、etcd/Consul、dyups、nginx-unit |
+| 30 | [njs JavaScript 模块](./30-nginx-njs-guide.md) | njs 引擎、js_import/js_set/js_content、Fetch API、共享字典 |
+| 31 | [OpenTelemetry 可观测性](./31-nginx-observability.md) | ngx_otel_module、分布式追踪、Jaeger/Zipkin 集成、采样策略 |
+| 32 | [ACME 自动证书管理](./32-nginx-acme-ssl.md) | ngx_http_acme_module、Let's Encrypt、自动续期、HTTP-01/DNS-01 挑战 |
 
 ---
 
@@ -68,10 +71,16 @@
 ### 扩展与第三方
 - [第三方扩展模块](./22-nginx-third-party-modules.md) - NJS, Lua, Brotli, RTMP 等
 - [Lua 模块深度指南](./26-nginx-lua-guide.md) - OpenResty、ngx_lua、cosocket
+- [njs JavaScript 模块](./30-nginx-njs-guide.md) - njs 引擎、JavaScript 扩展
 
 ### 安全深度
 - [安全与访问控制](./09-nginx-security.md) - 综合安全配置
 - [安全深度指南](./27-nginx-security-deep-dive.md) - WAF、DDoS、OWASP
+- [ACME 自动证书管理](./32-nginx-acme-ssl.md) - Let's Encrypt、自动 SSL 证书
+
+### 可观测性
+- [日志与监控](./08-nginx-logging-monitoring.md) - 访问日志、错误日志、stub_status
+- [OpenTelemetry 可观测性](./31-nginx-observability.md) - 分布式追踪、Jaeger/Zipkin
 
 ### API 与动态配置
 - [API 网关配置](./28-nginx-api-gateway.md) - API 路由、JWT、限流配额

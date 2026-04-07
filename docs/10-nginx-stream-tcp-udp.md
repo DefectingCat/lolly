@@ -690,3 +690,373 @@ upstream backend {
     health_check_timeout 5s;
 }
 ```
+
+---
+
+## 15. 访问控制模块
+
+### ngx_stream_access_module
+
+基于 IP 地址的访问控制，允许或拒绝特定客户端连接。
+
+**指令**：
+
+| 指令 | 语法 | 默认值 | 上下文 |
+|------|------|--------|--------|
+| `allow` | `allow address \| CIDR \| unix: \| all;` | — | stream, server |
+| `deny` | `deny address \| CIDR \| unix: \| all;` | — | stream, server |
+
+**配置示例**：
+
+```nginx
+stream {
+    # 数据库访问控制
+    server {
+        listen 3306;
+        
+        # 允许内网访问
+        allow 10.0.0.0/8;
+        allow 192.168.0.0/16;
+        allow 172.16.0.0/12;
+        
+        # 拒绝其他所有
+        deny all;
+        
+        proxy_pass mysql_backend;
+    }
+
+    # Redis 访问控制
+    server {
+        listen 6379;
+        
+        # 仅允许特定 IP
+        allow 192.168.1.100;
+        allow 192.168.1.101;
+        deny all;
+        
+        proxy_pass redis_backend;
+    }
+
+    # 管理端口（仅本地）
+    server {
+        listen 9000;
+        
+        allow 127.0.0.1;
+        deny all;
+        
+        proxy_pass admin_backend;
+    }
+}
+```
+
+**规则匹配顺序**：
+- 按配置顺序依次检查
+- 首个匹配的规则决定结果
+- 未匹配任何规则时默认允许
+
+---
+
+## 16. 连接限制模块
+
+### ngx_stream_limit_conn_module
+
+限制并发连接数，防止资源耗尽。
+
+**指令**：
+
+| 指令 | 语法 | 默认值 | 上下文 |
+|------|------|--------|--------|
+| `limit_conn_zone` | `limit_conn_zone key zone=name:size;` | — | stream |
+| `limit_conn` | `limit_conn zone number;` | — | stream, server |
+| `limit_conn_log_level` | `limit_conn_log_level info \| notice \| warn \| error;` | error | stream, server |
+
+**配置示例**：
+
+```nginx
+stream {
+    # 按客户端 IP 限制连接数
+    limit_conn_zone $binary_remote_addr zone=addr:10m;
+    
+    # 按上游服务器限制连接数
+    limit_conn_zone $server_addr zone=server:10m;
+
+    # MySQL 代理 - 每 IP 最多 10 个连接
+    server {
+        listen 3306;
+        limit_conn addr 10;
+        proxy_pass mysql_backend;
+    }
+
+    # Redis 代理 - 每 IP 最多 5 个连接
+    server {
+        listen 6379;
+        limit_conn addr 5;
+        limit_conn_log_level warn;
+        proxy_pass redis_backend;
+    }
+
+    # 全局连接限制
+    server {
+        listen 8080;
+        limit_conn addr 50;      # 每 IP 最多 50
+        limit_conn server 1000;  # 服务总连接上限
+        proxy_pass backend;
+    }
+}
+```
+
+**内存计算**：
+- 1MB 共享内存可存储约 16,000 个 32 字节 key（$binary_remote_addr）
+- 或约 8,000 个 IPv6 地址（16 字节）
+
+---
+
+## 17. 地理位置模块
+
+### ngx_stream_geo_module
+
+根据客户端 IP 地址创建变量值，用于地理路由或访问控制。
+
+**指令**：
+
+| 指令 | 语法 | 默认值 | 上下文 |
+|------|------|--------|--------|
+| `geo` | `geo [$address] $variable { ... }` | — | stream |
+
+**配置示例**：
+
+```nginx
+stream {
+    # 基础地理映射
+    geo $remote_addr $region {
+        default        other;
+        10.0.0.0/8     internal;
+        192.168.0.0/16 internal;
+        172.16.0.0/12  internal;
+        
+        # 中国大陆 IP 段（示例）
+        1.0.1.0/24     china;
+        1.0.2.0/23     china;
+        # ... 更多 IP 段
+    }
+
+    # 使用变量进行路由
+    map $region $backend_pool {
+        internal  internal_backend;
+        china     china_backend;
+        other     global_backend;
+    }
+
+    upstream internal_backend {
+        server 192.168.1.1:3306;
+    }
+
+    upstream china_backend {
+        server 10.0.1.1:3306;
+    }
+
+    upstream global_backend {
+        server 10.0.2.1:3306;
+    }
+
+    server {
+        listen 3306;
+        proxy_pass $backend_pool;
+    }
+}
+```
+
+**高级用法**：
+
+```nginx
+stream {
+    # 使用变量作为地址源
+    geo $realip_remote_addr $region {
+        default other;
+        # ... 配置
+    }
+
+    # 带 CIDR 包含
+    geo $country {
+        default    XX;
+        include    /etc/nginx/geo/countries.conf;
+    }
+
+    # countries.conf 内容示例：
+    # 1.0.1.0/24     CN;
+    # 1.0.2.0/23     CN;
+    # 1.1.1.0/24     AU;
+}
+
+    # 使用 GeoIP 数据库（需 ngx_stream_geoip_module）
+    geoip_country /usr/share/GeoIP/GeoIP.dat;
+    
+    map $geoip_country_code $backend {
+        default global_backend;
+        CN      china_backend;
+        US      us_backend;
+        EU      eu_backend;
+    }
+}
+```
+
+---
+
+## 18. 真实 IP 模块
+
+### ngx_stream_realip_module
+
+处理 PROXY 协议头，获取客户端真实 IP 地址。
+
+**指令**：
+
+| 指令 | 语法 | 默认值 | 上下文 |
+|------|------|--------|--------|
+| `set_real_ip_from` | `set_real_ip_from address \| CIDR;` | — | stream, server |
+| `real_ip_header` | `real_ip_header field;` | proxy_protocol | stream, server |
+
+**配置示例**：
+
+```nginx
+stream {
+    server {
+        listen 3306 proxy_protocol;  # 接收 PROXY 协议
+        
+        # 信任的代理服务器地址
+        set_real_ip_from 10.0.0.0/8;
+        set_real_ip_from 192.168.0.0/16;
+        set_real_ip_from 172.16.0.0/12;
+        
+        proxy_pass mysql_backend;
+    }
+}
+```
+
+**可用变量**：
+
+| 变量 | 说明 |
+|------|------|
+| `$realip_remote_addr` | 原始客户端地址（PROXY 协议中的地址）|
+| `$realip_remote_port` | 原始客户端端口 |
+| `$proxy_protocol_addr` | PROXY 协议中的客户端地址 |
+| `$proxy_protocol_port` | PROXY 协议中的客户端端口 |
+| `$proxy_protocol_server_addr` | PROXY 协议中的目标服务器地址 |
+| `$proxy_protocol_server_port` | PROXY 协议中的目标服务器端口 |
+
+**典型场景**：
+
+```nginx
+stream {
+    # 场景：负载均衡器 → NGINX → 后端
+    server {
+        listen 3306 proxy_protocol;
+        
+        # 负载均衡器的 IP
+        set_real_ip_from 10.0.0.1;
+        set_real_ip_from 10.0.0.2;
+        
+        # 使用真实 IP 进行限流
+        limit_conn_zone $realip_remote_addr zone=conn_limit:10m;
+        limit_conn conn_limit 10;
+        
+        # 日志记录真实 IP
+        log_format main '$realip_remote_addr [$time_local] '
+                        '$protocol $status $bytes_sent $bytes_received';
+        access_log /var/log/nginx/stream.log main;
+        
+        proxy_pass mysql_backend;
+    }
+}
+```
+
+---
+
+## 19. 高级日志配置
+
+### 日志格式详解
+
+```nginx
+stream {
+    # JSON 格式日志
+    log_format json_combined escape=json
+        '{'
+            '"time_local":"$time_local",'
+            '"remote_addr":"$remote_addr",'
+            '"server_addr":"$server_addr",'
+            '"server_port":"$server_port",'
+            '"protocol":"$protocol",'
+            '"status":"$status",'
+            '"bytes_sent":"$bytes_sent",'
+            '"bytes_received":"$bytes_received",'
+            '"session_time":"$session_time",'
+            '"upstream_addr":"$upstream_addr",'
+            '"upstream_bytes_sent":"$upstream_bytes_sent",'
+            '"upstream_bytes_received":"$upstream_bytes_received",'
+            '"upstream_connect_time":"$upstream_connect_time"'
+        '}';
+
+    # 详细格式日志
+    log_format detailed '$remote_addr - [$time_local] '
+                        '$protocol/$status '
+                        'sent:$bytes_sent recv:$bytes_received '
+                        'time:$session_time '
+                        'upstream:$upstream_addr '
+                        'upstream_time:$upstream_connect_time';
+
+    # 条件日志（仅记录错误）
+    map $status $loggable {
+        ~^[23]  0;
+        default 1;
+    }
+
+    server {
+        listen 3306;
+        access_log /var/log/nginx/stream.json json_combined;
+        access_log /var/log/nginx/stream_errors.log detailed if=$loggable;
+        proxy_pass backend;
+    }
+}
+```
+
+### 日志缓冲与压缩
+
+```nginx
+stream {
+    server {
+        listen 3306;
+        
+        # 缓冲写入（提升性能）
+        access_log /var/log/nginx/stream.log main buffer=32k flush=5s;
+        
+        # gzip 压缩日志
+        access_log /var/log/nginx/stream.log.gz main gzip buffer=32k;
+        
+        proxy_pass backend;
+    }
+}
+```
+
+### open_log_file_cache
+
+缓存日志文件描述符，减少文件打开操作：
+
+```nginx
+stream {
+    open_log_file_cache max=1000 inactive=20s valid=1m min_uses=2;
+    
+    server {
+        listen 3306;
+        access_log /var/log/nginx/stream.log main;
+        proxy_pass backend;
+    }
+}
+```
+
+**参数说明**：
+
+| 参数 | 说明 |
+|------|------|
+| `max` | 缓存的最大文件描述符数 |
+| `inactive` | 非活动文件保留时间 |
+| `valid` | 检查文件是否有效的时间间隔 |
+| `min_uses` | 最小使用次数才缓存 |

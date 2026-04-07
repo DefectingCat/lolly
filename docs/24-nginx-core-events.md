@@ -1069,8 +1069,133 @@ events {
 
     # 互斥锁（现代 Linux 不需要）
     accept_mutex off;
+
+    # 异步 I/O 请求数（epoll + aio 场景）
+    worker_aio_requests 64;     # 默认 32
 }
 ```
+
+### 6.3 新增指令详解
+
+#### worker_aio_requests
+
+设置使用 `epoll` 和 `aio` 时，单个 worker 进程的最大未完成异步 I/O 操作数。
+
+**语法**：`worker_aio_requests number;`
+
+**默认值**：`worker_aio_requests 32;`
+
+**上下文**：events
+
+**版本**：1.1.4+
+
+```nginx
+events {
+    worker_connections 10240;
+    use epoll;
+    multi_accept on;
+    worker_aio_requests 64;    # 提高异步 I/O 并发
+}
+
+http {
+    # 配合 aio 使用
+    location /videos/ {
+        aio threads;
+        sendfile on;
+    }
+}
+```
+
+**适用场景**：
+- 高并发文件传输（视频、图片服务）
+- 使用 `aio threads` 异步 I/O
+- 大文件下载服务
+
+#### ssl_object_cache_inheritable
+
+控制 SSL 对象（证书、密钥等）在配置重载时是否继承。
+
+**语法**：`ssl_object_cache_inheritable on | off;`
+
+**默认值**：`ssl_object_cache_inheritable on;`
+
+**上下文**：main
+
+**版本**：1.27.4+
+
+```nginx
+# 默认情况下，SSL 对象在 reload 时会继承
+ssl_object_cache_inheritable on;
+
+http {
+    server {
+        listen 443 ssl;
+        # 静态证书路径 - 支持继承
+        ssl_certificate /etc/nginx/ssl/server.crt;
+        ssl_certificate_key /etc/nginx/ssl/server.key;
+    }
+}
+```
+
+**说明**：
+- 开启时，未修改的 SSL 证书/密钥在 reload 时复用
+- 变量形式加载的 SSL 对象无法继承
+- 关闭时，每次 reload 都重新加载所有 SSL 对象
+
+### 6.4 EPOLLEXCLUSIVE 标志详解
+
+**版本支持**：Linux 2.6.39+，nginx 1.11.3+
+
+`EPOLLEXCLUSIVE` 是 Linux 内核提供的标志，用于解决多 worker 进程的惊群问题。
+
+**传统惊群问题**：
+```
+                         新连接到达
+                              │
+         ┌──────────┬─────────┴─────────┬──────────┐
+         ▼          ▼                   ▼          ▼
+     Worker 1   Worker 2            Worker 3   Worker 4
+     (唤醒)      (唤醒)              (唤醒)     (唤醒)
+         │          │                   │          │
+         └──────────┴─────────┬─────────┴──────────┘
+                              ▼
+                    只有一个 accept 成功
+                    其他唤醒浪费 CPU
+```
+
+**使用 EPOLLEXCLUSIVE 后**：
+```
+                         新连接到达
+                              │
+         ┌──────────┬─────────┴─────────┬──────────┐
+         ▼          ▼                   ▼          ▼
+     Worker 1   Worker 2            Worker 3   Worker 4
+     (唤醒)      (休眠)              (休眠)     (休眠)
+         │
+         ▼
+     accept 成功，处理连接
+```
+
+**nginx 配置建议**：
+
+```nginx
+# Linux 2.6.39+ 不需要 accept_mutex
+events {
+    use epoll;
+    accept_mutex off;      # 关闭互斥锁，使用 EPOLLEXCLUSIVE
+    multi_accept on;       # 可以开启，EPOLLEXCLUSIVE 已解决惊群
+}
+```
+
+**优势**：
+- 减少不必要的进程唤醒
+- 降低 CPU 使用率
+- 提高高并发场景性能
+
+**注意事项**：
+- 仅对 `epoll` 有效
+- 需要内核 2.6.39+
+- nginx 1.11.3+ 自动启用
 
 ### 6.3 内核参数优化
 
