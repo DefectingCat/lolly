@@ -36,7 +36,9 @@ import (
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/middleware"
 	"rua.plus/lolly/internal/middleware/accesslog"
+	"rua.plus/lolly/internal/middleware/bodylimit"
 	"rua.plus/lolly/internal/middleware/compression"
+	"rua.plus/lolly/internal/middleware/errorintercept"
 	"rua.plus/lolly/internal/middleware/rewrite"
 	"rua.plus/lolly/internal/middleware/security"
 	"rua.plus/lolly/internal/proxy"
@@ -75,6 +77,9 @@ type Server struct {
 
 	// accessLogMiddleware 访问日志中间件，记录请求详细信息
 	accessLogMiddleware *accesslog.AccessLog
+
+	// errorPageManager 错误页面管理器（可选）
+	errorPageManager *handler.ErrorPageManager
 
 	// pool Goroutine 池，用于限制并发处理请求数（可选）
 	pool *GoroutinePool
@@ -239,6 +244,29 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 		middlewares = append(middlewares, auth)
 	}
 
+	// 4.5 BodyLimit (请求体大小限制)
+	// 创建 bodylimit 中间件，使用全局配置或默认值
+	bodyLimitMiddleware := bodylimit.NewWithDefault()
+	if serverCfg.ClientMaxBodySize != "" {
+		bl, err := bodylimit.New(serverCfg.ClientMaxBodySize)
+		if err != nil {
+			return nil, fmt.Errorf("创建请求体限制中间件失败: %w", err)
+		}
+		bodyLimitMiddleware = bl
+	}
+	// 添加路径级别的限制配置
+	for i := range serverCfg.Proxy {
+		if serverCfg.Proxy[i].ClientMaxBodySize != "" {
+			if err := bodyLimitMiddleware.AddPathLimit(
+				serverCfg.Proxy[i].Path,
+				serverCfg.Proxy[i].ClientMaxBodySize,
+			); err != nil {
+				return nil, fmt.Errorf("添加路径请求体限制失败: %w", err)
+			}
+		}
+	}
+	middlewares = append(middlewares, bodyLimitMiddleware)
+
 	// 5. Rewrite (URL 重写)
 	if len(serverCfg.Rewrite) > 0 {
 		rw, err := rewrite.New(serverCfg.Rewrite)
@@ -266,6 +294,13 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 		serverCfg.Security.Headers.PermissionsPolicy != "" {
 		headers := security.NewSecurityHeadersWithHSTS(&serverCfg.Security.Headers, &serverCfg.SSL.HSTS)
 		middlewares = append(middlewares, headers)
+	}
+
+	// 8. ErrorIntercept (错误页面拦截)
+	// 如果配置了错误页面，添加错误拦截中间件
+	if s.errorPageManager != nil && s.errorPageManager.IsConfigured() {
+		ei := errorintercept.New(s.errorPageManager)
+		middlewares = append(middlewares, ei)
 	}
 
 	return middleware.NewChain(middlewares...), nil
@@ -306,6 +341,21 @@ func (s *Server) Start() error {
 			s.config.Performance.FileCache.MaxSize,
 			s.config.Performance.FileCache.Inactive,
 		)
+	}
+
+	// 预加载错误页面（如果配置）
+	if s.config.Server.Security.ErrorPage.Pages != nil || s.config.Server.Security.ErrorPage.Default != "" {
+		var err error
+		s.errorPageManager, err = handler.NewErrorPageManager(&s.config.Server.Security.ErrorPage)
+		if err != nil {
+			// 检查是否是部分加载失败
+			if _, ok := err.(*handler.PartialLoadError); ok {
+				logging.Warn().Msg("部分错误页面加载失败: " + err.Error())
+			} else {
+				// 全部加载失败，阻止启动
+				return fmt.Errorf("加载错误页面失败: %w", err)
+			}
+		}
 	}
 
 	if s.config.HasServers() {
@@ -681,6 +731,13 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 		}
 		if cfg.Compression.GzipStatic {
 			staticHandler.SetGzipStatic(true, cfg.Compression.GzipStaticExtensions)
+		}
+
+		// 设置 try_files 配置
+		if len(static.TryFiles) > 0 {
+			// 注意：tryFilesPass 需要路由器支持，当前实现传入 nil
+			// 如果 tryFilesPass 为 true，需要额外处理
+			staticHandler.SetTryFiles(static.TryFiles, static.TryFilesPass, router)
 		}
 
 		// 注册路由：确保路径以 / 结尾

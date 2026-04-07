@@ -55,6 +55,16 @@ type StaticHandler struct {
 
 	// gzipStatic 预压缩文件支持（可选）
 	gzipStatic *compression.GzipStatic
+
+	// tryFiles 按顺序尝试查找的文件列表
+	// 支持 $uri 和 $uri/ 占位符
+	tryFiles []string
+
+	// tryFilesPass 内部重定向是否触发中间件
+	tryFilesPass bool
+
+	// router 用于内部重定向时重新路由（当 tryFilesPass 为 true）
+	router *Router
 }
 
 // NewStaticHandler 创建静态文件处理器。
@@ -114,22 +124,42 @@ func (h *StaticHandler) SetGzipStatic(enabled bool, extensions []string) {
 	}
 }
 
+// SetTryFiles 设置 try_files 配置。
+//
+// 配置按顺序尝试查找的文件列表，支持 $uri 和 $uri/ 占位符。
+// 用于 SPA 部署，当请求的文件不存在时可以回退到指定文件。
+//
+// 参数：
+//   - tryFiles: 按顺序尝试的文件列表，如 ["$uri", "$uri/", "/index.html"]
+//   - tryFilesPass: 内部重定向是否触发中间件，默认为 false
+//   - router: 当 tryFilesPass 为 true 时使用的路由器
+//
+// 使用示例：
+//
+//	handler.SetTryFiles([]string{"$uri", "$uri/", "/index.html"}, false, nil)
+func (h *StaticHandler) SetTryFiles(tryFiles []string, tryFilesPass bool, router *Router) {
+	h.tryFiles = tryFiles
+	h.tryFilesPass = tryFilesPass
+	h.router = router
+}
+
 // Handle 处理静态文件请求。
 //
 // 根据请求路径查找并返回对应的静态文件。
-// 支持目录索引文件、缓存查找和零拷贝传输。
+// 支持目录索引文件、try_files、缓存查找和零拷贝传输。
 //
 // 参数：
 //   - ctx: fasthttp 请求上下文
 //
 // 处理流程：
 //  1. 安全检查：防止目录遍历攻击
-//  2. 检查文件/目录是否存在
-//  3. 如果是目录，尝试查找索引文件
-//  4. 尝试发送预压缩文件
-//  5. 尝试从缓存获取
-//  6. 大文件使用零拷贝传输
-//  7. 读取文件并存入缓存
+//  2. 如果配置了 try_files，按顺序尝试查找文件
+//  3. 检查文件/目录是否存在
+//  4. 如果是目录，尝试查找索引文件
+//  5. 尝试发送预压缩文件
+//  6. 尝试从缓存获取
+//  7. 大文件使用零拷贝传输
+//  8. 读取文件并存入缓存
 func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 	reqPath := string(ctx.Path())
 
@@ -139,16 +169,153 @@ func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	// 剥离路径前缀
+	// 如果配置了 try_files，按顺序尝试
+	if len(h.tryFiles) > 0 {
+		h.handleTryFiles(ctx, reqPath)
+		return
+	}
+
+	// 标准处理流程
+	h.handleStandard(ctx, reqPath)
+}
+
+// handleTryFiles 处理 try_files 逻辑。
+//
+// 按顺序尝试查找文件，支持 $uri 和 $uri/ 占位符。
+//
+// 占位符说明：
+//   - $uri: 请求路径对应的文件
+//   - $uri/: 请求路径对应的目录下的索引文件
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//   - reqPath: 原始请求路径
+func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string) {
+	// 获取相对路径（剥离路径前缀）
+	relPath := reqPath
 	if h.pathPrefix != "" && h.pathPrefix != "/" {
-		reqPath = strings.TrimPrefix(reqPath, h.pathPrefix)
-		if !strings.HasPrefix(reqPath, "/") {
-			reqPath = "/" + reqPath
+		relPath = strings.TrimPrefix(reqPath, h.pathPrefix)
+		if !strings.HasPrefix(relPath, "/") {
+			relPath = "/" + relPath
+		}
+	}
+
+	for _, tryFile := range h.tryFiles {
+		// 解析占位符
+		targetPath := h.resolveTryFilePath(tryFile, relPath)
+
+		// 构建完整文件路径
+		filePath := filepath.Join(h.root, targetPath)
+
+		// 检查文件/目录是否存在
+		info, err := os.Stat(filePath)
+		if err != nil {
+			continue // 不存在，尝试下一个
+		}
+
+		if info.IsDir() {
+			// 如果是目录，尝试查找索引文件
+			for _, idx := range h.index {
+				idxPath := filepath.Join(filePath, idx)
+				if idxInfo, err := os.Stat(idxPath); err == nil && !idxInfo.IsDir() {
+					h.serveFile(ctx, idxPath, idxInfo)
+					return
+				}
+			}
+			continue // 目录中没有索引文件，尝试下一个
+		}
+
+		// 找到文件，检查是否是内部重定向
+		if tryFile != "$uri" && !strings.HasPrefix(tryFile, "$uri") {
+			// 这是内部重定向（fallback 文件）
+			h.handleInternalRedirect(ctx, targetPath)
+			return
+		}
+
+		// 直接服务文件
+		h.serveFile(ctx, filePath, info)
+		return
+	}
+
+	// 所有 try_files 都未找到
+	ctx.Error("Not Found", fasthttp.StatusNotFound)
+}
+
+// resolveTryFilePath 解析 try_files 中的占位符。
+//
+// 参数：
+//   - tryFile: try_files 配置项
+//   - relPath: 相对请求路径
+//
+// 返回值：
+//   - string: 解析后的文件路径
+func (h *StaticHandler) resolveTryFilePath(tryFile, relPath string) string {
+	switch {
+	case tryFile == "$uri":
+		return relPath
+	case tryFile == "$uri/":
+		return relPath + "/"
+	case strings.HasPrefix(tryFile, "/"):
+		// 绝对路径，直接返回（去掉开头的 /）
+		return tryFile[1:]
+	default:
+		// 其他情况直接返回
+		return tryFile
+	}
+}
+
+// handleInternalRedirect 处理内部重定向。
+//
+// 当 try_files 的回退文件与原始请求不同时触发。
+// 根据 tryFilesPass 配置决定是否重新进入中间件链。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//   - targetPath: 重定向目标路径（相对于 root）
+func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetPath string) {
+	if h.tryFilesPass && h.router != nil {
+		// tryFilesPass 为 true，重新进入中间件链
+		// 修改请求路径后重新路由
+		newPath := h.pathPrefix + targetPath
+		if !strings.HasPrefix(newPath, "/") {
+			newPath = "/" + newPath
+		}
+		ctx.Request.SetRequestURI(newPath)
+		h.router.Handler()(ctx)
+		return
+	}
+
+	// tryFilesPass 为 false（默认），直接服务文件，不触发中间件
+	filePath := filepath.Join(h.root, targetPath)
+	info, err := os.Stat(filePath)
+	if err != nil {
+		ctx.Error("Not Found", fasthttp.StatusNotFound)
+		return
+	}
+	if info.IsDir() {
+		ctx.Error("Forbidden", fasthttp.StatusForbidden)
+		return
+	}
+	h.serveFile(ctx, filePath, info)
+}
+
+// handleStandard 标准静态文件处理流程。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//   - reqPath: 请求路径
+func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string) {
+	// 剥离路径前缀
+	relPath := reqPath
+	if h.pathPrefix != "" && h.pathPrefix != "/" {
+		relPath = strings.TrimPrefix(reqPath, h.pathPrefix)
+		if !strings.HasPrefix(relPath, "/") {
+			relPath = "/" + relPath
 		}
 	}
 
 	// 拼接文件路径
-	filePath := filepath.Join(h.root, reqPath)
+	filePath := filepath.Join(h.root, relPath)
 
 	// 检查文件/目录是否存在
 	info, err := os.Stat(filePath)
