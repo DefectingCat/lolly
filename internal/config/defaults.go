@@ -250,6 +250,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("      allow: []                   # 允许的 IP/CIDR 列表\n")
 	buf.WriteString("      deny: []                    # 拒绝的 IP/CIDR 列表\n")
 	fmt.Fprintf(&buf, "      default: \"%s\"             # 默认动作（有效值: allow, deny）\n", cfg.Server.Security.Access.Default)
+	buf.WriteString("      trusted_proxies: []         # 可信代理 CIDR 列表，用于 X-Forwarded-For 解析\n")
 	buf.WriteString("\n")
 	buf.WriteString("    # 速率限制\n")
 	buf.WriteString("    rate_limit:\n")

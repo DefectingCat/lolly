@@ -66,6 +66,13 @@ func validateServer(s *ServerConfig, isDefault bool) error {
 		}
 	}
 
+	// 验证重写规则
+	for i := range s.Rewrite {
+		if err := validateRewrite(&s.Rewrite[i]); err != nil {
+			return fmt.Errorf("rewrite[%d]: %w", i, err)
+		}
+	}
+
 	// 验证 SSL 配置
 	if err := validateSSL(&s.SSL); err != nil {
 		return fmt.Errorf("ssl: %w", err)
@@ -145,6 +152,21 @@ func validateProxy(p *ProxyConfig) error {
 		return fmt.Errorf("无效的负载均衡算法：%s", p.LoadBalance)
 	}
 
+	// 验证一致性哈希键格式
+	if p.HashKey != "" {
+		validHashKeys := []string{"ip", "uri"}
+		valid := false
+		for _, k := range validHashKeys {
+			if p.HashKey == k || strings.HasPrefix(p.HashKey, "header:") {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("无效的 hash_key: %s（仅支持 ip, uri 或 header:X-Name 格式）", p.HashKey)
+		}
+	}
+
 	return nil
 }
 
@@ -198,7 +220,7 @@ func validateSSL(s *SSLConfig) error {
 
 // validateSecurity 验证安全配置。
 //
-// 验证访问控制、认证和速率限制配置的有效性。
+// 验证访问控制、认证、速率限制和安全头部的有效性。
 //
 // 参数：
 //   - s: 安全配置对象
@@ -219,6 +241,11 @@ func validateSecurity(s *SecurityConfig) error {
 	// 验证速率限制配置
 	if err := validateRateLimit(&s.RateLimit); err != nil {
 		return fmt.Errorf("rate_limit: %w", err)
+	}
+
+	// 验证安全头部配置
+	if err := validateSecurityHeaders(&s.Headers); err != nil {
+		return fmt.Errorf("headers: %w", err)
 	}
 
 	return nil
@@ -368,6 +395,32 @@ func validateRateLimit(r *RateLimitConfig) error {
 		return fmt.Errorf("无效的 key 来源: %s（仅支持 ip 或 header）", r.Key)
 	}
 
+	// 验证限流算法
+	validAlgorithms := []string{"", "token_bucket", "sliding_window"}
+	valid = false
+	for _, alg := range validAlgorithms {
+		if r.Algorithm == alg {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("无效的限流算法: %s（仅支持 token_bucket 或 sliding_window）", r.Algorithm)
+	}
+
+	// 验证滑动窗口模式
+	validModes := []string{"", "approximate", "precise"}
+	valid = false
+	for _, mode := range validModes {
+		if r.SlidingWindowMode == mode {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("无效的滑动窗口模式: %s（仅支持 approximate 或 precise）", r.SlidingWindowMode)
+	}
+
 	return nil
 }
 
@@ -412,6 +465,131 @@ func validateCompression(c *CompressionConfig) error {
 	// 验证最小压缩大小
 	if c.MinSize < 0 {
 		return errors.New("min_size 不能为负数")
+	}
+
+	return nil
+}
+
+// validateRewrite 验证 URL 重写规则。
+//
+// 检查重写模式、替换目标和标志的有效性。
+//
+// 参数：
+//   - r: 重写规则配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - pattern 必填
+//   - flag 仅允许 last, redirect, permanent, break
+func validateRewrite(r *RewriteRule) error {
+	// 模式必填
+	if r.Pattern == "" {
+		return errors.New("pattern 必填")
+	}
+
+	// 验证标志
+	validFlags := []string{"", "last", "redirect", "permanent", "break"}
+	valid := false
+	for _, f := range validFlags {
+		if r.Flag == f {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("无效的 flag: %s（仅支持 last, redirect, permanent, break）", r.Flag)
+	}
+
+	return nil
+}
+
+// validateLogging 验证日志配置。
+//
+// 检查日志格式和级别的有效性。
+//
+// 参数：
+//   - l: 日志配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - format 仅允许 text 或 json
+//   - level 仅允许 debug, info, warn, error
+func validateLogging(l *LoggingConfig) error {
+	// 验证日志格式
+	validFormats := []string{"", "text", "json"}
+	valid := false
+	for _, f := range validFormats {
+		if l.Format == f {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("无效的日志格式: %s（仅支持 text 或 json）", l.Format)
+	}
+
+	// 验证错误日志级别
+	validLevels := []string{"", "debug", "info", "warn", "error"}
+	valid = false
+	for _, lvl := range validLevels {
+		if l.Error.Level == lvl {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("无效的日志级别: %s（仅支持 debug, info, warn, error）", l.Error.Level)
+	}
+
+	return nil
+}
+
+// validateSecurityHeaders 验证安全头部配置。
+//
+// 检查各安全头部值的有效性。
+//
+// 参数：
+//   - h: 安全头部配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - x_frame_options 仅允许 DENY, SAMEORIGIN 或空
+//   - referrer_policy 仅允许标准 RFC 值
+func validateSecurityHeaders(h *SecurityHeaders) error {
+	// 验证 X-Frame-Options
+	validFrameOptions := []string{"", "DENY", "SAMEORIGIN"}
+	valid := false
+	for _, opt := range validFrameOptions {
+		if h.XFrameOptions == opt {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("无效的 x_frame_options: %s（仅支持 DENY, SAMEORIGIN 或空）", h.XFrameOptions)
+	}
+
+	// 验证 Referrer-Policy
+	validReferrerPolicies := []string{
+		"", "no-referrer", "no-referrer-when-downgrade", "origin",
+		"origin-when-cross-origin", "same-origin", "strict-origin",
+		"strict-origin-when-cross-origin", "unsafe-url",
+	}
+	valid = false
+	for _, policy := range validReferrerPolicies {
+		if h.ReferrerPolicy == policy {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fmt.Errorf("无效的 referrer_policy: %s", h.ReferrerPolicy)
 	}
 
 	return nil

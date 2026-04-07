@@ -439,5 +439,10 @@ func Validate(cfg *Config) error {
 		}
 	}
 
+	// 验证日志配置
+	if err := validateLogging(&cfg.Logging); err != nil {
+		return err
+	}
+
 	return nil
 }
