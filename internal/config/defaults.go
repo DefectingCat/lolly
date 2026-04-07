@@ -137,6 +137,11 @@ func DefaultConfig() *Config {
 				Path:  "/_status",
 				Allow: []string{"127.0.0.1"},
 			},
+			Pprof: PprofConfig{
+				Enabled: false,
+				Path:    "/debug/pprof",
+				Allow:   []string{"127.0.0.1"},
+			},
 		},
 		HTTP3: HTTP3Config{
 			Enabled:     false,
@@ -436,6 +441,13 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "    path: \"%s\"        # 状态端点路径\n", cfg.Monitoring.Status.Path)
 	buf.WriteString("    allow:                 # 允许访问的 IP\n")
 	for _, ip := range cfg.Monitoring.Status.Allow {
+		fmt.Fprintf(&buf, "      - \"%s\"\n", ip)
+	}
+	buf.WriteString("  pprof:                  # pprof 性能分析端点（用于 PGO 优化）\n")
+	fmt.Fprintf(&buf, "    enabled: %v           # 是否启用（生产环境仅在收集 profile 时启用）\n", cfg.Monitoring.Pprof.Enabled)
+	fmt.Fprintf(&buf, "    path: \"%s\"      # 端点路径前缀\n", cfg.Monitoring.Pprof.Path)
+	buf.WriteString("    allow:                 # 允许访问的 IP\n")
+	for _, ip := range cfg.Monitoring.Pprof.Allow {
 		fmt.Fprintf(&buf, "      - \"%s\"\n", ip)
 	}
 

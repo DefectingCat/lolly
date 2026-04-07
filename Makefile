@@ -10,7 +10,7 @@ GO_VERSION := $(shell go version | awk '{print $$3}')
 BUILD_PLATFORM := $(shell go env GOOS)/$(shell go env GOARCH)
 BUILD_DIR := bin
 
-# 生产构建标志
+# 生产构建标志（体积优化）
 LDFLAGS := -ldflags "-s -w \
 	-X 'rua.plus/lolly/internal/app.Version=$(VERSION)' \
 	-X 'rua.plus/lolly/internal/app.GitCommit=$(GIT_COMMIT)' \
@@ -18,6 +18,10 @@ LDFLAGS := -ldflags "-s -w \
 	-X 'rua.plus/lolly/internal/app.BuildTime=$(BUILD_TIME)' \
 	-X 'rua.plus/lolly/internal/app.GoVersion=$(GO_VERSION)' \
 	-X 'rua.plus/lolly/internal/app.BuildPlatform=$(BUILD_PLATFORM)'"
+
+# 运行时性能优化标志
+PERF_GCFLAGS := -gcflags="-l=4"
+PERF_ASMFLAGS := -asmflags="-l=4"
 
 # Go 文件
 MAIN_PATH := main.go
@@ -37,12 +41,63 @@ build:
 	@echo "Built: $(BUILD_DIR)/$(APP_NAME)"
 	@echo "Version: $(VERSION) | Commit: $(GIT_COMMIT) | Platform: $(BUILD_PLATFORM)"
 
-# 生产构建（优化）
+# 生产构建（体积优化）
 build-prod:
 	@echo "Building $(APP_NAME) for production..."
 	@mkdir -p $(BUILD_DIR)
 	go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
 	@echo "Production build complete: $(BUILD_DIR)/$(APP_NAME)"
+
+# 生产构建（最大运行时性能）
+build-perf:
+	@echo "Building $(APP_NAME) with max runtime performance..."
+	@mkdir -p $(BUILD_DIR)
+	go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
+		-o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
+	@echo "Performance build complete: $(BUILD_DIR)/$(APP_NAME)"
+
+# PGO 构建（需先收集 profile）
+PGO_PROFILE ?= default.pgo
+build-pgo:
+	@echo "Building $(APP_NAME) with PGO optimization..."
+	@mkdir -p $(BUILD_DIR)
+	if [ -f $(PGO_PROFILE) ]; then \
+		go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
+			-pgo=$(PGO_PROFILE) -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH); \
+		echo "PGO build complete using: $(PGO_PROFILE)"; \
+	else \
+		echo "PGO profile not found: $(PGO_PROFILE)"; \
+		echo "Run 'make pgo-collect' first to generate profile"; \
+		exit 1; \
+	fi
+
+# 收集 PGO profile（运行代表性 workload）
+pgo-collect:
+	@echo "=== PGO Profile Collection Guide ==="
+	@echo ""
+	@echo "Step 1: Enable pprof in your config file:"
+	@echo "  monitoring:"
+	@echo "    pprof:"
+	@echo "      enabled: true"
+	@echo "      path: /debug/pprof"
+	@echo "      allow: [\"127.0.0.1\"]"
+	@echo ""
+	@echo "Step 2: Build and run lolly with representative workload:"
+	@echo "  make build && ./bin/lolly -c configs/lolly.yaml"
+	@echo ""
+	@echo "Step 3: Collect CPU profile (run during peak load):"
+	@echo "  curl http://localhost:<port>/debug/pprof/profile?seconds=30 > $(PGO_PROFILE)"
+	@echo ""
+	@echo "Step 4: Build with PGO optimization:"
+	@echo "  make build-pgo"
+	@echo ""
+	@echo "Available pprof endpoints:"
+	@echo "  /debug/pprof          - Index page"
+	@echo "  /debug/pprof/profile  - CPU profile (add ?seconds=N)"
+	@echo "  /debug/pprof/heap     - Memory profile"
+	@echo "  /debug/pprof/goroutine - Goroutine count"
+	@echo ""
+	@echo "Tip: Profile during real workload for best PGO results"
 
 # 跨平台构建
 build-linux:
@@ -225,7 +280,10 @@ help:
 	@echo ""
 	@echo "Build:"
 	@echo "  make build          - Build for current platform"
-	@echo "  make build-prod     - Production build (optimized)"
+	@echo "  make build-prod     - Production build (size optimized)"
+	@echo "  make build-perf     - Production build (max runtime performance)"
+	@echo "  make build-pgo      - PGO build (needs profile, use PGO_PROFILE=path)"
+	@echo "  make pgo-collect    - Guide for collecting PGO profile"
 	@echo "  make build-all      - Build for all platforms"
 	@echo "  make build-linux    - Build for Linux amd64"
 	@echo "  make build-darwin   - Build for macOS (amd64 + arm64)"

@@ -62,3 +62,4 @@ config.yaml
 lolly
 coverage.html
 html/
+default.pgo

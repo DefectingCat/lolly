@@ -388,6 +388,17 @@ func (s *Server) startSingleMode() error {
 		}
 	}
 
+	// 注册 pprof 性能分析端点（如果配置）
+	if s.config.Monitoring.Pprof.Enabled {
+		pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
+		if err != nil {
+			logging.Error().Msg("创建 pprof 处理器失败: " + err.Error())
+		} else {
+			router.GET(pprofHandler.Path(), pprofHandler.ServeHTTP)
+			router.GET(pprofHandler.Path()+"/{profile:*}", pprofHandler.ServeHTTP)
+		}
+	}
+
 	// 注册代理路由
 	s.registerProxyRoutes(router, &s.config.Server)
 
@@ -488,6 +499,17 @@ func (s *Server) startVHostMode() error {
 				logging.Error().Msg("创建状态处理器失败: " + err.Error())
 			} else {
 				router.GET(statusHandler.Path(), statusHandler.ServeHTTP)
+			}
+		}
+
+		// 注册 pprof 性能分析端点（如果配置）
+		if s.config.Monitoring.Pprof.Enabled {
+			pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
+			if err != nil {
+				logging.Error().Msg("创建 pprof 处理器失败: " + err.Error())
+			} else {
+				router.GET(pprofHandler.Path(), pprofHandler.ServeHTTP)
+				router.GET(pprofHandler.Path()+"/{profile:*}", pprofHandler.ServeHTTP)
 			}
 		}
 

@@ -1166,6 +1166,39 @@ type MonitoringConfig struct {
 	// Status 状态端点配置
 	// 服务健康状态检查端点
 	Status StatusConfig `yaml:"status"`
+
+	// Pprof pprof 性能分析端点配置
+	// 用于收集 CPU、内存等性能数据，支持 PGO 优化
+	Pprof PprofConfig `yaml:"pprof"`
+}
+
+// PprofConfig pprof 性能分析端点配置。
+//
+// 配置 pprof 端点用于收集运行时性能数据。
+// 收集的 profile 可用于 PGO (Profile-Guided Optimization) 构建。
+//
+// 注意事项：
+//   - 生产环境仅在收集 profile 时启用，完成后关闭
+//   - 建议严格限制访问 IP，防止性能数据泄露
+//   - CPU profile 收集需要代表性 workload
+//
+// 使用示例：
+//
+//	pprof:
+//	  enabled: true
+//	  path: "/debug/pprof"
+//	  allow: ["127.0.0.1"]
+type PprofConfig struct {
+	// Enabled 是否启用 pprof 端点
+	Enabled bool `yaml:"enabled"`
+
+	// Path 端点路径前缀
+	// 默认为 "/debug/pprof"
+	Path string `yaml:"path"`
+
+	// Allow 允许访问的 IP 列表
+	// 可访问 pprof 端点的 IP 地址或 CIDR
+	Allow []string `yaml:"allow"`
 }
 
 // StatusConfig 状态监控端点配置。
