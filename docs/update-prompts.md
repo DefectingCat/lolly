@@ -15,6 +15,8 @@
 
 /plan 深度分析一个完善测试的方案
 
+/ultrawork 分析并完善测试覆盖率，每完成一个功能点提交一次
+
 ## 注释
 
 /ultrawork 参考 @docs/comments.md，深度分析项目注释是否完善

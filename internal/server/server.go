@@ -340,8 +340,8 @@ func (s *Server) startSingleMode() error {
 	// 注册代理路由
 	s.registerProxyRoutes(router, &s.config.Server)
 
-		// 静态文件服务
-		s.registerStaticHandler(router, &s.config.Server)
+	// 静态文件服务
+	s.registerStaticHandler(router, &s.config.Server)
 
 	// 构建中间件链
 	chain, err := s.buildMiddlewareChain(&s.config.Server)

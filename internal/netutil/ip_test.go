@@ -65,10 +65,10 @@ func TestExtractClientIP(t *testing.T) {
 
 func TestExtractClientIPNet(t *testing.T) {
 	tests := []struct {
-		name    string
-		xff     string
-		xri     string
-		want    net.IP
+		name string
+		xff  string
+		xri  string
+		want net.IP
 	}{
 		{
 			name: "X-Forwarded-For valid IP",

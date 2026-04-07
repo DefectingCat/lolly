@@ -4,11 +4,11 @@ import "testing"
 
 func TestParseTargetURL(t *testing.T) {
 	tests := []struct {
-		name            string
-		targetURL       string
-		addDefaultPort  bool
-		wantAddr        string
-		wantIsTLS       bool
+		name           string
+		targetURL      string
+		addDefaultPort bool
+		wantAddr       string
+		wantIsTLS      bool
 	}{
 		// HTTP without port
 		{
