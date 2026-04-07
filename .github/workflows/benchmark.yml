@@ -1,0 +1,105 @@
+# Benchmark CI Workflow
+# 自动化运行 Go 基准测试并进行性能回归检测
+
+name: Benchmark
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  GO_VERSION: '1.23'
+  BENCH_COUNT: 10
+
+jobs:
+  benchmark:
+    name: Run Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 需要完整历史进行基准线对比
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install benchstat
+        run: go install golang.org/x/perf/cmd/benchstat@latest
+
+      - name: Run benchmarks (current)
+        run: |
+          go test -bench=. -benchmem -count=${{ env.BENCH_COUNT }} ./... > benchmark-current.txt
+          cat benchmark-current.txt
+
+      - name: Upload current benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-current
+          path: benchmark-current.txt
+          retention-days: 30
+
+      - name: Checkout main branch (for comparison)
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
+        run: |
+          git stash
+          git checkout main || git checkout master || echo "No main/master branch"
+          git stash pop || true
+
+      - name: Run benchmarks (baseline)
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
+        run: |
+          go test -bench=. -benchmem -count=${{ env.BENCH_COUNT }} ./... > benchmark-baseline.txt || echo "Baseline failed" > benchmark-baseline.txt
+
+      - name: Compare benchmarks
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
+        run: |
+          if [ -f benchmark-baseline.txt ] && [ -s benchmark-baseline.txt ]; then
+            benchstat benchmark-baseline.txt benchmark-current.txt > benchmark-comparison.txt
+            cat benchmark-comparison.txt
+          else
+            echo "No baseline for comparison" > benchmark-comparison.txt
+          fi
+
+      - name: Upload comparison results
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-comparison
+          path: benchmark-comparison.txt
+          retention-days: 7
+
+      - name: Check regression
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master'
+        run: |
+          if [ -f benchmark-comparison.txt ]; then
+            python3 scripts/check_regression.py benchmark-comparison.txt || true
+          fi
+
+  benchmark-save:
+    name: Save Benchmark Baseline
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run benchmarks
+        run: |
+          go test -bench=. -benchmem -count=${{ env.BENCH_COUNT }} ./... > benchmark-main.txt
+
+      - name: Upload baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-baseline-main
+          path: benchmark-main.txt
+          retention-days: 90

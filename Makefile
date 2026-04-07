@@ -110,6 +110,52 @@ bench:
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./...
 
+# 运行基准测试（统计模式，10次采样）
+bench-stat:
+	@echo "Running benchmarks with statistical sampling..."
+	go test -bench=. -benchmem -count=10 ./... | tee benchmark-current.txt
+
+# 对比基准测试结果（需要 benchstat）
+bench-compare:
+	@echo "Comparing benchmarks..."
+	@if command -v benchstat >/dev/null 2>&1; then \
+		if [ -f benchmark-baseline.txt ]; then \
+			benchstat benchmark-baseline.txt benchmark-current.txt; \
+		else \
+			echo "基准线文件 benchmark-baseline.txt 不存在，运行当前基准测试..."; \
+			$(MAKE) bench-stat; \
+		fi \
+	else \
+		echo "benchstat 未安装，运行: go install golang.org/x/perf/cmd/benchstat@latest"; \
+		exit 1; \
+	fi
+
+# 保存当前基准结果为基准线
+bench-save:
+	@echo "Saving benchmark baseline..."
+	@if [ -f benchmark-current.txt ]; then \
+		cp benchmark-current.txt benchmark-baseline.txt; \
+		echo "基准线已保存到 benchmark-baseline.txt"; \
+	else \
+		echo "运行基准测试并保存..."; \
+		$(MAKE) bench-stat; \
+		cp benchmark-current.txt benchmark-baseline.txt; \
+	fi
+
+# 检查性能回归（需要 Python）
+bench-check:
+	@echo "Checking for performance regressions..."
+	@if [ -f benchmark-comparison.txt ]; then \
+		python scripts/check_regression.py benchmark-comparison.txt; \
+	elif command -v benchstat >/dev/null 2>&1 && [ -f benchmark-baseline.txt ] && [ -f benchmark-current.txt ]; then \
+		benchstat benchmark-baseline.txt benchmark-current.txt > benchmark-comparison.txt; \
+		python scripts/check_regression.py benchmark-comparison.txt; \
+	else \
+		echo "需要 benchstat 和基准线/当前结果文件"; \
+		echo "运行: make bench-save && make bench-stat && make bench-check"; \
+		exit 1; \
+	fi
+
 # ============================================
 # 代码质量
 # ============================================
@@ -194,6 +240,10 @@ help:
 	@echo "  make test           - Run all tests"
 	@echo "  make test-cover     - Run tests with coverage"
 	@echo "  make bench          - Run benchmarks"
+	@echo "  make bench-stat     - Run benchmarks with statistical sampling (10x)"
+	@echo "  make bench-compare  - Compare against baseline (needs benchstat)"
+	@echo "  make bench-save     - Save current results as baseline"
+	@echo "  make bench-check    - Check for performance regressions"
 	@echo ""
 	@echo "Quality:"
 	@echo "  make fmt            - Format code"
