@@ -56,7 +56,7 @@ func validateServer(s *ServerConfig, isDefault bool) error {
 	}
 
 	// 验证静态文件配置
-	if err := validateStatic(&s.Static); err != nil {
+	if err := validateStatics(s.Static); err != nil {
 		return fmt.Errorf("static: %w", err)
 	}
 
@@ -65,6 +65,11 @@ func validateServer(s *ServerConfig, isDefault bool) error {
 		if err := validateProxy(&s.Proxy[i]); err != nil {
 			return fmt.Errorf("proxy[%d]: %w", i, err)
 		}
+	}
+
+	// 检查 static 和 proxy 路径冲突
+	if err := validatePathConflicts(s); err != nil {
+		return err
 	}
 
 	// 验证重写规则
@@ -89,6 +94,69 @@ func validateServer(s *ServerConfig, isDefault bool) error {
 		return fmt.Errorf("compression: %w", err)
 	}
 
+	return nil
+}
+
+// validateStatics 验证静态文件配置数组。
+//
+// 检查静态文件配置的路径重复和根目录路径安全性。
+//
+// 参数：
+//   - statics: 静态文件配置数组
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+func validateStatics(statics []StaticConfig) error {
+	if len(statics) == 0 {
+		return nil
+	}
+
+	paths := make(map[string]int)
+	for i, s := range statics {
+		// Path 默认为 "/"
+		path := s.Path
+		if path == "" {
+			path = "/"
+		}
+
+		// 检查路径重复
+		if idx, exists := paths[path]; exists {
+			return fmt.Errorf("路径 %s 重复定义 (static[%d] 和 static[%d])", path, idx, i)
+		}
+		paths[path] = i
+
+		// 验证根目录路径安全
+		if s.Root != "" && strings.Contains(s.Root, "..") {
+			return fmt.Errorf("static[%d]: 根目录路径不能包含 '..'", i)
+		}
+	}
+	return nil
+}
+
+// validatePathConflicts 检查 static 和 proxy 路径冲突。
+//
+// 确保 static 和 proxy 没有相同的 path 前缀。
+//
+// 参数：
+//   - s: 服务器配置对象
+//
+// 返回值：
+//   - error: 发现冲突时返回错误信息，成功返回 nil
+func validatePathConflicts(s *ServerConfig) error {
+	staticPaths := make(map[string]int)
+	for i, st := range s.Static {
+		path := st.Path
+		if path == "" {
+			path = "/"
+		}
+		staticPaths[path] = i
+	}
+
+	for i, p := range s.Proxy {
+		if idx, exists := staticPaths[p.Path]; exists {
+			return fmt.Errorf("路径 %s 同时定义在 static[%d] 和 proxy[%d]", p.Path, idx, i)
+		}
+	}
 	return nil
 }
 

@@ -45,10 +45,11 @@ func DefaultConfig() *Config {
 			IdleTimeout:        120 * time.Second,
 			MaxConnsPerIP:      1000,
 			MaxRequestsPerConn: 10000,
-			Static: StaticConfig{
+			Static: []StaticConfig{{
+				Path:  "/",
 				Root:  "/var/www/html",
 				Index: []string{"index.html", "index.htm"},
-			},
+			}},
 			SSL: SSLConfig{
 				Protocols:    []string{"TLSv1.2", "TLSv1.3"},
 				OCSPStapling: false,
@@ -183,13 +184,20 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("\n")
 
 	// static 配置
-	buf.WriteString("  # 静态文件服务配置\n")
+	buf.WriteString("  # 静态文件服务配置（支持多个目录）\n")
 	buf.WriteString("  static:\n")
-	fmt.Fprintf(&buf, "    root: \"%s\"   # 静态文件根目录\n", cfg.Server.Static.Root)
-	buf.WriteString("    index:                  # 索引文件\n")
-	for _, idx := range cfg.Server.Static.Index {
-		fmt.Fprintf(&buf, "      - \"%s\"\n", idx)
+	for _, st := range cfg.Server.Static {
+		buf.WriteString("    - path: \"/\"              # 匹配路径前缀\n")
+		fmt.Fprintf(&buf, "      root: \"%s\"  # 静态文件根目录\n", st.Root)
+		buf.WriteString("      index:                 # 索引文件\n")
+		for _, idx := range st.Index {
+			fmt.Fprintf(&buf, "        - \"%s\"\n", idx)
+		}
 	}
+	buf.WriteString("  # 示例：额外的静态目录\n")
+	buf.WriteString("  # - path: \"/assets/\"\n")
+	buf.WriteString("  #   root: \"/var/www/assets\"\n")
+	buf.WriteString("  #   index: [\"index.html\"]\n")
 	buf.WriteString("\n")
 
 	// proxy 配置示例
@@ -319,9 +327,10 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("#     idle_timeout: 120s              # 空闲超时（0 表示不限制）\n")
 	buf.WriteString("#     max_conns_per_ip: 1000          # 每 IP 最大连接数（0 表示不限制）\n")
 	buf.WriteString("#     max_requests_per_conn: 10000   # 每连接最大请求数（0 表示不限制）\n")
-	buf.WriteString("#     static:                         # 静态文件配置\n")
-	buf.WriteString("#       root: /var/www/api\n")
-	buf.WriteString("#       index: [index.html]\n")
+	buf.WriteString("#     static:                         # 静态文件配置（支持多个目录）\n")
+	buf.WriteString("#       - path: /\n")
+	buf.WriteString("#         root: /var/www/api\n")
+	buf.WriteString("#         index: [index.html]\n")
 	buf.WriteString("#     proxy:                          # 反向代理配置\n")
 	buf.WriteString("#       - path: /api\n")
 	buf.WriteString("#         targets:\n")
@@ -347,8 +356,9 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("#   - listen: \":8443\"              # 另一个虚拟主机\n")
 	buf.WriteString("#     name: \"static.example.com\"\n")
 	buf.WriteString("#     static:\n")
-	buf.WriteString("#       root: /var/www/static\n")
-	buf.WriteString("#       index: [index.html, index.htm]\n")
+	buf.WriteString("#       - path: /\n")
+	buf.WriteString("#         root: /var/www/static\n")
+	buf.WriteString("#         index: [index.html, index.htm]\n")
 	buf.WriteString("#     ssl:\n")
 	buf.WriteString("#       cert: /path/to/static.cert.pem\n")
 	buf.WriteString("#       key: /path/to/static.key.pem\n")

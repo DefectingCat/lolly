@@ -24,6 +24,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -341,7 +342,7 @@ func (s *Server) startSingleMode() error {
 	s.registerProxyRoutes(router, &s.config.Server)
 
 	// 静态文件服务
-	s.registerStaticHandler(router, &s.config.Server)
+	s.registerStaticHandlers(router, &s.config.Server)
 
 	// 构建中间件链
 	chain, err := s.buildMiddlewareChain(&s.config.Server)
@@ -410,20 +411,7 @@ func (s *Server) startVHostMode() error {
 		s.registerProxyRoutes(router, &s.config.Servers[i])
 
 		// 静态文件
-		staticHandler := handler.NewStaticHandler(
-			s.config.Servers[i].Static.Root,
-			s.config.Servers[i].Static.Index,
-			true, // useSendfile
-		)
-		if s.fileCache != nil {
-			staticHandler.SetFileCache(s.fileCache)
-		}
-		// 设置预压缩文件支持
-		if s.config.Servers[i].Compression.GzipStatic {
-			staticHandler.SetGzipStatic(true, s.config.Servers[i].Compression.GzipStaticExtensions)
-		}
-		router.GET("/{filepath:*}", staticHandler.Handle)
-		router.HEAD("/{filepath:*}", staticHandler.Handle)
+		s.registerStaticHandlers(router, &s.config.Servers[i])
 
 		// 为每个虚拟主机构建独立的中间件链
 		chain, err := s.buildMiddlewareChain(&s.config.Servers[i])
@@ -454,19 +442,9 @@ func (s *Server) startVHostMode() error {
 		}
 
 		s.registerProxyRoutes(router, &s.config.Server)
-		staticHandler := handler.NewStaticHandler(
-			s.config.Server.Static.Root,
-			s.config.Server.Static.Index,
-			true, // useSendfile
-		)
-		if s.fileCache != nil {
-			staticHandler.SetFileCache(s.fileCache)
-		}
-		// 设置预压缩文件支持
-		if s.config.Server.Compression.GzipStatic {
-			staticHandler.SetGzipStatic(true, s.config.Server.Compression.GzipStaticExtensions)
-		}
-		router.GET("/{filepath:*}", staticHandler.Handle)
+
+		// 静态文件
+		s.registerStaticHandlers(router, &s.config.Server)
 
 		chain, err := s.buildMiddlewareChain(&s.config.Server)
 		if err != nil {
@@ -678,25 +656,39 @@ func (s *Server) getProxyCacheStats() ProxyCacheStats {
 	return total
 }
 
-// registerStaticHandler 注册静态文件处理器。
+// registerStaticHandlers 注册静态文件处理器。
 //
-// 为路由器注册静态文件服务，支持文件缓存和预压缩文件。
+// 为路由器注册静态文件服务，支持多个静态目录、文件缓存和预压缩文件。
 //
 // 参数：
 //   - router: 路由器实例，用于注册路由规则
 //   - cfg: 服务器配置，包含静态文件和压缩设置
-func (s *Server) registerStaticHandler(router *handler.Router, cfg *config.ServerConfig) {
-	staticHandler := handler.NewStaticHandler(
-		cfg.Static.Root,
-		cfg.Static.Index,
-		true, // useSendfile
-	)
-	if s.fileCache != nil {
-		staticHandler.SetFileCache(s.fileCache)
+func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.ServerConfig) {
+	for _, static := range cfg.Static {
+		path := static.Path
+		if path == "" {
+			path = "/"
+		}
+
+		staticHandler := handler.NewStaticHandler(
+			static.Root,
+			path,
+			static.Index,
+			true, // useSendfile
+		)
+		if s.fileCache != nil {
+			staticHandler.SetFileCache(s.fileCache)
+		}
+		if cfg.Compression.GzipStatic {
+			staticHandler.SetGzipStatic(true, cfg.Compression.GzipStaticExtensions)
+		}
+
+		// 注册路由：确保路径以 / 结尾
+		routePath := path
+		if !strings.HasSuffix(routePath, "/") {
+			routePath += "/"
+		}
+		router.GET(routePath+"{filepath:*}", staticHandler.Handle)
+		router.HEAD(routePath+"{filepath:*}", staticHandler.Handle)
 	}
-	if cfg.Compression.GzipStatic {
-		staticHandler.SetGzipStatic(true, cfg.Compression.GzipStaticExtensions)
-	}
-	router.GET("/{filepath:*}", staticHandler.Handle)
-	router.HEAD("/{filepath:*}", staticHandler.Handle)
 }

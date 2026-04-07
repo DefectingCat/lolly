@@ -32,7 +32,7 @@ func TestValidateServer(t *testing.T) {
 			name: "有效配置",
 			config: ServerConfig{
 				Listen: ":8080",
-				Static: StaticConfig{Root: "/var/www"},
+				Static: []StaticConfig{{Path: "/", Root: "/var/www"}},
 				Proxy: []ProxyConfig{
 					{Path: "/api", Targets: []ProxyTarget{{URL: "http://backend:8080"}}},
 				},
@@ -43,7 +43,7 @@ func TestValidateServer(t *testing.T) {
 		{
 			name: "默认服务器可省略Listen",
 			config: ServerConfig{
-				Static: StaticConfig{Root: "/var/www"},
+				Static: []StaticConfig{{Path: "/", Root: "/var/www"}},
 			},
 			isDefault: true,
 			wantErr:   false,
@@ -51,7 +51,7 @@ func TestValidateServer(t *testing.T) {
 		{
 			name: "非默认服务器Listen缺失",
 			config: ServerConfig{
-				Static: StaticConfig{Root: "/var/www"},
+				Static: []StaticConfig{{Path: "/", Root: "/var/www"}},
 			},
 			isDefault: false,
 			wantErr:   true,
@@ -70,7 +70,7 @@ func TestValidateServer(t *testing.T) {
 			name: "静态根目录含..",
 			config: ServerConfig{
 				Listen: ":8080",
-				Static: StaticConfig{Root: "/var/../www"},
+				Static: []StaticConfig{{Path: "/", Root: "/var/../www"}},
 			},
 			isDefault: false,
 			wantErr:   true,

@@ -27,10 +27,11 @@ func TestNew(t *testing.T) {
 	cfg := &config.Config{
 		Server: config.ServerConfig{
 			Listen: ":8080",
-			Static: config.StaticConfig{
+			Static: []config.StaticConfig{{
+				Path:  "/",
 				Root:  "./static",
 				Index: []string{"index.html"},
-			},
+			}},
 		},
 	}
 

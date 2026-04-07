@@ -41,6 +41,9 @@ type StaticHandler struct {
 	// root 静态文件根目录
 	root string
 
+	// pathPrefix 路径前缀，会被剥离后拼接 root
+	pathPrefix string
+
 	// index 索引文件列表，当请求目录时依次查找
 	index []string
 
@@ -60,6 +63,7 @@ type StaticHandler struct {
 //
 // 参数：
 //   - root: 静态文件根目录路径
+//   - pathPrefix: 路径前缀，会被剥离后拼接 root
 //   - index: 索引文件列表，当请求目录时依次查找（如 ["index.html", "index.htm"]）
 //   - useSendfile: 是否启用零拷贝传输（大文件优化）
 //
@@ -68,10 +72,11 @@ type StaticHandler struct {
 //
 // 使用示例：
 //
-//	handler := handler.NewStaticHandler("/var/www", []string{"index.html"}, true)
-func NewStaticHandler(root string, index []string, useSendfile bool) *StaticHandler {
+//	handler := handler.NewStaticHandler("/var/www", "/", []string{"index.html"}, true)
+func NewStaticHandler(root, pathPrefix string, index []string, useSendfile bool) *StaticHandler {
 	return &StaticHandler{
 		root:        root,
+		pathPrefix:  pathPrefix,
 		index:       index,
 		useSendfile: useSendfile,
 	}
@@ -126,16 +131,24 @@ func (h *StaticHandler) SetGzipStatic(enabled bool, extensions []string) {
 //  6. 大文件使用零拷贝传输
 //  7. 读取文件并存入缓存
 func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
-	path := string(ctx.Path())
+	reqPath := string(ctx.Path())
 
 	// 安全检查：防止目录遍历
-	if strings.Contains(path, "..") {
+	if strings.Contains(reqPath, "..") {
 		ctx.Error("Forbidden", fasthttp.StatusForbidden)
 		return
 	}
 
+	// 剥离路径前缀
+	if h.pathPrefix != "" && h.pathPrefix != "/" {
+		reqPath = strings.TrimPrefix(reqPath, h.pathPrefix)
+		if !strings.HasPrefix(reqPath, "/") {
+			reqPath = "/" + reqPath
+		}
+	}
+
 	// 拼接文件路径
-	filePath := filepath.Join(h.root, path)
+	filePath := filepath.Join(h.root, reqPath)
 
 	// 检查文件/目录是否存在
 	info, err := os.Stat(filePath)

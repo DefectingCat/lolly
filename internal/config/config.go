@@ -145,9 +145,9 @@ type ServerConfig struct {
 	// 多个服务器可通过 Name 区分不同域名或服务
 	Name string `yaml:"name"`
 
-	// Static 静态文件服务配置
-	// 用于提供静态资源，如 HTML、CSS、JS、图片等
-	Static StaticConfig `yaml:"static"`
+	// Static 静态文件服务配置列表
+	// 支持多个静态目录，按 path 前缀匹配
+	Static []StaticConfig `yaml:"static"`
 
 	// Proxy 反向代理规则列表
 	// 按顺序匹配，首个匹配的规则生效
@@ -192,9 +192,10 @@ type ServerConfig struct {
 
 // StaticConfig 静态文件服务配置。
 //
-// 用于配置静态文件服务器的行为，包括根目录和索引文件。
+// 用于配置静态文件服务器的行为，包括路径匹配、根目录和索引文件。
 //
 // 注意事项：
+//   - Path 为路径前缀，匹配的请求将被该静态处理器处理
 //   - Root 路径可以是相对路径或绝对路径
 //   - 索引文件按顺序查找，第一个存在的文件将被使用
 //   - 目录路径需要确保有读取权限
@@ -202,9 +203,17 @@ type ServerConfig struct {
 // 使用示例：
 //
 //	static:
-//	  root: "/var/www/html"
-//	  index: ["index.html", "index.htm", "default.html"]
+//	  - path: "/"
+//	    root: "/var/www/html"
+//	    index: ["index.html", "index.htm"]
+//	  - path: "/assets/"
+//	    root: "/var/www/assets"
 type StaticConfig struct {
+	// Path 匹配路径前缀
+	// 以此前缀开头的请求将被该静态处理器处理
+	// 默认为 "/"，匹配所有路径
+	Path string `yaml:"path"`
+
 	// Root 静态文件根目录
 	// 所有静态文件请求都将以此目录为基础解析
 	Root string `yaml:"root"`

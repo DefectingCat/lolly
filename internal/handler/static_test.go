@@ -28,7 +28,7 @@ import (
 // newTestHandler 创建测试用的静态文件处理器
 func newTestHandler(t *testing.T, root string) *StaticHandler {
 	t.Helper()
-	return NewStaticHandler(root, []string{"index.html", "index.htm"}, false) // 测试时禁用 sendfile
+	return NewStaticHandler(root, "/", []string{"index.html", "index.htm"}, false) // 测试时禁用 sendfile
 }
 
 // newTestContext 创建测试用的 fasthttp 请求上下文
@@ -391,7 +391,7 @@ func TestNewStaticHandler(t *testing.T) {
 	t.Run("正常创建", func(t *testing.T) {
 		root := "/var/www"
 		index := []string{"index.html", "index.htm"}
-		handler := NewStaticHandler(root, index, true)
+		handler := NewStaticHandler(root, "/", index, true)
 
 		if handler == nil {
 			t.Fatal("NewStaticHandler() 返回 nil")
@@ -405,7 +405,7 @@ func TestNewStaticHandler(t *testing.T) {
 	})
 
 	t.Run("空索引列表", func(t *testing.T) {
-		handler := NewStaticHandler("/var/www", nil, false)
+		handler := NewStaticHandler("/var/www", "/", nil, false)
 		if handler == nil {
 			t.Fatal("NewStaticHandler() 返回 nil")
 		}
@@ -417,7 +417,7 @@ func TestNewStaticHandler(t *testing.T) {
 
 // TestStaticHandler_SetFileCache 测试设置文件缓存
 func TestStaticHandler_SetFileCache(t *testing.T) {
-	handler := NewStaticHandler("/var/www", nil, false)
+	handler := NewStaticHandler("/var/www", "/", nil, false)
 
 	// 设置 nil 缓存
 	handler.SetFileCache(nil)
@@ -431,7 +431,7 @@ func TestStaticHandler_SetFileCache(t *testing.T) {
 
 // TestStaticHandler_SetGzipStatic 测试设置 Gzip 静态文件
 func TestStaticHandler_SetGzipStatic(t *testing.T) {
-	handler := NewStaticHandler("/var/www", nil, false)
+	handler := NewStaticHandler("/var/www", "/", nil, false)
 
 	// 启用 gzip
 	handler.SetGzipStatic(true, []string{".gz", ".gzip"})
@@ -509,7 +509,7 @@ func TestStaticHandler_Handle_Precompressed(t *testing.T) {
 		t.Fatalf("创建 gzip 文件失败: %v", err)
 	}
 
-	handler := NewStaticHandler(tmpDir, nil, false)
+	handler := NewStaticHandler(tmpDir, "/", nil, false)
 	handler.SetGzipStatic(true, []string{".gz"})
 
 	ctx := &fasthttp.RequestCtx{}
@@ -540,7 +540,7 @@ func TestStaticHandler_Handle_LargeFile(t *testing.T) {
 	}
 
 	// 使用 sendfile 启用的处理器
-	handler := NewStaticHandler(tmpDir, []string{"index.html"}, true)
+	handler := NewStaticHandler(tmpDir, "/", []string{"index.html"}, true)
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.SetRequestURI("/large.bin")

@@ -15,9 +15,10 @@ func TestLoad(t *testing.T) {
 server:
   listen: ":8080"
   static:
-    root: "/var/www"
-    index:
-      - "index.html"
+    - path: "/"
+      root: "/var/www"
+      index:
+        - "index.html"
 logging:
   access:
     path: "/var/log/access.log"
@@ -49,11 +50,11 @@ monitoring:
 		if cfg.Server.Listen != ":8080" {
 			t.Errorf("Server.Listen = %q, want %q", cfg.Server.Listen, ":8080")
 		}
-		if cfg.Server.Static.Root != "/var/www" {
-			t.Errorf("Server.Static.Root = %q, want %q", cfg.Server.Static.Root, "/var/www")
+		if cfg.Server.Static[0].Root != "/var/www" {
+			t.Errorf("Server.Static.Root = %q, want %q", cfg.Server.Static[0].Root, "/var/www")
 		}
-		if len(cfg.Server.Static.Index) != 1 || cfg.Server.Static.Index[0] != "index.html" {
-			t.Errorf("Server.Static.Index = %v, want [index.html]", cfg.Server.Static.Index)
+		if len(cfg.Server.Static[0].Index) != 1 || cfg.Server.Static[0].Index[0] != "index.html" {
+			t.Errorf("Server.Static.Index = %v, want [index.html]", cfg.Server.Static[0].Index)
 		}
 	})
 
@@ -139,7 +140,8 @@ func TestLoadFromString(t *testing.T) {
 server:
   listen: ":9090"
   static:
-    root: "/app/public"
+    - path: "/"
+      root: "/app/public"
 `
 		cfg, err := LoadFromString(yamlStr)
 		if err != nil {
@@ -149,8 +151,8 @@ server:
 		if cfg.Server.Listen != ":9090" {
 			t.Errorf("Server.Listen = %q, want %q", cfg.Server.Listen, ":9090")
 		}
-		if cfg.Server.Static.Root != "/app/public" {
-			t.Errorf("Server.Static.Root = %q, want %q", cfg.Server.Static.Root, "/app/public")
+		if cfg.Server.Static[0].Root != "/app/public" {
+			t.Errorf("Server.Static.Root = %q, want %q", cfg.Server.Static[0].Root, "/app/public")
 		}
 	})
 
@@ -192,10 +194,11 @@ func TestSave(t *testing.T) {
 		cfg := &Config{
 			Server: ServerConfig{
 				Listen: ":8080",
-				Static: StaticConfig{
+				Static: []StaticConfig{{
+					Path:  "/",
 					Root:  "/var/www",
 					Index: []string{"index.html"},
-				},
+				}},
 			},
 		}
 
@@ -215,8 +218,8 @@ func TestSave(t *testing.T) {
 		if loaded.Server.Listen != cfg.Server.Listen {
 			t.Errorf("loaded.Server.Listen = %q, want %q", loaded.Server.Listen, cfg.Server.Listen)
 		}
-		if loaded.Server.Static.Root != cfg.Server.Static.Root {
-			t.Errorf("loaded.Server.Static.Root = %q, want %q", loaded.Server.Static.Root, cfg.Server.Static.Root)
+		if loaded.Server.Static[0].Root != cfg.Server.Static[0].Root {
+			t.Errorf("loaded.Server.Static[0].Root = %q, want %q", loaded.Server.Static[0].Root, cfg.Server.Static[0].Root)
 		}
 	})
 
@@ -263,10 +266,11 @@ func TestSave(t *testing.T) {
 			Server: ServerConfig{
 				Listen: ":8443",
 				Name:   "default",
-				Static: StaticConfig{
+				Static: []StaticConfig{{
+					Path:  "/",
 					Root:  "/var/www/html",
 					Index: []string{"index.html", "index.htm"},
-				},
+				}},
 				Proxy: []ProxyConfig{
 					{
 						Path: "/api",
