@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-02 | Updated: 2026-04-03 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-07 -->
 
 # middleware
 
@@ -17,7 +17,9 @@
 | Directory | Purpose |
 |-----------|---------|
 | `accesslog/` | 访问日志中间件（请求记录、响应统计） |
+| `bodylimit/` | 请求体大小限制中间件（超限返回 413） |
 | `compression/` | 响应压缩中间件（Gzip、Deflate） |
+| `errorintercept/` | 错误拦截中间件（自定义错误页面） |
 | `rewrite/` | URL 重写中间件（正则替换、路径转换） |
 | `security/` | 安全中间件（访问控制、认证、限流、安全头部） |
 

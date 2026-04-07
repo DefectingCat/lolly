@@ -28,3 +28,5 @@
 /ultrawork 深度分析下，有没有重复的逻辑/代码，或者冗余的东西
 
 /ultrawork 运行 make lint，并修复
+
+/ultrawork 深度分析下当前项目的性能
