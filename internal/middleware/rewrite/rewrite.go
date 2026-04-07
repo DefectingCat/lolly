@@ -10,11 +10,14 @@ import (
 	"rua.plus/lolly/internal/config"
 )
 
+// MaxRewriteIterations URL重写最大迭代次数，防止无限循环
+const MaxRewriteIterations = 10
+
 // Flag 重写标志类型。
 type Flag int
 
 const (
-	// FlagLast 继续匹配其他规则。
+	// FlagLast 继续匹配其他规则（nginx行为：重新从第一条规则开始匹配）。
 	FlagLast Flag = iota
 	// FlagRedirect 返回 302 临时重定向。
 	FlagRedirect
@@ -113,7 +116,20 @@ func (m *RewriteMiddleware) Process(next fasthttp.RequestHandler) fasthttp.Reque
 		path := string(ctx.Path())
 		originalPath := path
 
-		for _, rule := range m.rules {
+		// 全局迭代计数器，用于检测循环（每次重写都计入迭代）
+		iterationCount := 0
+		// 规则索引，支持FlagLast后重新开始匹配
+		ruleIndex := 0
+
+		for ruleIndex < len(m.rules) {
+			// 检查迭代次数是否超过限制（在任何重写操作之前检查）
+			if iterationCount >= MaxRewriteIterations {
+				ctx.Error("Internal Server Error", fasthttp.StatusInternalServerError)
+				return
+			}
+
+			rule := m.rules[ruleIndex]
+
 			if rule.pattern.MatchString(path) {
 				// 执行正则替换
 				newPath := rule.pattern.ReplaceAllString(path, rule.replacement)
@@ -126,16 +142,21 @@ func (m *RewriteMiddleware) Process(next fasthttp.RequestHandler) fasthttp.Reque
 					ctx.Redirect(newPath, fasthttp.StatusMovedPermanently)
 					return
 				case FlagBreak:
-					// 修改路径后停止匹配
+					// 修改路径后停止匹配，不增加迭代计数（不触发循环检测）
 					ctx.Request.SetRequestURI(newPath)
 					next(ctx)
 					return
 				case FlagLast:
-					// 修改路径，继续匹配其他规则
+					// 修改路径，并重新从第一条规则开始匹配（nginx兼容行为）
 					path = newPath
 					ctx.Request.SetRequestURI(path)
+					iterationCount++ // 每次FlagLast重写都增加计数
+					ruleIndex = 0    // 重新从第一条规则开始
+					continue
 				}
 			}
+
+			ruleIndex++
 		}
 
 		// 如果路径被修改过，需要重新设置
