@@ -23,12 +23,12 @@ func setupMockBackend(body []byte) (string, func()) {
 	server := &fasthttp.Server{
 		Handler: func(ctx *fasthttp.RequestCtx) {
 			ctx.SetStatusCode(fasthttp.StatusOK)
-			ctx.Write(body)
+			_, _ = ctx.Write(body)
 		},
 	}
 
 	go func() {
-		server.Serve(ln)
+		_ = server.Serve(ln)
 	}()
 
 	// 等待服务器启动
@@ -36,7 +36,7 @@ func setupMockBackend(body []byte) (string, func()) {
 
 	addr := ln.Addr().String()
 	cleanup := func() {
-		ln.Close()
+		_ = ln.Close()
 	}
 
 	return addr, cleanup
@@ -45,7 +45,7 @@ func setupMockBackend(body []byte) (string, func()) {
 // BenchmarkProxyForward 基准测试代理转发性能。
 func BenchmarkProxyForward(b *testing.B) {
 	testCases := []struct {
-		name      string
+		name        string
 		concurrency int
 	}{
 		{"concurrency1", 1},
@@ -251,7 +251,7 @@ func BenchmarkProxyHostClient(b *testing.B) {
 		req.SetRequestURI("http://" + addr + "/api/test")
 		req.Header.SetMethod(fasthttp.MethodGet)
 
-		client.Do(req, resp)
+		_ = client.Do(req, resp)
 
 		fasthttp.ReleaseRequest(req)
 		fasthttp.ReleaseResponse(resp)
@@ -281,7 +281,7 @@ func BenchmarkProxyHostClientParallel(b *testing.B) {
 			req.SetRequestURI("http://" + addr + "/api/test")
 			req.Header.SetMethod(fasthttp.MethodGet)
 
-			client.Do(req, resp)
+			_ = client.Do(req, resp)
 
 			fasthttp.ReleaseRequest(req)
 			fasthttp.ReleaseResponse(resp)

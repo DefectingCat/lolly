@@ -56,14 +56,14 @@ func StartMockFasthttpBackend(config MockBackendConfig) (string, func()) {
 
 	// Start server in background
 	go func() {
-		mb.server.Serve(ln)
+		_ = mb.server.Serve(ln)
 	}()
 
 	addr := "127.0.0.1:0" // In-memory listener address
 
 	cleanup := func() {
-		mb.server.Shutdown()
-		ln.Close()
+		_ = mb.server.Shutdown()
+		_ = ln.Close()
 	}
 
 	return addr, cleanup
@@ -79,16 +79,16 @@ func (mb *MockBackend) handler(ctx *fasthttp.RequestCtx) {
 	case ModeDelay:
 		time.Sleep(config.Delay)
 		ctx.SetStatusCode(config.StatusCode)
-		ctx.Write(config.Body)
+		_, _ = ctx.Write(config.Body)
 
 	case ModeError:
 		if rand.Float64() < config.ErrorRate {
 			ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-			ctx.WriteString("internal server error")
+			_, _ = ctx.WriteString("internal server error")
 			return
 		}
 		ctx.SetStatusCode(config.StatusCode)
-		ctx.Write(config.Body)
+		_, _ = ctx.Write(config.Body)
 
 	case ModeRandomResponse:
 		codes := []int{
@@ -99,11 +99,11 @@ func (mb *MockBackend) handler(ctx *fasthttp.RequestCtx) {
 			fasthttp.StatusNotFound,
 		}
 		ctx.SetStatusCode(codes[rand.Intn(len(codes))])
-		ctx.Write(config.Body)
+		_, _ = ctx.Write(config.Body)
 
 	default: // ModeFixed
 		ctx.SetStatusCode(config.StatusCode)
-		ctx.Write(config.Body)
+		_, _ = ctx.Write(config.Body)
 	}
 }
 

@@ -159,6 +159,6 @@ func (lg *FasthttpLoadGenerator) RunParallel(pb *testing.PB) {
 	for pb.Next() {
 		req.SetRequestURI("http://" + lg.addr + "/")
 		req.Header.SetMethod("GET")
-		lg.client.Do(req, resp)
+		_ = lg.client.Do(req, resp)
 	}
 }
