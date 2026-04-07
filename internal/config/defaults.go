@@ -186,6 +186,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "  idle_timeout: %ds            # 空闲超时（0 表示不限制）\n", int(cfg.Server.IdleTimeout.Seconds()))
 	fmt.Fprintf(&buf, "  max_conns_per_ip: %d         # 每 IP 最大连接数（0 表示不限制）\n", cfg.Server.MaxConnsPerIP)
 	fmt.Fprintf(&buf, "  max_requests_per_conn: %d    # 每连接最大请求数（0 表示不限制）\n", cfg.Server.MaxRequestsPerConn)
+	fmt.Fprintf(&buf, "  client_max_body_size: \"1MB\"  # 请求体大小限制（支持单位: b, kb, mb, gb）\n")
 	buf.WriteString("\n")
 
 	// static 配置
@@ -198,6 +199,8 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 		for _, idx := range st.Index {
 			fmt.Fprintf(&buf, "        - \"%s\"\n", idx)
 		}
+		buf.WriteString("      try_files: []             # SPA 部署示例: [\"$uri\", \"$uri/\", \"/index.html\"]\n")
+		buf.WriteString("      try_files_pass: false     # 内部重定向是否触发中间件\n")
 	}
 	buf.WriteString("  # 示例：额外的静态目录\n")
 	buf.WriteString("  # - path: \"/assets/\"\n")
@@ -234,6 +237,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("  #       max_age: 60s\n")
 	buf.WriteString("  #       cache_lock: true          # 防止缓存击穿\n")
 	buf.WriteString("  #       stale_while_revalidate: 30s\n")
+	buf.WriteString("  #     client_max_body_size: \"50MB\"  # 此代理路径的请求体限制\n")
 	buf.WriteString("\n")
 
 	// SSL 配置
@@ -295,6 +299,12 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "      referrer_policy: \"%s\"        # 引用策略（有效值: no-referrer, no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url）\n", cfg.Server.Security.Headers.ReferrerPolicy)
 	buf.WriteString("      # content_security_policy: \"default-src 'self'\"  # 内容安全策略 CSP\n")
 	buf.WriteString("      # permissions_policy: \"geolocation=(), microphone=()\"  # 权限策略\n")
+	buf.WriteString("\n")
+	buf.WriteString("    # 自定义错误页面\n")
+	buf.WriteString("    error_page:\n")
+	buf.WriteString("      pages: {}                  # 状态码到页面映射，如 {404: \"/errors/404.html\"}\n")
+	buf.WriteString("      default: \"\"                # 默认错误页面\n")
+	buf.WriteString("      response_code: 0          # 响应状态码覆盖（0 表示使用原始状态码）\n")
 	buf.WriteString("\n")
 
 	// rewrite 配置示例
