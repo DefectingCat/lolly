@@ -221,6 +221,11 @@ func validateProxy(p *ProxyConfig) error {
 		return fmt.Errorf("无效的负载均衡算法：%s", p.LoadBalance)
 	}
 
+	// 验证故障转移配置
+	if err := validateNextUpstream(&p.NextUpstream); err != nil {
+		return fmt.Errorf("next_upstream: %w", err)
+	}
+
 	// 验证一致性哈希键格式
 	if p.HashKey != "" {
 		validHashKeys := []string{"ip", "uri"}
@@ -728,6 +733,40 @@ func validatePerformance(p *PerformanceConfig) error {
 	}
 	if p.Transport.MaxConnsPerHost < 0 {
 		return errors.New("transport.max_conns_per_host 不能为负数")
+	}
+
+	return nil
+}
+
+// validateNextUpstream 验证故障转移配置。
+//
+// 检查重试次数和 HTTP 状态码的有效性。
+//
+// 参数：
+//   - n: 故障转移配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - tries 不能为负数，建议不超过后端数量
+//   - http_codes 应包含有效的 HTTP 状态码
+func validateNextUpstream(n *NextUpstreamConfig) error {
+	// 未配置时跳过
+	if n.Tries == 0 && len(n.HTTPCodes) == 0 {
+		return nil
+	}
+
+	// 验证重试次数
+	if n.Tries < 0 {
+		return errors.New("tries 不能为负数")
+	}
+
+	// 验证 HTTP 状态码
+	for i, code := range n.HTTPCodes {
+		if code < 100 || code > 599 {
+			return fmt.Errorf("http_codes[%d]: 无效的 HTTP 状态码 %d", i, code)
+		}
 	}
 
 	return nil

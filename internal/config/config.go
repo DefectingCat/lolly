@@ -188,6 +188,12 @@ type ServerConfig struct {
 	// MaxRequestsPerConn 每连接最大请求数
 	// 达到后连接将被优雅关闭
 	MaxRequestsPerConn int `yaml:"max_requests_per_conn"`
+
+	// ClientMaxBodySize 客户端请求体大小限制
+	// 限制请求体最大字节数，超过返回 413 错误
+	// 支持单位：b, kb, mb, gb 或纯数字表示字节
+	// 默认值为 1MB
+	ClientMaxBodySize string `yaml:"client_max_body_size"`
 }
 
 // StaticConfig 静态文件服务配置。
@@ -222,6 +228,16 @@ type StaticConfig struct {
 	// 访问目录时依次查找这些文件作为默认页面
 	// 默认为 ["index.html", "index.htm"]
 	Index []string `yaml:"index"`
+
+	// TryFiles 按顺序尝试查找的文件列表
+	// 支持 $uri 和 $uri/ 占位符，用于 SPA 部署
+	// 示例: ["$uri", "$uri/", "/index.html"]
+	TryFiles []string `yaml:"try_files"`
+
+	// TryFilesPass 内部重定向是否触发中间件
+	// 默认为 false，内部重定向不触发中间件
+	// 设置为 true 时，try_files 回退会重新进入中间件链
+	TryFilesPass bool `yaml:"try_files_pass"`
 }
 
 // ProxyConfig 反向代理配置，支持负载均衡和健康检查。
@@ -284,6 +300,15 @@ type ProxyConfig struct {
 	// Cache 代理缓存配置
 	// 启用后缓存后端响应减少重复请求
 	Cache ProxyCacheConfig `yaml:"cache"`
+
+	// ClientMaxBodySize 请求体大小限制
+	// 限制此代理路径的请求体最大字节数，覆盖全局配置
+	// 支持单位：b, kb, mb, gb 或纯数字表示字节
+	ClientMaxBodySize string `yaml:"client_max_body_size"`
+
+	// NextUpstream 故障转移配置
+	// 配置后端故障时的自动重试行为
+	NextUpstream NextUpstreamConfig `yaml:"next_upstream"`
 }
 
 // ProxyTarget 后端目标配置。
@@ -436,6 +461,30 @@ type ProxyCacheConfig struct {
 	StaleWhileRevalidate time.Duration `yaml:"stale_while_revalidate"`
 }
 
+// NextUpstreamConfig 故障转移配置，定义后端失败时的自动重试行为。
+//
+// 当后端返回特定错误状态码或连接失败时，自动尝试下一个可用后端。
+//
+// 注意事项：
+//   - Tries 为 1 时禁用故障转移
+//   - 空 NextUpstream 使用默认值（Tries=1，禁用故障转移）
+//   - 建议根据后端数量合理设置 Tries 值
+//
+// 使用示例：
+//
+//	next_upstream:
+//	  tries: 3
+//	  http_codes: [502, 503, 504]
+type NextUpstreamConfig struct {
+	// Tries 最大尝试次数
+	// 包括第一次尝试在内的总请求次数
+	Tries int `yaml:"tries"`
+
+	// HTTPCodes 触发重试的 HTTP 状态码列表
+	// 后端返回这些状态码时自动尝试下一个
+	HTTPCodes []int `yaml:"http_codes"`
+}
+
 // SSLConfig SSL/TLS 配置。
 //
 // 用于配置 HTTPS 服务所需的证书和加密参数。
@@ -562,6 +611,10 @@ type SecurityConfig struct {
 	// Headers 安全头部
 	// 添加安全相关的 HTTP 响应头
 	Headers SecurityHeaders `yaml:"headers"`
+
+	// ErrorPage 自定义错误页面配置
+	// 允许为特定 HTTP 状态码配置自定义错误页面
+	ErrorPage ErrorPageConfig `yaml:"error_page"`
 }
 
 // AccessConfig IP 访问控制配置。
@@ -758,6 +811,41 @@ type SecurityHeaders struct {
 	// PermissionsPolicy Permissions-Policy 头部
 	// 控制浏览器功能权限（原 Feature-Policy）
 	PermissionsPolicy string `yaml:"permissions_policy"`
+}
+
+// ErrorPageConfig 自定义错误页面配置。
+//
+// 允许为特定 HTTP 状态码配置自定义错误页面。
+// 错误页面文件在启动时预加载到内存中，运行时不进行文件 I/O。
+//
+// 注意事项：
+//   - 错误页面文件路径可以是相对路径或绝对路径
+//   - 所有错误页面加载失败时会阻止服务器启动
+//   - 部分错误页面加载失败会记录警告但允许启动
+//   - 支持可选的响应状态码覆盖
+//
+// 使用示例：
+//
+//	error_page:
+//	  pages:
+//	    404: "/var/www/errors/404.html"
+//	    500: "/var/www/errors/500.html"
+//	    503: "/var/www/errors/503.html"
+//	  default: "/var/www/errors/error.html"
+//	  response_code: 200  # 可选：覆盖响应状态码
+type ErrorPageConfig struct {
+	// Pages 状态码到错误页面文件的映射
+	// key 为 HTTP 状态码（如 404, 500），value 为文件路径
+	Pages map[int]string `yaml:"pages"`
+
+	// Default 默认错误页面
+	// 当特定状态码没有配置时使用
+	Default string `yaml:"default"`
+
+	// ResponseCode 响应状态码覆盖
+	// 如果不为 0，所有错误页面响应将使用此状态码
+	// 例如设置为 200 时，即使发生错误也返回 200 OK
+	ResponseCode int `yaml:"response_code"`
 }
 
 // RewriteRule URL 重写规则。

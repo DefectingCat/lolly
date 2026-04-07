@@ -235,6 +235,21 @@ func (h *HealthChecker) MarkUnhealthy(target *loadbalance.Target) {
 	target.Healthy.Store(false)
 }
 
+// MarkHealthy 将目标标记为健康。
+// 此方法用于故障转移成功后，将之前失败的目标恢复为健康状态。
+//
+// 在故障转移成功后的使用示例：
+//
+//	if err := retryRequest(target, req, resp); err == nil {
+//	    healthChecker.MarkHealthy(target)
+//	}
+//
+// 注意：此方法与主动健康检查独立运作，用于快速恢复
+// 故障转移场景中已恢复的目标。
+func (h *HealthChecker) MarkHealthy(target *loadbalance.Target) {
+	target.Healthy.Store(true)
+}
+
 // IsRunning 如果健康检查器当前正在运行，则返回 true。
 func (h *HealthChecker) IsRunning() bool {
 	return h.running.Load()

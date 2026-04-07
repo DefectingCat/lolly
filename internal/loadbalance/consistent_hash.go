@@ -185,5 +185,93 @@ func (c *ConsistentHash) GetStats() ConsistentHashStats {
 	}
 }
 
+// SelectExcluding 根据指定键选择目标，排除指定的目标列表。
+//
+// 参数：
+//   - targets: 可用目标列表
+//   - excluded: 需要排除的目标列表
+//
+// 返回值：
+//   - *Target: 选中的目标，如果没有可用目标则返回 nil
+func (c *ConsistentHash) SelectExcluding(targets []*Target, excluded []*Target) *Target {
+	return c.SelectExcludingByKey(targets, excluded, "")
+}
+
+// SelectExcludingByKey 根据指定键选择目标，排除指定的目标列表。
+//
+// 参数：
+//   - targets: 可用目标列表
+//   - excluded: 需要排除的目标列表
+//   - key: 哈希键值（如客户端 IP、URI 等）
+//
+// 返回值：
+//   - *Target: 选中的目标，如果没有可用目标则返回 nil
+func (c *ConsistentHash) SelectExcludingByKey(targets []*Target, excluded []*Target, key string) *Target {
+	// 构建排除集合
+	excludeSet := make(map[string]bool, len(excluded))
+	for _, t := range excluded {
+		if t != nil {
+			excludeSet[t.URL] = true
+		}
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	// 如果没有排除的目标，使用正常选择
+	if len(excludeSet) == 0 {
+		return c.SelectByKey(targets, key)
+	}
+
+	// 过滤掉被排除的目标
+	filtered := make([]*Target, 0, len(targets))
+	for _, t := range targets {
+		if t.Healthy.Load() && !excludeSet[t.URL] {
+			filtered = append(filtered, t)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return nil
+	}
+
+	// 为过滤后的目标临时构建哈希环
+	circle := make(map[uint64]*Target)
+	sortedHashes := make([]uint64, 0)
+
+	for _, target := range filtered {
+		for i := 0; i < c.virtualNodes; i++ {
+			nodeKey := fmt.Sprintf("%s#%d", target.URL, i)
+			hash := c.hashKeyString(nodeKey)
+			circle[hash] = target
+			sortedHashes = append(sortedHashes, hash)
+		}
+	}
+
+	// 排序哈希值
+	sort.Slice(sortedHashes, func(i, j int) bool {
+		return sortedHashes[i] < sortedHashes[j]
+	})
+
+	if len(sortedHashes) == 0 {
+		return nil
+	}
+
+	// 计算键的哈希值
+	hash := c.hashKeyString(key)
+
+	// 二分查找最近的节点
+	idx := sort.Search(len(sortedHashes), func(i int) bool {
+		return sortedHashes[i] >= hash
+	})
+
+	// 环形回绕
+	if idx >= len(sortedHashes) {
+		idx = 0
+	}
+
+	return circle[sortedHashes[idx]]
+}
+
 // 验证接口实现
 var _ Balancer = (*ConsistentHash)(nil)

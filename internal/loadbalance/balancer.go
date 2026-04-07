@@ -46,6 +46,11 @@ type Balancer interface {
 	// Select 根据算法策略从提供的列表中选择一个目标。
 	// 如果没有健康目标可用，返回 nil。
 	Select(targets []*Target) *Target
+
+	// SelectExcluding 根据算法策略选择一个目标，排除指定的目标列表。
+	// 用于故障转移场景，避免选择已失败的目标。
+	// 如果除了排除列表外没有可用目标，返回 nil。
+	SelectExcluding(targets []*Target, excluded []*Target) *Target
 }
 
 // RoundRobin 实现简单的轮询负载均衡。
@@ -215,4 +220,135 @@ func IncrementConnections(t *Target) {
 // 当连接关闭时应调用此函数。
 func DecrementConnections(t *Target) {
 	atomic.AddInt64(&t.Connections, -1)
+}
+
+// filterHealthyAndExclude 返回仅包含健康目标且不在排除列表中的新切片。
+// 这是 SelectExcluding 使用的辅助函数。
+func filterHealthyAndExclude(targets []*Target, excluded []*Target) []*Target {
+	// 构建排除集合（使用 URL 作为键）
+	excludeSet := make(map[string]bool, len(excluded))
+	for _, t := range excluded {
+		if t != nil {
+			excludeSet[t.URL] = true
+		}
+	}
+
+	// 过滤健康且不在排除列表中的目标
+	available := make([]*Target, 0, len(targets))
+	for _, t := range targets {
+		if t.Healthy.Load() && !excludeSet[t.URL] {
+			available = append(available, t)
+		}
+	}
+	return available
+}
+
+// SelectExcluding 根据轮询策略选择一个目标，排除指定的目标列表。
+// 只考虑健康且不在排除列表中的目标。
+func (r *RoundRobin) SelectExcluding(targets []*Target, excluded []*Target) *Target {
+	available := filterHealthyAndExclude(targets, excluded)
+	if len(available) == 0 {
+		return nil
+	}
+
+	// 原子地递增并获取计数器值
+	idx := atomic.AddUint64(&r.counter, 1) - 1
+	return available[idx%uint64(len(available))]
+}
+
+// SelectExcluding 根据权重分布选择目标，排除指定的目标列表。
+// 只考虑健康且不在排除列表中的目标。
+func (w *WeightedRoundRobin) SelectExcluding(targets []*Target, excluded []*Target) *Target {
+	available := filterHealthyAndExclude(targets, excluded)
+	if len(available) == 0 {
+		return nil
+	}
+
+	// 计算总权重
+	totalWeight := 0
+	for _, t := range available {
+		if t.Weight <= 0 {
+			totalWeight += 1 // 最小权重为 1
+		} else {
+			totalWeight += t.Weight
+		}
+	}
+
+	if totalWeight == 0 {
+		return nil
+	}
+
+	// 使用原子计数器确定权重分布中的位置
+	idx := atomic.AddUint64(&w.counter, 1) - 1
+	pos := int(idx % uint64(totalWeight))
+
+	// 找到计算位置处的目标
+	currentWeight := 0
+	for _, t := range available {
+		weight := t.Weight
+		if weight <= 0 {
+			weight = 1
+		}
+		currentWeight += weight
+		if pos < currentWeight {
+			return t
+		}
+	}
+
+	// 回退到最后一个目标（不应到达这里）
+	return available[len(available)-1]
+}
+
+// SelectExcluding 选择连接数最少的目标，排除指定的目标列表。
+// 只考虑健康且不在排除列表中的目标。
+func (l *LeastConnections) SelectExcluding(targets []*Target, excluded []*Target) *Target {
+	// 构建排除集合
+	excludeSet := make(map[string]bool, len(excluded))
+	for _, t := range excluded {
+		if t != nil {
+			excludeSet[t.URL] = true
+		}
+	}
+
+	var selected *Target
+	var minConns int64 = -1
+
+	for _, t := range targets {
+		if !t.Healthy.Load() || excludeSet[t.URL] {
+			continue
+		}
+
+		// 原子地读取连接计数
+		conns := atomic.LoadInt64(&t.Connections)
+
+		if selected == nil || conns < minConns {
+			selected = t
+			minConns = conns
+		}
+	}
+
+	return selected
+}
+
+// SelectExcluding 基于客户端 IP 的哈希值选择目标，排除指定的目标列表。
+// 只考虑健康且不在排除列表中的目标。
+func (i *IPHash) SelectExcluding(targets []*Target, excluded []*Target) *Target {
+	return i.SelectExcludingByIP(targets, excluded, "")
+}
+
+// SelectExcludingByIP 基于提供的 IP 地址的哈希值选择目标，排除指定的目标列表。
+// 只考虑健康且不在排除列表中的目标。
+func (i *IPHash) SelectExcludingByIP(targets []*Target, excluded []*Target, clientIP string) *Target {
+	available := filterHealthyAndExclude(targets, excluded)
+	if len(available) == 0 {
+		return nil
+	}
+
+	// 对客户端 IP 进行哈希
+	h := fnv.New64a()
+	h.Write([]byte(clientIP))
+	hash := h.Sum64()
+
+	idx := hash % uint64(len(available))
+	return available[idx]
 }

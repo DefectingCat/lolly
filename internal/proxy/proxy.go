@@ -34,6 +34,7 @@ package proxy
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -207,107 +208,190 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 // 4. 将响应复制回客户端
 //
 // 如果没有可用的健康目标，返回 502 Bad Gateway。
-// 如果后端请求失败，返回相应的错误响应。
+// 如果后端请求失败，根据 next_upstream 配置尝试下一个目标。
 func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
-	// 使用负载均衡器选择目标
-	target := p.selectTarget(ctx)
-	if target == nil {
-		ctx.Error("Bad Gateway: no healthy upstream", fasthttp.StatusBadGateway)
-		return
+	// 故障转移配置
+	maxTries := p.config.NextUpstream.Tries
+	if maxTries <= 0 {
+		maxTries = 1 // 默认不重试
+	}
+	httpCodes := p.config.NextUpstream.HTTPCodes
+	if len(httpCodes) == 0 {
+		// 默认重试的状态码
+		httpCodes = []int{502, 503, 504}
 	}
 
-	// 获取所选目标的客户端
-	client := p.getClient(target.URL)
-	if client == nil {
-		ctx.Error("Bad Gateway: upstream client unavailable", fasthttp.StatusBadGateway)
-		return
-	}
+	// 已尝试的目标列表（用于故障转移时排除）
+	attemptedTargets := make([]*loadbalance.Target, 0, maxTries)
 
-	// 增加连接计数（用于最少连接数负载均衡）
-	loadbalance.IncrementConnections(target)
-	defer loadbalance.DecrementConnections(target)
+	var lastErr error
 
-	// 检查是否为 WebSocket 升级请求
-	if isWebSocketRequest(ctx) {
-		p.handleWebSocket(ctx, target, client)
-		return
-	}
+	for attempt := 0; attempt < maxTries; attempt++ {
+		// 选择目标（第一次使用普通选择，后续排除已失败目标）
+		var target *loadbalance.Target
+		if attempt == 0 {
+			target = p.selectTarget(ctx)
+		} else {
+			target = p.selectTargetExcluding(ctx, attemptedTargets)
+		}
 
-	// 准备请求
-	req := &ctx.Request
-
-	// 修改请求头
-	p.modifyRequestHeaders(ctx, target)
-
-	// 尝试从缓存获取（如果启用）
-	if p.cache != nil {
-		cacheKey := p.buildCacheKey(ctx)
-		if entry, ok, stale := p.cache.Get(cacheKey); ok {
-			// 缓存命中
-			if !stale {
-				// 新鲜缓存，直接返回
-				p.writeCachedResponse(ctx, entry)
+		if target == nil {
+			if attempt == 0 {
+				ctx.Error("Bad Gateway: no healthy upstream", fasthttp.StatusBadGateway)
 				return
 			}
-			// 过期缓存，尝试后台刷新，同时返回旧数据
-			go p.backgroundRefresh(ctx, target, cacheKey)
-			p.writeCachedResponse(ctx, entry)
+			// 没有更多可用目标，返回最后一次错误
+			break
+		}
+
+		attemptedTargets = append(attemptedTargets, target)
+
+		// 获取所选目标的客户端
+		client := p.getClient(target.URL)
+		if client == nil {
+			// 标记为不健康并继续尝试下一个
+			if p.healthChecker != nil {
+				p.healthChecker.MarkUnhealthy(target)
+			}
+			continue
+		}
+
+		// 增加连接计数（用于最少连接数负载均衡）
+		loadbalance.IncrementConnections(target)
+
+		// 检查是否为 WebSocket 升级请求
+		if isWebSocketRequest(ctx) {
+			// WebSocket 使用 defer 确保连接计数释放
+			defer loadbalance.DecrementConnections(target)
+			p.handleWebSocket(ctx, target, client)
 			return
 		}
 
-		// 检查是否需要缓存锁（防止缓存击穿）
-		if done := p.cache.AcquireLock(cacheKey); done != nil {
-			// 有其他请求正在生成缓存，等待
-			<-done
-			// 重新尝试获取缓存
-			if entry, ok, _ := p.cache.Get(cacheKey); ok {
+		// 准备请求
+		req := &ctx.Request
+
+		// 修改请求头
+		p.modifyRequestHeaders(ctx, target)
+
+		// 尝试从缓存获取（如果启用）
+		if p.cache != nil && attempt == 0 {
+			cacheKey := p.buildCacheKey(ctx)
+			if entry, ok, stale := p.cache.Get(cacheKey); ok {
+				// 缓存命中
+				loadbalance.DecrementConnections(target)
+				if !stale {
+					// 新鲜缓存，直接返回
+					p.writeCachedResponse(ctx, entry)
+					return
+				}
+				// 过期缓存，尝试后台刷新，同时返回旧数据
+				go p.backgroundRefresh(ctx, target, cacheKey)
 				p.writeCachedResponse(ctx, entry)
 				return
 			}
+
+			// 检查是否需要缓存锁（防止缓存击穿）
+			if done := p.cache.AcquireLock(cacheKey); done != nil {
+				// 有其他请求正在生成缓存，等待
+				loadbalance.DecrementConnections(target)
+				<-done
+				// 重新尝试获取缓存
+				if entry, ok, _ := p.cache.Get(cacheKey); ok {
+					p.writeCachedResponse(ctx, entry)
+					return
+				}
+				// 缓存未命中，需要重新选择目标
+				loadbalance.IncrementConnections(target)
+			}
 		}
+
+		// 执行代理请求
+		err := client.Do(req, &ctx.Response)
+
+		if err != nil {
+			loadbalance.DecrementConnections(target)
+
+			// 被动健康检查：标记目标为不健康
+			if p.healthChecker != nil {
+				p.healthChecker.MarkUnhealthy(target)
+			}
+
+			// 释放缓存锁
+			if p.cache != nil && attempt == 0 {
+				p.cache.ReleaseLock(p.buildCacheKey(ctx), err)
+			}
+
+			lastErr = err
+			// 继续尝试下一个目标
+			continue
+		}
+
+		// 请求成功，减少连接计数
+		loadbalance.DecrementConnections(target)
+
+		// 检查响应状态码是否需要重试
+		statusCode := ctx.Response.StatusCode()
+		shouldRetry := false
+		for _, code := range httpCodes {
+			if statusCode == code {
+				shouldRetry = true
+				break
+			}
+		}
+
+		if shouldRetry {
+			// 释放缓存锁
+			if p.cache != nil && attempt == 0 {
+				p.cache.ReleaseLock(p.buildCacheKey(ctx), fmt.Errorf("HTTP %d", statusCode))
+			}
+
+			// 如果不是最后一次尝试，继续下一个目标
+			if attempt < maxTries-1 {
+				// 标记目标为不健康
+				if p.healthChecker != nil {
+					p.healthChecker.MarkUnhealthy(target)
+				}
+				continue
+			}
+		}
+
+		// 重试成功时恢复健康状态
+		if attempt > 0 && p.healthChecker != nil {
+			p.healthChecker.MarkHealthy(target)
+		}
+
+		// 存入缓存（如果启用且响应可缓存）
+		if p.cache != nil {
+			cacheKey := p.buildCacheKey(ctx)
+			if statusCode >= 200 && statusCode < 300 {
+				// 提取响应头
+				headers := make(map[string]string)
+				for key, value := range ctx.Response.Header.All() {
+					headers[string(key)] = string(value)
+				}
+				p.cache.Set(cacheKey, ctx.Response.Body(), headers, statusCode, p.config.Cache.MaxAge)
+			}
+			p.cache.ReleaseLock(cacheKey, nil)
+		}
+
+		// 修改响应头
+		p.modifyResponseHeaders(ctx)
+		return
 	}
 
-	// 执行代理请求
-	err := client.Do(req, &ctx.Response)
-	if err != nil {
-		// 被动健康检查：标记目标为不健康
-		if p.healthChecker != nil {
-			p.healthChecker.MarkUnhealthy(target)
-		}
-
-		// 释放缓存锁
-		if p.cache != nil {
-			p.cache.ReleaseLock(p.buildCacheKey(ctx), err)
-		}
-
+	// 所有尝试都失败
+	if lastErr != nil {
 		// 处理不同类型的错误
-		if errors.Is(err, fasthttp.ErrTimeout) {
+		if errors.Is(lastErr, fasthttp.ErrTimeout) {
 			ctx.Error("Gateway Timeout", fasthttp.StatusGatewayTimeout)
-		} else if errors.Is(err, fasthttp.ErrConnectionClosed) {
+		} else if errors.Is(lastErr, fasthttp.ErrConnectionClosed) {
 			ctx.Error("Bad Gateway: upstream connection closed", fasthttp.StatusBadGateway)
 		} else {
 			ctx.Error("Bad Gateway", fasthttp.StatusBadGateway)
 		}
-		return
+	} else {
+		ctx.Error("Bad Gateway: all upstreams failed", fasthttp.StatusBadGateway)
 	}
-
-	// 存入缓存（如果启用且响应可缓存）
-	if p.cache != nil {
-		cacheKey := p.buildCacheKey(ctx)
-		status := ctx.Response.StatusCode()
-		if status >= 200 && status < 300 {
-			// 提取响应头
-			headers := make(map[string]string)
-			for key, value := range ctx.Response.Header.All() {
-				headers[string(key)] = string(value)
-			}
-			p.cache.Set(cacheKey, ctx.Response.Body(), headers, status, p.config.Cache.MaxAge)
-		}
-		p.cache.ReleaseLock(cacheKey, nil)
-	}
-
-	// 修改响应头
-	p.modifyResponseHeaders(ctx)
 }
 
 // selectTarget 使用配置的负载均衡器选择后端目标。
@@ -338,6 +422,35 @@ func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 	}
 
 	return balancer.Select(targets)
+}
+
+// selectTargetExcluding 选择后端目标，排除已尝试失败的目标。
+// 用于故障转移场景，避免重复选择已失败的目标。
+// 如果没有可用的健康目标则返回 nil。
+func (p *Proxy) selectTargetExcluding(ctx *fasthttp.RequestCtx, excluded []*loadbalance.Target) *loadbalance.Target {
+	p.mu.RLock()
+	balancer := p.balancer
+	targets := p.targets
+	p.mu.RUnlock()
+
+	if len(targets) == 0 {
+		return nil
+	}
+
+	// 对于 IPHash 负载均衡器，提取客户端 IP
+	if ipHash, ok := balancer.(*loadbalance.IPHash); ok {
+		clientIP := netutil.ExtractClientIP(ctx)
+		return ipHash.SelectExcludingByIP(targets, excluded, clientIP)
+	}
+
+	// 对于一致性哈希，根据 hash_key 配置选择
+	if ch, ok := balancer.(*loadbalance.ConsistentHash); ok {
+		hashKey := ch.GetHashKey()
+		key := p.extractHashKey(ctx, hashKey)
+		return ch.SelectExcludingByKey(targets, excluded, key)
+	}
+
+	return balancer.SelectExcluding(targets, excluded)
 }
 
 // extractHashKey 根据配置提取哈希键值。
