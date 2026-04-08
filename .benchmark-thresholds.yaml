@@ -1,0 +1,129 @@
+# 性能回归阈值配置
+#
+# 阈值推导方法论:
+# 1. 运行基准测试 50 次获取样本
+# 2. 计算每个测试的变异系数 (CV = stdev / mean * 100)
+# 3. threshold_warning = 2 * CV
+# 4. threshold_block = 3 * CV
+#
+# 注意: 以下为示例值，实际值需从 Phase 0 数据推导
+
+# 分环境阈值配置
+environments:
+  # 本地稳定环境 - 严格阈值
+  local:
+    description: "本地稳定环境，delta <5% 可达"
+    thresholds:
+      # 默认阈值
+      default:
+        warning: -5.0   # 性能下降 5% 警告
+        block: -12.0    # 性能下降 12% 阻塞
+
+      # 变量展开 - 高频操作，严格阈值
+      variable:
+        warning: -3.0
+        block: -8.0
+
+      # 缓存操作 - 高频操作
+      cache:
+        warning: -3.0
+        block: -8.0
+
+      # 负载均衡
+      loadbalance:
+        warning: -5.0
+        block: -12.0
+
+      # 代理转发
+      proxy:
+        warning: -5.0
+        block: -12.0
+
+      # 压缩 - 受数据特征影响较大
+      compression:
+        warning: -8.0
+        block: -15.0
+
+      # 限流
+      ratelimit:
+        warning: -5.0
+        block: -12.0
+
+      # 滑动窗口
+      sliding_window:
+        warning: -8.0
+        block: -15.0
+
+      # 静态文件服务
+      static:
+        warning: -5.0
+        block: -12.0
+
+      # DNS 解析 - 网络波动影响大
+      resolver:
+        warning: -10.0
+        block: -20.0
+
+  # CI 共享 runner 环境 - 宽松阈值
+  ci:
+    description: "CI 共享 runner，波动较大，delta <20% 作为警告阈值"
+    thresholds:
+      # 默认阈值 - CI 环境波动大
+      default:
+        warning: -15.0
+        block: -25.0
+
+      # 核心模块相对更稳定
+      variable:
+        warning: -10.0
+        block: -20.0
+
+      cache:
+        warning: -10.0
+        block: -20.0
+
+      loadbalance:
+        warning: -15.0
+        block: -25.0
+
+      proxy:
+        warning: -15.0
+        block: -25.0
+
+      # 压缩受数据特征影响
+      compression:
+        warning: -20.0
+        block: -30.0
+
+      ratelimit:
+        warning: -15.0
+        block: -25.0
+
+      sliding_window:
+        warning: -20.0
+        block: -30.0
+
+      static:
+        warning: -15.0
+        block: -25.0
+
+      # DNS 解析在 CI 中波动更大
+      resolver:
+        warning: -25.0
+        block: -35.0
+
+# 全局配置
+global:
+  # 最小样本数
+  min_samples: 10
+
+  # P 值阈值（统计显著性）
+  p_value_threshold: 0.05
+
+  # 内存分配增长阈值（独立于时间阈值）
+  memory_warning: 10.0   # 内存分配增长 10% 警告
+  memory_block: 25.0     # 内存分配增长 25% 阻塞
+
+  # 忽略列表（不检测回归的测试）
+  ignore:
+    # - BenchmarkSomeFlakyTest
