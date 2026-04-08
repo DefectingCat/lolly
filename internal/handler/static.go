@@ -37,9 +37,15 @@ import (
 //   - 自动处理目录遍历攻击防护（拒绝包含 ".." 的路径）
 //   - 并发安全，可在多个 goroutine 中使用
 //   - 大文件（>= 8KB）自动启用零拷贝传输
+//   - alias 与 root 互斥，同时配置时 alias 优先
 type StaticHandler struct {
 	// root 静态文件根目录
 	root string
+
+	// alias 路径别名（与 root 互斥）
+	// 例如：path: "/images/", alias: "/var/www/img/"
+	// 请求 "/images/logo.png" -> 文件 "/var/www/img/logo.png"
+	alias string
 
 	// pathPrefix 路径前缀，会被剥离后拼接 root
 	pathPrefix string
@@ -90,6 +96,68 @@ func NewStaticHandler(root, pathPrefix string, index []string, useSendfile bool)
 		index:       index,
 		useSendfile: useSendfile,
 	}
+}
+
+// NewStaticHandlerWithAlias 创建带 alias 的静态文件处理器。
+//
+// alias 与 root 的区别：
+//   - root: 请求路径附加到 root 后
+//     例如：root "/var/www", 请求 "/images/logo.png" -> "/var/www/images/logo.png"
+//   - alias: 请求路径替换匹配部分
+//     例如：alias "/var/www/img/", 请求 "/images/logo.png" -> "/var/www/img/logo.png"
+//
+// 参数：
+//   - alias: 路径别名
+//   - pathPrefix: 路径前缀，用于匹配和替换
+//   - index: 索引文件列表
+//   - useSendfile: 是否启用零拷贝传输
+//
+// 使用示例：
+//
+//	handler := handler.NewStaticHandlerWithAlias("/var/www/img/", "/images/", []string{"index.html"}, true)
+func NewStaticHandlerWithAlias(alias, pathPrefix string, index []string, useSendfile bool) *StaticHandler {
+	return &StaticHandler{
+		alias:       alias,
+		pathPrefix:  pathPrefix,
+		index:       index,
+		useSendfile: useSendfile,
+	}
+}
+
+// SetAlias 设置路径别名。
+//
+// alias 与 root 互斥，设置 alias 会清空 root。
+//
+// 参数：
+//   - alias: 路径别名
+func (h *StaticHandler) SetAlias(alias string) {
+	h.alias = alias
+	if alias != "" {
+		h.root = ""
+	}
+}
+
+// SetRoot 设置静态文件根目录。
+//
+// root 与 alias 互斥，设置 root 会清空 alias。
+//
+// 参数：
+//   - root: 静态文件根目录
+func (h *StaticHandler) SetRoot(root string) {
+	h.root = root
+	if root != "" {
+		h.alias = ""
+	}
+}
+
+// GetAlias 获取路径别名。
+func (h *StaticHandler) GetAlias() string {
+	return h.alias
+}
+
+// GetRoot 获取静态文件根目录。
+func (h *StaticHandler) GetRoot() string {
+	return h.root
 }
 
 // SetFileCache 设置文件缓存。
@@ -204,8 +272,13 @@ func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string)
 		// 解析占位符
 		targetPath := h.resolveTryFilePath(tryFile, relPath)
 
-		// 构建完整文件路径
-		filePath := filepath.Join(h.root, targetPath)
+		// 构建完整文件路径（支持 alias 和 root）
+		var filePath string
+		if h.alias != "" {
+			filePath = filepath.Join(h.alias, targetPath)
+		} else {
+			filePath = filepath.Join(h.root, targetPath)
+		}
 
 		// 检查文件/目录是否存在
 		info, err := os.Stat(filePath)
@@ -271,7 +344,7 @@ func (h *StaticHandler) resolveTryFilePath(tryFile, relPath string) string {
 //
 // 参数：
 //   - ctx: fasthttp 请求上下文
-//   - targetPath: 重定向目标路径（相对于 root）
+//   - targetPath: 重定向目标路径（相对于 root 或 alias）
 func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetPath string) {
 	if h.tryFilesPass && h.router != nil {
 		// tryFilesPass 为 true，重新进入中间件链
@@ -286,7 +359,12 @@ func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetP
 	}
 
 	// tryFilesPass 为 false（默认），直接服务文件，不触发中间件
-	filePath := filepath.Join(h.root, targetPath)
+	var filePath string
+	if h.alias != "" {
+		filePath = filepath.Join(h.alias, targetPath)
+	} else {
+		filePath = filepath.Join(h.root, targetPath)
+	}
 	info, err := os.Stat(filePath)
 	if err != nil {
 		ctx.Error("Not Found", fasthttp.StatusNotFound)
@@ -305,17 +383,36 @@ func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetP
 //   - ctx: fasthttp 请求上下文
 //   - reqPath: 请求路径
 func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string) {
-	// 剥离路径前缀
-	relPath := reqPath
-	if h.pathPrefix != "" && h.pathPrefix != "/" {
-		relPath = strings.TrimPrefix(reqPath, h.pathPrefix)
-		if !strings.HasPrefix(relPath, "/") {
-			relPath = "/" + relPath
-		}
-	}
+	// 计算文件路径
+	var filePath string
 
-	// 拼接文件路径
-	filePath := filepath.Join(h.root, relPath)
+	if h.alias != "" {
+		// alias 模式：将匹配的路径前缀替换为 alias
+		// 例如：path: "/images/", alias: "/var/www/img/"
+		// 请求 "/images/logo.png" -> 文件 "/var/www/img/logo.png"
+		relPath := reqPath
+		if h.pathPrefix != "" && h.pathPrefix != "/" {
+			relPath = strings.TrimPrefix(reqPath, h.pathPrefix)
+			if !strings.HasPrefix(relPath, "/") {
+				relPath = "/" + relPath
+			}
+		}
+		// 使用 alias 替换匹配部分
+		filePath = filepath.Join(h.alias, relPath)
+	} else {
+		// root 模式：将请求路径附加到 root
+		// 剥离路径前缀
+		relPath := reqPath
+		if h.pathPrefix != "" && h.pathPrefix != "/" {
+			relPath = strings.TrimPrefix(reqPath, h.pathPrefix)
+			if !strings.HasPrefix(relPath, "/") {
+				relPath = "/" + relPath
+			}
+		}
+
+		// 拼接文件路径
+		filePath = filepath.Join(h.root, relPath)
+	}
 
 	// 检查文件/目录是否存在
 	info, err := os.Stat(filePath)

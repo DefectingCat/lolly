@@ -1099,6 +1099,269 @@ func TestStaticHandler_TryFilesWithPathPrefix(t *testing.T) {
 	}
 }
 
+// TestStaticHandler_Alias 测试 alias 路径替换功能
+func TestStaticHandler_Alias(t *testing.T) {
+	tests := []struct {
+		name        string
+		setup       func(t *testing.T, aliasDir string)
+		alias       string
+		pathPrefix  string
+		path        string
+		wantStatus  int
+		wantContent string
+		skipContent bool
+	}{
+		{
+			name: "alias 基础替换",
+			setup: func(t *testing.T, aliasDir string) {
+				if err := os.WriteFile(filepath.Join(aliasDir, "logo.png"), []byte("png content"), 0644); err != nil {
+					t.Fatalf("创建文件失败: %v", err)
+				}
+			},
+			alias:       "/alias/images/",
+			pathPrefix:  "/images/",
+			path:        "/images/logo.png",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "png content",
+		},
+		{
+			name: "alias 嵌套路径",
+			setup: func(t *testing.T, aliasDir string) {
+				subDir := filepath.Join(aliasDir, "icons")
+				if err := os.MkdirAll(subDir, 0755); err != nil {
+					t.Fatalf("创建目录失败: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(subDir, "app.png"), []byte("app icon"), 0644); err != nil {
+					t.Fatalf("创建文件失败: %v", err)
+				}
+			},
+			alias:       "/alias/img/",
+			pathPrefix:  "/images/",
+			path:        "/images/icons/app.png",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "app icon",
+		},
+		{
+			name: "alias 目录索引",
+			setup: func(t *testing.T, aliasDir string) {
+				if err := os.WriteFile(filepath.Join(aliasDir, "index.html"), []byte("alias index"), 0644); err != nil {
+					t.Fatalf("创建文件失败: %v", err)
+				}
+			},
+			alias:       "/alias/images/",
+			pathPrefix:  "/images/",
+			path:        "/images/",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "alias index",
+		},
+		{
+			name: "alias 文件不存在",
+			setup: func(t *testing.T, aliasDir string) {
+				// 不创建任何文件
+			},
+			alias:       "/alias/images/",
+			pathPrefix:  "/images/",
+			path:        "/images/notfound.png",
+			wantStatus:  fasthttp.StatusNotFound,
+			skipContent: true,
+		},
+		{
+			name: "root 与 alias 互斥 - 使用 alias",
+			setup: func(t *testing.T, aliasDir string) {
+				if err := os.WriteFile(filepath.Join(aliasDir, "file.txt"), []byte("from alias"), 0644); err != nil {
+					t.Fatalf("创建文件失败: %v", err)
+				}
+			},
+			alias:       "/alias/images/",
+			pathPrefix:  "/images/",
+			path:        "/images/file.txt",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "from alias",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 创建临时目录作为 alias 目录
+			aliasDir := t.TempDir()
+			tt.setup(t, aliasDir)
+
+			// 创建处理器（使用 alias）
+			handler := NewStaticHandlerWithAlias(aliasDir, tt.pathPrefix, []string{"index.html"}, false)
+
+			ctx := newTestContext(t, tt.path)
+			handler.Handle(ctx)
+
+			if got := ctx.Response.StatusCode(); got != tt.wantStatus {
+				t.Errorf("状态码 = %d, want %d", got, tt.wantStatus)
+			}
+
+			if !tt.skipContent && tt.wantContent != "" {
+				got := string(ctx.Response.Body())
+				if got != tt.wantContent {
+					t.Errorf("内容 = %q, want %q", got, tt.wantContent)
+				}
+			}
+		})
+	}
+}
+
+// TestStaticHandler_AliasVsRoot 测试 alias 和 root 的行为区别
+func TestStaticHandler_AliasVsRoot(t *testing.T) {
+	// root 目录
+	rootDir := t.TempDir()
+	// alias 目录
+	aliasDir := t.TempDir()
+
+	// 在 root 创建子目录和文件
+	imagesDir := filepath.Join(rootDir, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		t.Fatalf("创建 images 目录失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(imagesDir, "logo.png"), []byte("from root"), 0644); err != nil {
+		t.Fatalf("创建 root 文件失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(aliasDir, "logo.png"), []byte("from alias"), 0644); err != nil {
+		t.Fatalf("创建 alias 文件失败: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		handler     *StaticHandler
+		path        string
+		wantContent string
+	}{
+		{
+			name:        "root 模式：请求路径附加到 root",
+			handler:     NewStaticHandler(rootDir, "/", []string{"index.html"}, false),
+			path:        "/images/logo.png",
+			wantContent: "from root", // /var/www/images/logo.png
+		},
+		{
+			name:        "alias 模式：请求路径替换匹配部分",
+			handler:     NewStaticHandlerWithAlias(aliasDir, "/images/", []string{"index.html"}, false),
+			path:        "/images/logo.png",
+			wantContent: "from alias", // /alias/logo.png（images/被替换）
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := newTestContext(t, tt.path)
+			tt.handler.Handle(ctx)
+
+			got := string(ctx.Response.Body())
+			if got != tt.wantContent {
+				t.Errorf("内容 = %q, want %q", got, tt.wantContent)
+			}
+		})
+	}
+}
+
+// TestStaticHandler_SetAlias 测试 SetAlias 方法
+func TestStaticHandler_SetAlias(t *testing.T) {
+	t.Run("设置 alias", func(t *testing.T) {
+		handler := NewStaticHandler("/root", "/", nil, false)
+
+		if handler.GetAlias() != "" {
+			t.Error("初始 alias 应为空")
+		}
+
+		handler.SetAlias("/alias")
+
+		if handler.GetAlias() != "/alias" {
+			t.Errorf("GetAlias() = %q, want %q", handler.GetAlias(), "/alias")
+		}
+		if handler.GetRoot() != "" {
+			t.Error("设置 alias 后 root 应被清空")
+		}
+	})
+
+	t.Run("设置 root 清除 alias", func(t *testing.T) {
+		handler := NewStaticHandlerWithAlias("/alias", "/", nil, false)
+
+		if handler.GetAlias() != "/alias" {
+			t.Error("初始 alias 应为 /alias")
+		}
+
+		handler.SetRoot("/root")
+
+		if handler.GetRoot() != "/root" {
+			t.Errorf("GetRoot() = %q, want %q", handler.GetRoot(), "/root")
+		}
+		if handler.GetAlias() != "" {
+			t.Error("设置 root 后 alias 应被清空")
+		}
+	})
+}
+
+// TestStaticHandler_AliasWithTryFiles 测试 alias 与 try_files 组合
+func TestStaticHandler_AliasWithTryFiles(t *testing.T) {
+	aliasDir := t.TempDir()
+
+	// 创建测试文件
+	if err := os.WriteFile(filepath.Join(aliasDir, "app.js"), []byte("app content"), 0644); err != nil {
+		t.Fatalf("创建文件失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(aliasDir, "index.html"), []byte("fallback"), 0644); err != nil {
+		t.Fatalf("创建文件失败: %v", err)
+	}
+
+	handler := NewStaticHandlerWithAlias(aliasDir, "/static/", []string{"index.html"}, false)
+	handler.SetTryFiles([]string{"$uri", "/index.html"}, false, nil)
+
+	tests := []struct {
+		name        string
+		path        string
+		wantStatus  int
+		wantContent string
+	}{
+		{
+			name:        "找到文件",
+			path:        "/static/app.js",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "app content",
+		},
+		{
+			name:        "回退到 index.html",
+			path:        "/static/nonexistent",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "fallback",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := newTestContext(t, tt.path)
+			handler.Handle(ctx)
+
+			if got := ctx.Response.StatusCode(); got != tt.wantStatus {
+				t.Errorf("状态码 = %d, want %d", got, tt.wantStatus)
+			}
+
+			got := string(ctx.Response.Body())
+			if got != tt.wantContent {
+				t.Errorf("内容 = %q, want %q", got, tt.wantContent)
+			}
+		})
+	}
+}
+
+// TestNewStaticHandlerWithAlias 测试 NewStaticHandlerWithAlias 构造函数
+func TestNewStaticHandlerWithAlias(t *testing.T) {
+	handler := NewStaticHandlerWithAlias("/var/www/img/", "/images/", []string{"index.html"}, true)
+
+	if handler == nil {
+		t.Fatal("NewStaticHandlerWithAlias() 返回 nil")
+	}
+	if handler.GetAlias() != "/var/www/img/" {
+		t.Errorf("GetAlias() = %q, want %q", handler.GetAlias(), "/var/www/img/")
+	}
+	if handler.GetRoot() != "" {
+		t.Errorf("GetRoot() = %q, want 空字符串", handler.GetRoot())
+	}
+}
+
 // TestStaticHandler_TryFilesEdgeCases 测试 try_files 边界情况
 func TestStaticHandler_TryFilesEdgeCases(t *testing.T) {
 	tmpDir := t.TempDir()
