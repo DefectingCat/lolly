@@ -581,3 +581,561 @@ func TestStaticHandler_Handle_Symlink(t *testing.T) {
 		t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
 	}
 }
+
+// TestStaticHandler_SetTryFiles 测试 SetTryFiles 配置设置
+func TestStaticHandler_SetTryFiles(t *testing.T) {
+	tests := []struct {
+		name           string
+		tryFiles       []string
+		tryFilesPass   bool
+		wantTryFiles   []string
+		wantPass       bool
+	}{
+		{
+			name:         "基本配置",
+			tryFiles:     []string{"$uri", "$uri/", "/index.html"},
+			tryFilesPass: false,
+			wantTryFiles: []string{"$uri", "$uri/", "/index.html"},
+			wantPass:     false,
+		},
+		{
+			name:         "启用 tryFilesPass",
+			tryFiles:     []string{"$uri", "/fallback.html"},
+			tryFilesPass: true,
+			wantTryFiles: []string{"$uri", "/fallback.html"},
+			wantPass:     true,
+		},
+		{
+			name:         "空配置",
+			tryFiles:     []string{},
+			tryFilesPass: false,
+			wantTryFiles: []string{},
+			wantPass:     false,
+		},
+		{
+			name:         "单一项配置",
+			tryFiles:     []string{"/app.html"},
+			tryFilesPass: false,
+			wantTryFiles: []string{"/app.html"},
+			wantPass:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewStaticHandler("/var/www", "/", []string{"index.html"}, false)
+			router := NewRouter()
+
+			handler.SetTryFiles(tt.tryFiles, tt.tryFilesPass, router)
+
+			// 验证配置
+			if len(handler.tryFiles) != len(tt.wantTryFiles) {
+				t.Errorf("tryFiles length = %d, want %d", len(handler.tryFiles), len(tt.wantTryFiles))
+			}
+			for i, v := range tt.wantTryFiles {
+				if handler.tryFiles[i] != v {
+					t.Errorf("tryFiles[%d] = %q, want %q", i, handler.tryFiles[i], v)
+				}
+			}
+			if handler.tryFilesPass != tt.wantPass {
+				t.Errorf("tryFilesPass = %v, want %v", handler.tryFilesPass, tt.wantPass)
+			}
+			if handler.router != router {
+				t.Error("router 未正确设置")
+			}
+		})
+	}
+}
+
+// TestStaticHandler_resolveTryFilePath 测试 resolveTryFilePath 占位符解析
+func TestStaticHandler_resolveTryFilePath(t *testing.T) {
+	handler := NewStaticHandler("/var/www", "/", []string{"index.html"}, false)
+
+	tests := []struct {
+		name       string
+		tryFile    string
+		relPath    string
+		wantResult string
+	}{
+		{
+			name:       "$uri 占位符",
+			tryFile:    "$uri",
+			relPath:    "/api/user",
+			wantResult: "/api/user",
+		},
+		{
+			name:       "$uri/ 占位符",
+			tryFile:    "$uri/",
+			relPath:    "/api/user",
+			wantResult: "/api/user/",
+		},
+		{
+			name:       "绝对路径",
+			tryFile:    "/index.html",
+			relPath:    "/api/user",
+			wantResult: "index.html",
+		},
+		{
+			name:       "普通文件名",
+			tryFile:    "fallback.html",
+			relPath:    "/api/user",
+			wantResult: "fallback.html",
+		},
+		{
+			name:       "根路径 $uri",
+			tryFile:    "$uri",
+			relPath:    "/",
+			wantResult: "/",
+		},
+		{
+			name:       "嵌套路径 $uri",
+			tryFile:    "$uri",
+			relPath:    "/assets/js/app.js",
+			wantResult: "/assets/js/app.js",
+		},
+		{
+			name:       "带查询风格路径",
+			tryFile:    "$uri",
+			relPath:    "/path/to/file.txt",
+			wantResult: "/path/to/file.txt",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := handler.resolveTryFilePath(tt.tryFile, tt.relPath)
+			if got != tt.wantResult {
+				t.Errorf("resolveTryFilePath(%q, %q) = %q, want %q", tt.tryFile, tt.relPath, got, tt.wantResult)
+			}
+		})
+	}
+}
+
+// TestStaticHandler_handleTryFiles 测试 handleTryFiles 功能
+func TestStaticHandler_handleTryFiles(t *testing.T) {
+	tests := []struct {
+		name        string
+		setup       func(t *testing.T, root string)
+		tryFiles    []string
+		path        string
+		wantStatus  int
+		wantContent string
+		skipContent bool
+	}{
+		{
+			name: "$uri 找到文件",
+			setup: func(t *testing.T, root string) {
+				if err := os.WriteFile(filepath.Join(root, "app.js"), []byte("app content"), 0644); err != nil {
+					t.Fatalf("创建文件失败: %v", err)
+				}
+			},
+			tryFiles:    []string{"$uri", "$uri/", "/index.html"},
+			path:        "/app.js",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "app content",
+		},
+		{
+			name: "$uri 未找到回退到 $uri/",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "assets")
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					t.Fatalf("创建目录失败: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("assets index"), 0644); err != nil {
+					t.Fatalf("创建索引文件失败: %v", err)
+				}
+			},
+			tryFiles:    []string{"$uri", "$uri/", "/index.html"},
+			path:        "/assets",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "assets index",
+		},
+		{
+			name: "回退到 fallback 文件",
+			setup: func(t *testing.T, root string) {
+				if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("spa fallback"), 0644); err != nil {
+					t.Fatalf("创建 fallback 文件失败: %v", err)
+				}
+			},
+			tryFiles:    []string{"$uri", "$uri/", "/index.html"},
+			path:        "/nonexistent",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "spa fallback",
+		},
+		{
+			name: "所有 try_files 都未找到",
+			setup: func(t *testing.T, root string) {
+				// 不创建任何文件
+			},
+			tryFiles:    []string{"$uri", "$uri/", "/index.html"},
+			path:        "/nonexistent",
+			wantStatus:  fasthttp.StatusNotFound,
+			skipContent: true,
+		},
+		{
+			name: "嵌套目录回退",
+			setup: func(t *testing.T, root string) {
+				if err := os.WriteFile(filepath.Join(root, "app.html"), []byte("app shell"), 0644); err != nil {
+					t.Fatalf("创建 fallback 文件失败: %v", err)
+				}
+			},
+			tryFiles:    []string{"$uri", "/app.html"},
+			path:        "/user/profile",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "app shell",
+		},
+		{
+			name: "路径前缀剥离",
+			setup: func(t *testing.T, root string) {
+				apiDir := filepath.Join(root, "api")
+				if err := os.MkdirAll(apiDir, 0755); err != nil {
+					t.Fatalf("创建目录失败: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(apiDir, "data.json"), []byte("json data"), 0644); err != nil {
+					t.Fatalf("创建文件失败: %v", err)
+				}
+			},
+			tryFiles:    []string{"$uri"},
+			path:        "/static/api/data.json",
+			wantStatus:  fasthttp.StatusNotFound, // 路径前缀剥离后找不到
+			skipContent: true,
+		},
+		{
+			name: "空 try_files 数组",
+			setup: func(t *testing.T, root string) {
+				if err := os.WriteFile(filepath.Join(root, "test.txt"), []byte("test"), 0644); err != nil {
+					t.Fatalf("创建文件失败: %v", err)
+				}
+			},
+			tryFiles:    []string{},
+			path:        "/test.txt",
+			wantStatus:  fasthttp.StatusOK, // 空 try_files 走标准处理流程
+			wantContent: "test",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tt.setup(t, tmpDir)
+
+			handler := NewStaticHandler(tmpDir, "/", []string{"index.html"}, false)
+			handler.SetTryFiles(tt.tryFiles, false, nil)
+
+			ctx := newTestContext(t, tt.path)
+			handler.Handle(ctx)
+
+			if got := ctx.Response.StatusCode(); got != tt.wantStatus {
+				t.Errorf("状态码 = %d, want %d", got, tt.wantStatus)
+			}
+
+			if !tt.skipContent && tt.wantContent != "" {
+				got := string(ctx.Response.Body())
+				if got != tt.wantContent {
+					t.Errorf("内容 = %q, want %q", got, tt.wantContent)
+				}
+			}
+		})
+	}
+}
+
+// TestStaticHandler_handleInternalRedirect 测试内部重定向功能
+func TestStaticHandler_handleInternalRedirect(t *testing.T) {
+	tests := []struct {
+		name        string
+		setup       func(t *testing.T, root string)
+		tryFiles    []string
+		tryFilesPass bool
+		path        string
+		wantStatus  int
+		wantContent string
+		skipContent bool
+	}{
+		{
+			name: "tryFilesPass false 直接服务文件",
+			setup: func(t *testing.T, root string) {
+				if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("index content"), 0644); err != nil {
+					t.Fatalf("创建文件失败: %v", err)
+				}
+			},
+			tryFiles:     []string{"$uri", "/index.html"},
+			tryFilesPass: false,
+			path:         "/nonexistent",
+			wantStatus:   fasthttp.StatusOK,
+			wantContent:  "index content",
+		},
+		{
+			name: "tryFilesPass true 触发重定向",
+			setup: func(t *testing.T, root string) {
+				if err := os.WriteFile(filepath.Join(root, "fallback.txt"), []byte("fallback content"), 0644); err != nil {
+					t.Fatalf("创建文件失败: %v", err)
+				}
+			},
+			tryFiles:     []string{"$uri", "/fallback.txt"},
+			tryFilesPass: true,
+			path:         "/nonexistent",
+			wantStatus:   fasthttp.StatusOK,
+			wantContent:  "fallback content",
+		},
+		{
+			name: "内部重定向目标不存在",
+			setup: func(t *testing.T, root string) {
+				// 不创建 fallback 文件
+			},
+			tryFiles:     []string{"$uri", "/fallback.html"},
+			tryFilesPass: false,
+			path:         "/nonexistent",
+			wantStatus:   fasthttp.StatusNotFound,
+			skipContent:  true,
+		},
+		{
+			name: "内部重定向目标是目录",
+			setup: func(t *testing.T, root string) {
+				dir := filepath.Join(root, "fallback")
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					t.Fatalf("创建目录失败: %v", err)
+				}
+				// 在 fallback 目录中创建一个 index.html
+				if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("fallback index"), 0644); err != nil {
+					t.Fatalf("创建 index.html 失败: %v", err)
+				}
+			},
+			tryFiles:     []string{"$uri", "$uri/", "/fallback"},
+			tryFilesPass: false,
+			path:         "/nonexistent",
+			wantStatus:   fasthttp.StatusOK,
+			wantContent:  "fallback index",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tt.setup(t, tmpDir)
+
+			handler := NewStaticHandler(tmpDir, "/", []string{"index.html"}, false)
+			router := NewRouter()
+			handler.SetTryFiles(tt.tryFiles, tt.tryFilesPass, router)
+
+			// 注册路由处理器用于测试 tryFilesPass 重定向
+			if tt.tryFilesPass {
+				router.GET("/{filepath:*}", func(ctx *fasthttp.RequestCtx) {
+					// 通配符路由，可以匹配任何路径
+					path := string(ctx.Path())
+					// 从 root 读取文件
+					filePath := filepath.Join(tmpDir, path[1:]) // 去掉开头的 /
+					data, err := os.ReadFile(filePath)
+					if err != nil {
+						ctx.SetStatusCode(fasthttp.StatusNotFound)
+						ctx.SetBodyString("Not Found")
+						return
+					}
+					ctx.SetStatusCode(fasthttp.StatusOK)
+					ctx.SetBody(data)
+				})
+			}
+
+			ctx := newTestContext(t, tt.path)
+			handler.Handle(ctx)
+
+			if got := ctx.Response.StatusCode(); got != tt.wantStatus {
+				t.Errorf("状态码 = %d, want %d", got, tt.wantStatus)
+			}
+
+			if !tt.skipContent && tt.wantContent != "" {
+				got := string(ctx.Response.Body())
+				if got != tt.wantContent {
+					t.Errorf("内容 = %q, want %q", got, tt.wantContent)
+				}
+			}
+		})
+	}
+}
+
+// TestStaticHandler_TryFilesSPA 测试 SPA 场景下的 try_files
+func TestStaticHandler_TryFilesSPA(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建 SPA 文件结构
+	// index.html - 主应用入口
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("<!DOCTYPE html><html><body>SPA App</body></html>"), 0644); err != nil {
+		t.Fatalf("创建 index.html 失败: %v", err)
+	}
+
+	// 静态资源文件
+	assetsDir := filepath.Join(tmpDir, "assets")
+	if err := os.MkdirAll(assetsDir, 0755); err != nil {
+		t.Fatalf("创建 assets 目录失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(assetsDir, "app.js"), []byte("console.log('app')"), 0644); err != nil {
+		t.Fatalf("创建 app.js 失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(assetsDir, "style.css"), []byte("body { margin: 0 }"), 0644); err != nil {
+		t.Fatalf("创建 style.css 失败: %v", err)
+	}
+
+	handler := NewStaticHandler(tmpDir, "/", []string{"index.html"}, false)
+	handler.SetTryFiles([]string{"$uri", "$uri/", "/index.html"}, false, nil)
+
+	tests := []struct {
+		name        string
+		path        string
+		wantStatus  int
+		wantContent string
+	}{
+		{
+			name:        "访问存在的静态资源",
+			path:        "/assets/app.js",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "console.log('app')",
+		},
+		{
+			name:        "访问存在的 CSS 文件",
+			path:        "/assets/style.css",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "body { margin: 0 }",
+		},
+		{
+			name:        "访问前端路由回退到 index.html",
+			path:        "/dashboard",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "<!DOCTYPE html><html><body>SPA App</body></html>",
+		},
+		{
+			name:        "访问嵌套前端路由",
+			path:        "/user/profile/settings",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "<!DOCTYPE html><html><body>SPA App</body></html>",
+		},
+		{
+			name:        "访问根路径",
+			path:        "/",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "<!DOCTYPE html><html><body>SPA App</body></html>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := newTestContext(t, tt.path)
+			handler.Handle(ctx)
+
+			if got := ctx.Response.StatusCode(); got != tt.wantStatus {
+				t.Errorf("状态码 = %d, want %d", got, tt.wantStatus)
+			}
+
+			got := string(ctx.Response.Body())
+			if got != tt.wantContent {
+				t.Errorf("内容 = %q, want %q", got, tt.wantContent)
+			}
+		})
+	}
+}
+
+// TestStaticHandler_TryFilesWithPathPrefix 测试带路径前缀的 try_files
+func TestStaticHandler_TryFilesWithPathPrefix(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建 API 模拟文件
+	apiDir := filepath.Join(tmpDir, "api")
+	if err := os.MkdirAll(apiDir, 0755); err != nil {
+		t.Fatalf("创建 api 目录失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(apiDir, "users.json"), []byte("[]"), 0644); err != nil {
+		t.Fatalf("创建 users.json 失败: %v", err)
+	}
+
+	// 创建静态文件
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("static index"), 0644); err != nil {
+		t.Fatalf("创建 index.html 失败: %v", err)
+	}
+
+	handler := NewStaticHandler(tmpDir, "/static", []string{"index.html"}, false)
+	handler.SetTryFiles([]string{"$uri", "$uri/", "/index.html"}, false, nil)
+
+	tests := []struct {
+		name        string
+		path        string
+		wantStatus  int
+		wantContent string
+		skipContent bool
+	}{
+		{
+			name:        "带前缀访问文件",
+			path:        "/static/api/users.json",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "[]",
+		},
+		{
+			name:        "带前缀访问目录",
+			path:        "/static/api/",
+			wantStatus:  fasthttp.StatusOK, // 目录无索引文件，但会回退到 /index.html
+			wantContent: "static index",
+		},
+		{
+			name:        "前缀剥离后回退",
+			path:        "/static/unknown",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "static index",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := newTestContext(t, tt.path)
+			handler.Handle(ctx)
+
+			if got := ctx.Response.StatusCode(); got != tt.wantStatus {
+				t.Errorf("状态码 = %d, want %d", got, tt.wantStatus)
+			}
+
+			if !tt.skipContent {
+				got := string(ctx.Response.Body())
+				if got != tt.wantContent {
+					t.Errorf("内容 = %q, want %q", got, tt.wantContent)
+				}
+			}
+		})
+	}
+}
+
+// TestStaticHandler_TryFilesEdgeCases 测试 try_files 边界情况
+func TestStaticHandler_TryFilesEdgeCases(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建测试文件
+	if err := os.WriteFile(filepath.Join(tmpDir, "file with spaces.txt"), []byte("spaces"), 0644); err != nil {
+		t.Fatalf("创建带空格文件失败: %v", err)
+	}
+
+	handler := NewStaticHandler(tmpDir, "/", []string{"index.html"}, false)
+	handler.SetTryFiles([]string{"$uri", "/index.html"}, false, nil)
+
+	tests := []struct {
+		name       string
+		path       string
+		wantStatus int
+	}{
+		{
+			name:       "路径遍历攻击被阻止 - fasthttp 规范化",
+			path:       "/../secret",
+			wantStatus: fasthttp.StatusNotFound, // fasthttp 规范化为 /secret，文件不存在返回 404
+		},
+		{
+			name:       "双点号在路径中被阻止",
+			path:       "/file..name",
+			wantStatus: fasthttp.StatusForbidden,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := newTestContext(t, tt.path)
+			handler.Handle(ctx)
+
+			if got := ctx.Response.StatusCode(); got != tt.wantStatus {
+				t.Errorf("状态码 = %d, want %d", got, tt.wantStatus)
+			}
+		})
+	}
+}
