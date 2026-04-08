@@ -62,6 +62,12 @@ type TLSManager struct {
 	// ocspManager OCSP Stapling 管理器
 	ocspManager *OCSPManager
 
+	// sessionTicketMgr Session Ticket 管理器
+	sessionTicketMgr *SessionTicketManager
+
+	// clientVerifier 客户端证书验证器
+	clientVerifier *ClientVerifier
+
 	// certificates 解析后的证书映射，用于 OCSP
 	certificates map[string]*x509.Certificate
 
@@ -132,6 +138,21 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 		issuers:      make(map[string]*x509.Certificate),
 	}
 
+	// 初始化 Session Tickets（如果启用）
+	if cfg.SessionTickets.Enabled {
+		sessionTicketMgr, err := NewSessionTicketManager(cfg.SessionTickets)
+		if err != nil {
+			// Session Tickets 初始化失败不阻止 TLS 工作
+			// 可以记录日志
+			_ = err
+		} else {
+			manager.sessionTicketMgr = sessionTicketMgr
+			// 应用 Session Tickets 到 TLS 配置
+			sessionTicketMgr.ApplyToTLSConfig(tlsCfg)
+			sessionTicketMgr.Start()
+		}
+	}
+
 	// 初始化 OCSP Stapling（如果启用）
 	if cfg.OCSPStapling {
 		ocspMgr := NewOCSPManager(DefaultOCSPConfig())
@@ -162,6 +183,19 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 		}
 
 		ocspMgr.Start()
+	}
+
+	// 初始化客户端证书验证（如果启用）
+	if cfg.ClientVerify.Enabled {
+		clientVerifier, err := NewClientVerifier(cfg.ClientVerify)
+		if err != nil {
+			// 客户端验证配置失败不阻止 TLS 工作
+			// 可以记录日志
+			_ = err
+		} else {
+			manager.clientVerifier = clientVerifier
+			clientVerifier.ConfigureTLS(tlsCfg)
+		}
 	}
 
 	// 设置为默认配置
@@ -310,10 +344,13 @@ func (m *TLSManager) RemoveCertificate(name string) {
 	m.mu.Unlock()
 }
 
-// Close 停止 OCSP 管理器并释放资源。
+// Close 停止 OCSP 管理器和 Session Ticket 管理器并释放资源。
 func (m *TLSManager) Close() {
 	if m.ocspManager != nil {
 		m.ocspManager.Stop()
+	}
+	if m.sessionTicketMgr != nil {
+		m.sessionTicketMgr.Stop()
 	}
 }
 

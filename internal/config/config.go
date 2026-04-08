@@ -541,6 +541,14 @@ type SSLConfig struct {
 	// HSTS HSTS 配置
 	// HTTP Strict Transport Security 安全策略
 	HSTS HSTSConfig `yaml:"hsts"`
+
+	// SessionTickets Session Tickets 配置
+	// 启用 TLS 1.3 会话恢复以提升握手性能
+	SessionTickets SessionTicketsConfig `yaml:"session_tickets"`
+
+	// ClientVerify 客户端证书验证配置
+	// 启用 mTLS 双向认证
+	ClientVerify ClientVerifyConfig `yaml:"client_verify"`
 }
 
 // HSTSConfig HTTP Strict Transport Security 配置。
@@ -571,6 +579,87 @@ type HSTSConfig struct {
 	// Preload 加入 HSTS 预加载列表
 	// 申请加入浏览器内置的 HSTS 列表
 	Preload bool `yaml:"preload"`
+}
+
+// SessionTicketsConfig TLS Session Ticket 配置。
+//
+// Session Tickets 允许 TLS 1.3 会话恢复，避免完整握手，显著提升性能。
+// 密钥定期轮换增强安全性，同时保留旧密钥确保已发放的票据仍可解密。
+//
+// 注意事项：
+//   - KeyFile 为密钥存储文件路径，用于持久化密钥
+//   - RotateInterval 为密钥轮换间隔，建议 1-24 小时
+//   - RetainKeys 为保留的历史密钥数量，至少保留 2 个
+//   - 密钥文件权限应为 0600（仅所有者可读写）
+//
+// 使用示例：
+//
+//	ssl:
+//	  session_tickets:
+//	    enabled: true
+//	    key_file: "/var/lib/lolly/session_tickets.key"
+//	    rotate_interval: 1h
+//	    retain_keys: 3
+type SessionTicketsConfig struct {
+	// Enabled 是否启用 Session Tickets
+	Enabled bool `yaml:"enabled"`
+
+	// KeyFile 密钥存储文件路径
+	// 用于持久化密钥，确保重启后旧票据仍可解密
+	KeyFile string `yaml:"key_file"`
+
+	// RotateInterval 密钥轮换间隔
+	// 定期生成新密钥，增强安全性
+	RotateInterval time.Duration `yaml:"rotate_interval"`
+
+	// RetainKeys 保留的历史密钥数量
+	// 旧密钥用于解密已发放的票据，建议 3-5 个
+	RetainKeys int `yaml:"retain_keys"`
+}
+
+// ClientVerifyConfig mTLS 客户端证书验证配置。
+//
+// 配置双向 TLS 认证，要求客户端提供有效证书才能建立连接。
+// 适用于需要强身份验证的场景，如 API 服务、内部系统通信。
+//
+// 注意事项：
+//   - Mode 可选值：none、request、require、optional_no_ca
+//   - ClientCA 为客户端 CA 证书文件路径（必需）
+//   - VerifyDepth 为证书链验证深度，默认 1
+//   - CRL 为证书撤销列表文件路径（可选）
+//
+// 使用示例：
+//
+//	ssl:
+//	  client_verify:
+//	    enabled: true
+//	    mode: "require"
+//	    client_ca: "/etc/ssl/ca/client-ca.crt"
+//	    verify_depth: 2
+//	    crl: "/etc/ssl/ca/client-ca.crl"
+type ClientVerifyConfig struct {
+	// Enabled 是否启用客户端证书验证
+	Enabled bool `yaml:"enabled"`
+
+	// Mode 验证模式
+	// 可选值：
+	//   - none: 不请求客户端证书（默认）
+	//   - request: 请求证书但不验证
+	//   - require: 要求并验证客户端证书
+	//   - optional_no_ca: 请求证书但不强制验证
+	Mode string `yaml:"mode"`
+
+	// ClientCA 客户端 CA 证书文件路径
+	// 用于验证客户端证书的信任链
+	ClientCA string `yaml:"client_ca"`
+
+	// VerifyDepth 证书链验证深度
+	// 限制证书链的最大层数，默认 1
+	VerifyDepth int `yaml:"verify_depth"`
+
+	// CRL 证书撤销列表文件路径
+	// 用于检查客户端证书是否被撤销（可选）
+	CRL string `yaml:"crl"`
 }
 
 // SecurityConfig 安全配置，包含访问控制、限流、认证和安全头部。
@@ -612,6 +701,10 @@ type SecurityConfig struct {
 	// Auth 认证配置
 	// HTTP Basic 认证设置
 	Auth AuthConfig `yaml:"auth"`
+
+	// AuthRequest 外部认证子请求配置
+	// 将认证委托给外部服务，根据响应状态码决定是否允许请求继续
+	AuthRequest AuthRequestConfig `yaml:"auth_request"`
 
 	// Headers 安全头部
 	// 添加安全相关的 HTTP 响应头
@@ -847,6 +940,58 @@ type ErrorPageConfig struct {
 	// 如果不为 0，所有错误页面响应将使用此状态码
 	// 例如设置为 200 时，即使发生错误也返回 200 OK
 	ResponseCode int `yaml:"response_code"`
+}
+
+// AuthRequestConfig 外部认证子请求配置。
+//
+// 将认证委托给外部服务，根据子请求的响应状态码决定是否允许原请求继续。
+// 适用于需要复杂认证逻辑或与现有认证系统集成的场景。
+//
+// 行为规则：
+//   - 2xx 响应：认证通过，原请求继续处理
+//   - 401/403 响应：认证失败，返回相应状态码
+//   - 其他响应或超时：返回 500 内部服务器错误
+//   - 认证服务不可用时：返回 500 内部服务器错误
+//
+// 注意事项：
+//   - 认证请求使用独立的连接池，避免影响主服务
+//   - 支持变量展开（如 $host, $uri, $request_uri）
+//   - 建议配置合理的超时时间，避免长时间阻塞
+//   - 认证请求会携带原请求的头信息（如 Cookie, Authorization）
+//
+// 使用示例：
+//
+//	security:
+//	  auth_request:
+//	    uri: /auth
+//	    method: GET
+//	    auth_timeout: 5s
+//	    headers:
+//	      X-Original-Uri: $request_uri
+//	      X-Original-Host: $host
+type AuthRequestConfig struct {
+	// Enabled 是否启用外部认证子请求
+	Enabled bool `yaml:"enabled"`
+
+	// URI 认证服务地址
+	// 可以是相对路径（如 /auth）或完整 URL（如 http://auth-service:8080/verify）
+	URI string `yaml:"uri"`
+
+	// Method 认证请求方法
+	// 默认为 GET，支持 GET、POST、HEAD 等
+	Method string `yaml:"method"`
+
+	// Timeout 认证请求超时时间
+	// 默认 5 秒，超过此时间视为认证失败
+	Timeout time.Duration `yaml:"auth_timeout"`
+
+	// Headers 自定义认证请求头
+	// 支持变量展开，用于向认证服务传递原请求信息
+	Headers map[string]string `yaml:"headers"`
+
+	// ForwardHeaders 需要转发到认证服务的原请求头
+	// 默认包含：Cookie, Authorization, X-Forwarded-For
+	ForwardHeaders []string `yaml:"forward_headers"`
 }
 
 // RewriteRule URL 重写规则。
@@ -1249,6 +1394,14 @@ type StreamConfig struct {
 	// Upstream 上游配置
 	// 后端服务器列表和负载均衡设置
 	Upstream StreamUpstream `yaml:"upstream"`
+
+	// SSL SSL/TLS 配置
+	// 启用 TLS 终端，支持加密的 TCP 连接
+	SSL StreamSSLConfig `yaml:"ssl"`
+
+	// ProxySSL 上游 SSL 配置
+	// 启用到上游服务器的 TLS 连接
+	ProxySSL StreamProxySSLConfig `yaml:"proxy_ssl"`
 }
 
 // StreamUpstream Stream 上游配置。
@@ -1299,6 +1452,110 @@ type StreamTarget struct {
 	// Weight 权重
 	// 用于加权轮询负载均衡
 	Weight int `yaml:"weight"`
+}
+
+// StreamSSLConfig Stream SSL 服务端配置。
+//
+// 配置 Stream 模块的 TLS 终端功能，用于加密 TCP 流量。
+//
+// 注意事项：
+//   - 仅对 TCP 协议有效，UDP 不支持 TLS
+//   - 证书文件需要 PEM 格式
+//   - 支持配置客户端证书验证（mTLS）
+//
+// 使用示例：
+//
+//	stream:
+//	  - listen: ":3306"
+//	    protocol: "tcp"
+//	    ssl:
+//	      enabled: true
+//	      cert: "/etc/ssl/server.crt"
+//	      key: "/etc/ssl/server.key"
+//	    upstream:
+//	      targets:
+//	        - addr: "mysql:3306"
+type StreamSSLConfig struct {
+	// Enabled 是否启用 SSL/TLS
+	Enabled bool `yaml:"enabled"`
+
+	// Cert 证书文件路径
+	// PEM 格式的服务器证书
+	Cert string `yaml:"cert"`
+
+	// Key 私钥文件路径
+	// PEM 格式的私钥
+	Key string `yaml:"key"`
+
+	// Protocols TLS 协议版本
+	// 默认 ["TLSv1.2", "TLSv1.3"]
+	Protocols []string `yaml:"protocols"`
+
+	// Ciphers 加密套件
+	// 仅对 TLS 1.2 有效
+	Ciphers []string `yaml:"ciphers"`
+
+	// ClientCA 客户端 CA 证书
+	// 用于 mTLS 客户端证书验证
+	ClientCA string `yaml:"client_ca"`
+
+	// VerifyDepth 证书链验证深度
+	// 默认 1
+	VerifyDepth int `yaml:"verify_depth"`
+}
+
+// StreamProxySSLConfig Stream 上游 SSL 配置。
+//
+// 配置到上游服务器的 TLS 连接，用于加密代理到后端的流量。
+//
+// 注意事项：
+//   - 启用后，代理将使用 TLS 连接到上游
+//   - 支持客户端证书（mTLS）和服务器证书验证
+//   - ServerName 用于 SNI 和证书验证
+//
+// 使用示例：
+//
+//	stream:
+//	  - listen: ":3306"
+//	    protocol: "tcp"
+//	    proxy_ssl:
+//	      enabled: true
+//	      verify: true
+//	      trusted_ca: "/etc/ssl/ca.crt"
+//	      server_name: "mysql.internal"
+//	    upstream:
+//	      targets:
+//	        - addr: "mysql:3306"
+type StreamProxySSLConfig struct {
+	// Enabled 是否启用上游 SSL
+	Enabled bool `yaml:"enabled"`
+
+	// Verify 是否验证上游证书
+	// 为 true 时验证证书链
+	Verify bool `yaml:"verify"`
+
+	// TrustedCA 信任的 CA 证书
+	// 用于验证上游服务器证书
+	TrustedCA string `yaml:"trusted_ca"`
+
+	// ServerName 服务器名称
+	// 用于 SNI 和证书验证
+	ServerName string `yaml:"server_name"`
+
+	// Cert 客户端证书
+	// 用于 mTLS 客户端认证
+	Cert string `yaml:"cert"`
+
+	// Key 客户端私钥
+	// 用于 mTLS 客户端认证
+	Key string `yaml:"key"`
+
+	// Protocols TLS 协议版本
+	Protocols []string `yaml:"protocols"`
+
+	// SessionReuse 是否复用 SSL 会话
+	// 启用后可提升连接性能
+	SessionReuse bool `yaml:"session_reuse"`
 }
 
 // Load 从文件加载配置。
