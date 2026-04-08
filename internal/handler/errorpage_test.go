@@ -295,11 +295,11 @@ func TestErrorPageManager_GetPage(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		cfg             config.ErrorPageConfig
-		requestCode     int
-		wantContent     string
-		wantFound       bool
+		name             string
+		cfg              config.ErrorPageConfig
+		requestCode      int
+		wantContent      string
+		wantFound        bool
 		wantResponseCode int
 	}{
 		{

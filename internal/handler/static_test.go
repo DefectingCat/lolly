@@ -585,11 +585,11 @@ func TestStaticHandler_Handle_Symlink(t *testing.T) {
 // TestStaticHandler_SetTryFiles 测试 SetTryFiles 配置设置
 func TestStaticHandler_SetTryFiles(t *testing.T) {
 	tests := []struct {
-		name           string
-		tryFiles       []string
-		tryFilesPass   bool
-		wantTryFiles   []string
-		wantPass       bool
+		name         string
+		tryFiles     []string
+		tryFilesPass bool
+		wantTryFiles []string
+		wantPass     bool
 	}{
 		{
 			name:         "基本配置",
@@ -842,14 +842,14 @@ func TestStaticHandler_handleTryFiles(t *testing.T) {
 // TestStaticHandler_handleInternalRedirect 测试内部重定向功能
 func TestStaticHandler_handleInternalRedirect(t *testing.T) {
 	tests := []struct {
-		name        string
-		setup       func(t *testing.T, root string)
-		tryFiles    []string
+		name         string
+		setup        func(t *testing.T, root string)
+		tryFiles     []string
 		tryFilesPass bool
-		path        string
-		wantStatus  int
-		wantContent string
-		skipContent bool
+		path         string
+		wantStatus   int
+		wantContent  string
+		skipContent  bool
 	}{
 		{
 			name: "tryFilesPass false 直接服务文件",

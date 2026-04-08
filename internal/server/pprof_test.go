@@ -272,59 +272,59 @@ func TestPprofHandler_Path(t *testing.T) {
 
 func TestPprofHandler_isAllowed(t *testing.T) {
 	tests := []struct {
-		name       string
-		allowedIPs []string
+		name        string
+		allowedIPs  []string
 		allowedNets []string
-		clientIP   string
+		clientIP    string
 		wantAllowed bool
 	}{
 		{
-			name:       "empty allow list - allow all",
-			allowedIPs: []string{},
+			name:        "empty allow list - allow all",
+			allowedIPs:  []string{},
 			allowedNets: []string{},
-			clientIP:   "192.168.1.100",
+			clientIP:    "192.168.1.100",
 			wantAllowed: true,
 		},
 		{
-			name:       "IP exact match",
-			allowedIPs: []string{"127.0.0.1"},
+			name:        "IP exact match",
+			allowedIPs:  []string{"127.0.0.1"},
 			allowedNets: []string{},
-			clientIP:   "127.0.0.1",
+			clientIP:    "127.0.0.1",
 			wantAllowed: true,
 		},
 		{
-			name:       "IP no match",
-			allowedIPs: []string{"127.0.0.1"},
+			name:        "IP no match",
+			allowedIPs:  []string{"127.0.0.1"},
 			allowedNets: []string{},
-			clientIP:   "127.0.0.2",
+			clientIP:    "127.0.0.2",
 			wantAllowed: false,
 		},
 		{
-			name:       "CIDR match",
-			allowedIPs: []string{},
+			name:        "CIDR match",
+			allowedIPs:  []string{},
 			allowedNets: []string{"192.168.0.0/16"},
-			clientIP:   "192.168.1.100",
+			clientIP:    "192.168.1.100",
 			wantAllowed: true,
 		},
 		{
-			name:       "CIDR no match",
-			allowedIPs: []string{},
+			name:        "CIDR no match",
+			allowedIPs:  []string{},
 			allowedNets: []string{"10.0.0.0/8"},
-			clientIP:   "192.168.1.100",
+			clientIP:    "192.168.1.100",
 			wantAllowed: false,
 		},
 		{
-			name:       "IPv6 CIDR match",
-			allowedIPs: []string{},
+			name:        "IPv6 CIDR match",
+			allowedIPs:  []string{},
 			allowedNets: []string{"2001:db8::/32"},
-			clientIP:   "2001:db8::1",
+			clientIP:    "2001:db8::1",
 			wantAllowed: true,
 		},
 		{
-			name:       "IPv6 exact match",
-			allowedIPs: []string{"::1"},
+			name:        "IPv6 exact match",
+			allowedIPs:  []string{"::1"},
 			allowedNets: []string{},
-			clientIP:   "::1",
+			clientIP:    "::1",
 			wantAllowed: true,
 		},
 	}
