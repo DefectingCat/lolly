@@ -130,9 +130,17 @@ func (c *ConsistentHash) rebuildCircle(targets []*Target) {
 			continue
 		}
 
-		for i := 0; i < c.virtualNodes; i++ {
-			key := fmt.Sprintf("%s#%d", target.URL, i)
-			hash := c.hashKeyString(key)
+		// 确保目标已预计算哈希
+		if len(target.VirtualHashes) == 0 {
+			target.VirtualHashes = make([]uint64, c.virtualNodes)
+			for i := 0; i < c.virtualNodes; i++ {
+				key := fmt.Sprintf("%s#%d", target.URL, i)
+				target.VirtualHashes[i] = c.hashKeyString(key)
+			}
+		}
+
+		// 使用预计算的哈希值
+		for _, hash := range target.VirtualHashes {
 			c.circle[hash] = target
 			c.sortedHashes = append(c.sortedHashes, hash)
 		}
@@ -149,6 +157,34 @@ func (c *ConsistentHash) hashKeyString(key string) uint64 {
 	h := fnv.New64a()
 	h.Write([]byte(key))
 	return h.Sum64()
+}
+
+// PrecomputeHashes 预计算目标的虚拟节点哈希值。
+//
+// 此方法应在目标初始化时调用，避免在 SelectExcludingByKey 中重复计算哈希值。
+// 预计算的哈希值存储在 Target.VirtualHashes 中，用于故障转移场景。
+//
+// 参数：
+//   - targets: 需要预计算哈希的目标列表
+//   - virtualNodes: 每个目标的虚拟节点数
+func (c *ConsistentHash) PrecomputeHashes(targets []*Target, virtualNodes int) {
+	if virtualNodes <= 0 {
+		virtualNodes = 150
+	}
+
+	for _, target := range targets {
+		// 如果已经预计算过且数量匹配，跳过
+		if len(target.VirtualHashes) == virtualNodes {
+			continue
+		}
+
+		// 预计算该目标的所有虚拟节点哈希
+		target.VirtualHashes = make([]uint64, virtualNodes)
+		for i := 0; i < virtualNodes; i++ {
+			key := fmt.Sprintf("%s#%d", target.URL, i)
+			target.VirtualHashes[i] = c.hashKeyString(key)
+		}
+	}
 }
 
 // GetHashKey 返回哈希键配置。
@@ -207,6 +243,9 @@ func (c *ConsistentHash) SelectExcluding(targets []*Target, excluded []*Target) 
 // 返回值：
 //   - *Target: 选中的目标，如果没有可用目标则返回 nil
 func (c *ConsistentHash) SelectExcludingByKey(targets []*Target, excluded []*Target, key string) *Target {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	// 构建排除集合
 	excludeSet := make(map[string]bool, len(excluded))
 	for _, t := range excluded {
@@ -215,47 +254,45 @@ func (c *ConsistentHash) SelectExcludingByKey(targets []*Target, excluded []*Tar
 		}
 	}
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
 	// 如果没有排除的目标，使用正常选择
 	if len(excludeSet) == 0 {
 		return c.SelectByKey(targets, key)
 	}
 
-	// 过滤掉被排除的目标
-	filtered := make([]*Target, 0, len(targets))
-	for _, t := range targets {
-		if t.Healthy.Load() && !excludeSet[t.URL] {
-			filtered = append(filtered, t)
-		}
-	}
-
-	if len(filtered) == 0 {
-		return nil
-	}
-
-	// 为过滤后的目标临时构建哈希环
+	// 使用预计算的虚拟节点哈希构建哈希环
+	// 避免在每次调用时重新计算哈希值
 	circle := make(map[uint64]*Target)
-	sortedHashes := make([]uint64, 0)
+	sortedHashes := make([]uint64, 0, len(targets)*c.virtualNodes)
 
-	for _, target := range filtered {
-		for i := 0; i < c.virtualNodes; i++ {
-			nodeKey := fmt.Sprintf("%s#%d", target.URL, i)
-			hash := c.hashKeyString(nodeKey)
+	for _, target := range targets {
+		if !target.Healthy.Load() || excludeSet[target.URL] {
+			continue
+		}
+
+		// 确保目标已预计算哈希
+		if len(target.VirtualHashes) == 0 {
+			// 回退到动态计算（不应该发生，但保持安全）
+			c.mu.RUnlock()
+			c.PrecomputeHashes([]*Target{target}, c.virtualNodes)
+			c.mu.RLock()
+		}
+
+		// 使用预计算的哈希值
+		for _, hash := range target.VirtualHashes {
 			circle[hash] = target
 			sortedHashes = append(sortedHashes, hash)
 		}
 	}
 
-	// 排序哈希值
-	sort.Slice(sortedHashes, func(i, j int) bool {
-		return sortedHashes[i] < sortedHashes[j]
-	})
-
 	if len(sortedHashes) == 0 {
 		return nil
 	}
+
+	// 排序哈希值（仅在需要时）
+	// 使用 sort.Slice 进行排序
+	sort.Slice(sortedHashes, func(i, j int) bool {
+		return sortedHashes[i] < sortedHashes[j]
+	})
 
 	// 计算键的哈希值
 	hash := c.hashKeyString(key)

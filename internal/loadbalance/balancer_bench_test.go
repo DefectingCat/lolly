@@ -154,7 +154,38 @@ func BenchmarkConsistentHashRebuild(b *testing.B) {
 	}
 }
 
-// BenchmarkLeastConnSelect 基准测试最少连接算法。
+// BenchmarkConsistentHashSelectExcluding 基准测试一致性哈希排除选择算法。
+func BenchmarkConsistentHashSelectExcluding(b *testing.B) {
+	testCases := []struct {
+		name         string
+		targets      int
+		virtualNodes int
+		excludeCount int
+	}{
+		{"50targets_150vnodes_exclude5", 50, 150, 5},
+		{"50targets_150vnodes_exclude10", 50, 150, 10},
+		{"100targets_150vnodes_exclude5", 100, 150, 5},
+	}
+
+	for _, tc := range testCases {
+		b.Run(tc.name, func(b *testing.B) {
+			targets := generateTargets(tc.targets)
+			ch := NewConsistentHash(tc.virtualNodes, "ip")
+
+			// 预计算所有目标的虚拟节点哈希
+			ch.PrecomputeHashes(targets, tc.virtualNodes)
+			ch.Rebuild(targets)
+
+			excluded := targets[:tc.excludeCount]
+			key := "test-request-key"
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				ch.SelectExcludingByKey(targets, excluded, key)
+			}
+		})
+	}
+}
 func BenchmarkLeastConnSelect(b *testing.B) {
 	testCases := []struct {
 		name    string

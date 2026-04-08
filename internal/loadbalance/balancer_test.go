@@ -761,7 +761,153 @@ func TestConsistentHash(t *testing.T) {
 	})
 }
 
-// TestIsValidAlgorithm 测试算法验证函数。
+// TestConsistentHashSelectExcludingByKey 测试一致性哈希排除选择功能。
+func TestConsistentHashSelectExcludingByKey(t *testing.T) {
+	t.Run("空排除列表", func(t *testing.T) {
+		ch := NewConsistentHash(150, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+		ch.Rebuild(targets)
+
+		key := "192.168.1.100"
+		got := ch.SelectExcludingByKey(targets, []*Target{}, key)
+
+		if got == nil {
+			t.Fatal("SelectExcludingByKey() = nil, want non-nil")
+		}
+
+		// 验证正常选择行为
+		got2 := ch.SelectExcludingByKey(targets, nil, key)
+		if got2 == nil {
+			t.Fatal("SelectExcludingByKey() with nil = nil, want non-nil")
+		}
+		if got.URL != got2.URL {
+			t.Errorf("空排除和nil排除应该返回相同结果: empty=%q, nil=%q", got.URL, got2.URL)
+		}
+	})
+
+	t.Run("部分排除", func(t *testing.T) {
+		ch := NewConsistentHash(150, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+		ch.Rebuild(targets)
+
+		// 排除第一个目标
+		excluded := []*Target{targets[0]}
+		key := "192.168.1.100"
+
+		// 多次选择，验证不会选中排除的目标
+		for i := 0; i < 100; i++ {
+			got := ch.SelectExcludingByKey(targets, excluded, key)
+			if got == nil {
+				t.Fatal("SelectExcludingByKey() = nil, want non-nil")
+			}
+			if got.URL == targets[0].URL {
+				t.Errorf("选中了被排除的目标: %q", got.URL)
+			}
+		}
+	})
+
+	t.Run("全部排除", func(t *testing.T) {
+		ch := NewConsistentHash(150, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		ch.Rebuild(targets)
+
+		// 排除所有目标
+		excluded := []*Target{targets[0], targets[1]}
+		key := "192.168.1.100"
+
+		got := ch.SelectExcludingByKey(targets, excluded, key)
+		if got != nil {
+			t.Errorf("SelectExcludingByKey() = %q, want nil (all excluded)", got.URL)
+		}
+	})
+
+	t.Run("排除包含nil目标", func(t *testing.T) {
+		ch := NewConsistentHash(150, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		ch.Rebuild(targets)
+
+		// 排除列表中包含nil
+		excluded := []*Target{nil, targets[0]}
+		key := "192.168.1.100"
+
+		got := ch.SelectExcludingByKey(targets, excluded, key)
+		if got == nil {
+			t.Fatal("SelectExcludingByKey() = nil, want non-nil")
+		}
+		if got.URL == targets[0].URL {
+			t.Errorf("选中了被排除的目标: %q", got.URL)
+		}
+	})
+
+	t.Run("并发安全", func(t *testing.T) {
+		ch := NewConsistentHash(150, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+		ch.Rebuild(targets)
+
+		excluded := []*Target{targets[0]}
+		key := "192.168.1.100"
+
+		var wg sync.WaitGroup
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for j := 0; j < 100; j++ {
+					got := ch.SelectExcludingByKey(targets, excluded, key)
+					if got != nil && got.URL == targets[0].URL {
+						t.Errorf("并发时选中了被排除的目标: %q", got.URL)
+					}
+				}
+			}()
+		}
+		wg.Wait()
+	})
+
+	t.Run("相同键一致性", func(t *testing.T) {
+		ch := NewConsistentHash(150, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+		ch.Rebuild(targets)
+
+		excluded := []*Target{targets[0]}
+		key := "192.168.1.100"
+
+		// 相同键应该始终返回相同的目标
+		var firstSelection *Target
+		for i := 0; i < 50; i++ {
+			got := ch.SelectExcludingByKey(targets, excluded, key)
+			if got == nil {
+				t.Fatal("SelectExcludingByKey() = nil, want non-nil")
+			}
+			if firstSelection == nil {
+				firstSelection = got
+			} else if got.URL != firstSelection.URL {
+				t.Errorf("相同键选择不同目标: first=%q, got=%q", firstSelection.URL, got.URL)
+			}
+		}
+	})
+}
 func TestIsValidAlgorithm(t *testing.T) {
 	tests := []struct {
 		name      string

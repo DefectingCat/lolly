@@ -50,6 +50,10 @@ type Target struct {
 
 	// lastResolved 最后解析时间（UnixNano，使用 atomic.Int64）
 	lastResolved atomic.Int64
+
+	// VirtualHashes 预计算的虚拟节点哈希值（用于一致性哈希）
+	// 由 PrecomputeHashes 方法填充，避免运行时重复计算
+	VirtualHashes []uint64
 }
 
 // Balancer 是负载均衡算法的接口。
