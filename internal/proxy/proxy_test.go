@@ -19,6 +19,7 @@
 package proxy
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/netutil"
+	"rua.plus/lolly/internal/variable"
 )
 
 // TestNewProxy 测试 NewProxy 函数
@@ -1129,4 +1131,208 @@ func containsAt(s, substr string, start int) bool {
 		}
 	}
 	return false
+}
+
+// TestUpstreamVariablesCapture 测试上游变量捕获
+func TestUpstreamVariablesCapture(t *testing.T) {
+	// 创建后端服务器
+	backend := &fasthttp.Server{
+		Handler: func(ctx *fasthttp.RequestCtx) {
+			ctx.SetStatusCode(200)
+			ctx.SetBodyString("OK")
+		},
+	}
+
+	// 在随机端口启动后端
+	backendLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	defer func() { _ = backendLn.Close() }()
+
+	go func() { _ = backend.Serve(backendLn) }()
+
+	// 等待后端启动
+	time.Sleep(50 * time.Millisecond)
+
+	backendAddr := "http://" + backendLn.Addr().String()
+
+	// 创建代理
+	targets := []*loadbalance.Target{
+		{URL: backendAddr, Weight: 1},
+	}
+	targets[0].Healthy.Store(true)
+
+	cfg := &config.ProxyConfig{
+		Path:        "/",
+		LoadBalance: "round_robin",
+		Timeout: config.ProxyTimeout{
+			Connect: 5 * time.Second,
+			Read:    30 * time.Second,
+			Write:   30 * time.Second,
+		},
+	}
+
+	p, err := NewProxy(cfg, targets, nil)
+	if err != nil {
+		t.Fatalf("failed to create proxy: %v", err)
+	}
+
+	// 创建请求
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.Header.SetRequestURI("/test")
+	ctx.Request.Header.SetHost("example.com")
+
+	// 执行代理请求
+	p.ServeHTTP(ctx)
+
+	// 验证响应
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200, got %d", ctx.Response.StatusCode())
+	}
+
+	// 测试 UpstreamTiming
+	timing := NewUpstreamTiming()
+	if timing == nil {
+		t.Error("NewUpstreamTiming() returned nil")
+	}
+
+	// 测试时间标记
+	timing.MarkConnectStart()
+	timing.MarkConnectEnd()
+	timing.MarkHeaderReceived()
+	timing.MarkResponseEnd()
+
+	// 验证时间计算
+	if timing.GetConnectTime() < 0 {
+		t.Error("GetConnectTime() should be >= 0")
+	}
+	if timing.GetHeaderTime() < 0 {
+		t.Error("GetHeaderTime() should be >= 0")
+	}
+	if timing.GetResponseTime() < 0 {
+		t.Error("GetResponseTime() should be >= 0")
+	}
+}
+
+// TestUpstreamVariablesErrorPaths 测试上游变量错误路径
+func TestUpstreamVariablesErrorPaths(t *testing.T) {
+	tests := []struct {
+		name         string
+		backendAddr  string
+		expectedAddr string
+		expectedCode int
+	}{
+		{
+			name:         "no healthy backend",
+			backendAddr:  "",
+			expectedAddr: "FAILED",
+			expectedCode: 502,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var targets []*loadbalance.Target
+			if tt.backendAddr != "" {
+				targets = []*loadbalance.Target{
+					{URL: tt.backendAddr, Weight: 1},
+				}
+				targets[0].Healthy.Store(true)
+			} else {
+				// 创建一个不健康目标
+				targets = []*loadbalance.Target{
+					{URL: "http://127.0.0.1:1", Weight: 1},
+				}
+			}
+
+			cfg := &config.ProxyConfig{
+				Path:        "/",
+				LoadBalance: "round_robin",
+				Timeout: config.ProxyTimeout{
+					Connect: 1 * time.Millisecond, // 超短超时
+					Read:    1 * time.Millisecond,
+					Write:   1 * time.Millisecond,
+				},
+			}
+
+			p, err := NewProxy(cfg, targets, nil)
+			if err != nil {
+				t.Fatalf("failed to create proxy: %v", err)
+			}
+
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.Header.SetMethod("GET")
+			ctx.Request.Header.SetRequestURI("/test")
+			ctx.Request.Header.SetHost("example.com")
+
+			p.ServeHTTP(ctx)
+
+			// 验证错误状态码
+			if ctx.Response.StatusCode() != tt.expectedCode &&
+				ctx.Response.StatusCode() != 502 &&
+				ctx.Response.StatusCode() != 504 {
+				t.Errorf("expected status %d or 502/504, got %d", tt.expectedCode, ctx.Response.StatusCode())
+			}
+		})
+	}
+}
+
+// TestFinalizeUpstreamVars 测试 FinalizeUpstreamVars 函数
+func TestFinalizeUpstreamVars(t *testing.T) {
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.Header.SetRequestURI("/test")
+
+	vc := variable.NewVariableContext(ctx)
+	defer variable.ReleaseVariableContext(vc)
+
+	timing := NewUpstreamTiming()
+	timing.MarkConnectStart()
+	time.Sleep(1 * time.Millisecond)
+	timing.MarkConnectEnd()
+	timing.MarkHeaderReceived()
+	time.Sleep(1 * time.Millisecond)
+	timing.MarkResponseEnd()
+
+	// 测试 FinalizeUpstreamVars
+	FinalizeUpstreamVars(vc, "http://backend:8080", 200, timing)
+
+	// 验证变量已设置
+	addr, ok := vc.Get("upstream_addr")
+	if !ok || addr != "http://backend:8080" {
+		t.Errorf("upstream_addr = %q, want 'http://backend:8080'", addr)
+	}
+
+	status, ok := vc.Get("upstream_status")
+	if !ok || status != "200" {
+		t.Errorf("upstream_status = %q, want '200'", status)
+	}
+
+	// 测试 nil vc
+	FinalizeUpstreamVars(nil, "http://backend:8080", 200, timing)
+	// 不应该 panic
+}
+
+// TestUpstreamTimingZero 测试 UpstreamTiming 零值处理
+func TestUpstreamTimingZero(t *testing.T) {
+	timing := NewUpstreamTiming()
+
+	// 未标记时应该返回 0
+	if timing.GetConnectTime() != 0 {
+		t.Errorf("GetConnectTime() = %v, want 0", timing.GetConnectTime())
+	}
+	if timing.GetHeaderTime() != 0 {
+		t.Errorf("GetHeaderTime() = %v, want 0", timing.GetHeaderTime())
+	}
+	if timing.GetResponseTime() != 0 {
+		t.Errorf("GetResponseTime() = %v, want 0", timing.GetResponseTime())
+	}
+
+	// 只标记开始
+	timing.MarkConnectStart()
+	if timing.GetConnectTime() != 0 {
+		t.Errorf("GetConnectTime() after MarkConnectStart = %v, want 0", timing.GetConnectTime())
+	}
 }

@@ -49,6 +49,12 @@ type VariableContext struct {
 	bodySize   int64             // 响应体大小（由外部设置）
 	duration   int64             // 请求处理时间纳秒（由外部设置）
 	serverName string            // 服务器名称
+	// 上游变量
+	upstreamAddr         string  // 上游服务器地址
+	upstreamStatus       int     // 上游响应状态码
+	upstreamResponseTime float64 // 上游响应时间（秒）
+	upstreamConnectTime  float64 // 上游连接时间（秒）
+	upstreamHeaderTime   float64 // 上游首字节时间（秒）
 }
 
 // pool 用于复用 VariableContext
@@ -82,6 +88,11 @@ func NewVariableContext(ctx *fasthttp.RequestCtx) *VariableContext {
 	vc.bodySize = 0
 	vc.duration = 0
 	vc.serverName = ""
+	vc.upstreamAddr = ""
+	vc.upstreamStatus = 0
+	vc.upstreamResponseTime = 0
+	vc.upstreamConnectTime = 0
+	vc.upstreamHeaderTime = 0
 	// 清空缓存
 	for k := range vc.cache {
 		delete(vc.cache, k)
@@ -103,6 +114,11 @@ func ReleaseVariableContext(vc *VariableContext) {
 	vc.bodySize = 0
 	vc.duration = 0
 	vc.serverName = ""
+	vc.upstreamAddr = ""
+	vc.upstreamStatus = 0
+	vc.upstreamResponseTime = 0
+	vc.upstreamConnectTime = 0
+	vc.upstreamHeaderTime = 0
 	pool.Put(vc)
 }
 
@@ -116,6 +132,15 @@ func (vc *VariableContext) SetResponseInfo(status int, bodySize int64, durationN
 // SetServerName 设置服务器名称
 func (vc *VariableContext) SetServerName(name string) {
 	vc.serverName = name
+}
+
+// SetUpstreamVars 设置上游变量
+func (vc *VariableContext) SetUpstreamVars(addr string, status int, responseTime, connectTime, headerTime float64) {
+	vc.upstreamAddr = addr
+	vc.upstreamStatus = status
+	vc.upstreamResponseTime = responseTime
+	vc.upstreamConnectTime = connectTime
+	vc.upstreamHeaderTime = headerTime
 }
 
 // Get 获取变量值（优先自定义变量，再查内置变量）
@@ -164,6 +189,32 @@ func (vc *VariableContext) Get(name string) (string, bool) {
 		if vc.serverName != "" {
 			return vc.serverName, true
 		}
+	// 上游变量
+	case VarUpstreamAddr:
+		if vc.upstreamAddr != "" {
+			return vc.upstreamAddr, true
+		}
+		return "-", true
+	case VarUpstreamStatus:
+		if vc.upstreamStatus > 0 {
+			return strconv.Itoa(vc.upstreamStatus), true
+		}
+		return "-", true
+	case VarUpstreamResponseTime:
+		if vc.upstreamResponseTime > 0 {
+			return strconv.FormatFloat(vc.upstreamResponseTime, 'f', 3, 64), true
+		}
+		return "-", true
+	case VarUpstreamConnectTime:
+		if vc.upstreamConnectTime > 0 {
+			return strconv.FormatFloat(vc.upstreamConnectTime, 'f', 3, 64), true
+		}
+		return "-", true
+	case VarUpstreamHeaderTime:
+		if vc.upstreamHeaderTime > 0 {
+			return strconv.FormatFloat(vc.upstreamHeaderTime, 'f', 3, 64), true
+		}
+		return "-", true
 	}
 
 	// 3. 查内置变量缓存

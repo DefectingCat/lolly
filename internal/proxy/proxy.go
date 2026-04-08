@@ -211,6 +211,80 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 	return client
 }
 
+// UpstreamTiming 上游时间记录，用于捕获各种时间戳
+type UpstreamTiming struct {
+	start          time.Time
+	connectStart   time.Time
+	connectEnd     time.Time
+	headerReceived time.Time
+	responseEnd    time.Time
+}
+
+// NewUpstreamTiming 创建新的上游时间记录器
+func NewUpstreamTiming() *UpstreamTiming {
+	return &UpstreamTiming{
+		start: time.Now(),
+	}
+}
+
+// MarkConnectStart 标记连接开始
+func (t *UpstreamTiming) MarkConnectStart() {
+	t.connectStart = time.Now()
+}
+
+// MarkConnectEnd 标记连接完成
+func (t *UpstreamTiming) MarkConnectEnd() {
+	t.connectEnd = time.Now()
+}
+
+// MarkHeaderReceived 标记接收到响应头
+func (t *UpstreamTiming) MarkHeaderReceived() {
+	t.headerReceived = time.Now()
+}
+
+// MarkResponseEnd 标记响应完成
+func (t *UpstreamTiming) MarkResponseEnd() {
+	t.responseEnd = time.Now()
+}
+
+// GetConnectTime 获取连接时间（秒）
+func (t *UpstreamTiming) GetConnectTime() float64 {
+	if t.connectStart.IsZero() || t.connectEnd.IsZero() {
+		return 0
+	}
+	return t.connectEnd.Sub(t.connectStart).Seconds()
+}
+
+// GetHeaderTime 获取首字节时间（秒）
+func (t *UpstreamTiming) GetHeaderTime() float64 {
+	if t.connectEnd.IsZero() || t.headerReceived.IsZero() {
+		return 0
+	}
+	return t.headerReceived.Sub(t.connectEnd).Seconds()
+}
+
+// GetResponseTime 获取响应时间（秒）
+func (t *UpstreamTiming) GetResponseTime() float64 {
+	if t.connectEnd.IsZero() || t.responseEnd.IsZero() {
+		return 0
+	}
+	return t.responseEnd.Sub(t.connectEnd).Seconds()
+}
+
+// FinalizeUpstreamVars 在请求处理结束时设置上游变量到 VariableContext
+// 这个函数应该在 ServeHTTP 的 defer 中调用
+func FinalizeUpstreamVars(vc *variable.VariableContext, upstreamAddr string, upstreamStatus int, timing *UpstreamTiming) {
+	if vc == nil {
+		return
+	}
+
+	connectTime := timing.GetConnectTime()
+	headerTime := timing.GetHeaderTime()
+	responseTime := timing.GetResponseTime()
+
+	vc.SetUpstreamVars(upstreamAddr, upstreamStatus, responseTime, connectTime, headerTime)
+}
+
 // ServeHTTP 通过将传入的 HTTP 请求转发到选定的后端目标来处理请求。
 // 实现了 fasthttp 请求处理器接口。
 //
@@ -223,6 +297,24 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 // 如果没有可用的健康目标，返回 502 Bad Gateway。
 // 如果后端请求失败，根据 next_upstream 配置尝试下一个目标。
 func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
+	// 上游变量捕获
+	var upstreamAddr string
+	var upstreamStatus int
+	timing := NewUpstreamTiming()
+
+	// 创建变量上下文用于设置上游变量
+	vc := variable.NewVariableContext(ctx)
+	defer func() {
+		// 确保记录了响应结束时间
+		if timing.responseEnd.IsZero() {
+			timing.MarkResponseEnd()
+		}
+		// 设置上游变量
+		FinalizeUpstreamVars(vc, upstreamAddr, upstreamStatus, timing)
+		// 释放变量上下文
+		variable.ReleaseVariableContext(vc)
+	}()
+
 	// 故障转移配置
 	maxTries := p.config.NextUpstream.Tries
 	if maxTries <= 0 {
@@ -250,6 +342,9 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		if target == nil {
 			if attempt == 0 {
+				// 没有可用后端
+				upstreamAddr = "FAILED"
+				upstreamStatus = 502
 				ctx.Error("Bad Gateway: no healthy upstream", fasthttp.StatusBadGateway)
 				return
 			}
@@ -272,11 +367,23 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		// 增加连接计数（用于最少连接数负载均衡）
 		loadbalance.IncrementConnections(target)
 
+		// 设置上游地址
+		upstreamAddr = target.URL
+
 		// 检查是否为 WebSocket 升级请求
 		if isWebSocketRequest(ctx) {
 			// WebSocket 使用 defer 确保连接计数释放
 			defer loadbalance.DecrementConnections(target)
-			p.handleWebSocket(ctx, target, client)
+			timing.MarkConnectStart()
+			err := ProxyWebSocket(ctx, target, p.config.Timeout.Connect)
+			timing.MarkConnectEnd()
+			if err != nil {
+				upstreamStatus = 502
+				logging.Error().Msgf("WebSocket proxy error: %v", err)
+				return
+			}
+			// WebSocket 成功
+			upstreamStatus = 101
 			return
 		}
 
@@ -294,11 +401,15 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				loadbalance.DecrementConnections(target)
 				if !stale {
 					// 新鲜缓存，直接返回
+					upstreamAddr = "CACHE"
+					upstreamStatus = entry.Status
 					p.writeCachedResponse(ctx, entry)
 					return
 				}
 				// 过期缓存，尝试后台刷新，同时返回旧数据
 				go p.backgroundRefresh(ctx, target, cacheKey)
+				upstreamAddr = "CACHE"
+				upstreamStatus = entry.Status
 				p.writeCachedResponse(ctx, entry)
 				return
 			}
@@ -310,6 +421,8 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				<-done
 				// 重新尝试获取缓存
 				if entry, ok, _ := p.cache.Get(cacheKey); ok {
+					upstreamAddr = "CACHE"
+					upstreamStatus = entry.Status
 					p.writeCachedResponse(ctx, entry)
 					return
 				}
@@ -319,7 +432,9 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		}
 
 		// 执行代理请求
+		timing.MarkConnectStart()
 		err := client.Do(req, &ctx.Response)
+		timing.MarkConnectEnd()
 
 		if err != nil {
 			loadbalance.DecrementConnections(target)
@@ -334,16 +449,28 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				p.cache.ReleaseLock(p.buildCacheKey(ctx), err)
 			}
 
+			// 设置失败状态
+			if errors.Is(err, fasthttp.ErrTimeout) {
+				upstreamStatus = 504
+			} else {
+				upstreamStatus = 502
+			}
+
 			lastErr = err
 			// 继续尝试下一个目标
 			continue
 		}
+
+		// 记录首字节时间
+		timing.MarkHeaderReceived()
 
 		// 请求成功，减少连接计数
 		loadbalance.DecrementConnections(target)
 
 		// 检查响应状态码是否需要重试
 		statusCode := ctx.Response.StatusCode()
+		upstreamStatus = statusCode
+
 		shouldRetry := false
 		for _, code := range httpCodes {
 			if statusCode == code {
@@ -396,13 +523,18 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	if lastErr != nil {
 		// 处理不同类型的错误
 		if errors.Is(lastErr, fasthttp.ErrTimeout) {
+			upstreamStatus = 504
 			ctx.Error("Gateway Timeout", fasthttp.StatusGatewayTimeout)
 		} else if errors.Is(lastErr, fasthttp.ErrConnectionClosed) {
+			upstreamStatus = 502
 			ctx.Error("Bad Gateway: upstream connection closed", fasthttp.StatusBadGateway)
 		} else {
+			upstreamStatus = 502
 			ctx.Error("Bad Gateway", fasthttp.StatusBadGateway)
 		}
 	} else {
+		upstreamAddr = "FAILED"
+		upstreamStatus = 502
 		ctx.Error("Bad Gateway: all upstreams failed", fasthttp.StatusBadGateway)
 	}
 }
@@ -572,8 +704,9 @@ func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
 	return strings.EqualFold(string(upgrade), "websocket")
 }
 
-// handleWebSocket 处理 WebSocket 升级请求。
-func (p *Proxy) handleWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, client *fasthttp.HostClient) {
+// handleWebSocket 处理 WebSocket 升级请求（保留用于兼容性，实际逻辑在 ServeHTTP 中）
+// nolint:unused // 保留用于未来 WebSocket 功能扩展
+func (p *Proxy) handleWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, _ *fasthttp.HostClient) {
 	timeout := p.config.Timeout.Connect
 	if timeout == 0 {
 		timeout = 30 * time.Second

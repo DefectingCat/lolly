@@ -31,6 +31,12 @@ const (
 	VarTimeLocal     = "time_local"
 	VarTimeISO8601   = "time_iso8601"
 	VarRequestID     = "request_id"
+	// 上游变量
+	VarUpstreamAddr         = "upstream_addr"
+	VarUpstreamStatus       = "upstream_status"
+	VarUpstreamResponseTime = "upstream_response_time"
+	VarUpstreamConnectTime  = "upstream_connect_time"
+	VarUpstreamHeaderTime   = "upstream_header_time"
 )
 
 // init 注册所有内置变量

@@ -831,3 +831,207 @@ func TestBuiltinVarNames(t *testing.T) {
 		t.Error("BuiltinVarNames() missing 'remote_addr'")
 	}
 }
+
+// TestUpstreamVariables 测试上游变量
+func TestUpstreamVariables(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewVariableContext(ctx)
+	defer ReleaseVariableContext(vc)
+
+	// 未设置时应该返回默认值 "-"
+	tests := []struct {
+		varName  string
+		expected string
+	}{
+		{VarUpstreamAddr, "-"},
+		{VarUpstreamStatus, "-"},
+		{VarUpstreamResponseTime, "-"},
+		{VarUpstreamConnectTime, "-"},
+		{VarUpstreamHeaderTime, "-"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.varName+"_default", func(t *testing.T) {
+			value, ok := vc.Get(tt.varName)
+			if !ok {
+				t.Errorf("expected variable %s to exist", tt.varName)
+				return
+			}
+			if value != tt.expected {
+				t.Errorf("%s = %q, want %q", tt.varName, value, tt.expected)
+			}
+		})
+	}
+
+	// 设置上游变量
+	vc.SetUpstreamVars("http://backend:8080", 200, 0.123, 0.001, 0.045)
+
+	// 验证设置后的值
+	testsAfter := []struct {
+		varName  string
+		expected string
+	}{
+		{VarUpstreamAddr, "http://backend:8080"},
+		{VarUpstreamStatus, "200"},
+		{VarUpstreamResponseTime, "0.123"},
+		{VarUpstreamConnectTime, "0.001"},
+		{VarUpstreamHeaderTime, "0.045"},
+	}
+
+	for _, tt := range testsAfter {
+		t.Run(tt.varName+"_set", func(t *testing.T) {
+			value, ok := vc.Get(tt.varName)
+			if !ok {
+				t.Errorf("expected variable %s to exist", tt.varName)
+				return
+			}
+			if value != tt.expected {
+				t.Errorf("%s = %q, want %q", tt.varName, value, tt.expected)
+			}
+		})
+	}
+}
+
+// TestUpstreamVariablesInExpand 测试在模板中展开上游变量
+func TestUpstreamVariablesInExpand(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewVariableContext(ctx)
+	defer ReleaseVariableContext(vc)
+
+	// 设置上游变量
+	vc.SetUpstreamVars("http://backend:8080", 200, 0.123, 0.001, 0.045)
+
+	// 测试展开
+	template := "$upstream_addr $upstream_status $upstream_response_time"
+	result := vc.Expand(template)
+	expected := "http://backend:8080 200 0.123"
+	if result != expected {
+		t.Errorf("Expand = %q, want %q", result, expected)
+	}
+}
+
+// TestUpstreamVariablesErrorCases 测试上游变量错误情况
+func TestUpstreamVariablesErrorCases(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewVariableContext(ctx)
+	defer ReleaseVariableContext(vc)
+
+	// 测试各种错误场景
+	tests := []struct {
+		name     string
+		addr     string
+		status   int
+		expected map[string]string
+	}{
+		{
+			name:   "no backend",
+			addr:   "FAILED",
+			status: 502,
+			expected: map[string]string{
+				VarUpstreamAddr:   "FAILED",
+				VarUpstreamStatus: "502",
+			},
+		},
+		{
+			name:   "timeout",
+			addr:   "http://backend:8080",
+			status: 504,
+			expected: map[string]string{
+				VarUpstreamAddr:   "http://backend:8080",
+				VarUpstreamStatus: "504",
+			},
+		},
+		{
+			name:   "cache hit",
+			addr:   "CACHE",
+			status: 200,
+			expected: map[string]string{
+				VarUpstreamAddr:   "CACHE",
+				VarUpstreamStatus: "200",
+			},
+		},
+		{
+			name:   "websocket success",
+			addr:   "ws://backend:8080",
+			status: 101,
+			expected: map[string]string{
+				VarUpstreamAddr:   "ws://backend:8080",
+				VarUpstreamStatus: "101",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vc.SetUpstreamVars(tt.addr, tt.status, 0, 0, 0)
+
+			for varName, expected := range tt.expected {
+				value, ok := vc.Get(varName)
+				if !ok {
+					t.Errorf("expected variable %s to exist", varName)
+					continue
+				}
+				if value != expected {
+					t.Errorf("%s = %q, want %q", varName, value, expected)
+				}
+			}
+		})
+	}
+}
+
+// TestUpstreamVariablesZeroValues 测试上游变量零值处理
+func TestUpstreamVariablesZeroValues(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewVariableContext(ctx)
+	defer ReleaseVariableContext(vc)
+
+	// 测试零值应该返回 "-"
+	vc.SetUpstreamVars("", 0, 0, 0, 0)
+
+	tests := []struct {
+		varName  string
+		expected string
+	}{
+		{VarUpstreamAddr, "-"},
+		{VarUpstreamStatus, "-"},
+		{VarUpstreamResponseTime, "-"},
+		{VarUpstreamConnectTime, "-"},
+		{VarUpstreamHeaderTime, "-"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.varName, func(t *testing.T) {
+			value, ok := vc.Get(tt.varName)
+			if !ok {
+				t.Errorf("expected variable %s to exist", tt.varName)
+				return
+			}
+			if value != tt.expected {
+				t.Errorf("%s = %q, want %q", tt.varName, value, tt.expected)
+			}
+		})
+	}
+}
+
+// BenchmarkUpstreamVariables 基准测试：上游变量
+func BenchmarkUpstreamVariables(b *testing.B) {
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetHost("example.com")
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.Header.SetRequestURI("/test")
+
+	vc := NewVariableContext(ctx)
+	defer ReleaseVariableContext(vc)
+
+	// 设置上游变量
+	vc.SetUpstreamVars("http://backend:8080", 200, 0.123, 0.001, 0.045)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, _ = vc.Get(VarUpstreamAddr)
+		_, _ = vc.Get(VarUpstreamStatus)
+		_, _ = vc.Get(VarUpstreamResponseTime)
+	}
+}
