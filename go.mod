@@ -5,6 +5,7 @@ go 1.26.1
 require (
 	github.com/andybalholm/brotli v1.2.0
 	github.com/fasthttp/router v1.5.4
+	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.18.2
 	github.com/quic-go/quic-go v0.59.0
 	github.com/rs/zerolog v1.35.0
