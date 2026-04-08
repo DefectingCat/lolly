@@ -28,6 +28,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/http3"
 	"rua.plus/lolly/internal/logging"
+	"rua.plus/lolly/internal/resolver"
 	"rua.plus/lolly/internal/server"
 	"rua.plus/lolly/internal/stream"
 )
@@ -88,6 +89,9 @@ type App struct {
 
 	// logger 应用日志管理器
 	logger *logging.AppLogger
+
+	// resolver DNS 解析器（可选）
+	resv resolver.Resolver
 }
 
 // NewApp 创建应用程序。
@@ -178,8 +182,22 @@ func (a *App) Run() int {
 	a.logger.LogStartup("配置加载成功", map[string]string{"config_path": a.cfgPath})
 	a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Server.Listen})
 
+	// 创建 DNS 解析器（如果启用）
+	if a.cfg.Resolver.Enabled {
+		a.resv = resolver.New(&a.cfg.Resolver)
+		a.logger.LogStartup("DNS 解析器已启用", map[string]string{
+			"addresses": fmt.Sprintf("%v", a.cfg.Resolver.Addresses),
+			"ttl":       a.cfg.Resolver.TTL().String(),
+		})
+	}
+
 	// 创建 HTTP 服务器
 	a.srv = server.New(a.cfg)
+
+	// 设置 DNS 解析器到服务器
+	if a.resv != nil {
+		a.srv.SetResolver(a.resv)
+	}
 
 	// 如果有继承的监听器，设置到服务器
 	if len(a.listeners) > 0 {

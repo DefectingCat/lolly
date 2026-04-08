@@ -42,6 +42,7 @@ import (
 	"rua.plus/lolly/internal/middleware/rewrite"
 	"rua.plus/lolly/internal/middleware/security"
 	"rua.plus/lolly/internal/proxy"
+	"rua.plus/lolly/internal/resolver"
 	"rua.plus/lolly/internal/ssl"
 )
 
@@ -107,6 +108,9 @@ type Server struct {
 
 	// listeners 保存的监听器列表，用于热升级
 	listeners []net.Listener
+
+	// resolver DNS 解析器（可选）
+	resolver resolver.Resolver
 }
 
 // New 创建 HTTP 服务器实例。
@@ -600,6 +604,14 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 			continue
 		}
 
+		// 设置 DNS 解析器（如果已配置）
+		if s.resolver != nil {
+			p.SetResolver(s.resolver)
+			if err := p.Start(); err != nil {
+				logging.Error().Err(err).Msg("启动代理失败")
+			}
+		}
+
 		// 启动健康检查
 		if proxyCfg.HealthCheck.Interval > 0 {
 			hc := proxy.NewHealthChecker(targets, &proxyCfg.HealthCheck)
@@ -770,4 +782,14 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 		router.GET(routePath+"{filepath:*}", staticHandler.Handle)
 		router.HEAD(routePath+"{filepath:*}", staticHandler.Handle)
 	}
+}
+
+// SetResolver 设置 DNS 解析器。
+func (s *Server) SetResolver(r resolver.Resolver) {
+	s.resolver = r
+}
+
+// GetResolver 返回 DNS 解析器。
+func (s *Server) GetResolver() resolver.Resolver {
+	return s.resolver
 }

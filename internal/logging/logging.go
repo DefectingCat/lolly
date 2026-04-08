@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/variable"
 )
 
 // Logger 日志管理器，分离访问日志和错误日志。
@@ -140,7 +140,7 @@ func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, dur
 
 // formatAccessLog 根据模板格式化访问日志。
 //
-// 支持以下变量替换：
+// 使用变量系统展开模板字符串，支持以下变量：
 //   - $remote_addr: 客户端地址
 //   - $remote_user: 认证用户
 //   - $request: 请求方法和路径
@@ -149,7 +149,8 @@ func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, dur
 //   - $request_time: 请求处理时间
 //   - $http_referer: Referer 头
 //   - $http_user_agent: User-Agent 头
-//   - $time: 当前时间
+//   - $time_local, $time_iso8601: 时间
+//   - $host, $uri, $args: 请求信息
 //
 // 参数：
 //   - ctx: FastHTTP 请求上下文
@@ -168,23 +169,24 @@ func (l *Logger) formatAccessLog(ctx *fasthttp.RequestCtx, status int, size int6
 		}
 	}
 
-	replacements := map[string]string{
-		"$remote_addr":     ctx.RemoteAddr().String(),
-		"$remote_user":     remoteUser,
-		"$request":         string(ctx.Method()) + " " + string(ctx.Path()) + " " + string(ctx.Request.Header.Protocol()),
-		"$status":          strconv.Itoa(status),
-		"$body_bytes_sent": strconv.FormatInt(size, 10),
-		"$request_time":    fmt.Sprintf("%.6f", duration.Seconds()),
-		"$http_referer":    string(ctx.Request.Header.Peek("Referer")),
-		"$http_user_agent": string(ctx.Request.Header.Peek("User-Agent")),
-		"$time":            time.Now().Format(time.RFC3339),
-	}
+	// 创建变量上下文
+	vc := variable.NewVariableContext(ctx)
+	defer variable.ReleaseVariableContext(vc)
 
-	result := l.accessFormat
-	for varName, value := range replacements {
-		result = strings.ReplaceAll(result, varName, value)
-	}
-	return result
+	// 设置响应信息（同时设置到 ctx 供 builtin getter 使用）
+	vc.SetResponseInfo(status, size, duration.Nanoseconds())
+	variable.SetResponseInfoInContext(ctx, status, size, duration.Nanoseconds())
+
+	// 设置自定义变量（用于兼容旧的变量名）
+	vc.Set("remote_user", remoteUser)
+	vc.Set("request", string(ctx.Method())+" "+string(ctx.Path())+" "+string(ctx.Request.Header.Protocol()))
+	vc.Set("http_referer", string(ctx.Request.Header.Peek("Referer")))
+	vc.Set("http_user_agent", string(ctx.Request.Header.Peek("User-Agent")))
+	// 添加 $time 别名（兼容旧格式）
+	vc.Set("time", time.Now().Format(time.RFC3339))
+
+	// 展开模板
+	return vc.Expand(l.accessFormat)
 }
 
 // Debug 返回 Debug 级别日志记录器。

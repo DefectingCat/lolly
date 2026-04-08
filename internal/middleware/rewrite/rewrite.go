@@ -8,6 +8,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/variable"
 )
 
 // MaxRewriteIterations URL重写最大迭代次数，防止无限循环
@@ -133,6 +134,11 @@ func (m *RewriteMiddleware) Process(next fasthttp.RequestHandler) fasthttp.Reque
 			if rule.pattern.MatchString(path) {
 				// 执行正则替换
 				newPath := rule.pattern.ReplaceAllString(path, rule.replacement)
+
+				// 对替换结果进行变量展开
+				vc := variable.NewVariableContext(ctx)
+				newPath = vc.Expand(newPath)
+				variable.ReleaseVariableContext(vc)
 
 				switch rule.flag {
 				case FlagRedirect:

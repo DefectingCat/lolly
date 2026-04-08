@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -45,6 +46,8 @@ import (
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/netutil"
+	"rua.plus/lolly/internal/resolver"
+	"rua.plus/lolly/internal/variable"
 )
 
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
@@ -72,6 +75,15 @@ type Proxy struct {
 
 	// healthChecker 健康检查器，用于被动健康检查
 	healthChecker *HealthChecker
+
+	// resolver DNS 解析器，用于动态解析域名
+	resolver resolver.Resolver
+
+	// stopCh 用于停止后台协程
+	stopCh chan struct{}
+
+	// started 标记代理是否已启动
+	started atomic.Bool
 
 	// mu 保护并发访问的读写锁
 	mu sync.RWMutex
@@ -108,6 +120,7 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 		clients:  make(map[string]*fasthttp.HostClient),
 		balancer: balancer,
 		config:   cfg,
+		stopCh:   make(chan struct{}),
 	}
 
 	// 为每个后端目标初始化 HostClient
@@ -512,10 +525,13 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 	}
 	headers.Set("X-Forwarded-Proto", proto)
 
-	// 从配置设置自定义请求头
+	// 从配置设置自定义请求头（支持变量展开）
 	if p.config.Headers.SetRequest != nil {
+		vc := variable.NewVariableContext(ctx)
+		defer variable.ReleaseVariableContext(vc)
 		for key, value := range p.config.Headers.SetRequest {
-			headers.Set(key, value)
+			expanded := vc.Expand(value)
+			headers.Set(key, expanded)
 		}
 	}
 
@@ -529,10 +545,13 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 
 // modifyResponseHeaders 在发送给客户端之前修改响应头。
 func (p *Proxy) modifyResponseHeaders(ctx *fasthttp.RequestCtx) {
-	// 从配置设置自定义响应头
+	// 从配置设置自定义响应头（支持变量展开）
 	if p.config.Headers.SetResponse != nil {
+		vc := variable.NewVariableContext(ctx)
+		defer variable.ReleaseVariableContext(vc)
 		for key, value := range p.config.Headers.SetResponse {
-			ctx.Response.Header.Set(key, value)
+			expanded := vc.Expand(value)
+			ctx.Response.Header.Set(key, expanded)
 		}
 	}
 }
