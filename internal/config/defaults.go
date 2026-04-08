@@ -236,6 +236,9 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("  #       cache_lock: true          # 防止缓存击穿\n")
 	buf.WriteString("  #       stale_while_revalidate: 30s\n")
 	buf.WriteString("  #     client_max_body_size: \"50MB\"  # 此代理路径的请求体限制\n")
+	buf.WriteString("  #     next_upstream:              # 故障转移配置\n")
+	buf.WriteString("  #       tries: 1                  # 最大尝试次数（1 表示禁用故障转移）\n")
+	buf.WriteString("  #       http_codes: [502, 503, 504]  # 触发重试的 HTTP 状态码\n")
 	buf.WriteString("\n")
 
 	// SSL 配置
