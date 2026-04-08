@@ -289,6 +289,72 @@ func TestRateLimiterGetStats(t *testing.T) {
 	if stats.Burst != 200 {
 		t.Errorf("Expected Burst 200, got %f", stats.Burst)
 	}
+
+	// 测试优雅关闭
+	rl.StopCleanup()
+}
+
+func TestRateLimiterAutoCleanup(t *testing.T) {
+	// 使用自定义的创建方式，方便测试
+	cfg := &config.RateLimitConfig{
+		RequestRate: 100,
+		Burst:       200,
+		Key:         "ip",
+	}
+
+	mw, err := NewRateLimiter(cfg)
+	if err != nil {
+		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+
+	rl, ok := mw.(*RateLimiter)
+	if !ok {
+		t.Fatalf("Expected *RateLimiter, got %T", mw)
+	}
+
+	// 创建一些桶
+	rl.Allow("key1")
+	rl.Allow("key2")
+	rl.Allow("key3")
+
+	// 验证桶已创建
+	stats := rl.GetStats()
+	if stats.BucketCount != 3 {
+		t.Errorf("Expected 3 buckets, got %d", stats.BucketCount)
+	}
+
+	// 手动调用 Cleanup 模拟过期清理（使用很短的过期时间）
+	rl.Cleanup(1 * time.Nanosecond)
+
+	// 验证所有桶已被清理
+	stats = rl.GetStats()
+	if stats.BucketCount != 0 {
+		t.Errorf("Expected 0 buckets after cleanup, got %d", stats.BucketCount)
+	}
+
+	// 测试优雅关闭
+	rl.StopCleanup()
+}
+
+func TestRateLimiterStopCleanup(t *testing.T) {
+	mw, err := NewRateLimiter(&config.RateLimitConfig{
+		RequestRate: 100,
+		Burst:       200,
+	})
+	if err != nil {
+		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+
+	rl, ok := mw.(*RateLimiter)
+	if !ok {
+		t.Fatalf("Expected *RateLimiter, got %T", mw)
+	}
+
+	// 验证可以正常关闭
+	rl.StopCleanup()
+
+	// 再次调用不应 panic
+	rl.StopCleanup()
 }
 
 func TestNewConnLimiter(t *testing.T) {

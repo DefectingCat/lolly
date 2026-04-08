@@ -49,13 +49,16 @@ import (
 //
 // 注意事项：
 //   - 所有方法均为并发安全
-//   - 应定期调用 Cleanup 清理过期的桶
+//   - 启动后会自动后台清理过期的桶
 type RateLimiter struct {
-	rate    float64                 // 每秒添加的令牌数
-	burst   float64                 // 桶的最大容量
-	keyFunc KeyFunc                 // 提取限流键的函数
-	buckets map[string]*tokenBucket // 各键的令牌桶映射
-	mu      sync.RWMutex            // 读写锁，保护并发访问
+	rate          float64                 // 每秒添加的令牌数
+	burst         float64                 // 桶的最大容量
+	keyFunc       KeyFunc                 // 提取限流键的函数
+	buckets       map[string]*tokenBucket // 各键的令牌桶映射
+	mu            sync.RWMutex            // 读写锁，保护并发访问
+	cleanupTicker *time.Ticker            // 清理定时器
+	stopCleanupCh chan struct{}           // 停止清理的信号通道
+	cleanupDone   chan struct{}           // 清理 goroutine 完成的信号
 }
 
 // tokenBucket 表示单个限流键的令牌桶。
@@ -119,9 +122,11 @@ func newTokenBucketLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
 	}
 
 	rl := &RateLimiter{
-		rate:    float64(cfg.RequestRate),
-		burst:   float64(cfg.Burst),
-		buckets: make(map[string]*tokenBucket),
+		rate:          float64(cfg.RequestRate),
+		burst:         float64(cfg.Burst),
+		buckets:       make(map[string]*tokenBucket),
+		stopCleanupCh: make(chan struct{}),
+		cleanupDone:   make(chan struct{}),
 	}
 
 	// 根据配置设置键提取函数
@@ -133,6 +138,9 @@ func newTokenBucketLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
 	default:
 		return nil, fmt.Errorf("unknown key type: %s", cfg.Key)
 	}
+
+	// 启动后台清理 goroutine
+	rl.startCleanup(10 * time.Minute)
 
 	return rl, nil
 }
@@ -385,6 +393,46 @@ func (rl *RateLimiter) Cleanup(maxAge time.Duration) {
 			delete(rl.buckets, key)
 		}
 		bucket.mu.Unlock()
+	}
+}
+
+// startCleanup 启动后台清理 goroutine。
+//
+// 定期清理超过 24 小时未更新的令牌桶。
+// 该方法在创建限流器时自动调用，无需手动调用。
+//
+// 参数：
+//   - interval: 清理间隔时间
+func (rl *RateLimiter) startCleanup(interval time.Duration) {
+	rl.cleanupTicker = time.NewTicker(interval)
+	maxAge := 24 * time.Hour // 24 小时未更新则清理
+
+	go func() {
+		defer close(rl.cleanupDone)
+		for {
+			select {
+			case <-rl.cleanupTicker.C:
+				rl.Cleanup(maxAge)
+			case <-rl.stopCleanupCh:
+				return
+			}
+		}
+	}()
+}
+
+// StopCleanup 优雅关闭后台清理 goroutine。
+//
+// 发送停止信号并等待 goroutine 完成，确保资源正确释放。
+// 该方法应在限流器不再使用时调用（如服务器关闭时）。
+func (rl *RateLimiter) StopCleanup() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	if rl.cleanupTicker != nil {
+		rl.cleanupTicker.Stop()
+		close(rl.stopCleanupCh)
+		<-rl.cleanupDone
+		rl.cleanupTicker = nil // 防止重复关闭
 	}
 }
 
