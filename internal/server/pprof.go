@@ -7,10 +7,15 @@
 //   - 阻塞分析
 //   - 锁竞争分析
 //
+// 主要用途：
+//
+//	用于在生产环境中采集性能数据，支持性能优化和问题排查。
+//
 // 注意事项：
 //   - 仅在配置启用时生效
 //   - 生产环境建议限制访问 IP
 //   - CPU profile 收集需要代表性 workload
+//   - 所有端点均支持流式输出，适合大数据量场景
 //
 // 作者：xfy
 package server
@@ -85,6 +90,16 @@ func NewPprofHandler(cfg *config.PprofConfig) (*PprofHandler, error) {
 }
 
 // Path 返回 pprof 端点路径。
+//
+// 返回配置的 pprof 端点路径前缀，用于路由注册。
+//
+// 返回值：
+//   - string: pprof 端点的路径前缀，如 "/debug/pprof"
+//
+// 使用示例：
+//
+//	path := handler.Path()
+//	router.GET(path, handler.ServeHTTP)
 func (h *PprofHandler) Path() string {
 	return h.path
 }
@@ -93,6 +108,13 @@ func (h *PprofHandler) Path() string {
 //
 // 根据 URL 路径选择对应的 profile 处理器，
 // 并检查客户端 IP 是否在允许列表中。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，包含请求信息和响应写入接口
+//
+// 注意事项：
+//   - 未授权访问返回 403 Forbidden
+//   - 未知的 profile 类型返回 404 Not Found
 func (h *PprofHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// IP 访问控制
 	if !h.isAllowed(ctx) {
@@ -125,6 +147,15 @@ func (h *PprofHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 }
 
 // isAllowed 检查客户端 IP 是否允许访问。
+//
+// 根据配置的 IP 白名单和 CIDR 网络范围验证客户端 IP。
+// 若未配置任何限制，则默认允许所有访问。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，用于获取客户端 IP
+//
+// 返回值：
+//   - bool: true 表示允许访问，false 表示禁止访问
 func (h *PprofHandler) isAllowed(ctx *fasthttp.RequestCtx) bool {
 	if len(h.allowedIPs) == 0 && len(h.allowedNets) == 0 {
 		return true // 无限制
@@ -154,6 +185,11 @@ func (h *PprofHandler) isAllowed(ctx *fasthttp.RequestCtx) bool {
 }
 
 // handleIndex 处理索引页面。
+//
+// 返回 HTML 格式的 pprof 端点索引页面，列出所有可用的 profile 类型。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，用于写入响应内容
 func (h *PprofHandler) handleIndex(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("text/html; charset=utf-8")
 	html := `<html>
@@ -174,6 +210,12 @@ func (h *PprofHandler) handleIndex(ctx *fasthttp.RequestCtx) {
 }
 
 // handleCPU 处理 CPU profile 请求。
+//
+// 启动 CPU profile 采集，等待指定时长后停止并返回结果。
+// 采集时长可通过 URL 参数 "seconds" 指定，默认 30 秒。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，用于获取参数和写入响应
 func (h *PprofHandler) handleCPU(ctx *fasthttp.RequestCtx) {
 	// 获取采集时长
 	seconds := 30
@@ -195,13 +237,18 @@ func (h *PprofHandler) handleCPU(ctx *fasthttp.RequestCtx) {
 		// 等待采集完成
 		time.Sleep(time.Duration(seconds) * time.Second)
 
-		// 厉止 CPU profile
+		// 停止 CPU profile
 		stopCPUProfile()
 		_ = w.Flush()
 	})
 }
 
 // handleHeap 处理内存 profile 请求。
+//
+// 执行 GC 后采集内存分配 profile 并返回结果。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，用于写入响应
 func (h *PprofHandler) handleHeap(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/octet-stream")
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
@@ -211,6 +258,11 @@ func (h *PprofHandler) handleHeap(ctx *fasthttp.RequestCtx) {
 }
 
 // handleGoroutine 处理 Goroutine profile 请求。
+//
+// 采集当前所有 Goroutine 的栈追踪信息并返回。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，用于写入响应
 func (h *PprofHandler) handleGoroutine(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/octet-stream")
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
@@ -220,6 +272,11 @@ func (h *PprofHandler) handleGoroutine(ctx *fasthttp.RequestCtx) {
 }
 
 // handleBlock 处理阻塞 profile 请求。
+//
+// 采集阻塞操作的 profile 数据并返回。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，用于写入响应
 func (h *PprofHandler) handleBlock(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/octet-stream")
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
@@ -229,6 +286,11 @@ func (h *PprofHandler) handleBlock(ctx *fasthttp.RequestCtx) {
 }
 
 // handleMutex 处理锁竞争 profile 请求。
+//
+// 采集互斥锁竞争的 profile 数据并返回。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，用于写入响应
 func (h *PprofHandler) handleMutex(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/octet-stream")
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
