@@ -931,3 +931,556 @@ http {
     }
 }
 ```
+
+---
+
+## 18. 主动健康检查详解
+
+### 18.1 被动检查 vs 主动检查
+
+| 特性 | 被动健康检查 (Passive) | 主动健康检查 (Active) |
+|------|----------------------|---------------------|
+| **实现方式** | 基于真实客户端请求响应判断 | 独立的探测请求周期性检测 |
+| **触发时机** | 实际请求失败时 | 按配置间隔主动发起 |
+| **资源占用** | 无额外开销 | 需要额外的连接和请求 |
+| **发现速度** | 慢（依赖真实流量） | 快（独立探测） |
+| **可用性** | 开源 NGINX 内置 | NGINX Plus 商业版 / 第三方模块 |
+| **配置位置** | `server` 指令参数 | `upstream` 块或 `location` 指令 |
+| **典型参数** | `max_fails`, `fail_timeout` | `interval`, `fails`, `passes`, `match` |
+
+**被动检查机制**：
+```nginx
+upstream backend {
+    # 在 fail_timeout(30s) 内连续失败 max_fails(3) 次，标记为不可用
+    server srv1.example.com max_fails=3 fail_timeout=30s;
+}
+```
+
+**主动检查优势**：
+- 不依赖真实客户端流量即可检测后端状态
+- 可以检测特定的健康检查端点（如 `/health`）
+- 支持自定义匹配规则验证响应内容
+- 支持 gRPC、TCP、UDP 等多种协议
+
+### 18.2 HTTP 健康检查指令详解 (NGINX Plus)
+
+**注意**：HTTP 主动健康检查模块 (`ngx_http_upstream_hc_module`) 是 NGINX Plus 商业订阅的一部分。
+
+#### health_check 指令
+
+**语法**：`health_check [parameters];`
+**上下文**：`location`
+**功能**：启用 upstream 服务器组的定期健康检查
+
+**参数说明**：
+
+| 参数 | 语法 | 默认值 | 说明 |
+|------|------|--------|------|
+| `interval` | `interval=time` | `5s` | 检查间隔时间 |
+| `jitter` | `jitter=time` | — | 随机延迟时间，避免多个服务器同时检查 |
+| `fails` | `fails=number` | `1` | 连续失败次数判定为不健康 |
+| `passes` | `passes=number` | `1` | 连续成功次数判定为健康 |
+| `uri` | `uri=uri` | `/` | 健康检查请求的 URI |
+| `port` | `port=number` | 服务器端口 | 健康检查使用的端口 |
+| `match` | `match=name` | — | 引用 `match` 块进行响应验证 |
+| `mandatory` | `mandatory [persistent]` | — | 初始状态为 "checking"；`persistent` 在 reload 后保持状态 |
+| `keepalive_time` | `keepalive_time=time` | — | 启用健康检查连接的 keepalive |
+| `type=grpc` | `type=grpc [grpc_service=name] [grpc_status=code]` | — | 启用 gRPC 健康检查 |
+
+#### match 指令
+
+**语法**：`match name { ... }`
+**上下文**：`http`
+**功能**：定义响应验证测试集
+
+**测试项**：
+
+| 测试项 | 语法 | 说明 |
+|--------|------|------|
+| `status` | `status [!] code [code...]` | 状态码匹配，支持范围如 `200-399` |
+| `header` | `header header [operator] value` | 响应头匹配，`=` 精确匹配，`~` 正则匹配 |
+| `body` | `body ~ "regex"` | 响应体正则匹配（只检查前 256KB） |
+| `require` | `require $variable` | 变量非空且不为 "0" |
+
+**header 操作符**：
+- `=` 或 `==`：精确相等
+- `!=`：不相等
+- `~`：正则匹配（区分大小写）
+- `~*`：正则匹配（不区分大小写）
+
+#### 配置示例
+
+**基础健康检查**：
+```nginx
+upstream dynamic {
+    zone upstream_dynamic 64k;  # 共享内存区必须
+
+    server backend1.example.com weight=5;
+    server backend2.example.com:8080 fail_timeout=5s slow_start=30s;
+}
+
+server {
+    location / {
+        proxy_pass http://dynamic;
+        health_check;  # 使用默认配置
+    }
+}
+```
+
+**高级配置**：
+```nginx
+server {
+    location / {
+        proxy_pass http://backend;
+        health_check interval=10s jitter=2s fails=3 passes=2
+                     uri=/health port=8080 match=server_ok
+                     keepalive_time=60s;
+    }
+}
+
+match server_ok {
+    status 200;                              # 状态码必须是 200
+    header Content-Type = application/json;  # Content-Type 精确匹配
+    header X-Health-Status ~ ^ok$;          # 正则匹配头值
+    body ~ "\"status\":\\s*\"healthy\"";      # 响应体包含状态标记
+}
+```
+
+**gRPC 健康检查**（不兼容 `uri` 和 `match`）：
+```nginx
+upstream grpc_backend {
+    zone grpc_zone 64k;
+    server grpc1.example.com:50051;
+    server grpc2.example.com:50051;
+}
+
+server {
+    location / {
+        grpc_pass grpc://grpc_backend;
+        health_check mandatory type=grpc grpc_service=myapp.HealthCheck grpc_status=12;
+    }
+}
+```
+
+### 18.3 Stream 健康检查指令详解 (NGINX Plus)
+
+**注意**：Stream 主动健康检查模块 (`ngx_stream_upstream_hc_module`) 是 NGINX Plus 商业订阅的一部分。
+
+#### 指令概览
+
+| 指令 | 上下文 | 默认值 | 说明 |
+|------|--------|--------|------|
+| `health_check` | `server` | — | 启用健康检查 |
+| `health_check_timeout` | `stream`, `server` | `5s` | 健康检查超时 |
+| `match` | `stream` | — | 定义响应验证规则 |
+
+#### health_check 参数（Stream）
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `interval` | `5s` | 检查间隔 |
+| `jitter` | — | 随机延迟 |
+| `fails` | `1` | 失败次数阈值 |
+| `passes` | `1` | 成功次数阈值 |
+| `match` | — | 引用 match 块 |
+| `port` | 服务器端口 | 检查端口 |
+| `udp` | — | 使用 UDP 协议 |
+| `mandatory` | — | 初始状态为 "checking" |
+| `persistent` | — | reload 后保持状态 |
+
+#### match 块（Stream）
+
+| 测试项 | 语法 | 说明 |
+|--------|------|------|
+| `send` | `send "string"` | 发送给服务器的字符串（支持 `\x` 十六进制） |
+| `expect` | `expect "string"` / `expect ~ "regex"` | 期望的响应 |
+
+**注意**：只检查服务器返回数据的前 `proxy_buffer_size` 字节。
+
+#### 配置示例
+
+**TCP 基础检查**：
+```nginx
+upstream tcp_backend {
+    zone tcp_zone 64k;
+    server backend1.example.com:12345 weight=5;
+    server backend2.example.com:12345;
+}
+
+server {
+    listen 12346;
+    proxy_pass tcp_backend;
+    health_check interval=5s;
+}
+```
+
+**UDP 健康检查**：
+```nginx
+upstream dns_upstream {
+    zone dns_zone 64k;
+    server dns1.example.com:53;
+}
+
+server {
+    listen 53 udp;
+    proxy_pass dns_upstream;
+    health_check udp interval=3s;  # 发送探测并期望无 ICMP 不可达回复
+}
+```
+
+**自定义匹配规则（MySQL 检查）**：
+```nginx
+upstream mysql_backend {
+    zone mysql_zone 10m;
+    server db1.example.com:3306;
+    server db2.example.com:3306;
+}
+
+match mysql_handshake {
+    # 发送 MySQL 握手包（十六进制）
+    send "\x3a\x00\x00\x01\x0a\x35\x2e\x35\x2e\x32\x2d\x6d\x32\x00\x01...";
+    # 期望收到包含版本信息的响应
+    expect ~ "\x4a\x00\x00\x00\x0a";
+}
+
+server {
+    listen 3307;
+    proxy_pass mysql_backend;
+    health_check match=mysql_handshake interval=5s;
+    health_check_timeout 10s;
+}
+```
+
+**HTTP 风格的 TCP 检查**：
+```nginx
+match http_check {
+    send     "GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n";
+    expect ~ "200 OK";
+}
+
+server {
+    listen 80;
+    proxy_pass backend;
+    health_check match=http_check interval=5s fails=3 passes=2;
+}
+```
+
+### 18.4 自定义健康检查配置示例
+
+#### 场景一：API 网关健康检查
+
+```nginx
+http {
+    upstream api_backend {
+        zone api_zone 64k;
+
+        server api1.example.com:8080;
+        server api2.example.com:8080;
+        server api3.example.com:8080;
+    }
+
+    # 健康检查匹配规则
+    match api_healthy {
+        status 200;
+        header Content-Type = application/json;
+        body ~ "\"status\":\\s*\"up\"";
+    }
+
+    server {
+        listen 80;
+        server_name api.example.com;
+
+        location / {
+            proxy_pass http://api_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+
+            # 健康检查配置
+            health_check interval=5s jitter=1s fails=3 passes=2
+                         uri=/api/health
+                         match=api_healthy;
+        }
+
+        # 健康检查状态页（NGINX Plus）
+        location /upstream_status {
+            upstream_status;
+            access_log off;
+            allow 10.0.0.0/8;
+            deny all;
+        }
+    }
+}
+```
+
+#### 场景二：多协议混合检查
+
+```nginx
+# TCP 服务健康检查
+stream {
+    upstream redis_backend {
+        zone redis_zone 64k;
+        server redis1.example.com:6379;
+        server redis2.example.com:6379;
+    }
+
+    match redis_ping {
+        send "PING\r\n";
+        expect ~ "\+PONG";
+    }
+
+    server {
+        listen 6379;
+        proxy_pass redis_backend;
+        health_check match=redis_ping interval=10s fails=2 passes=2;
+        health_check_timeout 3s;
+    }
+}
+
+# HTTP 服务健康检查
+http {
+    upstream web_backend {
+        zone web_zone 64k;
+        server web1.example.com:80;
+        server web2.example.com:80;
+    }
+
+    server {
+        location / {
+            proxy_pass http://web_backend;
+            health_check interval=5s uri=/nginx_health;
+        }
+    }
+}
+```
+
+#### 场景三：微服务 gRPC 健康检查
+
+```nginx
+upstream grpc_services {
+    zone grpc_zone 64k;
+    server service1.example.com:50051;
+    server service2.example.com:50051;
+}
+
+server {
+    listen 50051 http2;
+
+    location / {
+        grpc_pass grpc://grpc_services;
+        # gRPC 健康检查：使用标准 gRPC Health Checking Protocol
+        # grpc_status=12 (UNIMPLEMENTED) 表示服务未实现健康检查接口
+        # grpc_status=0 (OK) 表示服务健康
+        health_check mandatory type=grpc grpc_service=grpc.health.v1.Health
+                         interval=5s fails=3 passes=2;
+    }
+}
+```
+
+### 18.5 健康检查与负载均衡配合
+
+#### 状态流转机制
+
+```
+         初始状态
+            |
+            v
+      ┌───────────┐     ┌──────────────┐
+      │ checking  │────▶│   unhealthy  │
+      └─────┬─────┘     └──────────────┘
+            │                   │
+            │  passes 次成功     │ fails 次失败
+            v                   v
+      ┌───────────┐     ┌──────────────┐
+      │  healthy  │◀────│              │
+      └───────────┘     └──────────────┘
+```
+
+**关键行为**：
+- `checking` 状态：初始或 reload 后，不接收客户端请求
+- `mandatory` 参数：强制等待首次健康检查完成才标记为健康
+- `persistent` 参数：reload 后如之前是健康状态则保持 healthy
+
+#### 与负载均衡算法结合
+
+```nginx
+upstream backend {
+    zone backend 64k;
+    least_conn;  # 最少连接算法
+
+    server srv1.example.com weight=5;
+    server srv2.example.com;
+    server srv3.example.com;
+
+    # 被动检查参数与主动检查并存
+    # 被动检查作为兜底，主动检查提供快速发现
+}
+
+server {
+    location / {
+        proxy_pass http://backend;
+        health_check interval=5s fails=3 passes=2;
+
+        # 故障转移配置
+        proxy_next_upstream error timeout http_502 http_503 http_504;
+        proxy_next_upstream_timeout 5s;
+        proxy_next_upstream_tries 2;
+    }
+}
+```
+
+**监控指标集成**：
+
+```nginx
+log_format health_log '$remote_addr - $remote_user [$time_local] '
+                      '"$request" $status '
+                      'upstream=$upstream_addr '
+                      'upstream_status=$upstream_status '
+                      'health_check=$upstream_health_check_status';
+
+server {
+    location / {
+        proxy_pass http://backend;
+        health_check interval=5s;
+        access_log /var/log/nginx/health.log health_log;
+    }
+}
+```
+
+### 18.6 开源 NGINX 的替代方案
+
+由于主动健康检查是 NGINX Plus 商业特性，开源版本需要使用第三方模块。
+
+#### nginx_upstream_check_module (Tengine)
+
+由阿里巴巴 Tengine 团队开发的第三方模块，支持主动健康检查。
+
+**源码地址**：https://github.com/yaoweibin/nginx_upstream_check_module
+
+**安装方法**：
+```bash
+# 下载模块源码
+git clone https://github.com/yaoweibin/nginx_upstream_check_module.git
+
+# 下载 NGINX 源码并解压
+cd /usr/local/src
+tar -xzvf nginx-1.24.0.tar.gz
+cd nginx-1.24.0
+
+# 应用补丁（根据版本选择）
+patch -p1 < /path/to/nginx_upstream_check_module/check.patch
+# 或 patch -p1 < /path/to/nginx_upstream_check_module/check_1.20.1+.patch
+
+# 编译安装
+./configure \
+    --prefix=/etc/nginx \
+    --add-module=/path/to/nginx_upstream_check_module \
+    --with-http_ssl_module \
+    --with-http_v2_module
+
+make && make install
+```
+
+**指令说明**：
+
+| 指令 | 语法 | 默认值 | 说明 |
+|------|------|--------|------|
+| `check` | `check interval=ms [fall=N] [rise=N] [timeout=ms] [default_down=true\|false] [type=tcp\|http\|ssl_hello\|mysql\|ajp\|fastcgi]` | 见右侧 | 启用健康检查<br>`interval`: 检查间隔(ms)<br>`fall`: 失败次数<br>`rise`: 成功次数<br>`timeout`: 超时(ms)<br>`default_down`: 默认下线状态<br>`type`: 检查协议 |
+| `check_keepalive_requests` | `check_keepalive_requests num` | `1` | 长连接检查次数 |
+| `check_http_send` | `check_http_send "packet"` | `GET / HTTP/1.0\r\n\r\n` | HTTP 检查请求包 |
+| `check_http_expect_alive` | `check_http_expect_alive [http_2xx] [http_3xx] [http_4xx] [http_5xx]` | `http_2xx` `http_3xx` | 视为健康的 HTTP 状态码 |
+| `check_fastcgi_param` | `check_fastcgi_param parameter value` | — | FastCGI 检查参数 |
+| `check_status` | `check_status [html\|csv\|json]` | `html` | 状态查看页面格式 |
+
+**配置示例**：
+```nginx
+upstream backend {
+    server 192.168.0.1:80;
+    server 192.168.0.2:80;
+
+    # 每 5 秒检查一次，失败 3 次下线，成功 2 次上线，超时 4 秒
+    check interval=5000 rise=2 fall=3 timeout=4000 type=http;
+
+    # HTTP 健康检查配置
+    check_http_send "GET /health HTTP/1.0\r\n\r\n";
+    check_http_expect_alive http_2xx http_3xx;
+
+    # 启用长连接检查（可选）
+    check_keepalive_requests 100;
+}
+
+server {
+    listen 80;
+
+    location / {
+        proxy_pass http://backend;
+    }
+
+    # 健康检查状态页
+    location /status {
+        check_status json;  # 可选 html, csv, json
+        access_log off;
+        allow 10.0.0.0/8;
+        deny all;
+    }
+}
+```
+
+**支持的健康检查类型**：
+- `tcp`：仅建立 TCP 连接
+- `http`：发送 HTTP 请求并验证响应
+- `ssl_hello`：发送 SSL Client Hello
+- `mysql`：发送 MySQL ping 包
+- `ajp`：发送 AJP ping 包
+- `fastcgi`：发送 FastCGI 请求
+
+#### 其他替代方案对比
+
+| 方案 | 类型 | 活跃度 | 特点 |
+|------|------|--------|------|
+| **nginx_upstream_check_module** | 第三方模块 | 中等 | 功能完整，Tengine 使用 |
+| **nginx-upsync-module** | 第三方模块 | 低 | 结合 Consul/etcd 动态发现 |
+| **OpenResty + lua-resty-healthcheck** | Lua 扩展 | 高 | 灵活可编程 |
+| **Traefik** | 替代代理 | 高 | 原生支持主动健康检查 |
+| **Envoy** | 替代代理 | 高 | 云原生，功能强大 |
+
+#### OpenResty + Lua 实现示例
+
+```nginx
+lua_shared_dict healthcheck 1m;
+
+upstream backend {
+    server 127.0.0.1:8081;
+    server 127.0.0.1:8082;
+    server 127.0.0.1:8083;
+}
+
+init_worker_by_lua_block {
+    local hc = require "resty.healthcheck"
+    local checker = hc.new({
+        name = "my-checker",
+        shm_name = "healthcheck",
+        checks = {
+            active = {
+                healthy = {
+                    interval = 5,
+                    successes = 2,
+                },
+                unhealthy = {
+                    interval = 5,
+                    http_failures = 3,
+                },
+            },
+        },
+    })
+
+    checker:add_target("127.0.0.1", 8081)
+    checker:add_target("127.0.0.1", 8082)
+    checker:add_target("127.0.0.1", 8083)
+}
+```
+
+**选型建议**：
+- 商业环境且有预算：**NGINX Plus**（完整支持，商业支持）
+- 开源替代且功能优先：**nginx_upstream_check_module**
+- 需要动态配置：**OpenResty + lua-resty-upstream-healthcheck**
+- 新架构选型：**Traefik** 或 **Envoy**（原生支持服务发现）
