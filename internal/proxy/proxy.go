@@ -35,6 +35,7 @@ package proxy
 import (
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -395,8 +396,8 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		// 尝试从缓存获取（如果启用）
 		if p.cache != nil && attempt == 0 {
-			cacheKey := p.buildCacheKey(ctx)
-			if entry, ok, stale := p.cache.Get(cacheKey); ok {
+			hashKey, origKey := p.buildCacheKeyHash(ctx)
+			if entry, ok, stale := p.cache.Get(hashKey, origKey); ok {
 				// 缓存命中
 				loadbalance.DecrementConnections(target)
 				if !stale {
@@ -407,22 +408,26 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 					return
 				}
 				// 过期缓存，尝试后台刷新，同时返回旧数据
-				go p.backgroundRefresh(ctx, target, cacheKey)
+
+				go p.backgroundRefresh(ctx, target, hashKey, origKey)
 				upstreamAddr = "CACHE"
 				upstreamStatus = entry.Status
+
 				p.writeCachedResponse(ctx, entry)
 				return
 			}
 
 			// 检查是否需要缓存锁（防止缓存击穿）
-			if done := p.cache.AcquireLock(cacheKey); done != nil {
+			if done := p.cache.AcquireLock(hashKey); done != nil {
 				// 有其他请求正在生成缓存，等待
 				loadbalance.DecrementConnections(target)
 				<-done
 				// 重新尝试获取缓存
-				if entry, ok, _ := p.cache.Get(cacheKey); ok {
+
+				if entry, ok, _ := p.cache.Get(hashKey, origKey); ok {
 					upstreamAddr = "CACHE"
 					upstreamStatus = entry.Status
+
 					p.writeCachedResponse(ctx, entry)
 					return
 				}
@@ -446,7 +451,8 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 			// 释放缓存锁
 			if p.cache != nil && attempt == 0 {
-				p.cache.ReleaseLock(p.buildCacheKey(ctx), err)
+				hashKey, _ := p.buildCacheKeyHash(ctx)
+				p.cache.ReleaseLock(hashKey, err)
 			}
 
 			// 设置失败状态
@@ -482,7 +488,8 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		if shouldRetry {
 			// 释放缓存锁
 			if p.cache != nil && attempt == 0 {
-				p.cache.ReleaseLock(p.buildCacheKey(ctx), fmt.Errorf("HTTP %d", statusCode))
+				hashKey, _ := p.buildCacheKeyHash(ctx)
+				p.cache.ReleaseLock(hashKey, fmt.Errorf("HTTP %d", statusCode))
 			}
 
 			// 如果不是最后一次尝试，继续下一个目标
@@ -502,16 +509,16 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		// 存入缓存（如果启用且响应可缓存）
 		if p.cache != nil {
-			cacheKey := p.buildCacheKey(ctx)
+			hashKey, origKey := p.buildCacheKeyHash(ctx)
 			if statusCode >= 200 && statusCode < 300 {
 				// 提取响应头
 				headers := make(map[string]string)
 				for key, value := range ctx.Response.Header.All() {
 					headers[string(key)] = string(value)
 				}
-				p.cache.Set(cacheKey, ctx.Response.Body(), headers, statusCode, p.config.Cache.MaxAge)
+				p.cache.Set(hashKey, origKey, ctx.Response.Body(), headers, statusCode, p.config.Cache.MaxAge)
 			}
-			p.cache.ReleaseLock(cacheKey, nil)
+			p.cache.ReleaseLock(hashKey, nil)
 		}
 
 		// 修改响应头
@@ -763,6 +770,18 @@ func (p *Proxy) buildCacheKey(ctx *fasthttp.RequestCtx) string {
 	return string(ctx.Request.Header.Method()) + ":" + string(ctx.Request.URI().RequestURI())
 }
 
+// buildCacheKeyHash 使用 FNV-64a 计算缓存键的 uint64 哈希值。
+// 这个函数分配 0 内存，比字符串键更高效。
+func (p *Proxy) buildCacheKeyHash(ctx *fasthttp.RequestCtx) (uint64, string) {
+	// 构建原始 key
+	origKey := p.buildCacheKey(ctx)
+
+	// 使用 FNV-64a 计算哈希
+	h := fnv.New64a()
+	h.Write([]byte(origKey))
+	return h.Sum64(), origKey
+}
+
 // writeCachedResponse 写入缓存的响应。
 func (p *Proxy) writeCachedResponse(ctx *fasthttp.RequestCtx, entry *cache.ProxyCacheEntry) {
 	ctx.Response.SetBody(entry.Data)
@@ -774,7 +793,7 @@ func (p *Proxy) writeCachedResponse(ctx *fasthttp.RequestCtx, entry *cache.Proxy
 }
 
 // backgroundRefresh 后台刷新缓存。
-func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.Target, cacheKey string) {
+func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.Target, hashKey uint64, origKey string) {
 	// 创建新的请求上下文副本
 	req := fasthttp.AcquireRequest()
 	resp := fasthttp.AcquireResponse()
@@ -793,7 +812,7 @@ func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.
 	// 执行请求
 	err := client.Do(req, resp)
 	if err != nil {
-		p.cache.ReleaseLock(cacheKey, err)
+		p.cache.ReleaseLock(hashKey, err)
 		return
 	}
 
@@ -804,7 +823,7 @@ func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.
 	}
 
 	// 更新缓存
-	p.cache.Set(cacheKey, resp.Body(), headers, resp.StatusCode(), p.config.Cache.MaxAge)
+	p.cache.Set(hashKey, origKey, resp.Body(), headers, resp.StatusCode(), p.config.Cache.MaxAge)
 }
 
 // GetCacheStats 返回代理缓存的统计信息。

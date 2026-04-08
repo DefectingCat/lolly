@@ -1046,9 +1046,11 @@ func TestProxyCache(t *testing.T) {
 	}
 
 	// 测试缓存设置和获取
-	p.cache.Set("/api/test", []byte("test data"), map[string]string{"Content-Type": "text/plain"}, 200, 1*time.Second)
+	testKey := "/api/test"
+	hashKey := uint64(0x1234567890abcdef) // 测试用哈希值
+	p.cache.Set(hashKey, testKey, []byte("test data"), map[string]string{"Content-Type": "text/plain"}, 200, 1*time.Second)
 
-	entry, found, stale := p.cache.Get("/api/test")
+	entry, found, stale := p.cache.Get(hashKey, testKey)
 	if !found {
 		t.Error("Cache should find existing entry")
 	}

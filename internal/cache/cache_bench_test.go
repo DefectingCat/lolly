@@ -10,9 +10,17 @@ package cache
 
 import (
 	"fmt"
+	"hash/fnv"
 	"testing"
 	"time"
 )
+
+// hashKeyBench 计算字符串的 FNV-64a 哈希值，用于 benchmark。
+func hashKeyBench(s string) uint64 {
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return h.Sum64()
+}
 
 // BenchmarkFileCacheGet 测试热点读取场景下的 Get 性能。
 // 模拟缓存命中率高的场景，测试 LRU 链表的访问效率。
@@ -190,18 +198,20 @@ func BenchmarkProxyCacheGet(b *testing.B) {
 
 	// 预填充缓存
 	for i := 0; i < 1000; i++ {
-		key := fmt.Sprintf("key%d", i)
+		origKey := fmt.Sprintf("key%d", i)
+		hashKey := hashKeyBench(origKey)
 		data := []byte("response body")
 		headers := map[string]string{"Content-Type": "application/json"}
-		pc.Set(key, data, headers, 200, 10*time.Minute)
+		pc.Set(hashKey, origKey, data, headers, 200, 10*time.Minute)
 	}
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
-			key := fmt.Sprintf("key%d", i%1000)
-			pc.Get(key)
+			origKey := fmt.Sprintf("key%d", i%1000)
+			hashKey := hashKeyBench(origKey)
+			pc.Get(hashKey, origKey)
 			i++
 		}
 	})
@@ -215,8 +225,9 @@ func BenchmarkProxyCacheSet(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		key := fmt.Sprintf("key%d", i)
-		pc.Set(key, data, headers, 200, 10*time.Minute)
+		origKey := fmt.Sprintf("key%d", i)
+		hashKey := hashKeyBench(origKey)
+		pc.Set(hashKey, origKey, data, headers, 200, 10*time.Minute)
 	}
 }
 
@@ -227,10 +238,11 @@ func BenchmarkProxyCacheConcurrent(b *testing.B) {
 
 	// 预填充缓存
 	for i := 0; i < 1000; i++ {
-		key := fmt.Sprintf("key%d", i)
+		origKey := fmt.Sprintf("key%d", i)
+		hashKey := hashKeyBench(origKey)
 		data := []byte("response body")
 		headers := map[string]string{"Content-Type": "application/json"}
-		pc.Set(key, data, headers, 200, 10*time.Minute)
+		pc.Set(hashKey, origKey, data, headers, 200, 10*time.Minute)
 	}
 
 	b.ResetTimer()
@@ -238,13 +250,15 @@ func BenchmarkProxyCacheConcurrent(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			if i%10 == 0 {
-				key := fmt.Sprintf("newkey%d", i)
+				origKey := fmt.Sprintf("newkey%d", i)
+				hashKey := hashKeyBench(origKey)
 				data := []byte("new response body")
 				headers := map[string]string{"Content-Type": "application/json"}
-				pc.Set(key, data, headers, 200, 10*time.Minute)
+				pc.Set(hashKey, origKey, data, headers, 200, 10*time.Minute)
 			} else {
-				key := fmt.Sprintf("key%d", i%1000)
-				pc.Get(key)
+				origKey := fmt.Sprintf("key%d", i%1000)
+				hashKey := hashKeyBench(origKey)
+				pc.Get(hashKey, origKey)
 			}
 			i++
 		}

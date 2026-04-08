@@ -11,9 +11,17 @@
 package cache
 
 import (
+	"hash/fnv"
 	"testing"
 	"time"
 )
+
+// hashKey 计算字符串的 FNV-64a 哈希值，用于测试。
+func hashKey(s string) uint64 {
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	return h.Sum64()
+}
 
 func TestNewFileCache(t *testing.T) {
 	fc := NewFileCache(100, 1024*1024, 30*time.Second)
@@ -164,9 +172,9 @@ func TestProxyCacheSetGet(t *testing.T) {
 	data := []byte("response body")
 	headers := map[string]string{"Content-Type": "application/json"}
 
-	pc.Set(key, data, headers, 200, 10*time.Minute)
+	pc.Set(hashKey(key), key, data, headers, 200, 10*time.Minute)
 
-	entry, ok, stale := pc.Get(key)
+	entry, ok, stale := pc.Get(hashKey(key), key)
 	if !ok {
 		t.Error("Expected to find cached entry")
 	}
@@ -185,10 +193,10 @@ func TestProxyCacheExpiration(t *testing.T) {
 	pc := NewProxyCache(nil, false, 0)
 
 	key := "expire-test"
-	pc.Set(key, []byte("data"), nil, 200, 100*time.Millisecond)
+	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 100*time.Millisecond)
 
 	// 立即获取应该成功
-	_, ok, _ := pc.Get(key)
+	_, ok, _ := pc.Get(hashKey(key), key)
 	if !ok {
 		t.Error("Expected entry to exist")
 	}
@@ -196,7 +204,7 @@ func TestProxyCacheExpiration(t *testing.T) {
 	// 等待过期
 	time.Sleep(150 * time.Millisecond)
 
-	_, ok, _ = pc.Get(key)
+	_, ok, _ = pc.Get(hashKey(key), key)
 	if ok {
 		t.Error("Expected entry to be expired")
 	}
@@ -206,12 +214,12 @@ func TestProxyCacheStaleWhileRevalidate(t *testing.T) {
 	pc := NewProxyCache(nil, false, 200*time.Millisecond)
 
 	key := "stale-test"
-	pc.Set(key, []byte("data"), nil, 200, 100*time.Millisecond)
+	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 100*time.Millisecond)
 
 	// 等待过期但仍在 stale 时间内
 	time.Sleep(150 * time.Millisecond)
 
-	entry, ok, stale := pc.Get(key)
+	entry, ok, stale := pc.Get(hashKey(key), key)
 	if !ok {
 		t.Error("Expected stale entry to be usable")
 	}
@@ -229,22 +237,22 @@ func TestProxyCacheLock(t *testing.T) {
 	key := "lock-test"
 
 	// 获取锁
-	ch := pc.AcquireLock(key)
+	ch := pc.AcquireLock(hashKey(key))
 	if ch != nil {
 		t.Error("Expected to acquire lock (nil chan)")
 	}
 
 	// 第二次获取应该返回等待 chan
-	ch2 := pc.AcquireLock(key)
+	ch2 := pc.AcquireLock(hashKey(key))
 	if ch2 == nil {
 		t.Error("Expected waiting chan when lock is held")
 	}
 
 	// 设置缓存并释放锁
-	pc.Set(key, []byte("data"), nil, 200, 10*time.Minute)
+	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 10*time.Minute)
 
 	// 现在应该能获取缓存
-	_, ok, _ := pc.Get(key)
+	_, ok, _ := pc.Get(hashKey(key), key)
 	if !ok {
 		t.Error("Expected cache entry after lock release")
 	}
@@ -286,10 +294,11 @@ func TestProxyCacheMatchRule(t *testing.T) {
 func TestProxyCacheDelete(t *testing.T) {
 	pc := NewProxyCache(nil, false, 0)
 
-	pc.Set("key1", []byte("data"), nil, 200, 10*time.Minute)
-	pc.Delete("key1")
+	key := "key1"
+	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 10*time.Minute)
+	pc.Delete(hashKey(key))
 
-	_, ok, _ := pc.Get("key1")
+	_, ok, _ := pc.Get(hashKey(key), key)
 	if ok {
 		t.Error("Expected entry to be deleted")
 	}
@@ -298,8 +307,8 @@ func TestProxyCacheDelete(t *testing.T) {
 func TestProxyCacheClear(t *testing.T) {
 	pc := NewProxyCache(nil, false, 0)
 
-	pc.Set("a", []byte("a"), nil, 200, 10*time.Minute)
-	pc.Set("b", []byte("b"), nil, 200, 10*time.Minute)
+	pc.Set(hashKey("a"), "a", []byte("a"), nil, 200, 10*time.Minute)
+	pc.Set(hashKey("b"), "b", []byte("b"), nil, 200, 10*time.Minute)
 
 	pc.Clear()
 

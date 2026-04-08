@@ -286,7 +286,8 @@ type ProxyCacheRule struct {
 
 // ProxyCacheEntry 代理缓存条目。
 type ProxyCacheEntry struct {
-	Key     string            // 缓存 key
+	Key     string            // 缓存 key (uint64 哈希值)
+	OrigKey string            // 原始 key 用于碰撞验证
 	Data    []byte            // 响应体
 	Headers map[string]string // 响应头
 	Status  int               // 状态码
@@ -297,10 +298,10 @@ type ProxyCacheEntry struct {
 // ProxyCache 代理响应缓存，支持缓存锁防击穿。
 type ProxyCache struct {
 	rules     []ProxyCacheRule
-	entries   map[string]*ProxyCacheEntry
+	entries   map[uint64]*ProxyCacheEntry
 	mu        sync.RWMutex
 	cacheLock bool                       // 缓存锁开关
-	pending   map[string]*pendingRequest // 正在生成的缓存项
+	pending   map[uint64]*pendingRequest // 正在生成的缓存项
 	staleTime time.Duration              // 过期缓存复用时间
 }
 
@@ -314,20 +315,26 @@ type pendingRequest struct {
 func NewProxyCache(rules []ProxyCacheRule, cacheLock bool, staleTime time.Duration) *ProxyCache {
 	return &ProxyCache{
 		rules:     rules,
-		entries:   make(map[string]*ProxyCacheEntry),
+		entries:   make(map[uint64]*ProxyCacheEntry),
 		cacheLock: cacheLock,
-		pending:   make(map[string]*pendingRequest),
+		pending:   make(map[uint64]*pendingRequest),
 		staleTime: staleTime,
 	}
 }
 
 // Get 获取缓存的代理响应。
-func (c *ProxyCache) Get(key string) (*ProxyCacheEntry, bool, bool) {
+// hashKey 是 uint64 哈希值，origKey 是原始 key 用于碰撞验证。
+func (c *ProxyCache) Get(hashKey uint64, origKey string) (*ProxyCacheEntry, bool, bool) {
 	c.mu.RLock()
-	entry, ok := c.entries[key]
+	entry, ok := c.entries[hashKey]
 	c.mu.RUnlock()
 
 	if !ok {
+		return nil, false, false
+	}
+
+	// 双重验证：检查原始 key 是否匹配（防止哈希碰撞）
+	if entry.OrigKey != origKey {
 		return nil, false, false
 	}
 
@@ -347,12 +354,13 @@ func (c *ProxyCache) Get(key string) (*ProxyCacheEntry, bool, bool) {
 }
 
 // Set 设置代理缓存条目。
-func (c *ProxyCache) Set(key string, data []byte, headers map[string]string, status int, maxAge time.Duration) {
+func (c *ProxyCache) Set(hashKey uint64, origKey string, data []byte, headers map[string]string, status int, maxAge time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.entries[key] = &ProxyCacheEntry{
-		Key:     key,
+	c.entries[hashKey] = &ProxyCacheEntry{
+		Key:     origKey, // 存储原始 key 作为 Key 字段（保持兼容性）
+		OrigKey: origKey,
 		Data:    data,
 		Headers: headers,
 		Status:  status,
@@ -361,17 +369,17 @@ func (c *ProxyCache) Set(key string, data []byte, headers map[string]string, sta
 	}
 
 	// 如果有等待的请求，通知它们
-	if pending, ok := c.pending[key]; ok {
+	if pending, ok := c.pending[hashKey]; ok {
 		pending.err = nil
 		close(pending.done)
-		delete(c.pending, key)
+		delete(c.pending, hashKey)
 	}
 }
 
 // AcquireLock 获取缓存生成锁（防止击穿）。
 // 如果返回 nil，表示获得锁，应该去生成缓存。
 // 如果返回 chan，表示有其他请求正在生成，应该等待。
-func (c *ProxyCache) AcquireLock(key string) <-chan struct{} {
+func (c *ProxyCache) AcquireLock(hashKey uint64) <-chan struct{} {
 	if !c.cacheLock {
 		return nil // 不使用缓存锁
 	}
@@ -380,12 +388,12 @@ func (c *ProxyCache) AcquireLock(key string) <-chan struct{} {
 	defer c.mu.Unlock()
 
 	// 检查是否已有缓存
-	if _, ok := c.entries[key]; ok {
+	if _, ok := c.entries[hashKey]; ok {
 		return nil
 	}
 
 	// 检查是否有 pending 请求
-	if pending, ok := c.pending[key]; ok {
+	if pending, ok := c.pending[hashKey]; ok {
 		return pending.done // 等待现有请求
 	}
 
@@ -393,12 +401,12 @@ func (c *ProxyCache) AcquireLock(key string) <-chan struct{} {
 	pending := &pendingRequest{
 		done: make(chan struct{}),
 	}
-	c.pending[key] = pending
+	c.pending[hashKey] = pending
 	return nil // 获得锁，应该生成缓存
 }
 
 // ReleaseLock 释放缓存生成锁。
-func (c *ProxyCache) ReleaseLock(key string, err error) {
+func (c *ProxyCache) ReleaseLock(hashKey uint64, err error) {
 	if !c.cacheLock {
 		return
 	}
@@ -406,10 +414,10 @@ func (c *ProxyCache) ReleaseLock(key string, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if pending, ok := c.pending[key]; ok {
+	if pending, ok := c.pending[hashKey]; ok {
 		pending.err = err
 		close(pending.done)
-		delete(c.pending, key)
+		delete(c.pending, hashKey)
 	}
 }
 
@@ -502,18 +510,18 @@ func containsInt(slice []int, val int) bool {
 }
 
 // Delete 删除缓存条目。
-func (c *ProxyCache) Delete(key string) {
+func (c *ProxyCache) Delete(hashKey uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.entries, key)
+	delete(c.entries, hashKey)
 }
 
 // Clear 清空代理缓存。
 func (c *ProxyCache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.entries = make(map[string]*ProxyCacheEntry)
-	c.pending = make(map[string]*pendingRequest)
+	c.entries = make(map[uint64]*ProxyCacheEntry)
+	c.pending = make(map[uint64]*pendingRequest)
 }
 
 // Stats 返回代理缓存统计。
