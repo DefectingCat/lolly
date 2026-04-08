@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
 	"strings"
 
 	"rua.plus/lolly/internal/loadbalance"
@@ -380,11 +379,6 @@ func validateAccess(a *AccessConfig) error {
 //   - algorithm 仅支持 bcrypt 或 argon2id
 //   - 启用认证时至少需要一个用户
 func validateAuth(a *AuthConfig) error {
-	// 检查废弃的 MinPasswordLength 字段
-	if a.MinPasswordLength > 0 {
-		fmt.Fprintln(os.Stderr, "[警告] security.auth.min_password_length 已废弃，将在未来版本中移除。密码长度验证应在密码哈希生成阶段进行")
-	}
-
 	// 未配置认证时跳过
 	if a.Type == "" {
 		return nil
@@ -729,20 +723,7 @@ func validateStream(s *StreamConfig) error {
 // 返回值：
 //   - error: 验证失败时返回错误信息，成功返回 nil
 func validatePerformance(p *PerformanceConfig) error {
-	// 检查废弃的 LRUEviction 字段
-	if p.FileCache.LRUEviction {
-		fmt.Fprintln(os.Stderr, "[警告] performance.file_cache.lru_eviction 已废弃，请使用 max_size 代替")
-	}
-
-	// 检查废弃的 MaxIdleConns 字段
-	if p.Transport.MaxIdleConns > 0 {
-		fmt.Fprintln(os.Stderr, "[警告] performance.transport.max_idle_conns 已废弃，fasthttp 不支持此参数，请使用 max_conns_per_host 代替")
-	}
-
 	// 检查 Transport 配置（可能导致性能问题）
-	if p.Transport.MaxIdleConns < 0 {
-		return errors.New("transport.max_idle_conns 不能为负数")
-	}
 	if p.Transport.MaxIdleConnsPerHost < 0 {
 		return errors.New("transport.max_idle_conns_per_host 不能为负数")
 	}

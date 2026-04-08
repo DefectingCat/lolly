@@ -119,12 +119,8 @@ func TestDefaultConfigPerformance(t *testing.T) {
 	if cfg.Performance.FileCache.Inactive != 20*time.Second {
 		t.Errorf("FileCache.Inactive 期望 20s, 实际 %v", cfg.Performance.FileCache.Inactive)
 	}
-	// 注意: LRUEviction 已废弃，不再验证
 
 	// 验证 Transport 默认值
-	if cfg.Performance.Transport.MaxIdleConns != 100 {
-		t.Errorf("Transport.MaxIdleConns 期望 100, 实际 %d", cfg.Performance.Transport.MaxIdleConns)
-	}
 	if cfg.Performance.Transport.MaxIdleConnsPerHost != 32 {
 		t.Errorf("Transport.MaxIdleConnsPerHost 期望 32, 实际 %d", cfg.Performance.Transport.MaxIdleConnsPerHost)
 	}

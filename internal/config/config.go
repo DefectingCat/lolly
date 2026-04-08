@@ -743,10 +743,6 @@ type AuthConfig struct {
 	// Realm 认证域
 	// 显示在浏览器认证对话框中的描述信息
 	Realm string `yaml:"realm"`
-
-	// MinPasswordLength 密码最小长度
-	// Deprecated: 该字段已废弃，将在未来版本中移除。密码长度验证应在密码哈希生成阶段进行
-	MinPasswordLength int `yaml:"min_password_length"`
 }
 
 // User 认证用户配置。
@@ -1087,7 +1083,6 @@ type GoroutinePoolConfig struct {
 //   - MaxEntries 限制最大缓存文件数量
 //   - MaxSize 限制缓存总内存使用量（字节）
 //   - Inactive 超过此时间未访问的文件将被淘汰
-//   - LRUEviction 已废弃，请使用 MaxSize
 //
 // 使用示例：
 //
@@ -1107,10 +1102,6 @@ type FileCacheConfig struct {
 	// Inactive 未访问淘汰时间
 	// 超过此时间未被访问的缓存将被清除
 	Inactive time.Duration `yaml:"inactive"`
-
-	// LRUEviction 启用 LRU 淘汰
-	// Deprecated: 该字段已废弃，将在未来版本中移除，请使用 MaxSize 代替
-	LRUEviction bool `yaml:"lru_eviction"`
 }
 
 // TransportConfig HTTP Transport 配置。
@@ -1118,7 +1109,6 @@ type FileCacheConfig struct {
 // 配置代理后端连接的连接池参数。
 //
 // 注意事项：
-//   - MaxIdleConns 控制所有主机的总空闲连接数
 //   - MaxIdleConnsPerHost 控制每个后端主机的空闲连接
 //   - IdleConnTimeout 控制空闲连接的保持时间
 //   - MaxConnsPerHost 限制每个后端主机的总连接数
@@ -1126,15 +1116,10 @@ type FileCacheConfig struct {
 // 使用示例：
 //
 //	transport:
-//	  max_idle_conns: 100
 //	  max_idle_conns_per_host: 10
 //	  idle_conn_timeout: 90s
 //	  max_conns_per_host: 100
 type TransportConfig struct {
-	// MaxIdleConns 最大空闲连接数
-	// Deprecated: 该字段已废弃，fasthttp.HostClient 不支持此参数，请使用 MaxConnsPerHost 代替
-	MaxIdleConns int `yaml:"max_idle_conns"`
-
 	// MaxIdleConnsPerHost 每主机最大空闲连接
 	// 单个后端主机的最大空闲连接数
 	MaxIdleConnsPerHost int `yaml:"max_idle_conns_per_host"`

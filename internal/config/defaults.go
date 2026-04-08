@@ -75,10 +75,9 @@ func DefaultConfig() *Config {
 					SlidingWindow:     60,
 				},
 				Auth: AuthConfig{
-					RequireTLS:        true,
-					Algorithm:         "bcrypt",
-					Realm:             "Restricted Area",
-					MinPasswordLength: 0, // 已废弃，不再使用
+					RequireTLS: true,
+					Algorithm:  "bcrypt",
+					Realm:      "Restricted Area",
 				},
 				Headers: SecurityHeaders{
 					XFrameOptions:       "DENY",
@@ -126,7 +125,6 @@ func DefaultConfig() *Config {
 				Inactive:   20 * time.Second,
 			},
 			Transport: TransportConfig{
-				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 32,
 				IdleConnTimeout:     90 * time.Second,
 				MaxConnsPerHost:     0, // 0 表示不限制
@@ -290,7 +288,6 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "      algorithm: \"%s\"            # 密码哈希算法（有效值: bcrypt, argon2id）\n", cfg.Server.Security.Auth.Algorithm)
 	buf.WriteString("      users: []                   # 用户列表\n")
 	fmt.Fprintf(&buf, "      realm: \"%s\"                # 认证域\n", cfg.Server.Security.Auth.Realm)
-	fmt.Fprintf(&buf, "      min_password_length: %d     # 密码最小长度\n", cfg.Server.Security.Auth.MinPasswordLength)
 	buf.WriteString("\n")
 	buf.WriteString("    # 安全头部\n")
 	buf.WriteString("    headers:\n")
@@ -428,7 +425,6 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "    max_size: %d              # 内存上限（字节，%dMB）\n", cfg.Performance.FileCache.MaxSize, cfg.Performance.FileCache.MaxSize/1024/1024)
 	fmt.Fprintf(&buf, "    inactive: %ds             # 未访问淘汰时间\n", int(cfg.Performance.FileCache.Inactive.Seconds()))
 	buf.WriteString("  transport:                   # HTTP Transport 连接池\n")
-	fmt.Fprintf(&buf, "    max_idle_conns: %d            # 最大空闲连接\n", cfg.Performance.Transport.MaxIdleConns)
 	fmt.Fprintf(&buf, "    max_idle_conns_per_host: %d   # 每主机空闲连接\n", cfg.Performance.Transport.MaxIdleConnsPerHost)
 	fmt.Fprintf(&buf, "    idle_conn_timeout: %ds        # 空闲超时\n", int(cfg.Performance.Transport.IdleConnTimeout.Seconds()))
 	fmt.Fprintf(&buf, "    max_conns_per_host: %d        # 每主机最大连接（0 表示不限制）\n", cfg.Performance.Transport.MaxConnsPerHost)

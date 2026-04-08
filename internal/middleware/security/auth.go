@@ -67,9 +67,6 @@ type BasicAuth struct {
 	// requireTLS 是否强制 HTTPS（默认 true）
 	requireTLS bool
 
-	// minPasswordLength 密码最小长度（用于验证）
-	minPasswordLength int
-
 	// argon2Params Argon2id 配置参数
 	argon2Params argon2Params
 
@@ -124,10 +121,9 @@ func NewBasicAuth(cfg *config.AuthConfig) (*BasicAuth, error) {
 	}
 
 	auth := &BasicAuth{
-		users:             make(map[string]string),
-		requireTLS:        cfg.RequireTLS, // Default is true from config defaults
-		minPasswordLength: cfg.MinPasswordLength,
-		argon2Params:      defaultArgon2Params,
+		users:        make(map[string]string),
+		requireTLS:   cfg.RequireTLS, // Default is true from config defaults
+		argon2Params: defaultArgon2Params,
 	}
 
 	// 设置认证域

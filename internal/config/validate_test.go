@@ -1000,7 +1000,6 @@ func TestValidatePerformance(t *testing.T) {
 			name: "有效的 transport 配置（零值）",
 			config: PerformanceConfig{
 				Transport: TransportConfig{
-					MaxIdleConns:        0,
 					MaxIdleConnsPerHost: 0,
 					MaxConnsPerHost:     0,
 				},
@@ -1011,31 +1010,11 @@ func TestValidatePerformance(t *testing.T) {
 			name: "有效的 transport 配置（正值）",
 			config: PerformanceConfig{
 				Transport: TransportConfig{
-					MaxIdleConns:        100,
 					MaxIdleConnsPerHost: 10,
 					MaxConnsPerHost:     50,
 				},
 			},
 			wantErr: false,
-		},
-		{
-			name: "LRUEviction=true（废弃警告）",
-			config: PerformanceConfig{
-				FileCache: FileCacheConfig{
-					LRUEviction: true,
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "MaxIdleConns 负数",
-			config: PerformanceConfig{
-				Transport: TransportConfig{
-					MaxIdleConns: -1,
-				},
-			},
-			wantErr: true,
-			errMsg:  "transport.max_idle_conns 不能为负数",
 		},
 		{
 			name: "MaxIdleConnsPerHost 负数",
@@ -1061,13 +1040,12 @@ func TestValidatePerformance(t *testing.T) {
 			name: "多个 transport 字段为负",
 			config: PerformanceConfig{
 				Transport: TransportConfig{
-					MaxIdleConns:        -1,
 					MaxIdleConnsPerHost: -2,
 					MaxConnsPerHost:     -3,
 				},
 			},
 			wantErr: true,
-			errMsg:  "transport.max_idle_conns 不能为负数",
+			errMsg:  "transport.max_idle_conns_per_host 不能为负数",
 		},
 	}
 

@@ -470,7 +470,6 @@ next_upstream:
 | `max_entries` | int64 | `10000` | 最大缓存条目数 |
 | `max_size` | int64 | `268435456` (256MB) | 内存上限 |
 | `inactive` | duration | `20s` | 未访问淘汰时间 |
-| `lru_eviction` | bool | - | **已废弃，请使用 max_size** |
 
 ### TransportConfig
 

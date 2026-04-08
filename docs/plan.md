@@ -1041,7 +1041,6 @@ cache:
     max_entries: 10000
     max_size: 256MB # 内存上限
     inactive: 20s
-    lru_eviction: true # 启用 LRU 淘汰
 
   proxy:
     enabled: true
