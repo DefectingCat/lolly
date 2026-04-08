@@ -745,7 +745,7 @@ type AuthConfig struct {
 	Realm string `yaml:"realm"`
 
 	// MinPasswordLength 密码最小长度
-	// 密码验证时的最小长度要求
+	// Deprecated: 该字段已废弃，将在未来版本中移除。密码长度验证应在密码哈希生成阶段进行
 	MinPasswordLength int `yaml:"min_password_length"`
 }
 
@@ -1132,7 +1132,7 @@ type FileCacheConfig struct {
 //	  max_conns_per_host: 100
 type TransportConfig struct {
 	// MaxIdleConns 最大空闲连接数
-	// 所有后端主机的总空闲连接上限
+	// Deprecated: 该字段已废弃，fasthttp.HostClient 不支持此参数，请使用 MaxConnsPerHost 代替
 	MaxIdleConns int `yaml:"max_idle_conns"`
 
 	// MaxIdleConnsPerHost 每主机最大空闲连接

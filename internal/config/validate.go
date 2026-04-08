@@ -380,6 +380,11 @@ func validateAccess(a *AccessConfig) error {
 //   - algorithm 仅支持 bcrypt 或 argon2id
 //   - 启用认证时至少需要一个用户
 func validateAuth(a *AuthConfig) error {
+	// 检查废弃的 MinPasswordLength 字段
+	if a.MinPasswordLength > 0 {
+		fmt.Fprintln(os.Stderr, "[警告] security.auth.min_password_length 已废弃，将在未来版本中移除。密码长度验证应在密码哈希生成阶段进行")
+	}
+
 	// 未配置认证时跳过
 	if a.Type == "" {
 		return nil
@@ -706,6 +711,11 @@ func validateStream(s *StreamConfig) error {
 		}
 	}
 
+	// 验证负载均衡算法
+	if !loadbalance.IsValidAlgorithm(s.Upstream.LoadBalance) {
+		return fmt.Errorf("无效的负载均衡算法：%s", s.Upstream.LoadBalance)
+	}
+
 	return nil
 }
 
@@ -722,6 +732,11 @@ func validatePerformance(p *PerformanceConfig) error {
 	// 检查废弃的 LRUEviction 字段
 	if p.FileCache.LRUEviction {
 		fmt.Fprintln(os.Stderr, "[警告] performance.file_cache.lru_eviction 已废弃，请使用 max_size 代替")
+	}
+
+	// 检查废弃的 MaxIdleConns 字段
+	if p.Transport.MaxIdleConns > 0 {
+		fmt.Fprintln(os.Stderr, "[警告] performance.transport.max_idle_conns 已废弃，fasthttp 不支持此参数，请使用 max_conns_per_host 代替")
 	}
 
 	// 检查 Transport 配置（可能导致性能问题）

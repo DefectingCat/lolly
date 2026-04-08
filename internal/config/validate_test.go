@@ -908,6 +908,43 @@ func TestValidateStream(t *testing.T) {
 			wantErr: true,
 			errMsg:  "addr 必填",
 		},
+		{
+			name: "无效负载均衡算法",
+			config: StreamConfig{
+				Listen:   ":3306",
+				Protocol: "tcp",
+				Upstream: StreamUpstream{
+					Targets:     []StreamTarget{{Addr: "db1:3306"}},
+					LoadBalance: "invalid_algorithm",
+				},
+			},
+			wantErr: true,
+			errMsg:  "无效的负载均衡算法",
+		},
+		{
+			name: "有效加权轮询算法",
+			config: StreamConfig{
+				Listen:   ":3306",
+				Protocol: "tcp",
+				Upstream: StreamUpstream{
+					Targets:     []StreamTarget{{Addr: "db1:3306"}},
+					LoadBalance: "weighted_round_robin",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "有效 IP 哈希算法",
+			config: StreamConfig{
+				Listen:   ":3306",
+				Protocol: "tcp",
+				Upstream: StreamUpstream{
+					Targets:     []StreamTarget{{Addr: "db1:3306"}},
+					LoadBalance: "ip_hash",
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

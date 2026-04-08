@@ -78,7 +78,7 @@ func DefaultConfig() *Config {
 					RequireTLS:        true,
 					Algorithm:         "bcrypt",
 					Realm:             "Restricted Area",
-					MinPasswordLength: 8,
+					MinPasswordLength: 0, // 已废弃，不再使用
 				},
 				Headers: SecurityHeaders{
 					XFrameOptions:       "DENY",
