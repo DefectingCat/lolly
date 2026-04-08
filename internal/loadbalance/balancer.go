@@ -18,7 +18,10 @@ package loadbalance
 
 import (
 	"hash/fnv"
+	"net"
+	"net/url"
 	"sync/atomic"
+	"time"
 )
 
 // Target 表示负载均衡的后端服务器目标。
@@ -38,6 +41,15 @@ type Target struct {
 	// Connections 跟踪当前活跃连接数。
 	// 并发修改此字段时应使用原子操作。
 	Connections int64
+
+	// hostname 从 URL 提取的主机名（缓存，避免重复解析）
+	hostname string
+
+	// resolvedIPs 解析后的 IP 列表（使用 atomic.Pointer 保证并发安全）
+	resolvedIPs atomic.Pointer[[]string]
+
+	// lastResolved 最后解析时间（UnixNano，使用 atomic.Int64）
+	lastResolved atomic.Int64
 }
 
 // Balancer 是负载均衡算法的接口。
@@ -351,4 +363,91 @@ func (i *IPHash) SelectExcludingByIP(targets []*Target, excluded []*Target, clie
 
 	idx := hash % uint64(len(available))
 	return available[idx]
+}
+
+// Hostname 返回目标主机名（从 URL 提取）。
+// 如果 hostname 未初始化，会自动调用 initHostname。
+func (t *Target) Hostname() string {
+	if t.hostname == "" {
+		t.initHostname()
+	}
+	return t.hostname
+}
+
+// ResolvedIPs 返回解析后的 IP 列表。
+// 如果未解析过，返回 nil。
+func (t *Target) ResolvedIPs() []string {
+	ips := t.resolvedIPs.Load()
+	if ips == nil {
+		return nil
+	}
+	return *ips
+}
+
+// SetResolvedIPs 设置解析后的 IP 列表，并更新最后解析时间。
+func (t *Target) SetResolvedIPs(ips []string) {
+	// 创建副本避免外部修改
+	ipsCopy := make([]string, len(ips))
+	copy(ipsCopy, ips)
+	t.resolvedIPs.Store(&ipsCopy)
+	t.lastResolved.Store(time.Now().UnixNano())
+}
+
+// NeedsResolve 检查是否需要重新解析。
+// 如果 hostname 是 IP 地址，返回 false。
+// 如果从未解析过或超过 TTL，返回 true。
+func (t *Target) NeedsResolve(ttl time.Duration) bool {
+	host := t.Hostname()
+
+	// IP 类型的 URL 不需要解析
+	if net.ParseIP(host) != nil {
+		return false
+	}
+
+	last := t.lastResolved.Load()
+	if last == 0 {
+		return true // 首次解析
+	}
+
+	return time.Since(time.Unix(0, last)) > ttl
+}
+
+// initHostname 从 URL 中提取并缓存主机名。
+// 必须在 Target 创建后调用一次。
+func (t *Target) initHostname() {
+	u, err := url.Parse(t.URL)
+	if err != nil {
+		// 解析失败，使用整个 URL 作为 hostname
+		t.hostname = t.URL
+		return
+	}
+
+	// 提取主机名（去掉端口）
+	host := u.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		t.hostname = h
+	} else {
+		t.hostname = host
+	}
+}
+
+// NewTargetFromConfig 从配置创建 Target（推荐入口）。
+// 自动初始化 hostname 和 Healthy 状态。
+func NewTargetFromConfig(url string, weight int) *Target {
+	t := &Target{
+		URL:    url,
+		Weight: weight,
+	}
+	t.initHostname()
+	t.Healthy.Store(true)
+	return t
+}
+
+// LastResolved 返回最后解析时间。
+func (t *Target) LastResolved() time.Time {
+	nano := t.lastResolved.Load()
+	if nano == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, nano)
 }

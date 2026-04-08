@@ -20,6 +20,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"time"
 
@@ -76,6 +77,10 @@ type Config struct {
 	// Monitoring 监控配置
 	// 包含状态端点等监控相关配置
 	Monitoring MonitoringConfig `yaml:"monitoring"`
+
+	// Resolver DNS 解析器配置
+	// 启用动态 DNS 解析和缓存
+	Resolver ResolverConfig `yaml:"resolver"`
 }
 
 // HTTP3Config HTTP/3 (QUIC) 配置。
@@ -1458,6 +1463,102 @@ func Validate(cfg *Config) error {
 	// 验证性能配置
 	if err := validatePerformance(&cfg.Performance); err != nil {
 		return fmt.Errorf("performance: %w", err)
+	}
+
+	// 验证 Resolver 配置
+	if err := cfg.Resolver.Validate(); err != nil {
+		return fmt.Errorf("resolver: %w", err)
+	}
+
+	return nil
+}
+
+// ResolverConfig DNS 解析器配置。
+//
+// 配置 DNS 解析器的行为，包括服务器地址、缓存 TTL、超时等。
+// 启用后可实现动态 DNS 解析和缓存，支持后端域名的动态解析。
+//
+// 注意事项：
+//   - Enabled 为 true 时启用 DNS 解析器
+//   - Addresses 配置 DNS 服务器地址，如 "8.8.8.8:53"
+//   - Valid 为缓存有效期（TTL），建议 30s-300s
+//   - Timeout 为单次查询超时时间
+//
+// 使用示例：
+//
+//	resolver:
+//	  enabled: true
+//	  addresses:
+//	    - "8.8.8.8:53"
+//	    - "8.8.4.4:53"
+//	  valid: 30s
+//	  timeout: 5s
+//	  ipv4: true
+//	  ipv6: false
+//	  cache_size: 1024
+type ResolverConfig struct {
+	// Enabled 是否启用 DNS 解析器
+	Enabled bool `yaml:"enabled"`
+
+	// Addresses DNS 服务器地址列表
+	// 格式为 "ip:port"，如 "8.8.8.8:53"
+	Addresses []string `yaml:"addresses"`
+
+	// Valid 缓存有效期（TTL）
+	// 解析结果的缓存时间
+	Valid time.Duration `yaml:"valid"`
+
+	// Timeout DNS 查询超时
+	// 单次 DNS 查询的最大等待时间
+	Timeout time.Duration `yaml:"timeout"`
+
+	// IPv4 是否查询 IPv4 地址
+	IPv4 bool `yaml:"ipv4"`
+
+	// IPv6 是否查询 IPv6 地址
+	IPv6 bool `yaml:"ipv6"`
+
+	// CacheSize 缓存最大条目数
+	// 0 表示无限制
+	CacheSize int `yaml:"cache_size"`
+}
+
+// TTL 返回缓存有效期（Valid 的别名，便于代码理解）。
+func (c *ResolverConfig) TTL() time.Duration {
+	return c.Valid
+}
+
+// Validate 验证 Resolver 配置。
+//
+// 检查 DNS 服务器地址格式、TTL 和超时设置的有效性。
+//
+// 返回值：
+//   - error: 验证失败时的错误信息
+func (c *ResolverConfig) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+
+	if len(c.Addresses) == 0 {
+		return errors.New("resolver.addresses is required when enabled")
+	}
+
+	for _, addr := range c.Addresses {
+		if _, err := net.ResolveUDPAddr("udp", addr); err != nil {
+			return fmt.Errorf("invalid DNS address %s: %w", addr, err)
+		}
+	}
+
+	if c.Valid > 0 && c.Valid < time.Second {
+		return errors.New("resolver.valid must be at least 1s")
+	}
+
+	if c.Timeout > 0 && c.Timeout < time.Second {
+		return errors.New("resolver.timeout must be at least 1s")
+	}
+
+	if !c.IPv4 && !c.IPv6 {
+		return errors.New("at least one of ipv4 or ipv6 must be enabled")
 	}
 
 	return nil
