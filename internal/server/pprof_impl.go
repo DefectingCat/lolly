@@ -14,8 +14,7 @@ import (
 )
 
 var (
-	cpuProfileMu    sync.Mutex
-	cpuProfileWriter io.Writer
+	cpuProfileMu     sync.Mutex
 	cpuProfileActive bool
 )
 
@@ -38,7 +37,6 @@ func startCPUProfile(w io.Writer) error {
 		return err
 	}
 
-	cpuProfileWriter = w
 	cpuProfileActive = true
 	return nil
 }
@@ -51,21 +49,20 @@ func stopCPUProfile() {
 	if cpuProfileActive {
 		pprof.StopCPUProfile()
 		cpuProfileActive = false
-		cpuProfileWriter = nil
 	}
 }
 
 // writeHeapProfile 写入内存分配 profile。
 func writeHeapProfile(w io.Writer) {
 	runtime.GC() // 先执行 GC，获取更准确的数据
-	pprof.WriteHeapProfile(w)
+	_ = pprof.WriteHeapProfile(w)
 }
 
 // writeGoroutineProfile 写入 Goroutine stack traces。
 func writeGoroutineProfile(w io.Writer) {
 	p := pprof.Lookup("goroutine")
 	if p != nil {
-		p.WriteTo(w, 0)
+		_ = p.WriteTo(w, 0)
 	}
 }
 
@@ -73,7 +70,7 @@ func writeGoroutineProfile(w io.Writer) {
 func writeBlockProfile(w io.Writer) {
 	p := pprof.Lookup("block")
 	if p != nil {
-		p.WriteTo(w, 0)
+		_ = p.WriteTo(w, 0)
 	}
 }
 
@@ -81,7 +78,7 @@ func writeBlockProfile(w io.Writer) {
 func writeMutexProfile(w io.Writer) {
 	p := pprof.Lookup("mutex")
 	if p != nil {
-		p.WriteTo(w, 0)
+		_ = p.WriteTo(w, 0)
 	}
 }
 
@@ -93,7 +90,7 @@ type bufioWriterAdapter struct {
 func (a *bufioWriterAdapter) Write(p []byte) (n int, err error) {
 	n, err = a.w.Write(p)
 	if err == nil {
-		a.w.Flush()
+		_ = a.w.Flush()
 	}
 	return n, err
 }
