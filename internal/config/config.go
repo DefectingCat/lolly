@@ -271,6 +271,10 @@ type ServerConfig struct {
 	// 支持单位：b, kb, mb, gb 或纯数字表示字节
 	// 默认值为 1MB
 	ClientMaxBodySize string `yaml:"client_max_body_size"`
+
+	// CacheAPI 缓存 API 配置
+	// 用于主动清理代理缓存
+	CacheAPI *CacheAPIConfig `yaml:"cache_api"`
 }
 
 // StaticConfig 静态文件服务配置。
@@ -1443,6 +1447,54 @@ type StatusConfig struct {
 	// 支持 "json" 和 "prometheus" 两种格式
 	// 默认为 "json"
 	Format string `yaml:"format"`
+}
+
+// CacheAPIConfig 缓存 API 配置。
+//
+// 配置缓存清理 API 端点，支持主动清理代理缓存。
+//
+// 注意事项：
+//   - Enabled 默认为 false，需显式启用
+//   - Allow 限制可访问的 IP 地址列表
+//   - Auth 配置认证方式，推荐使用 token 认证
+//
+// 使用示例：
+//
+//	cache_api:
+//	  enabled: true
+//	  path: "/_cache/purge"
+//	  allow: ["127.0.0.1", "10.0.0.0/8"]
+//	  auth:
+//	    type: "token"
+//	    token: "${CACHE_API_TOKEN}"
+type CacheAPIConfig struct {
+	// Enabled 是否启用缓存 API
+	// 默认为 false
+	Enabled bool `yaml:"enabled"`
+
+	// Path API 端点路径
+	// 默认为 "/_cache/purge"
+	Path string `yaml:"path"`
+
+	// Allow 允许访问的 IP 列表
+	// 可访问缓存 API 的 IP 地址或 CIDR
+	Allow []string `yaml:"allow"`
+
+	// Auth 认证配置
+	Auth CacheAPIAuthConfig `yaml:"auth"`
+}
+
+// CacheAPIAuthConfig 缓存 API 认证配置。
+type CacheAPIAuthConfig struct {
+	// Type 认证类型
+	// 支持 "none" 和 "token" 两种类型
+	// 默认为 "none"
+	Type string `yaml:"type"`
+
+	// Token 认证令牌
+	// 当 Type 为 "token" 时使用
+	// 支持环境变量替换，如 "${CACHE_API_TOKEN}"
+	Token string `yaml:"token"`
 }
 
 // StreamConfig TCP/UDP Stream 代理配置。

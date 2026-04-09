@@ -45,6 +45,15 @@ func DefaultConfig() *Config {
 			IdleTimeout:        120 * time.Second,
 			MaxConnsPerIP:      1000,
 			MaxRequestsPerConn: 10000,
+			CacheAPI: &CacheAPIConfig{
+				Enabled: false,
+				Path:    "/_cache/purge",
+				Allow:   []string{"127.0.0.1"},
+				Auth: CacheAPIAuthConfig{
+					Type:  "none",
+					Token: "",
+				},
+			},
 			Static: []StaticConfig{{
 				Path:  "/",
 				Root:  "/var/www/html",
