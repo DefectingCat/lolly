@@ -22,7 +22,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
+	"net/textproto"
 	"sync"
 	"time"
 
@@ -577,10 +577,5 @@ func (p *connectionPool) closeAll() { //nolint:unused // reserved for future use
 
 // canonicalHeaderKey 返回规范化的 HTTP 头键。
 func canonicalHeaderKey(key string) string {
-	// 使用 strings 包实现规范化
-	result := strings.ToLower(key)
-	if result == "" {
-		return ""
-	}
-	return strings.ToUpper(result[:1]) + result[1:]
+	return textproto.CanonicalMIMEHeaderKey(key)
 }
