@@ -21,7 +21,7 @@ func BenchmarkAccessLogProcess(b *testing.B) {
 		},
 	}
 	al := New(cfg)
-	defer al.Close()
+	defer func() { _ = al.Close() }()
 
 	mockHandler := func(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusOK)
@@ -49,7 +49,7 @@ func BenchmarkAccessLogProcessParallel(b *testing.B) {
 		},
 	}
 	al := New(cfg)
-	defer al.Close()
+	defer func() { _ = al.Close() }()
 
 	mockHandler := func(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusOK)

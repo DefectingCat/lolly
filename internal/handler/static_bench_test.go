@@ -24,9 +24,9 @@ func setupStaticTestDir() (string, func()) {
 	// 创建测试文件
 	testFiles := map[string][]byte{
 		"index.html":     []byte("<html><body>Index</body></html>"),
-		"style.css":      make([]byte, 1024),      // 1KB
-		"large.json":     make([]byte, 10*1024),   // 10KB
-		"nested/file.js": make([]byte, 5*1024),    // 5KB
+		"style.css":      make([]byte, 1024),    // 1KB
+		"large.json":     make([]byte, 10*1024), // 10KB
+		"nested/file.js": make([]byte, 5*1024),  // 5KB
 	}
 
 	for path, content := range testFiles {
@@ -40,7 +40,7 @@ func setupStaticTestDir() (string, func()) {
 	}
 
 	cleanup := func() {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir)
 	}
 
 	return dir, cleanup
