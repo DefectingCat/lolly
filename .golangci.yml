@@ -1,0 +1,156 @@
+version: 2
+
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+
+output:
+  formats:
+    colored-line-number:
+  print-issued-lines: true
+  print-linter-name: true
+
+linters:
+  default: all
+  disable:
+    # 禁用噪音过多或不相关的 linters
+    - arangolint      # ArangoDB 特定
+    - asasalint       # []any 检查
+    - asciicheck      # 非 ASCII 标识符（项目有中文）
+    - bidichk         # Unicode 序列检查
+    - bodyclose       # HTTP body 关闭检查
+    - canonicalheader # Header 规范化
+    - containedctx    # 结构体包含 context
+    - contextcheck    # context 继承检查
+    - copyloopvar     # 循环变量复制
+    - cyclop          # 圈复杂度
+    - decorder        # 声明顺序
+    - depguard        # 依赖检查
+    - dogsled         # 多个 blank identifier
+    - dupl            # 重复代码
+    - dupword         # 重复单词
+    - durationcheck   # Duration 乘法
+    - embeddedstructfieldcheck # 嵌入字段顺序
+    - err113          # 静态错误定义
+    - errchkjson      # JSON 编码检查
+    - errname         # 错误命名
+    - errorlint       # 错误包装检查
+    - exhaustruct     # 结构体完整性
+    - exptostd        # exp 包替换
+    - fatcontext      # 嵌套 context
+    - forbidigo       # 禁止标识符
+    - forcetypeassert # 强制类型断言
+    - funcorder       # 函数顺序
+    - funlen          # 函数长度
+    - ginkgolinter    # ginkgo 框架
+    - gochecknoglobals # 全局变量检查
+    - gochecknoinits  # init 函数检查
+    - gochecksumtype  # sum 类型检查
+    - gocognit        # 认知复杂度
+    - gocritic        # 代码批评
+    - gocyclo         # 圈复杂度
+    - godoclint       # godoc 检查
+    - godot           # 注释句点
+    - godox           # TODO/FIXME 检查
+    - goheader        # 文件头
+    - gomoddirectives # go.mod 指令
+    - gomodguard      # 模块依赖检查
+    - goprintffuncname # printf 函数命名
+    - gosec           # 安全检查（太多噪音）
+    - gosmopolitan    # 非 ASCII 字符（项目有中文）
+    - grouper         # 表达式分组
+    - iface           # 接口污染检查
+    - importas        # 导入别名
+    - inamedparam     # 接口方法参数命名
+    - interfacebloat  # 接口方法数量
+    - intrange        # 整数 range
+    - iotamixing      # iota 混用
+    - ireturn         # 返回接口检查
+    - lll             # 行长度
+    - loggercheck     # 日志检查
+    - maintidx        # 可维护性指数
+    - makezero        # slice 初始长度
+    - mirror          # bytes/strings 镜像
+    - misspell        # 拼写检查
+    - modernize       # 现代化建议
+    - mnd             # 魔法数字
+    - musttag         # 结构体标签强制
+    - nakedret        # naked return
+    - nestif          # 嵌套 if
+    - nilerr          # nil 错误检查
+    - nilnesserr      # nilness 错误
+    - nilnil          # nil nil 检查
+    - nlreturn        # return 前换行
+    - noctx           # 缺少 context
+    - noinlineerr     # 内联错误处理
+    - nonamedreturns  # 命名返回值
+    - nosprintfhostport # sprintf host port
+    - paralleltest    # 并行测试
+    - perfsprint      # fmt.Sprintf 性能
+    - prealloc        # 预分配
+    - predeclared     # 预声明标识符
+    - promlinter      # Prometheus 指标
+    - protogetter     # proto getter
+    - reassign        # 变量重赋值
+    - recvcheck       # 接收者检查
+    - rowserrcheck    # Rows.Err 检查
+    - sloglint        # slog 检查
+    - spancheck       # OpenTelemetry span
+    - sqlclosecheck   # SQL 关闭检查
+    - tagalign        # 标签对齐
+    - tagliatelle     # 标签命名
+    - testableexamples # 可测试示例
+    - testifylint     # testify 检查
+    - testpackage     # 测试包命名
+    - thelper         # t.Helper 检查
+    - tparallel       # t.Parallel 检查
+    - unconvert       # 类型转换
+    - unqueryvet      # SQL SELECT * 检查
+    - usestdlibvars   # 标准库变量
+    - usetesting      # testing 包使用
+    - varnamelen      # 变量名长度
+    - wastedassign    # 无用赋值
+    - whitespace      # 空白检查
+    - wrapcheck       # 错误包装
+    - wsl             # whitespace（废弃）
+    - wsl_v5          # whitespace v5
+    - zerologlint     # zerolog 检查
+
+formatters:
+  default: all
+  disable:
+    - gofumpt
+    - goimports
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  govet:
+    enable-all: true
+
+  staticcheck:
+    checks: ["all", "-ST1000", "-ST1003"]
+
+  unused:
+    check-exported: false
+
+  revive:
+    severity: warning
+    rules:
+      - name: unused-parameter
+        severity: warning
+        disabled: false
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - dupl
+        - gosec
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: false
