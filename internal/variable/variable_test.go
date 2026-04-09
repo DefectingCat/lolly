@@ -1035,3 +1035,101 @@ func BenchmarkUpstreamVariables(b *testing.B) {
 		_, _ = vc.Get(VarUpstreamResponseTime)
 	}
 }
+
+// TestGlobalVariables 测试全局变量功能
+func TestGlobalVariables(t *testing.T) {
+	// 清理
+	SetGlobalVariables(nil)
+
+	// 测试设置全局变量
+	SetGlobalVariables(map[string]string{
+		"app_name": "lolly",
+		"version":  "1.0.0",
+	})
+
+	// 测试 GetGlobalVariable
+	if v, ok := GetGlobalVariable("app_name"); !ok || v != "lolly" {
+		t.Errorf("GetGlobalVariable('app_name') = %q, %v, want 'lolly', true", v, ok)
+	}
+
+	if v, ok := GetGlobalVariable("notexist"); ok {
+		t.Errorf("GetGlobalVariable('notexist') = %q, %v, want '', false", v, ok)
+	}
+
+	// 测试 GetAllGlobalVariables
+	globals := GetAllGlobalVariables()
+	if globals == nil {
+		t.Error("GetAllGlobalVariables() returned nil")
+	}
+	if globals["app_name"] != "lolly" {
+		t.Errorf("globals['app_name'] = %q, want 'lolly'", globals["app_name"])
+	}
+
+	// 测试返回副本而非引用
+	globals["app_name"] = "modified"
+	if v, _ := GetGlobalVariable("app_name"); v != "lolly" {
+		t.Error("GetAllGlobalVariables() should return a copy, not a reference")
+	}
+
+	// 清理
+	SetGlobalVariables(nil)
+}
+
+// TestNewVariableContextWithGlobals 测试全局变量注入到请求上下文
+func TestNewVariableContextWithGlobals(t *testing.T) {
+	// 设置全局变量
+	SetGlobalVariables(map[string]string{
+		"global_var": "global_value",
+	})
+	defer SetGlobalVariables(nil)
+
+	ctx := mockRequestCtx(t)
+	vc := NewVariableContext(ctx)
+	defer ReleaseVariableContext(vc)
+
+	// 全局变量应该被注入
+	if v, ok := vc.Get("global_var"); !ok || v != "global_value" {
+		t.Errorf("Get('global_var') = %q, %v, want 'global_value', true", v, ok)
+	}
+
+	// 展开应该包含全局变量
+	result := vc.Expand("$global_var")
+	if result != "global_value" {
+		t.Errorf("Expand('$global_var') = %q, want 'global_value'", result)
+	}
+}
+
+// TestGlobalVariablesConcurrent 测试全局变量并发访问
+func TestGlobalVariablesConcurrent(t *testing.T) {
+	SetGlobalVariables(map[string]string{
+		"counter": "0",
+	})
+	defer SetGlobalVariables(nil)
+
+	done := make(chan bool)
+
+	// 并发读取
+	for i := 0; i < 10; i++ {
+		go func() {
+			for j := 0; j < 100; j++ {
+				_, _ = GetGlobalVariable("counter")
+			}
+			done <- true
+		}()
+	}
+
+	// 并发写入
+	for i := 0; i < 5; i++ {
+		go func() {
+			for j := 0; j < 50; j++ {
+				SetGlobalVariables(map[string]string{"counter": "updated"})
+			}
+			done <- true
+		}()
+	}
+
+	// 等待所有 goroutine 完成
+	for i := 0; i < 15; i++ {
+		<-done
+	}
+}

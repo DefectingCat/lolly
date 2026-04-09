@@ -67,6 +67,50 @@ var pool = sync.Pool{
 	},
 }
 
+// 全局自定义变量存储
+var (
+	globalVariables     map[string]string
+	globalVariablesLock sync.RWMutex
+)
+
+// SetGlobalVariables 设置全局自定义变量。
+// 在应用启动或配置重载时调用。
+func SetGlobalVariables(vars map[string]string) {
+	globalVariablesLock.Lock()
+	defer globalVariablesLock.Unlock()
+	globalVariables = make(map[string]string, len(vars))
+	for k, v := range vars {
+		globalVariables[k] = v
+	}
+}
+
+// GetGlobalVariable 获取全局变量值。
+func GetGlobalVariable(name string) (string, bool) {
+	globalVariablesLock.RLock()
+	defer globalVariablesLock.RUnlock()
+	if globalVariables == nil {
+		return "", false
+	}
+	v, ok := globalVariables[name]
+	return v, ok
+}
+
+// GetAllGlobalVariables 获取所有全局变量的副本。
+// 用于在 NewVariableContext 中批量注入。
+func GetAllGlobalVariables() map[string]string {
+	globalVariablesLock.RLock()
+	defer globalVariablesLock.RUnlock()
+	if globalVariables == nil {
+		return nil
+	}
+	// 返回副本，避免外部修改影响全局存储
+	result := make(map[string]string, len(globalVariables))
+	for k, v := range globalVariables {
+		result[k] = v
+	}
+	return result
+}
+
 // builtinVars 内置变量注册表
 var builtinVars = make(map[string]*BuiltinVariable)
 
@@ -80,7 +124,7 @@ func GetBuiltin(name string) *BuiltinVariable {
 	return builtinVars[name]
 }
 
-// NewVariableContext 从池中获取 VariableContext
+// NewVariableContext 从池中获取 VariableContext，并注入全局变量。
 func NewVariableContext(ctx *fasthttp.RequestCtx) *VariableContext {
 	vc := pool.Get().(*VariableContext)
 	vc.ctx = ctx
@@ -97,9 +141,14 @@ func NewVariableContext(ctx *fasthttp.RequestCtx) *VariableContext {
 	for k := range vc.cache {
 		delete(vc.cache, k)
 	}
-	// 清空自定义变量
+	// 清空自定义变量 store，然后注入全局变量
 	for k := range vc.store {
 		delete(vc.store, k)
+	}
+	// 注入全局变量
+	globals := GetAllGlobalVariables()
+	for name, value := range globals {
+		vc.store[name] = value
 	}
 	return vc
 }
