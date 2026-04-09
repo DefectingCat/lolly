@@ -274,6 +274,17 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "  #     max_age: %d                  # 过期时间（秒）\n", cfg.Server.SSL.HSTS.MaxAge)
 	fmt.Fprintf(&buf, "  #     include_sub_domains: %v      # 包含子域名\n", cfg.Server.SSL.HSTS.IncludeSubDomains)
 	fmt.Fprintf(&buf, "  #     preload: %v                  # 加入 HSTS 预加载列表\n", cfg.Server.SSL.HSTS.Preload)
+	buf.WriteString("  #   session_tickets:               # TLS Session Tickets 配置（TLS 1.3 会话恢复）\n")
+	fmt.Fprintf(&buf, "  #     enabled: %v                  # 是否启用 Session Tickets\n", cfg.Server.SSL.SessionTickets.Enabled)
+	buf.WriteString("  #     key_file: \"\"                # 密钥存储文件路径（用于持久化密钥）\n")
+	fmt.Fprintf(&buf, "  #     rotate_interval: %d          # 密钥轮换间隔（秒），建议 1-24 小时\n", int(cfg.Server.SSL.SessionTickets.RotateInterval.Seconds()))
+	fmt.Fprintf(&buf, "  #     retain_keys: %d              # 保留的历史密钥数量，建议 3-5 个\n", cfg.Server.SSL.SessionTickets.RetainKeys)
+	buf.WriteString("  #   client_verify:                 # mTLS 客户端证书验证配置\n")
+	buf.WriteString("  #     enabled: false               # 是否启用客户端证书验证\n")
+	buf.WriteString("  #     mode: \"none\"                # 验证模式（有效值: none, request, require, optional_no_ca）\n")
+	buf.WriteString("  #     client_ca: \"\"               # 客户端 CA 证书文件路径\n")
+	buf.WriteString("  #     verify_depth: 1              # 证书链验证深度\n")
+	buf.WriteString("  #     crl: \"\"                     # 证书撤销列表文件路径（可选）\n")
 	buf.WriteString("\n")
 
 	// security 配置
@@ -317,6 +328,15 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("      pages: {}                  # 状态码到页面映射，如 {404: \"/errors/404.html\"}\n")
 	buf.WriteString("      default: \"\"                # 默认错误页面\n")
 	buf.WriteString("      response_code: 0          # 响应状态码覆盖（0 表示使用原始状态码）\n")
+	buf.WriteString("\n")
+	buf.WriteString("    # 外部认证子请求配置（将认证委托给外部服务）\n")
+	buf.WriteString("    # auth_request:\n")
+	buf.WriteString("    #   enabled: false           # 是否启用外部认证\n")
+	buf.WriteString("    #   uri: \"/auth\"             # 认证服务地址（支持相对路径或完整 URL）\n")
+	buf.WriteString("    #   method: \"GET\"            # 认证请求方法（有效值: GET, POST, HEAD）\n")
+	buf.WriteString("    #   auth_timeout: 5s         # 认证请求超时时间\n")
+	buf.WriteString("    #   headers: {}              # 自定义认证请求头，如 {X-Original-Uri: \"$request_uri\"}\n")
+	buf.WriteString("    #   forward_headers: []      # 需要转发的原请求头，默认包含 Cookie, Authorization, X-Forwarded-For\n")
 	buf.WriteString("\n")
 
 	// rewrite 配置示例
@@ -411,6 +431,23 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("#         - addr: \"mysql2:3306\"\n")
 	buf.WriteString("#           weight: 1\n")
 	buf.WriteString("#       load_balance: \"round_robin\"  # 负载均衡算法（有效值: round_robin, weighted_round_robin, least_conn, ip_hash）\n")
+	buf.WriteString("#     ssl:                        # 服务端 SSL 配置（仅 TCP 支持）\n")
+	buf.WriteString("#       enabled: false            # 是否启用 TLS 终端\n")
+	buf.WriteString("#       cert: \"/path/to/cert.pem\" # 服务器证书文件\n")
+	buf.WriteString("#       key: \"/path/to/key.pem\"   # 服务器私钥文件\n")
+	buf.WriteString("#       protocols: [\"TLSv1.2\", \"TLSv1.3\"]  # TLS 协议版本\n")
+	buf.WriteString("#       ciphers: []               # 加密套件（仅 TLS 1.2 有效）\n")
+	buf.WriteString("#       client_ca: \"\"             # 客户端 CA 证书（mTLS）\n")
+	buf.WriteString("#       verify_depth: 1           # 证书链验证深度\n")
+	buf.WriteString("#     proxy_ssl:                  # 上游 SSL 配置（加密到后端的连接）\n")
+	buf.WriteString("#       enabled: false            # 是否启用上游 TLS\n")
+	buf.WriteString("#       verify: false             # 是否验证上游证书\n")
+	buf.WriteString("#       trusted_ca: \"\"            # 信任的 CA 证书\n")
+	buf.WriteString("#       server_name: \"\"           # SNI 服务器名称\n")
+	buf.WriteString("#       cert: \"\"                  # 客户端证书（mTLS）\n")
+	buf.WriteString("#       key: \"\"                   # 客户端私钥（mTLS）\n")
+	buf.WriteString("#       protocols: []             # TLS 协议版本\n")
+	buf.WriteString("#       session_reuse: false      # 是否复用 SSL 会话\n")
 	buf.WriteString("\n")
 
 	// logging 配置
@@ -471,6 +508,30 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	for _, ip := range cfg.Monitoring.Pprof.Allow {
 		fmt.Fprintf(&buf, "      - \"%s\"\n", ip)
 	}
+	buf.WriteString("\n")
+
+	// resolver 配置
+	buf.WriteString("# DNS 解析器配置（用于后端域名动态解析）\n")
+	buf.WriteString("# resolver:\n")
+	fmt.Fprintf(&buf, "#   enabled: %v              # 是否启用 DNS 解析器\n", cfg.Resolver.Enabled)
+	buf.WriteString("#   addresses:               # DNS 服务器地址列表\n")
+	buf.WriteString("#     - \"8.8.8.8:53\"\n")
+	buf.WriteString("#     - \"8.8.4.4:53\"\n")
+	fmt.Fprintf(&buf, "#   valid: %ds               # 缓存有效期（TTL），建议 30s-300s\n", int(cfg.Resolver.Valid.Seconds()))
+	fmt.Fprintf(&buf, "#   timeout: %ds             # DNS 查询超时\n", int(cfg.Resolver.Timeout.Seconds()))
+	fmt.Fprintf(&buf, "#   ipv4: %v                 # 是否查询 IPv4 地址\n", cfg.Resolver.IPv4)
+	fmt.Fprintf(&buf, "#   ipv6: %v                 # 是否查询 IPv6 地址\n", cfg.Resolver.IPv6)
+	fmt.Fprintf(&buf, "#   cache_size: %d           # 缓存最大条目数（0 表示不限制）\n", cfg.Resolver.CacheSize)
+	buf.WriteString("\n")
+
+	// variables 配置
+	buf.WriteString("# 自定义变量配置（全局变量，应用于所有虚拟主机）\n")
+	buf.WriteString("# variables:\n")
+	buf.WriteString("#   set:                     # 自定义变量集合\n")
+	buf.WriteString("#     app_name: \"lolly\"      # 可在日志格式中通过 $var_app_name 引用\n")
+	buf.WriteString("#     version: \"1.0.0\"\n")
+	buf.WriteString("# 注意：变量名只允许字母、数字、下划线，不能与内置变量冲突\n")
+	buf.WriteString("# 不能以 arg_、http_、cookie_ 开头（这些是动态变量前缀）\n")
 
 	return buf.Bytes(), nil
 }
