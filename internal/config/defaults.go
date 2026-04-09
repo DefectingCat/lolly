@@ -66,6 +66,19 @@ func DefaultConfig() *Config {
 					PushEnabled:          false,
 					H2CEnabled:           false,
 				},
+				SessionTickets: SessionTicketsConfig{
+					Enabled:        false,
+					KeyFile:        "",
+					RotateInterval: 1 * time.Hour,
+					RetainKeys:     3,
+				},
+				ClientVerify: ClientVerifyConfig{
+					Enabled:     false,
+					Mode:        "none",
+					ClientCA:    "",
+					VerifyDepth: 1,
+					CRL:         "",
+				},
 			},
 			Security: SecurityConfig{
 				Access: AccessConfig{
@@ -156,6 +169,15 @@ func DefaultConfig() *Config {
 			MaxStreams:  100,
 			IdleTimeout: 60 * time.Second,
 			Enable0RTT:  false,
+		},
+		Resolver: ResolverConfig{
+			Enabled:   false,
+			Addresses: []string{"8.8.8.8:53", "8.8.4.4:53"},
+			Valid:     30 * time.Second,
+			Timeout:   5 * time.Second,
+			IPv4:      true,
+			IPv6:      false,
+			CacheSize: 1024,
 		},
 		Variables: VariablesConfig{
 			Set: map[string]string{},
@@ -328,8 +350,8 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "      x_frame_options: \"%s\"        # 防止点击劫持（有效值: DENY, SAMEORIGIN, 空表示禁用）\n", cfg.Server.Security.Headers.XFrameOptions)
 	fmt.Fprintf(&buf, "      x_content_type_options: \"%s\" # 防止 MIME 嗅探（有效值：nosniff，空表示禁用）\n", cfg.Server.Security.Headers.XContentTypeOptions)
 	fmt.Fprintf(&buf, "      referrer_policy: \"%s\"        # 引用策略（有效值: no-referrer, no-referrer-when-downgrade, origin, origin-when-cross-origin, same-origin, strict-origin, strict-origin-when-cross-origin, unsafe-url）\n", cfg.Server.Security.Headers.ReferrerPolicy)
-	buf.WriteString("      # content_security_policy: \"default-src 'self'\"  # 内容安全策略 CSP\n")
-	buf.WriteString("      # permissions_policy: \"geolocation=(), microphone=()\"  # 权限策略\n")
+	buf.WriteString("      content_security_policy: \"\"  # 内容安全策略 CSP（空表示禁用）\n")
+	buf.WriteString("      permissions_policy: \"\"       # 权限策略（空表示禁用）\n")
 	buf.WriteString("\n")
 	buf.WriteString("    # 自定义错误页面\n")
 	buf.WriteString("    error_page:\n")
@@ -338,13 +360,13 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("      response_code: 0          # 响应状态码覆盖（0 表示使用原始状态码）\n")
 	buf.WriteString("\n")
 	buf.WriteString("    # 外部认证子请求配置（将认证委托给外部服务）\n")
-	buf.WriteString("    # auth_request:\n")
-	buf.WriteString("    #   enabled: false           # 是否启用外部认证\n")
-	buf.WriteString("    #   uri: \"/auth\"             # 认证服务地址（支持相对路径或完整 URL）\n")
-	buf.WriteString("    #   method: \"GET\"            # 认证请求方法（有效值: GET, POST, HEAD）\n")
-	buf.WriteString("    #   auth_timeout: 5s         # 认证请求超时时间\n")
-	buf.WriteString("    #   headers: {}              # 自定义认证请求头，如 {X-Original-Uri: \"$request_uri\"}\n")
-	buf.WriteString("    #   forward_headers: []      # 需要转发的原请求头，默认包含 Cookie, Authorization, X-Forwarded-For\n")
+	buf.WriteString("    auth_request:\n")
+	buf.WriteString("      enabled: false              # 是否启用外部认证\n")
+	buf.WriteString("      uri: \"\"                     # 认证服务地址（支持相对路径或完整 URL）\n")
+	buf.WriteString("      method: \"GET\"               # 认证请求方法（有效值: GET, POST, HEAD）\n")
+	buf.WriteString("      auth_timeout: 5s            # 认证请求超时时间\n")
+	buf.WriteString("      headers: {}                 # 自定义认证请求头，如 {X-Original-Uri: \"$request_uri\"}\n")
+	buf.WriteString("      forward_headers: []         # 需要转发的原请求头，默认包含 Cookie, Authorization, X-Forwarded-For\n")
 	buf.WriteString("\n")
 
 	// rewrite 配置示例
@@ -520,26 +542,24 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 
 	// resolver 配置
 	buf.WriteString("# DNS 解析器配置（用于后端域名动态解析）\n")
-	buf.WriteString("# resolver:\n")
-	fmt.Fprintf(&buf, "#   enabled: %v              # 是否启用 DNS 解析器\n", cfg.Resolver.Enabled)
-	buf.WriteString("#   addresses:               # DNS 服务器地址列表\n")
-	buf.WriteString("#     - \"8.8.8.8:53\"\n")
-	buf.WriteString("#     - \"8.8.4.4:53\"\n")
-	fmt.Fprintf(&buf, "#   valid: %ds               # 缓存有效期（TTL），建议 30s-300s\n", int(cfg.Resolver.Valid.Seconds()))
-	fmt.Fprintf(&buf, "#   timeout: %ds             # DNS 查询超时\n", int(cfg.Resolver.Timeout.Seconds()))
-	fmt.Fprintf(&buf, "#   ipv4: %v                 # 是否查询 IPv4 地址\n", cfg.Resolver.IPv4)
-	fmt.Fprintf(&buf, "#   ipv6: %v                 # 是否查询 IPv6 地址\n", cfg.Resolver.IPv6)
-	fmt.Fprintf(&buf, "#   cache_size: %d           # 缓存最大条目数（0 表示不限制）\n", cfg.Resolver.CacheSize)
+	buf.WriteString("resolver:\n")
+	fmt.Fprintf(&buf, "  enabled: %v              # 是否启用 DNS 解析器\n", cfg.Resolver.Enabled)
+	buf.WriteString("  addresses:               # DNS 服务器地址列表\n")
+	buf.WriteString("    - \"8.8.8.8:53\"\n")
+	buf.WriteString("    - \"8.8.4.4:53\"\n")
+	fmt.Fprintf(&buf, "  valid: %ds               # 缓存有效期（TTL），建议 30s-300s\n", int(cfg.Resolver.Valid.Seconds()))
+	fmt.Fprintf(&buf, "  timeout: %ds             # DNS 查询超时\n", int(cfg.Resolver.Timeout.Seconds()))
+	fmt.Fprintf(&buf, "  ipv4: %v                 # 是否查询 IPv4 地址\n", cfg.Resolver.IPv4)
+	fmt.Fprintf(&buf, "  ipv6: %v                 # 是否查询 IPv6 地址\n", cfg.Resolver.IPv6)
+	fmt.Fprintf(&buf, "  cache_size: %d           # 缓存最大条目数（0 表示不限制）\n", cfg.Resolver.CacheSize)
 	buf.WriteString("\n")
 
 	// variables 配置
 	buf.WriteString("# 自定义变量配置（全局变量，应用于所有虚拟主机）\n")
-	buf.WriteString("# variables:\n")
-	buf.WriteString("#   set:                     # 自定义变量集合\n")
-	buf.WriteString("#     app_name: \"lolly\"      # 可在日志格式中通过 $var_app_name 引用\n")
-	buf.WriteString("#     version: \"1.0.0\"\n")
-	buf.WriteString("# 注意：变量名只允许字母、数字、下划线，不能与内置变量冲突\n")
-	buf.WriteString("# 不能以 arg_、http_、cookie_ 开头（这些是动态变量前缀）\n")
+	buf.WriteString("variables:\n")
+	buf.WriteString("  set: {}                  # 自定义变量集合，如 {app_name: \"lolly\"}\n")
+	buf.WriteString("  # 注意：变量名只允许字母、数字、下划线，不能与内置变量冲突\n")
+	buf.WriteString("  # 不能以 arg_、http_、cookie_ 开头（这些是动态变量前缀）\n")
 
 	return buf.Bytes(), nil
 }

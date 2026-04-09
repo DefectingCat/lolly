@@ -131,3 +131,104 @@ func TestDefaultConfigPerformance(t *testing.T) {
 		t.Errorf("Transport.MaxConnsPerHost 期望 0 (不限制), 实际 %d", cfg.Performance.Transport.MaxConnsPerHost)
 	}
 }
+
+func TestDefaultConfigResolver(t *testing.T) {
+	// TestDefaultConfigResolver 测试 Resolver 默认值。
+	cfg := DefaultConfig()
+
+	// 验证 Resolver 默认值
+	if cfg.Resolver.Enabled {
+		t.Error("Resolver.Enabled 期望 false")
+	}
+	if len(cfg.Resolver.Addresses) != 2 {
+		t.Errorf("Resolver.Addresses 期望 2 个 DNS 服务器，实际 %d", len(cfg.Resolver.Addresses))
+	}
+	if cfg.Resolver.Valid != 30*time.Second {
+		t.Errorf("Resolver.Valid 期望 30s，实际 %v", cfg.Resolver.Valid)
+	}
+	if cfg.Resolver.Timeout != 5*time.Second {
+		t.Errorf("Resolver.Timeout 期望 5s，实际 %v", cfg.Resolver.Timeout)
+	}
+	if !cfg.Resolver.IPv4 {
+		t.Error("Resolver.IPv4 期望 true")
+	}
+	if cfg.Resolver.IPv6 {
+		t.Error("Resolver.IPv6 期望 false")
+	}
+	if cfg.Resolver.CacheSize != 1024 {
+		t.Errorf("Resolver.CacheSize 期望 1024，实际 %d", cfg.Resolver.CacheSize)
+	}
+}
+
+func TestDefaultConfigSSLDefaults(t *testing.T) {
+	// TestDefaultConfigSSLDefaults 测试 SSL 相关默认值。
+	cfg := DefaultConfig()
+
+	// 验证 SessionTickets 默认值
+	if cfg.Server.SSL.SessionTickets.Enabled {
+		t.Error("SessionTickets.Enabled 期望 false")
+	}
+	if cfg.Server.SSL.SessionTickets.RetainKeys != 3 {
+		t.Errorf("SessionTickets.RetainKeys 期望 3，实际 %d", cfg.Server.SSL.SessionTickets.RetainKeys)
+	}
+
+	// 验证 ClientVerify 默认值
+	if cfg.Server.SSL.ClientVerify.Enabled {
+		t.Error("ClientVerify.Enabled 期望 false")
+	}
+	if cfg.Server.SSL.ClientVerify.Mode != "none" {
+		t.Errorf("ClientVerify.Mode 期望 none，实际 %s", cfg.Server.SSL.ClientVerify.Mode)
+	}
+	if cfg.Server.SSL.ClientVerify.VerifyDepth != 1 {
+		t.Errorf("ClientVerify.VerifyDepth 期望 1，实际 %d", cfg.Server.SSL.ClientVerify.VerifyDepth)
+	}
+}
+
+func TestGenerateConfigYAMLContainsAllSections(t *testing.T) {
+	// TestGenerateConfigYAMLContainsAllSections 测试 YAML 包含所有配置块。
+	cfg := DefaultConfig()
+	yamlData, err := GenerateConfigYAML(cfg)
+	if err != nil {
+		t.Fatalf("GenerateConfigYAML 失败: %v", err)
+	}
+	yamlStr := string(yamlData)
+
+	// 验证包含非注释的配置块
+	requiredSections := []string{
+		"resolver:",
+		"variables:",
+		"content_security_policy:",
+		"permissions_policy:",
+		"auth_request:",
+	}
+
+	for _, section := range requiredSections {
+		// 检查配置块存在
+		if !strings.Contains(yamlStr, section) {
+			t.Errorf("配置块 %s 缺失", section)
+		}
+	}
+}
+
+func TestGenerateConfigYAMLLoadable(t *testing.T) {
+	// TestGenerateConfigYAMLLoadable 测试生成的 YAML 可以被加载。
+	cfg := DefaultConfig()
+	yamlData, err := GenerateConfigYAML(cfg)
+	if err != nil {
+		t.Fatalf("GenerateConfigYAML 失败: %v", err)
+	}
+
+	// 尝试加载生成的 YAML
+	loadedCfg, err := LoadFromString(string(yamlData))
+	if err != nil {
+		t.Fatalf("生成的 YAML 无法加载: %v", err)
+	}
+
+	// 验证关键字段匹配
+	if loadedCfg.Server.Listen != cfg.Server.Listen {
+		t.Errorf("Server.Listen 不匹配: 期望 %s, 实际 %s", cfg.Server.Listen, loadedCfg.Server.Listen)
+	}
+	if loadedCfg.Resolver.Enabled != cfg.Resolver.Enabled {
+		t.Errorf("Resolver.Enabled 不匹配")
+	}
+}
