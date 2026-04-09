@@ -86,8 +86,12 @@ variables:
   set:
     app_name: "lolly"
     version: "1.0.0"
-  request_id: true  # 自动生成唯一请求 ID
 ```
+
+**注意**:
+- `$request_id` 为内置变量，自动为每个请求生成唯一 UUID，无需配置
+- 自定义变量名不能与内置变量冲突
+- 变量名只允许字母、数字、下划线
 
 ---
 
@@ -218,7 +222,6 @@ resolver:
 variables:
   set:
     app_name: "lolly"
-  request_id: true
 
 logging:
   access:
