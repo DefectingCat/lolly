@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-02 | Updated: 2026-04-07 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-09 -->
 
 # internal
 
@@ -15,15 +15,19 @@
 | `cache/` | 文件缓存模块（缓存存储、过期管理） |
 | `config/` | 配置解析、验证和默认值生成 |
 | `handler/` | HTTP 请求处理器（路由、静态文件、Sendfile） |
+| `http2/` | HTTP/2 协议支持（ALPN 协商、fasthttp 适配） |
 | `http3/` | HTTP/3 (QUIC) 协议支持（fasthttp 适配、0-RTT） |
+| `integration/` | 集成测试（多模块端到端协作验证） |
 | `loadbalance/` | 负载均衡策略（轮询、最少连接、健康检查） |
 | `logging/` | 日志系统（zerolog 初始化、访问日志） |
 | `middleware/` | 中间件框架（接口定义、链式组合） |
 | `netutil/` | 网络工具函数（客户端 IP 提取、URL 解析） |
 | `proxy/` | 反向代理模块（HTTP/WebSocket 代理） |
+| `resolver/` | DNS 解析器（缓存、后台刷新、域名动态解析） |
 | `server/` | HTTP 服务器核心、虚拟主机、热升级、状态监控 |
 | `ssl/` | SSL/TLS 管理（证书加载、OCSP Stapling） |
 | `stream/` | TCP/UDP Stream 代理模块 |
+| `variable/` | 变量系统（nginx 风格变量展开、日志格式模板） |
 
 ## For AI Agents
 
