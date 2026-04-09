@@ -285,6 +285,13 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("  #     client_ca: \"\"               # 客户端 CA 证书文件路径\n")
 	buf.WriteString("  #     verify_depth: 1              # 证书链验证深度\n")
 	buf.WriteString("  #     crl: \"\"                     # 证书撤销列表文件路径（可选）\n")
+	buf.WriteString("  #   http2:                         # HTTP/2 配置（需 SSL 证书）\n")
+	fmt.Fprintf(&buf, "  #     enabled: %v                  # 是否启用 HTTP/2\n", cfg.Server.SSL.HTTP2.Enabled)
+	fmt.Fprintf(&buf, "  #     max_concurrent_streams: %d   # 最大并发流数\n", cfg.Server.SSL.HTTP2.MaxConcurrentStreams)
+	fmt.Fprintf(&buf, "  #     max_header_list_size: %d     # 最大头部列表大小（字节）\n", cfg.Server.SSL.HTTP2.MaxHeaderListSize)
+	fmt.Fprintf(&buf, "  #     idle_timeout: %ds            # 空闲超时\n", int(cfg.Server.SSL.HTTP2.IdleTimeout.Seconds()))
+	fmt.Fprintf(&buf, "  #     push_enabled: %v             # 是否启用 Server Push\n", cfg.Server.SSL.HTTP2.PushEnabled)
+	fmt.Fprintf(&buf, "  #     h2c_enabled: %v              # 是否启用 H2C（明文 HTTP/2）\n", cfg.Server.SSL.HTTP2.H2CEnabled)
 	buf.WriteString("\n")
 
 	// security 配置
@@ -314,6 +321,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "      algorithm: \"%s\"            # 密码哈希算法（有效值: bcrypt, argon2id）\n", cfg.Server.Security.Auth.Algorithm)
 	buf.WriteString("      users: []                   # 用户列表\n")
 	fmt.Fprintf(&buf, "      realm: \"%s\"                # 认证域\n", cfg.Server.Security.Auth.Realm)
+	fmt.Fprintf(&buf, "      min_password_length: %d     # 密码最小长度\n", cfg.Server.Security.Auth.MinPasswordLength)
 	buf.WriteString("\n")
 	buf.WriteString("    # 安全头部\n")
 	buf.WriteString("    headers:\n")
