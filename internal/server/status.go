@@ -13,6 +13,8 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"net"
 	"strings"
 	"time"
@@ -33,20 +35,57 @@ type StatusHandler struct {
 	server  *Server     // 服务器实例，用于获取状态数据
 	allowed []net.IPNet // 允许访问的 IP 网络列表
 	path    string      // 状态端点路径
+	format  string      // 输出格式：json 或 prometheus
 }
 
 // Status 状态响应结构。
 //
 // 包含服务器运行的各种统计信息，以 JSON 格式返回给客户端。
 type Status struct {
-	Version       string        `json:"version"`         // 服务器版本号
-	Uptime        time.Duration `json:"uptime"`          // 服务器运行时间
-	Connections   int64         `json:"connections"`     // 当前活跃连接数
-	Requests      int64         `json:"requests"`        // 已处理的总请求数
-	BytesSent     int64         `json:"bytes_sent"`      // 已发送的总字节数
-	BytesReceived int64         `json:"bytes_received"`  // 已接收的总字节数
-	Cache         *CacheStats   `json:"cache,omitempty"` // 缓存统计（可选）
-	Pool          *PoolStats    `json:"pool,omitempty"`  // Goroutine 池统计（可选）
+	Version       string            `json:"version"`               // 服务器版本号
+	Uptime        time.Duration     `json:"uptime"`                // 服务器运行时间
+	Connections   int64             `json:"connections"`           // 当前活跃连接数
+	Requests      int64             `json:"requests"`              // 已处理的总请求数
+	BytesSent     int64             `json:"bytes_sent"`            // 已发送的总字节数
+	BytesReceived int64             `json:"bytes_received"`        // 已接收的总字节数
+	Cache         *CacheStats       `json:"cache,omitempty"`       // 缓存统计（可选）
+	Pool          *PoolStats        `json:"pool,omitempty"`        // Goroutine 池统计（可选）
+	Upstreams     []UpstreamStatus  `json:"upstreams,omitempty"`   // Upstream 统计（可选）
+	RateLimits    []RateLimitStatus `json:"rate_limits,omitempty"` // 限流统计（可选）
+	SSL           *SSLStatus        `json:"ssl,omitempty"`         // SSL 统计（可选）
+}
+
+// UpstreamStatus Upstream 统计信息。
+type UpstreamStatus struct {
+	Name           string         `json:"name"`            // Upstream 名称
+	Targets        []TargetStatus `json:"targets"`         // 目标服务器列表
+	HealthyCount   int            `json:"healthy_count"`   // 健康目标数
+	UnhealthyCount int            `json:"unhealthy_count"` // 不健康目标数
+	LatencyP50     float64        `json:"latency_p50_ms"`  // P50 延迟（毫秒）
+	LatencyP95     float64        `json:"latency_p95_ms"`  // P95 延迟（毫秒）
+	LatencyP99     float64        `json:"latency_p99_ms"`  // P99 延迟（毫秒）
+}
+
+// TargetStatus 目标服务器状态。
+type TargetStatus struct {
+	URL     string `json:"url"`        // 目标 URL
+	Healthy bool   `json:"healthy"`    // 是否健康
+	Latency int64  `json:"latency_ms"` // 延迟（毫秒）
+}
+
+// RateLimitStatus 限流统计信息。
+type RateLimitStatus struct {
+	ZoneName string `json:"zone_name"` // 限流区域名称
+	Requests int64  `json:"requests"`  // 请求数
+	Limit    int64  `json:"limit"`     // 限制值
+	Rejected int64  `json:"rejected"`  // 拒绝数
+}
+
+// SSLStatus SSL 统计信息。
+type SSLStatus struct {
+	Handshakes    int64   `json:"handshakes"`         // 握手次数
+	SessionReused int64   `json:"session_reused"`     // 会话复用次数
+	ReuseRate     float64 `json:"reuse_rate_percent"` // 会话复用率（百分比）
 }
 
 // CacheStats 缓存统计信息。
@@ -85,6 +124,12 @@ func NewStatusHandler(server *Server, cfg *config.StatusConfig) (*StatusHandler,
 	h := &StatusHandler{
 		server: server,
 		path:   cfg.Path,
+		format: cfg.Format,
+	}
+
+	// 默认格式为 json
+	if h.format == "" {
+		h.format = "json"
 	}
 
 	// 解析允许的 IP 列表
@@ -141,7 +186,13 @@ func (h *StatusHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// 步骤2: 收集状态数据
 	status := h.collectStatus()
 
-	// 步骤3: 返回 JSON 响应
+	// 步骤3: 根据格式返回响应
+	if h.format == "prometheus" {
+		h.servePrometheus(ctx, status)
+		return
+	}
+
+	// 默认 JSON 格式
 	ctx.SetContentType("application/json; charset=utf-8")
 	ctx.SetStatusCode(fasthttp.StatusOK)
 
@@ -152,6 +203,118 @@ func (h *StatusHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	}
 
 	ctx.Write(data) //nolint:errcheck
+}
+
+// servePrometheus 以 Prometheus 格式输出指标。
+func (h *StatusHandler) servePrometheus(ctx *fasthttp.RequestCtx, status *Status) {
+	ctx.SetContentType("text/plain; charset=utf-8")
+	ctx.SetStatusCode(fasthttp.StatusOK)
+
+	var buf strings.Builder
+
+	// 基础指标
+	buf.WriteString("# HELP lolly_version Server version info\n")
+	buf.WriteString("# TYPE lolly_version gauge\n")
+	fmt.Fprintf(&buf, "lolly_version{version=\"%s\"} 1\n", status.Version)
+
+	buf.WriteString("\n# HELP lolly_uptime_seconds Server uptime in seconds\n")
+	buf.WriteString("# TYPE lolly_uptime_seconds gauge\n")
+	fmt.Fprintf(&buf, "lolly_uptime_seconds %.0f\n", status.Uptime.Seconds())
+
+	buf.WriteString("\n# HELP lolly_connections Current active connections\n")
+	buf.WriteString("# TYPE lolly_connections gauge\n")
+	fmt.Fprintf(&buf, "lolly_connections %d\n", status.Connections)
+
+	buf.WriteString("\n# HELP lolly_requests_total Total requests processed\n")
+	buf.WriteString("# TYPE lolly_requests_total counter\n")
+	fmt.Fprintf(&buf, "lolly_requests_total %d\n", status.Requests)
+
+	buf.WriteString("\n# HELP lolly_bytes_sent_total Total bytes sent\n")
+	buf.WriteString("# TYPE lolly_bytes_sent_total counter\n")
+	fmt.Fprintf(&buf, "lolly_bytes_sent_total %d\n", status.BytesSent)
+
+	buf.WriteString("\n# HELP lolly_bytes_received_total Total bytes received\n")
+	buf.WriteString("# TYPE lolly_bytes_received_total counter\n")
+	fmt.Fprintf(&buf, "lolly_bytes_received_total %d\n", status.BytesReceived)
+
+	// 缓存指标
+	if status.Cache != nil {
+		buf.WriteString("\n# HELP lolly_cache_entries Number of cache entries\n")
+		buf.WriteString("# TYPE lolly_cache_entries gauge\n")
+		fmt.Fprintf(&buf, "lolly_cache_entries{type=\"file\"} %d\n", status.Cache.FileCache.Entries)
+		fmt.Fprintf(&buf, "lolly_cache_entries{type=\"proxy\"} %d\n", status.Cache.ProxyCache.Entries)
+
+		buf.WriteString("\n# HELP lolly_cache_size_bytes Cache size in bytes\n")
+		buf.WriteString("# TYPE lolly_cache_size_bytes gauge\n")
+		fmt.Fprintf(&buf, "lolly_cache_size_bytes %d\n", status.Cache.FileCache.Size)
+
+		buf.WriteString("\n# HELP lolly_cache_pending Number of pending cache requests\n")
+		buf.WriteString("# TYPE lolly_cache_pending gauge\n")
+		fmt.Fprintf(&buf, "lolly_cache_pending %d\n", status.Cache.ProxyCache.Pending)
+	}
+
+	// Pool 指标
+	if status.Pool != nil {
+		buf.WriteString("\n# HELP lolly_pool_workers Number of goroutine pool workers\n")
+		buf.WriteString("# TYPE lolly_pool_workers gauge\n")
+		fmt.Fprintf(&buf, "lolly_pool_workers{state=\"total\"} %d\n", status.Pool.Workers)
+		fmt.Fprintf(&buf, "lolly_pool_workers{state=\"idle\"} %d\n", status.Pool.IdleWorkers)
+
+		buf.WriteString("\n# HELP lolly_pool_queue_length Queue length\n")
+		buf.WriteString("# TYPE lolly_pool_queue_length gauge\n")
+		fmt.Fprintf(&buf, "lolly_pool_queue_length %d\n", status.Pool.QueueLen)
+	}
+
+	// Upstream 指标
+	for _, upstream := range status.Upstreams {
+		buf.WriteString("\n# HELP lolly_upstream_healthy_count Number of healthy upstream targets\n")
+		buf.WriteString("# TYPE lolly_upstream_healthy_count gauge\n")
+		fmt.Fprintf(&buf, "lolly_upstream_healthy_count{name=\"%s\"} %d\n", upstream.Name, upstream.HealthyCount)
+
+		buf.WriteString("\n# HELP lolly_upstream_unhealthy_count Number of unhealthy upstream targets\n")
+		buf.WriteString("# TYPE lolly_upstream_unhealthy_count gauge\n")
+		fmt.Fprintf(&buf, "lolly_upstream_unhealthy_count{name=\"%s\"} %d\n", upstream.Name, upstream.UnhealthyCount)
+
+		buf.WriteString("\n# HELP lolly_upstream_latency_ms Upstream latency in milliseconds\n")
+		buf.WriteString("# TYPE lolly_upstream_latency_ms gauge\n")
+		fmt.Fprintf(&buf, "lolly_upstream_latency_ms{name=\"%s\",quantile=\"0.5\"} %.2f\n", upstream.Name, upstream.LatencyP50)
+		fmt.Fprintf(&buf, "lolly_upstream_latency_ms{name=\"%s\",quantile=\"0.95\"} %.2f\n", upstream.Name, upstream.LatencyP95)
+		fmt.Fprintf(&buf, "lolly_upstream_latency_ms{name=\"%s\",quantile=\"0.99\"} %.2f\n", upstream.Name, upstream.LatencyP99)
+	}
+
+	// SSL 指标
+	if status.SSL != nil {
+		buf.WriteString("\n# HELP lolly_ssl_handshakes_total Total SSL handshakes\n")
+		buf.WriteString("# TYPE lolly_ssl_handshakes_total counter\n")
+		fmt.Fprintf(&buf, "lolly_ssl_handshakes_total %d\n", status.SSL.Handshakes)
+
+		buf.WriteString("\n# HELP lolly_ssl_session_reused_total SSL sessions reused\n")
+		buf.WriteString("# TYPE lolly_ssl_session_reused_total counter\n")
+		fmt.Fprintf(&buf, "lolly_ssl_session_reused_total %d\n", status.SSL.SessionReused)
+
+		buf.WriteString("\n# HELP lolly_ssl_session_reuse_rate SSL session reuse rate\n")
+		buf.WriteString("# TYPE lolly_ssl_session_reuse_rate gauge\n")
+		fmt.Fprintf(&buf, "lolly_ssl_session_reuse_rate %.2f\n", status.SSL.ReuseRate)
+	}
+
+	// Rate Limit 指标
+	for _, rl := range status.RateLimits {
+		buf.WriteString("\n# HELP lolly_rate_limit_requests Total requests in rate limit zone\n")
+		buf.WriteString("# TYPE lolly_rate_limit_requests gauge\n")
+		fmt.Fprintf(&buf, "lolly_rate_limit_requests{zone=\"%s\"} %d\n", rl.ZoneName, rl.Requests)
+
+		buf.WriteString("\n# HELP lolly_rate_limit_limit Rate limit value\n")
+		buf.WriteString("# TYPE lolly_rate_limit_limit gauge\n")
+		fmt.Fprintf(&buf, "lolly_rate_limit_limit{zone=\"%s\"} %d\n", rl.ZoneName, rl.Limit)
+
+		buf.WriteString("\n# HELP lolly_rate_limit_rejected_total Total rejected requests\n")
+		buf.WriteString("# TYPE lolly_rate_limit_rejected_total counter\n")
+		fmt.Fprintf(&buf, "lolly_rate_limit_rejected_total{zone=\"%s\"} %d\n", rl.ZoneName, rl.Rejected)
+	}
+
+	if _, err := ctx.WriteString(buf.String()); err != nil {
+		log.Printf("failed to write metrics response: %v", err)
+	}
 }
 
 // checkAccess 检查客户端 IP 是否在允许列表中。

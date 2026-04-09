@@ -1438,6 +1438,11 @@ type StatusConfig struct {
 	// Allow 允许访问的 IP 列表
 	// 可访问状态端点的 IP 地址或 CIDR
 	Allow []string `yaml:"allow"`
+
+	// Format 输出格式
+	// 支持 "json" 和 "prometheus" 两种格式
+	// 默认为 "json"
+	Format string `yaml:"format"`
 }
 
 // StreamConfig TCP/UDP Stream 代理配置。
