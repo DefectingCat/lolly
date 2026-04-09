@@ -63,3 +63,4 @@ lolly
 coverage.html
 html/
 default.pgo
+benchmark-*.txt
