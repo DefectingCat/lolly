@@ -10,6 +10,9 @@ GO_VERSION := $(shell go version | awk '{print $$3}')
 BUILD_PLATFORM := $(shell go env GOOS)/$(shell go env GOARCH)
 BUILD_DIR := bin
 
+# 静态构建（禁用 CGO）
+CGO_DISABLE := CGO_ENABLED=0
+
 # 生产构建标志（体积优化）
 LDFLAGS := -ldflags "-s -w \
 	-X 'rua.plus/lolly/internal/app.Version=$(VERSION)' \
@@ -33,36 +36,36 @@ MAIN_PATH := main.go
 # 构建命令
 # ============================================
 
-# 本地构建
+# 本地构建（静态链接）
 build:
-	@echo "Building $(APP_NAME)..."
+	@echo "Building $(APP_NAME) (static)..."
 	@mkdir -p $(BUILD_DIR)
-	go build $(LDFLAGS) -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
+	$(CGO_DISABLE) go build $(LDFLAGS) -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
 	@echo "Built: $(BUILD_DIR)/$(APP_NAME)"
 	@echo "Version: $(VERSION) | Commit: $(GIT_COMMIT) | Platform: $(BUILD_PLATFORM)"
 
-# 生产构建（体积优化）
+# 生产构建（体积优化，静态链接）
 build-prod:
-	@echo "Building $(APP_NAME) for production..."
+	@echo "Building $(APP_NAME) for production (static)..."
 	@mkdir -p $(BUILD_DIR)
-	go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
+	$(CGO_DISABLE) go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
 	@echo "Production build complete: $(BUILD_DIR)/$(APP_NAME)"
 
-# 生产构建（最大运行时性能）
+# 生产构建（最大运行时性能，静态链接）
 build-perf:
-	@echo "Building $(APP_NAME) with max runtime performance..."
+	@echo "Building $(APP_NAME) with max runtime performance (static)..."
 	@mkdir -p $(BUILD_DIR)
-	go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
+	$(CGO_DISABLE) go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
 		-o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
 	@echo "Performance build complete: $(BUILD_DIR)/$(APP_NAME)"
 
-# PGO 构建（需先收集 profile）
+# PGO 构建（需先收集 profile，静态链接）
 PGO_PROFILE ?= default.pgo
 build-pgo:
-	@echo "Building $(APP_NAME) with PGO optimization..."
+	@echo "Building $(APP_NAME) with PGO optimization (static)..."
 	@mkdir -p $(BUILD_DIR)
 	if [ -f $(PGO_PROFILE) ]; then \
-		go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
+		$(CGO_DISABLE) go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
 			-pgo=$(PGO_PROFILE) -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH); \
 		echo "PGO build complete using: $(PGO_PROFILE)"; \
 	else \
@@ -99,24 +102,24 @@ pgo-collect:
 	@echo ""
 	@echo "Tip: Profile during real workload for best PGO results"
 
-# 跨平台构建
+# 跨平台构建（静态链接）
 build-linux:
-	@echo "Building for Linux..."
+	@echo "Building for Linux (static)..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 $(MAIN_PATH)
+	$(CGO_DISABLE) GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME)-linux-amd64 $(MAIN_PATH)
 	@echo "Built: $(BUILD_DIR)/$(APP_NAME)-linux-amd64"
 
 build-darwin:
-	@echo "Building for macOS..."
+	@echo "Building for macOS (static)..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 $(MAIN_PATH)
-	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 $(MAIN_PATH)
+	$(CGO_DISABLE) GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME)-darwin-amd64 $(MAIN_PATH)
+	$(CGO_DISABLE) GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME)-darwin-arm64 $(MAIN_PATH)
 	@echo "Built: $(BUILD_DIR)/$(APP_NAME)-darwin-{amd64,arm64}"
 
 build-windows:
-	@echo "Building for Windows..."
+	@echo "Building for Windows (static)..."
 	@mkdir -p $(BUILD_DIR)
-	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe $(MAIN_PATH)
+	$(CGO_DISABLE) GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe $(MAIN_PATH)
 	@echo "Built: $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe"
 
 # 构建所有平台
@@ -278,7 +281,7 @@ clean:
 help:
 	@echo "$(APP_NAME) Makefile Commands"
 	@echo ""
-	@echo "Build:"
+	@echo "Build (static linked):"
 	@echo "  make build          - Build for current platform"
 	@echo "  make build-prod     - Production build (size optimized)"
 	@echo "  make build-perf     - Production build (max runtime performance)"
