@@ -325,6 +325,54 @@ func TestValidateAuth(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "有效MinPasswordLength",
+			config: AuthConfig{
+				Type:              "basic",
+				Algorithm:         "bcrypt",
+				Users:             []User{{Name: "admin", Password: "hashed_password"}},
+				MinPasswordLength: 8,
+			},
+			wantErr: false,
+		},
+		{
+			name: "MinPasswordLength过小",
+			config: AuthConfig{
+				Type:              "basic",
+				Users:             []User{{Name: "admin", Password: "hashed_password"}},
+				MinPasswordLength: 5,
+			},
+			wantErr: true,
+			errMsg:  "min_password_length 建议至少为 6",
+		},
+		{
+			name: "MinPasswordLength过大",
+			config: AuthConfig{
+				Type:              "basic",
+				Users:             []User{{Name: "admin", Password: "hashed_password"}},
+				MinPasswordLength: 129,
+			},
+			wantErr: true,
+			errMsg:  "min_password_length 上限为 128",
+		},
+		{
+			name: "MinPasswordLength边界值6",
+			config: AuthConfig{
+				Type:              "basic",
+				Users:             []User{{Name: "admin", Password: "hashed_password"}},
+				MinPasswordLength: 6,
+			},
+			wantErr: false,
+		},
+		{
+			name: "MinPasswordLength边界值128",
+			config: AuthConfig{
+				Type:              "basic",
+				Users:             []User{{Name: "admin", Password: "hashed_password"}},
+				MinPasswordLength: 128,
+			},
+			wantErr: false,
+		},
+		{
 			name: "无效认证类型",
 			config: AuthConfig{
 				Type:  "oauth",
@@ -1063,6 +1111,112 @@ func TestValidatePerformance(t *testing.T) {
 			} else {
 				if err != nil {
 					t.Errorf("validatePerformance() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateVariables(t *testing.T) {
+	// TestValidateVariables 测试自定义变量配置验证。
+	tests := []struct {
+		name    string
+		config  VariablesConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "空配置有效",
+			config:  VariablesConfig{},
+			wantErr: false,
+		},
+		{
+			name: "有效变量名",
+			config: VariablesConfig{
+				Set: map[string]string{
+					"app_name": "lolly",
+					"version":  "1.0.0",
+					"ENV_VAR":  "production",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "空变量名",
+			config: VariablesConfig{
+				Set: map[string]string{
+					"": "value",
+				},
+			},
+			wantErr: true,
+			errMsg:  "变量名不能为空",
+		},
+		{
+			name: "变量名含特殊字符",
+			config: VariablesConfig{
+				Set: map[string]string{
+					"app-name": "value",
+				},
+			},
+			wantErr: true,
+			errMsg:  "包含非法字符",
+		},
+		{
+			name: "变量名arg_前缀冲突",
+			config: VariablesConfig{
+				Set: map[string]string{
+					"arg_foo": "value",
+				},
+			},
+			wantErr: true,
+			errMsg:  "与动态变量前缀冲突",
+		},
+		{
+			name: "变量名http_前缀冲突",
+			config: VariablesConfig{
+				Set: map[string]string{
+					"http_custom": "value",
+				},
+			},
+			wantErr: true,
+			errMsg:  "与动态变量前缀冲突",
+		},
+		{
+			name: "变量名cookie_前缀冲突",
+			config: VariablesConfig{
+				Set: map[string]string{
+					"cookie_session": "value",
+				},
+			},
+			wantErr: true,
+			errMsg:  "与动态变量前缀冲突",
+		},
+		{
+			name: "变量名与内置变量冲突",
+			config: VariablesConfig{
+				Set: map[string]string{
+					"host": "custom",
+				},
+			},
+			wantErr: true,
+			errMsg:  "与内置变量冲突",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateVariables(&tt.config)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateVariables() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateVariables() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateVariables() 期望返回 nil，但返回错误: %v", err)
 				}
 			}
 		})

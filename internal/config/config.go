@@ -81,6 +81,78 @@ type Config struct {
 	// Resolver DNS 解析器配置
 	// 启用动态 DNS 解析和缓存
 	Resolver ResolverConfig `yaml:"resolver"`
+
+	// Variables 自定义变量配置
+	// 全局变量定义，应用于所有虚拟主机
+	Variables VariablesConfig `yaml:"variables"`
+}
+
+// VariablesConfig 自定义变量配置。
+//
+// 用于定义全局自定义变量，可在日志格式和请求头中引用。
+// 变量作用于所有虚拟主机。
+//
+// 注意事项：
+//   - 变量名只允许字母、数字、下划线
+//   - 变量名不能与内置变量冲突
+//   - 变量名不能以 arg_、http_、cookie_ 开头（动态变量前缀）
+//
+// 使用示例：
+//
+//	variables:
+//	  set:
+//	    app_name: "lolly"
+//	    version: "1.0.0"
+type VariablesConfig struct {
+	// Set 自定义变量集合
+	// 键值对形式，可在日志格式和请求头模板中使用 $var_name 引用
+	Set map[string]string `yaml:"set"`
+}
+
+// HTTP2Config HTTP/2 配置。
+//
+// HTTP/2 提供多路复用、头部压缩和服务器推送等功能，
+// 需要服务器配置 SSL/TLS 证书才能正常工作。
+//
+// 注意事项：
+//   - 必须配置有效的 SSL 证书（TLS 1.2 或更高版本）
+//   - http2.enabled 仅在配置了 SSL/TLS 时生效
+//   - 客户端可以通过 ALPN 协商使用 HTTP/2 或 HTTP/1.1
+//
+// 使用示例：
+//
+//	server:
+//	  ssl:
+//	    cert: "/etc/ssl/server.crt"
+//	    key: "/etc/ssl/server.key"
+//	    http2:
+//	      enabled: true
+//	      max_concurrent_streams: 128
+//	      max_header_list_size: "16KB"
+type HTTP2Config struct {
+	// Enabled 是否启用 HTTP/2
+	// 默认为 true，但仅在配置了 SSL 时生效
+	Enabled bool `yaml:"enabled"`
+
+	// MaxConcurrentStreams 最大并发流
+	// 控制单个连接允许的最大并发流数量，默认 128
+	MaxConcurrentStreams int `yaml:"max_concurrent_streams"`
+
+	// MaxHeaderListSize 最大头部列表大小（字节）
+	// 限制请求和响应头部的大小，默认 1MB (1048576)
+	MaxHeaderListSize int `yaml:"max_header_list_size"`
+
+	// IdleTimeout 空闲超时
+	// 连接无活动时的最大保持时间，默认 120s
+	IdleTimeout time.Duration `yaml:"idle_timeout"`
+
+	// PushEnabled 是否启用 Server Push
+	// 默认 false
+	PushEnabled bool `yaml:"push_enabled"`
+
+	// H2CEnabled 是否启用 H2C（明文 HTTP/2）
+	// 默认 false，需要 Enabled 为 true 才生效
+	H2CEnabled bool `yaml:"h2c_enabled"`
 }
 
 // HTTP3Config HTTP/3 (QUIC) 配置。
@@ -546,6 +618,10 @@ type SSLConfig struct {
 	// 启用 TLS 1.3 会话恢复以提升握手性能
 	SessionTickets SessionTicketsConfig `yaml:"session_tickets"`
 
+	// HTTP2 HTTP/2 配置
+	// 启用 HTTP/2 支持，仅在配置了 SSL/TLS 时生效
+	HTTP2 HTTP2Config `yaml:"http2"`
+
 	// ClientVerify 客户端证书验证配置
 	// 启用 mTLS 双向认证
 	ClientVerify ClientVerifyConfig `yaml:"client_verify"`
@@ -841,6 +917,10 @@ type AuthConfig struct {
 	// Realm 认证域
 	// 显示在浏览器认证对话框中的描述信息
 	Realm string `yaml:"realm"`
+	// MinPasswordLength 密码最小长度
+	// 用于验证密码哈希对应的原始密码长度（仅提示性验证）
+	// 建议值：8-128，默认 8
+	MinPasswordLength int `yaml:"min_password_length"`
 }
 
 // User 认证用户配置。
@@ -1725,6 +1805,11 @@ func Validate(cfg *Config) error {
 	// 验证 Resolver 配置
 	if err := cfg.Resolver.Validate(); err != nil {
 		return fmt.Errorf("resolver: %w", err)
+	}
+
+	// 验证变量配置
+	if err := validateVariables(&cfg.Variables); err != nil {
+		return fmt.Errorf("variables: %w", err)
 	}
 
 	return nil

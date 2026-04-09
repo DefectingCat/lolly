@@ -108,6 +108,7 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12, // 强制 TLS 1.2 最低版本
 		MaxVersion:   tls.VersionTLS13,
+		NextProtos:   []string{"h2", "http/1.1"}, // 启用 HTTP/2 ALPN 支持
 	}
 
 	// 应用 TLS 1.2 的加密套件

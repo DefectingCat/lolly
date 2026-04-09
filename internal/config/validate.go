@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"rua.plus/lolly/internal/loadbalance"
+	"rua.plus/lolly/internal/variable"
 )
 
 // validateServer 验证服务器配置。
@@ -246,6 +247,7 @@ func validateProxy(p *ProxyConfig) error {
 // validateSSL 验证 SSL 配置。
 //
 // 检查 SSL 证书、私钥、TLS 协议版本和加密套件的有效性。
+// 同时验证 HTTP/2 配置的有效性。
 //
 // 参数：
 //   - s: SSL 配置对象
@@ -257,7 +259,13 @@ func validateProxy(p *ProxyConfig) error {
 //   - cert 和 key 必须同时配置或同时为空
 //   - TLS 协议仅允许 TLSv1.2 和 TLSv1.3
 //   - 拒绝不安全的加密套件（RC4、DES、3DES、CBC）
+//   - HTTP/2 配置仅在配置了 SSL 时生效
 func validateSSL(s *SSLConfig) error {
+	// 验证 HTTP/2 配置
+	if err := validateHTTP2(&s.HTTP2, s.Cert != "" && s.Key != ""); err != nil {
+		return fmt.Errorf("http2: %w", err)
+	}
+
 	// 未配置 SSL 时跳过验证
 	if s.Cert == "" && s.Key == "" {
 		return nil
@@ -422,6 +430,14 @@ func validateAuth(a *AuthConfig) error {
 		}
 	}
 
+	// 验证密码最小长度配置合理性
+	if a.MinPasswordLength > 0 && a.MinPasswordLength < 6 {
+		return fmt.Errorf("min_password_length 建议至少为 6")
+	}
+	if a.MinPasswordLength > 128 {
+		return fmt.Errorf("min_password_length 上限为 128")
+	}
+
 	return nil
 }
 
@@ -492,6 +508,46 @@ func validateRateLimit(r *RateLimitConfig) error {
 	}
 	if !valid {
 		return fmt.Errorf("无效的滑动窗口模式: %s（仅支持 approximate 或 precise）", r.SlidingWindowMode)
+	}
+
+	return nil
+}
+
+// validateHTTP2 验证 HTTP/2 配置。
+//
+// 检查 HTTP/2 配置的有效性，包括并发流数量和头部大小限制。
+//
+// 参数：
+//   - h: HTTP/2 配置对象
+//   - hasSSL: 是否配置了 SSL/TLS
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - http2.enabled 仅在配置了 SSL 时生效（HTTP/2 over TLS）
+//   - max_concurrent_streams 必须大于 0
+//   - max_header_list_size 必须是一个有效的字节大小（如 "16KB", "1MB"）或空
+func validateHTTP2(h *HTTP2Config, hasSSL bool) error {
+	// HTTP/2 配置在 HTTPS 下才有效（除非启用 H2C）
+	if h.Enabled && !hasSSL && !h.H2CEnabled {
+		// HTTP/2 需要 TLS（h2），明文 HTTP/2（h2c）需要单独启用
+		return errors.New("HTTP/2 需要配置 SSL/TLS 证书（http2.enabled 仅在配置 SSL 时生效，或启用 h2c_enabled）")
+	}
+
+	// 验证并发流数量
+	if h.MaxConcurrentStreams < 0 {
+		return errors.New("max_concurrent_streams 不能为负数")
+	}
+
+	// 验证头部大小限制
+	if h.MaxHeaderListSize < 0 {
+		return errors.New("max_header_list_size 不能为负数")
+	}
+
+	// 验证空闲超时
+	if h.IdleTimeout < 0 {
+		return errors.New("idle_timeout 不能为负数")
 	}
 
 	return nil
@@ -767,3 +823,109 @@ func validateNextUpstream(n *NextUpstreamConfig) error {
 
 	return nil
 }
+
+// validateVariables 验证自定义变量配置。
+//
+// 检查变量名的有效性和冲突情况。
+//
+// 参数：
+//   - v: 变量配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - 变量名不能为空
+//   - 变量名只允许字母、数字、下划线
+//   - 变量名不能以 arg_、http_、cookie_ 开头（动态变量前缀）
+//   - 变量名不能与内置变量冲突
+func validateVariables(v *VariablesConfig) error {
+	for name := range v.Set {
+		// 检查变量名非空
+		if name == "" {
+			return errors.New("变量名不能为空")
+		}
+
+		// 变量名只允许字母、数字、下划线
+		for i, c := range name {
+			isLetter := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+			isDigit := c >= '0' && c <= '9'
+			isUnderscore := c == '_'
+			if !isLetter && !isDigit && !isUnderscore {
+				return fmt.Errorf("变量名 '%s' 包含非法字符（位置 %d）", name, i)
+			}
+		}
+
+		// 检查动态变量前缀冲突
+		if strings.HasPrefix(name, "arg_") || strings.HasPrefix(name, "http_") || strings.HasPrefix(name, "cookie_") {
+			return fmt.Errorf("变量名 '%s' 与动态变量前缀冲突（arg_, http_, cookie_）", name)
+		}
+
+		// 禁止覆盖内置变量
+		if variable.GetBuiltin(name) != nil {
+			return fmt.Errorf("变量名 '%s' 与内置变量冲突", name)
+		}
+	}
+	return nil
+}
+
+// parseSize 解析大小字符串为字节数。
+//
+// 支持单位：b, kb, mb, gb（不区分大小写）。
+// 纯数字默认为字节。
+//
+// 参数：
+//   - s: 大小字符串，如 "16KB", "1MB", "1024"
+//
+// 返回值：
+//   - int64: 字节数
+//   - error: 解析失败时返回错误
+func parseSize(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, errors.New("大小字符串不能为空")
+	}
+
+	// 提取数字部分和单位
+	var numStr string
+	var unit string
+	for i := len(s) - 1; i >= 0; i-- {
+		c := s[i]
+		if c >= '0' && c <= '9' || c == '.' {
+			numStr = s[:i+1]
+			unit = strings.ToLower(s[i+1:])
+			break
+		}
+	}
+
+	if numStr == "" {
+		return 0, fmt.Errorf("无效的大小格式: %s", s)
+	}
+
+	// 解析数字
+	var value float64
+	_, err := fmt.Sscanf(numStr, "%f", &value)
+	if err != nil {
+		return 0, fmt.Errorf("无法解析数字: %s", numStr)
+	}
+
+	// 转换单位
+	var multiplier int64
+	switch unit {
+	case "", "b":
+		multiplier = 1
+	case "k", "kb":
+		multiplier = 1024
+	case "m", "mb":
+		multiplier = 1024 * 1024
+	case "g", "gb":
+		multiplier = 1024 * 1024 * 1024
+	default:
+		return 0, fmt.Errorf("未知单位: %s", unit)
+	}
+
+	return int64(value * float64(multiplier)), nil
+}
+
+// unused: kept for potential future use in size parsing
+var _ = parseSize

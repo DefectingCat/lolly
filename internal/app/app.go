@@ -26,11 +26,13 @@ import (
 	"time"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/http2"
 	"rua.plus/lolly/internal/http3"
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/resolver"
 	"rua.plus/lolly/internal/server"
 	"rua.plus/lolly/internal/stream"
+	"rua.plus/lolly/internal/variable"
 )
 
 // 版本信息，通过 -ldflags 注入。
@@ -71,6 +73,9 @@ type App struct {
 
 	// http3Srv HTTP/3 服务器实例（可选）
 	http3Srv *http3.Server
+
+	// http2Srv HTTP/2 服务器实例（可选）
+	http2Srv *http2.Server
 
 	// streamSrv Stream 服务器实例（可选）
 	streamSrv *stream.Server
@@ -166,6 +171,14 @@ func (a *App) Run() int {
 	}
 	a.cfg = cfg
 	a.logger = logging.NewAppLogger(&cfg.Logging)
+
+	// 设置全局变量
+	variable.SetGlobalVariables(cfg.Variables.Set)
+	if len(cfg.Variables.Set) > 0 {
+		a.logger.LogStartup("全局变量已加载", map[string]string{
+			"count": fmt.Sprintf("%d", len(cfg.Variables.Set)),
+		})
+	}
 
 	// 检查是否是子进程（热升级）
 	if os.Getenv("GRACEFUL_UPGRADE") == "1" {
@@ -263,6 +276,38 @@ func (a *App) Run() int {
 		}
 	}
 
+	// 创建并启动 HTTP/2 服务器（如果启用且配置了 TLS）
+	if a.cfg.Server.SSL.HTTP2.Enabled && a.cfg.Server.SSL.Cert != "" {
+		tlsConfig, err := a.srv.GetTLSConfig()
+		if err != nil {
+			a.logger.Error().Err(err).Msg("获取 TLS 配置失败，跳过 HTTP/2")
+		} else {
+			// 创建 HTTP/2 服务器，共享同一个 handler
+			a.http2Srv, err = http2.NewServer(&a.cfg.Server.SSL.HTTP2, a.srv.GetHandler(), tlsConfig)
+			if err != nil {
+				a.logger.Error().Err(err).Msg("创建 HTTP/2 服务器失败")
+			} else {
+				go func() {
+					a.logger.LogStartup("HTTP/2 服务器启动中", map[string]string{
+						"listen":                 a.cfg.Server.Listen,
+						"max_concurrent_streams": fmt.Sprintf("%d", a.cfg.Server.SSL.HTTP2.MaxConcurrentStreams),
+						"push_enabled":           fmt.Sprintf("%t", a.cfg.Server.SSL.HTTP2.PushEnabled),
+					})
+					// HTTP/2 服务器使用与主服务器相同的监听器
+					// 通过 ALPN 协商自动处理协议选择
+					listeners := a.srv.GetListeners()
+					if len(listeners) > 0 {
+						if err := a.http2Srv.Serve(listeners[0]); err != nil {
+							a.logger.Error().Err(err).Msg("HTTP/2 服务器启动失败")
+						}
+					} else {
+						a.logger.Error().Msg("HTTP/2 服务器启动失败: 无可用监听器")
+					}
+				}()
+			}
+		}
+	}
+
 	// 创建升级管理器
 	a.upgradeMgr = server.NewUpgradeManager(a.srv)
 	if a.pidFile != "" {
@@ -318,6 +363,7 @@ func (a *App) handleSignal(sig os.Signal) bool {
 	case syscall.SIGQUIT:
 		// 优雅停止：等待请求完成
 		a.logger.LogSignal("SIGQUIT", fmt.Sprintf("优雅停止（等待 %v）", shutdownTimeout))
+		a.shutdownHTTP2()
 		a.shutdownHTTP3()
 		_ = a.srv.GracefulStop(shutdownTimeout)
 		return false
@@ -325,6 +371,7 @@ func (a *App) handleSignal(sig os.Signal) bool {
 	case syscall.SIGTERM, syscall.SIGINT:
 		// 快速停止
 		a.logger.LogSignal(sigName(sig.(syscall.Signal)), "停止服务器")
+		a.shutdownHTTP2()
 		a.shutdownHTTP3()
 		_ = a.srv.Stop()
 		return false
@@ -358,6 +405,15 @@ func (a *App) shutdownHTTP3() {
 	if a.http3Srv != nil {
 		if err := a.http3Srv.Stop(); err != nil {
 			a.logger.Error().Err(err).Msg("HTTP/3 服务器关闭失败")
+		}
+	}
+}
+
+// shutdownHTTP2 关闭 HTTP/2 服务器。
+func (a *App) shutdownHTTP2() {
+	if a.http2Srv != nil {
+		if err := a.http2Srv.Stop(); err != nil {
+			a.logger.Error().Err(err).Msg("HTTP/2 服务器关闭失败")
 		}
 	}
 }
@@ -415,6 +471,7 @@ func (a *App) gracefulUpgrade() {
 	a.logger.LogStartup("热升级已启动，新进程正在接管", nil)
 
 	// 当前进程优雅停止
+	a.shutdownHTTP2()
 	a.shutdownHTTP3()
 	_ = a.srv.GracefulStop(shutdownTimeout)
 }

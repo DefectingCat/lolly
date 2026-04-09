@@ -58,6 +58,14 @@ func DefaultConfig() *Config {
 					IncludeSubDomains: true,
 					Preload:           false,
 				},
+				HTTP2: HTTP2Config{
+					Enabled:              true,
+					MaxConcurrentStreams: 128,
+					MaxHeaderListSize:    1048576, // 1MB
+					IdleTimeout:          120 * time.Second,
+					PushEnabled:          false,
+					H2CEnabled:           false,
+				},
 			},
 			Security: SecurityConfig{
 				Access: AccessConfig{
@@ -75,9 +83,10 @@ func DefaultConfig() *Config {
 					SlidingWindow:     60,
 				},
 				Auth: AuthConfig{
-					RequireTLS: true,
-					Algorithm:  "bcrypt",
-					Realm:      "Restricted Area",
+					RequireTLS:        true,
+					Algorithm:         "bcrypt",
+					Realm:             "Restricted Area",
+					MinPasswordLength: 8,
 				},
 				Headers: SecurityHeaders{
 					XFrameOptions:       "DENY",
@@ -147,6 +156,9 @@ func DefaultConfig() *Config {
 			MaxStreams:  100,
 			IdleTimeout: 60 * time.Second,
 			Enable0RTT:  false,
+		},
+		Variables: VariablesConfig{
+			Set: map[string]string{},
 		},
 	}
 }
