@@ -218,10 +218,15 @@ bench-check:
 # 代码质量
 # ============================================
 
-# 格式化代码
+# 格式化代码（使用 goimports 替代 go fmt）
 fmt:
-	@echo "Formatting code..."
-	go fmt ./...
+	@echo "Formatting code with goimports..."
+	@if command -v goimports >/dev/null 2>&1; then \
+		goimports -w .; \
+	else \
+		echo "goimports not installed. Run: go install golang.org/x/tools/cmd/goimports@latest"; \
+		exit 1; \
+	fi
 
 # 静态检查
 lint:
