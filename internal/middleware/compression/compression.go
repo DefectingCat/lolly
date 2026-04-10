@@ -36,10 +36,12 @@ const (
 	AlgorithmGzip Algorithm = iota
 	// AlgorithmBrotli 使用 brotli 压缩。
 	AlgorithmBrotli
+
+	compressionGZIP = "gzip"
 )
 
-// CompressionMiddleware 响应压缩中间件。
-type CompressionMiddleware struct {
+// Middleware 响应压缩中间件。
+type Middleware struct {
 	// types 可压缩的 MIME 类型列表
 	types []string
 	// level 压缩级别（1-9）
@@ -61,9 +63,9 @@ type CompressionMiddleware struct {
 //   - cfg: 压缩配置，包含算法类型、压缩级别、最小压缩大小等
 //
 // 返回值：
-//   - *CompressionMiddleware: 压缩中间件实例
+//   - *Middleware: 压缩中间件实例
 //   - error: 配置无效时返回错误
-func New(cfg *config.CompressionConfig) (*CompressionMiddleware, error) {
+func New(cfg *config.CompressionConfig) (*Middleware, error) {
 	if cfg == nil {
 		cfg = &config.CompressionConfig{
 			Type:    "gzip",
@@ -89,7 +91,7 @@ func New(cfg *config.CompressionConfig) (*CompressionMiddleware, error) {
 	switch strings.ToLower(cfg.Type) {
 	case "brotli":
 		algo = AlgorithmBrotli
-	case "gzip":
+	case compressionGZIP:
 		algo = AlgorithmGzip
 	case "both":
 		// both 模式优先使用 brotli（如果客户端支持）
@@ -98,7 +100,7 @@ func New(cfg *config.CompressionConfig) (*CompressionMiddleware, error) {
 		algo = AlgorithmGzip
 	}
 
-	m := &CompressionMiddleware{
+	m := &Middleware{
 		types:     cfg.Types,
 		level:     cfg.Level,
 		minSize:   cfg.MinSize,
@@ -141,7 +143,7 @@ func defaultCompressibleTypes() []string {
 }
 
 // Name 返回中间件名称。
-func (m *CompressionMiddleware) Name() string {
+func (m *Middleware) Name() string {
 	return "compression"
 }
 
@@ -152,7 +154,7 @@ func (m *CompressionMiddleware) Name() string {
 //
 // 返回值：
 //   - fasthttp.RequestHandler: 包装后的请求处理器
-func (m *CompressionMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+func (m *Middleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		// 检查客户端是否支持压缩
 		acceptEncoding := string(ctx.Request.Header.Peek("Accept-Encoding"))
@@ -204,7 +206,7 @@ func (m *CompressionMiddleware) Process(next fasthttp.RequestHandler) fasthttp.R
 			encoding = "br"
 		} else if useGzip {
 			compressed = m.compressGzip(body)
-			encoding = "gzip"
+			encoding = compressionGZIP
 		}
 
 		if len(compressed) > 0 && len(compressed) < bodyLen {
@@ -222,7 +224,7 @@ func (m *CompressionMiddleware) Process(next fasthttp.RequestHandler) fasthttp.R
 //
 // 返回值：
 //   - bool: 是否可压缩
-func (m *CompressionMiddleware) isCompressible(contentType string) bool {
+func (m *Middleware) isCompressible(contentType string) bool {
 	// 移除 charset 等参数
 	ct := contentType
 	if idx := strings.Index(ct, ";"); idx >= 0 {
@@ -252,7 +254,7 @@ func (m *CompressionMiddleware) isCompressible(contentType string) bool {
 //
 // 返回值：
 //   - []byte: 压缩后的数据
-func (m *CompressionMiddleware) compressGzip(data []byte) []byte {
+func (m *Middleware) compressGzip(data []byte) []byte {
 	w := m.gzipPool.Get().(*gzip.Writer)
 	defer m.gzipPool.Put(w)
 
@@ -271,7 +273,7 @@ func (m *CompressionMiddleware) compressGzip(data []byte) []byte {
 //
 // 返回值：
 //   - []byte: 压缩后的数据
-func (m *CompressionMiddleware) compressBrotli(data []byte) []byte {
+func (m *Middleware) compressBrotli(data []byte) []byte {
 	w := m.brotliPool.Get().(*brotli.Writer)
 	defer m.brotliPool.Put(w)
 
@@ -287,7 +289,7 @@ func (m *CompressionMiddleware) compressBrotli(data []byte) []byte {
 //
 // 返回值：
 //   - []string: 可压缩的 MIME 类型列表
-func (m *CompressionMiddleware) Types() []string {
+func (m *Middleware) Types() []string {
 	return m.types
 }
 
@@ -295,7 +297,7 @@ func (m *CompressionMiddleware) Types() []string {
 //
 // 返回值：
 //   - int: 压缩级别（1-9）
-func (m *CompressionMiddleware) Level() int {
+func (m *Middleware) Level() int {
 	return m.level
 }
 
@@ -303,6 +305,6 @@ func (m *CompressionMiddleware) Level() int {
 //
 // 返回值：
 //   - int: 最小压缩大小（字节）
-func (m *CompressionMiddleware) MinSize() int {
+func (m *Middleware) MinSize() int {
 	return m.minSize
 }

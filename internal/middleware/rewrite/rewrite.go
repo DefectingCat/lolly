@@ -52,14 +52,14 @@ type Rule struct {
 	flag Flag
 }
 
-// RewriteMiddleware URL 重写中间件。
-type RewriteMiddleware struct {
+// Middleware URL 重写中间件。
+type Middleware struct {
 	// rules 编译后的规则列表，按配置顺序执行
 	rules []Rule
 }
 
 // New 创建重写中间件。
-func New(rules []config.RewriteRule) (*RewriteMiddleware, error) {
+func New(rules []config.RewriteRule) (*Middleware, error) {
 	compiled := make([]Rule, 0, len(rules))
 	for _, r := range rules {
 		// 验证正则表达式安全性，防止 ReDoS
@@ -77,7 +77,7 @@ func New(rules []config.RewriteRule) (*RewriteMiddleware, error) {
 			flag:        parseFlag(r.Flag),
 		})
 	}
-	return &RewriteMiddleware{rules: compiled}, nil
+	return &Middleware{rules: compiled}, nil
 }
 
 // validateRegexSafety 验证正则表达式的安全性，防止 ReDoS 攻击。
@@ -107,12 +107,12 @@ func validateRegexSafety(pattern string) error {
 }
 
 // Name 返回中间件名称。
-func (m *RewriteMiddleware) Name() string {
+func (m *Middleware) Name() string {
 	return "rewrite"
 }
 
 // Process 应用重写规则。
-func (m *RewriteMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+func (m *Middleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		path := string(ctx.Path())
 		originalPath := path
@@ -136,9 +136,9 @@ func (m *RewriteMiddleware) Process(next fasthttp.RequestHandler) fasthttp.Reque
 				newPath := rule.pattern.ReplaceAllString(path, rule.replacement)
 
 				// 对替换结果进行变量展开
-				vc := variable.NewVariableContext(ctx)
+				vc := variable.NewContext(ctx)
 				newPath = vc.Expand(newPath)
-				variable.ReleaseVariableContext(vc)
+				variable.ReleaseContext(vc)
 
 				switch rule.flag {
 				case FlagRedirect:
@@ -175,6 +175,6 @@ func (m *RewriteMiddleware) Process(next fasthttp.RequestHandler) fasthttp.Reque
 }
 
 // Rules 返回编译后的规则列表（用于调试）。
-func (m *RewriteMiddleware) Rules() []Rule {
+func (m *Middleware) Rules() []Rule {
 	return m.rules
 }

@@ -89,7 +89,7 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestRewriteMiddlewareLast(t *testing.T) {
+func TestMiddlewareLast(t *testing.T) {
 	m, err := New([]config.RewriteRule{
 		{Pattern: "^/old/(.*)$", Replacement: "/new/$1", Flag: "last"},
 	})
@@ -118,7 +118,7 @@ func TestRewriteMiddlewareLast(t *testing.T) {
 	}
 }
 
-func TestRewriteMiddlewareRedirect(t *testing.T) {
+func TestMiddlewareRedirect(t *testing.T) {
 	m, err := New([]config.RewriteRule{
 		{Pattern: "^/old/(.*)$", Replacement: "/new/$1", Flag: "redirect"},
 	})
@@ -127,7 +127,7 @@ func TestRewriteMiddlewareRedirect(t *testing.T) {
 	}
 
 	handlerCalled := false
-	nextHandler := func(ctx *fasthttp.RequestCtx) {
+	nextHandler := func(_ *fasthttp.RequestCtx) {
 		handlerCalled = true
 	}
 
@@ -153,7 +153,7 @@ func TestRewriteMiddlewareRedirect(t *testing.T) {
 	}
 }
 
-func TestRewriteMiddlewarePermanent(t *testing.T) {
+func TestMiddlewarePermanent(t *testing.T) {
 	m, err := New([]config.RewriteRule{
 		{Pattern: "^/old/(.*)$", Replacement: "/new/$1", Flag: "permanent"},
 	})
@@ -182,7 +182,7 @@ func TestRewriteMiddlewarePermanent(t *testing.T) {
 	}
 }
 
-func TestRewriteMiddlewareBreak(t *testing.T) {
+func TestMiddlewareBreak(t *testing.T) {
 	m, err := New([]config.RewriteRule{
 		{Pattern: "^/api/(.*)$", Replacement: "/internal/$1", Flag: "break"},
 		{Pattern: "^/internal/(.*)$", Replacement: "/final/$1", Flag: "last"},
@@ -212,7 +212,7 @@ func TestRewriteMiddlewareBreak(t *testing.T) {
 	}
 }
 
-func TestRewriteMiddlewareChain(t *testing.T) {
+func TestMiddlewareChain(t *testing.T) {
 	// 测试多个 last 规则链式应用
 	m, err := New([]config.RewriteRule{
 		{Pattern: "^/v1/(.*)$", Replacement: "/v2/$1", Flag: "last"},
@@ -242,7 +242,7 @@ func TestRewriteMiddlewareChain(t *testing.T) {
 	}
 }
 
-func TestRewriteMiddlewareNoMatch(t *testing.T) {
+func TestMiddlewareNoMatch(t *testing.T) {
 	m, err := New([]config.RewriteRule{
 		{Pattern: "^/old/(.*)$", Replacement: "/new/$1", Flag: "last"},
 	})
@@ -270,7 +270,7 @@ func TestRewriteMiddlewareNoMatch(t *testing.T) {
 	}
 }
 
-func TestRewriteMiddlewareName(t *testing.T) {
+func TestMiddlewareName(t *testing.T) {
 	m, err := New(nil)
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
@@ -281,7 +281,7 @@ func TestRewriteMiddlewareName(t *testing.T) {
 	}
 }
 
-func TestRewriteMiddlewareRules(t *testing.T) {
+func TestMiddlewareRules(t *testing.T) {
 	rules := []config.RewriteRule{
 		{Pattern: "^/a/(.*)$", Replacement: "/b/$1", Flag: "last"},
 		{Pattern: "^/c$", Replacement: "/d", Flag: "redirect"},
@@ -357,7 +357,7 @@ func TestCrossRuleCycle(t *testing.T) {
 		t.Fatalf("New() error: %v", err)
 	}
 
-	nextHandler := func(ctx *fasthttp.RequestCtx) {
+	nextHandler := func(_ *fasthttp.RequestCtx) {
 		t.Error("Next handler should not be called in a loop scenario")
 	}
 
@@ -473,7 +473,7 @@ func TestIterationLimitExact(t *testing.T) {
 		t.Fatalf("New() error: %v", err)
 	}
 
-	nextHandler := func(ctx *fasthttp.RequestCtx) {
+	nextHandler := func(_ *fasthttp.RequestCtx) {
 		t.Error("Next handler should not be called when iteration limit exceeded")
 	}
 

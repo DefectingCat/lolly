@@ -39,7 +39,7 @@ func (m *testMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestH
 func TestEmptyChain(t *testing.T) {
 	chain := NewChain()
 	executed := false
-	final := func(ctx *fasthttp.RequestCtx) {
+	final := func(_ *fasthttp.RequestCtx) {
 		executed = true
 	}
 
@@ -64,7 +64,7 @@ func TestSingleMiddleware(t *testing.T) {
 	mw := &testMiddleware{name: "mw1", order: &order}
 	chain := NewChain(mw)
 
-	final := func(ctx *fasthttp.RequestCtx) {
+	final := func(_ *fasthttp.RequestCtx) {
 		order = append(order, "final")
 	}
 
@@ -92,7 +92,7 @@ func TestMultipleMiddlewareOrder(t *testing.T) {
 	// 添加顺序：mw1, mw2, mw3
 	chain := NewChain(mw1, mw2, mw3)
 
-	final := func(ctx *fasthttp.RequestCtx) {
+	final := func(_ *fasthttp.RequestCtx) {
 		order = append(order, "final")
 	}
 
