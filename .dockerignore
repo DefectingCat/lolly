@@ -1,0 +1,78 @@
+# Build artifacts
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go cache and modules
+vendor/
+
+# Test artifacts
+*.test
+*.out
+coverage.html
+coverage.out
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/
+
+# Claude/OMC state
+.omc/
+.claude/
+CLAUDE.md
+
+# Git submodule (large)
+lua-nginx-module/
+
+# Development configs (use production configs in container)
+lolly.yaml
+config.yaml
+
+# Compiled binary (will be built in container)
+lolly
+
+# Benchmark and profiling data
+default.pgo
+benchmark-*.txt
+
+# Documentation (not needed in runtime)
+docs/
+
+# Scripts (not needed in runtime)
+scripts/
+
+# HTML test directory
+html/
+
+# Git
+.git/
+.gitignore

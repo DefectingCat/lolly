@@ -1,0 +1,41 @@
+services:
+  lolly:
+    build: .
+    # 防止僵尸进程（lolly 无 PID 1 处理）
+    init: true
+    ports:
+      - "8080:8080"
+      # HTTP/3 (QUIC) - 需要 SSL 证书
+      # - "443:443/tcp"
+      # - "443:443/udp"
+    volumes:
+      - ./lolly.yaml:/etc/lolly/lolly.yaml:ro
+      # 静态文件目录
+      - ./html:/var/www/html:ro
+      # SSL 证书（可选）
+      # - ./certs:/etc/lolly/certs:ro
+      # 日志持久化（可选）
+      # - ./logs:/var/log/lolly
+    environment:
+      # 配合容器内存限制设置 GC 目标
+      - GOMEMLIMIT=750MiB
+    # 资源限制（可选）
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 1G
+    #     reservations:
+    #       memory: 256M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/_status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # 示例后端服务（用于反向代理测试）
+  # backend:
+  #   image: nginx:alpine
+  #   ports:
+  #     - "8000:80"
