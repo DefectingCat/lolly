@@ -393,13 +393,20 @@ func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout tim
 
 	// 步骤5: 检查响应状态码（期望 101 Switching Protocols）
 	if resp.StatusCode != http.StatusSwitchingProtocols {
+		// 关闭响应 body（升级失败时）
+		_ = resp.Body.Close()
 		return fmt.Errorf("backend rejected WebSocket upgrade: %s", resp.Status)
 	}
 
 	// 步骤6: 将升级响应发送回客户端
 	if err := writeUpgradeResponse(clientConn, resp); err != nil {
+		// 关闭响应 body（写入失败时）
+		_ = resp.Body.Close()
 		return fmt.Errorf("failed to send upgrade response to client: %w", err)
 	}
+
+	// 注意: WebSocket 升级成功后，resp.Body 不需要显式关闭
+	// 因为底层连接已被 bridge 用于双向数据传输
 
 	// 步骤7: 启动桥接（阻塞直到连接关闭）
 	return bridge.Bridge()
