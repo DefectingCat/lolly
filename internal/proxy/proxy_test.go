@@ -1287,8 +1287,8 @@ func TestFinalizeUpstreamVars(t *testing.T) {
 	ctx.Request.Header.SetMethod("GET")
 	ctx.Request.Header.SetRequestURI("/test")
 
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	timing := NewUpstreamTiming()
 	timing.MarkConnectStart()

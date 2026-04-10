@@ -25,6 +25,8 @@ import (
 	"rua.plus/lolly/internal/loadbalance"
 )
 
+const healthPath = "/health"
+
 // HealthChecker 对后端目标执行健康检查。
 // 它支持主动（定期 HTTP 探测）和被动（基于失败的）
 // 两种健康检查模式。
@@ -97,7 +99,7 @@ func NewHealthChecker(targets []*loadbalance.Target, cfg *config.HealthCheckConf
 
 	path := cfg.Path
 	if path == "" {
-		path = "/health"
+		path = healthPath
 	}
 
 	return &HealthChecker{

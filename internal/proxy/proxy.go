@@ -51,6 +51,11 @@ import (
 	"rua.plus/lolly/internal/variable"
 )
 
+const (
+	upstreamCache = "CACHE"
+	protoHTTPS    = "https"
+)
+
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
 //
 // 它为每个后端目标管理连接池，并提供负载均衡功能。
@@ -272,9 +277,9 @@ func (t *UpstreamTiming) GetResponseTime() float64 {
 	return t.responseEnd.Sub(t.connectEnd).Seconds()
 }
 
-// FinalizeUpstreamVars 在请求处理结束时设置上游变量到 VariableContext
+// FinalizeUpstreamVars 在请求处理结束时设置上游变量到 Context
 // 这个函数应该在 ServeHTTP 的 defer 中调用
-func FinalizeUpstreamVars(vc *variable.VariableContext, upstreamAddr string, upstreamStatus int, timing *UpstreamTiming) {
+func FinalizeUpstreamVars(vc *variable.Context, upstreamAddr string, upstreamStatus int, timing *UpstreamTiming) {
 	if vc == nil {
 		return
 	}
@@ -304,7 +309,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	timing := NewUpstreamTiming()
 
 	// 创建变量上下文用于设置上游变量
-	vc := variable.NewVariableContext(ctx)
+	vc := variable.NewContext(ctx)
 	defer func() {
 		// 确保记录了响应结束时间
 		if timing.responseEnd.IsZero() {
@@ -313,7 +318,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		// 设置上游变量
 		FinalizeUpstreamVars(vc, upstreamAddr, upstreamStatus, timing)
 		// 释放变量上下文
-		variable.ReleaseVariableContext(vc)
+		variable.ReleaseContext(vc)
 	}()
 
 	// 故障转移配置
@@ -376,7 +381,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			// WebSocket 使用 defer 确保连接计数释放
 			defer loadbalance.DecrementConnections(target)
 			timing.MarkConnectStart()
-			err := ProxyWebSocket(ctx, target, p.config.Timeout.Connect)
+			err := WebSocket(ctx, target, p.config.Timeout.Connect)
 			timing.MarkConnectEnd()
 			if err != nil {
 				upstreamStatus = 502
@@ -402,7 +407,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				loadbalance.DecrementConnections(target)
 				if !stale {
 					// 新鲜缓存，直接返回
-					upstreamAddr = "CACHE"
+					upstreamAddr = upstreamCache
 					upstreamStatus = entry.Status
 					p.writeCachedResponse(ctx, entry)
 					return
@@ -425,7 +430,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				// 重新尝试获取缓存
 
 				if entry, ok, _ := p.cache.Get(hashKey, origKey); ok {
-					upstreamAddr = "CACHE"
+					upstreamAddr = upstreamCache
 					upstreamStatus = entry.Status
 
 					p.writeCachedResponse(ctx, entry)
@@ -634,7 +639,7 @@ func (p *Proxy) getClient(targetURL string) *fasthttp.HostClient {
 
 // modifyRequestHeaders 在转发到后端之前修改请求头。
 // 添加标准代理请求头并应用自定义请求头配置。
-func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalance.Target) {
+func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, _ *loadbalance.Target) {
 	headers := &ctx.Request.Header
 
 	// 添加 X-Real-IP 请求头
@@ -660,14 +665,14 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 	// 添加 X-Forwarded-Proto 请求头
 	proto := "http"
 	if ctx.IsTLS() {
-		proto = "https"
+		proto = protoHTTPS
 	}
 	headers.Set("X-Forwarded-Proto", proto)
 
 	// 从配置设置自定义请求头（支持变量展开）
 	if p.config.Headers.SetRequest != nil {
-		vc := variable.NewVariableContext(ctx)
-		defer variable.ReleaseVariableContext(vc)
+		vc := variable.NewContext(ctx)
+		defer variable.ReleaseContext(vc)
 		for key, value := range p.config.Headers.SetRequest {
 			expanded := vc.Expand(value)
 			headers.Set(key, expanded)
@@ -686,8 +691,8 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 func (p *Proxy) modifyResponseHeaders(ctx *fasthttp.RequestCtx) {
 	// 从配置设置自定义响应头（支持变量展开）
 	if p.config.Headers.SetResponse != nil {
-		vc := variable.NewVariableContext(ctx)
-		defer variable.ReleaseVariableContext(vc)
+		vc := variable.NewContext(ctx)
+		defer variable.ReleaseContext(vc)
 		for key, value := range p.config.Headers.SetResponse {
 			expanded := vc.Expand(value)
 			ctx.Response.Header.Set(key, expanded)
@@ -712,13 +717,14 @@ func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
 }
 
 // handleWebSocket 处理 WebSocket 升级请求（保留用于兼容性，实际逻辑在 ServeHTTP 中）
-// nolint:unused // 保留用于未来 WebSocket 功能扩展
+//
+//nolint:unused // 保留用于未来 WebSocket 功能扩展
 func (p *Proxy) handleWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, _ *fasthttp.HostClient) {
 	timeout := p.config.Timeout.Connect
 	if timeout == 0 {
 		timeout = 30 * time.Second
 	}
-	if err := ProxyWebSocket(ctx, target, timeout); err != nil {
+	if err := WebSocket(ctx, target, timeout); err != nil {
 		logging.Error().Msgf("WebSocket proxy error: %v", err)
 	}
 }

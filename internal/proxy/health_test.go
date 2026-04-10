@@ -42,8 +42,8 @@ func TestNewHealthChecker(t *testing.T) {
 		if checker.GetTimeout() != 5*time.Second {
 			t.Errorf("Timeout = %v, want %v", checker.GetTimeout(), 5*time.Second)
 		}
-		if checker.GetPath() != "/health" {
-			t.Errorf("Path = %q, want %q", checker.GetPath(), "/health")
+		if checker.GetPath() != healthPath {
+			t.Errorf("Path = %q, want %q", checker.GetPath(), healthPath)
 		}
 		if checker.IsRunning() {
 			t.Error("新建的 checker 应未启动")
@@ -115,7 +115,7 @@ func TestNewHealthChecker(t *testing.T) {
 		if checker.GetTimeout() != 5*time.Second {
 			t.Errorf("零值 Timeout 应使用默认值，got %v", checker.GetTimeout())
 		}
-		if checker.GetPath() != "/health" {
+		if checker.GetPath() != healthPath {
 			t.Errorf("空 Path 应使用默认值，got %q", checker.GetPath())
 		}
 	})
@@ -131,7 +131,7 @@ func TestHealthCheckerStartStop(t *testing.T) {
 		cfg := &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
-			Path:     "/health",
+			Path:     healthPath,
 		}
 
 		checker := NewHealthChecker(targets, cfg)
@@ -200,8 +200,8 @@ func TestHealthCheckerStartStop(t *testing.T) {
 func TestCheckTarget(t *testing.T) {
 	t.Run("健康响应", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/health" {
-				t.Errorf("请求路径 = %q, want %q", r.URL.Path, "/health")
+			if r.URL.Path != healthPath {
+				t.Errorf("请求路径 = %q, want %q", r.URL.Path, healthPath)
 			}
 			w.WriteHeader(http.StatusOK)
 		}))
@@ -215,7 +215,7 @@ func TestCheckTarget(t *testing.T) {
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
-			Path:     "/health",
+			Path:     healthPath,
 		})
 
 		checker.checkTarget(target)
@@ -226,7 +226,7 @@ func TestCheckTarget(t *testing.T) {
 	})
 
 	t.Run("不健康响应", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		}))
 		defer server.Close()
@@ -239,7 +239,7 @@ func TestCheckTarget(t *testing.T) {
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
-			Path:     "/health",
+			Path:     healthPath,
 		})
 
 		checker.checkTarget(target)
@@ -250,7 +250,7 @@ func TestCheckTarget(t *testing.T) {
 	})
 
 	t.Run("超时", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			time.Sleep(100 * time.Millisecond)
 		}))
 		defer server.Close()
@@ -263,7 +263,7 @@ func TestCheckTarget(t *testing.T) {
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  10 * time.Millisecond,
-			Path:     "/health",
+			Path:     healthPath,
 		})
 
 		checker.checkTarget(target)
@@ -282,7 +282,7 @@ func TestCheckTarget(t *testing.T) {
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  100 * time.Millisecond,
-			Path:     "/health",
+			Path:     healthPath,
 		})
 
 		checker.checkTarget(target)
@@ -293,7 +293,7 @@ func TestCheckTarget(t *testing.T) {
 	})
 
 	t.Run("3xx 重定向响应", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusMovedPermanently)
 		}))
 		defer server.Close()
@@ -306,7 +306,7 @@ func TestCheckTarget(t *testing.T) {
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
-			Path:     "/health",
+			Path:     healthPath,
 		})
 
 		checker.checkTarget(target)
@@ -317,7 +317,7 @@ func TestCheckTarget(t *testing.T) {
 	})
 
 	t.Run("4xx 客户端错误响应", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNotFound)
 		}))
 		defer server.Close()
@@ -330,7 +330,7 @@ func TestCheckTarget(t *testing.T) {
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
-			Path:     "/health",
+			Path:     healthPath,
 		})
 
 		checker.checkTarget(target)
@@ -352,7 +352,7 @@ func TestCheckTarget(t *testing.T) {
 
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.WriteHeader(tt.statusCode)
 				}))
 				defer server.Close()
@@ -365,7 +365,7 @@ func TestCheckTarget(t *testing.T) {
 				checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 					Interval: 1 * time.Hour,
 					Timeout:  5 * time.Second,
-					Path:     "/health",
+					Path:     healthPath,
 				})
 
 				checker.checkTarget(target)
@@ -389,7 +389,7 @@ func TestMarkUnhealthy(t *testing.T) {
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
-			Path:     "/health",
+			Path:     healthPath,
 		})
 
 		checker.MarkUnhealthy(target)
@@ -408,7 +408,7 @@ func TestMarkUnhealthy(t *testing.T) {
 		checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
-			Path:     "/health",
+			Path:     healthPath,
 		})
 
 		checker.MarkUnhealthy(target)
@@ -431,7 +431,7 @@ func TestMarkUnhealthy(t *testing.T) {
 		checker := NewHealthChecker([]*loadbalance.Target{target1, target2}, &config.HealthCheckConfig{
 			Interval: 1 * time.Hour,
 			Timeout:  5 * time.Second,
-			Path:     "/health",
+			Path:     healthPath,
 		})
 
 		checker.MarkUnhealthy(target1)

@@ -170,13 +170,13 @@ func (p *Proxy) getResolverTTL() time.Duration {
 }
 
 // GetResolverStats 返回 DNS 解析器的统计信息。
-func (p *Proxy) GetResolverStats() resolver.ResolverStats {
+func (p *Proxy) GetResolverStats() resolver.Stats {
 	p.mu.RLock()
 	r := p.resolver
 	p.mu.RUnlock()
 
 	if r == nil {
-		return resolver.ResolverStats{}
+		return resolver.Stats{}
 	}
 	return r.Stats()
 }

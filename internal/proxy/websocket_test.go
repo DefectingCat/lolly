@@ -122,7 +122,7 @@ func TestIsConnectionClosedError(t *testing.T) {
 }
 
 // TestExtractHost 测试从 URL 提取主机
-func TestExtractHost(t *testing.T) {
+func TestExtractHost(_ *testing.T) {
 	// extractHost 函数可能不存在，检查一下
 	// 如果存在则测试
 }

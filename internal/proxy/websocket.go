@@ -11,7 +11,7 @@
 //
 // 使用示例：
 //
-//	err := proxy.ProxyWebSocket(ctx, target, 30*time.Second)
+//	err := proxy.WebSocket(ctx, target, 30*time.Second)
 //	if err != nil {
 //	    log.Printf("WebSocket proxy error: %v", err)
 //	}
@@ -337,7 +337,7 @@ func readWebSocketUpgradeResponse(conn net.Conn, timeout time.Duration) (*http.R
 	return resp, nil
 }
 
-// ProxyWebSocket 处理 WebSocket 代理请求。
+// WebSocket 处理 WebSocket 代理请求。
 //
 // 完整流程：
 //  1. 劫持客户端连接
@@ -353,7 +353,7 @@ func readWebSocketUpgradeResponse(conn net.Conn, timeout time.Duration) (*http.R
 //
 // 返回值：
 //   - error: 代理过程中的错误
-func ProxyWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout time.Duration) error {
+func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout time.Duration) error {
 	// 使用 Hijack 获取客户端 TCP 连接
 	var clientConn net.Conn
 
