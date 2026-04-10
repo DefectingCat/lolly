@@ -317,18 +317,41 @@ func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string)
 
 // resolveTryFilePath 解析 try_files 中的占位符。
 //
+// 支持的占位符：
+//   - $uri: 请求路径
+//   - $uri/: 请求路径加斜杠
+//   - $uri.<ext>: 请求路径加扩展名（如 $uri.html）
+//
+// nginx 兼容性说明：
+//   - $uri 变量语义与 nginx try_files 一致
+//   - 附加安全验证在 validateStatics 时执行
+//
 // 参数：
-//   - tryFile: try_files 配置项
+//   - tryFile: try_files 配置项（已在 validateStatics 时验证）
 //   - relPath: 相对请求路径
 //
 // 返回值：
-//   - string: 解析后的文件路径
+//   - string: 解析后的文件路径，根路径边界返回空字符串触发回退
 func (h *StaticHandler) resolveTryFilePath(tryFile, relPath string) string {
 	switch {
+	// ====== 保留：现有逻辑 ======
 	case tryFile == "$uri":
 		return relPath
 	case tryFile == "$uri/":
 		return relPath + "/"
+
+	// ====== 新增：动态后缀支持 ======
+	case strings.HasPrefix(tryFile, "$uri."):
+		// 提取后缀部分（包含点，如 ".html"）
+		suffix := tryFile[4:] // "$uri" 是4个字符，后面是 ".html" 等后缀
+		// 根路径边界处理：返回空字符串让 try_files 继续下一个条目
+		// 避免 "/.html" 这样的隐藏文件名
+		if relPath == "/" {
+			return "" // 触发回退到下一个 try_files 条目
+		}
+		return relPath + suffix
+
+	// ====== 保留：现有逻辑 ======
 	case strings.HasPrefix(tryFile, "/"):
 		// 绝对路径，直接返回（去掉开头的 /）
 		return tryFile[1:]

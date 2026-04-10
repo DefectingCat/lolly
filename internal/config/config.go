@@ -317,8 +317,30 @@ type StaticConfig struct {
 	Index []string `yaml:"index"`
 
 	// TryFiles 按顺序尝试查找的文件列表
-	// 支持 $uri 和 $uri/ 占位符，用于 SPA 部署
-	// 示例: ["$uri", "$uri/", "/index.html"]
+	// 支持以下模式：
+	//   - $uri: 请求路径
+	//   - $uri/: 请求路径加斜杠（目录）
+	//   - $uri.<ext>: 请求路径加扩展名（如 $uri.html, $uri.json）
+	//   - /path: 绝对路径回退（如 /index.html）
+	//   - filename: 相对路径回退（如 fallback.html）
+	//
+	// nginx 兼容性：
+	//   - $uri 变量语义与 nginx try_files 指令一致
+	//   - 配置语法可从 nginx 直接迁移
+	//
+	// 安全限制（附加于 nginx 基础）：
+	//   - 扩展名仅允许字母、数字、点、下划线、连字符
+	//   - 禁止危险后缀（.php, .exe, .bat 等）
+	//   - 禁止 null byte 和路径分隔符
+	//
+	// 根路径边界情况：
+	//   - 当 relPath="/" 且模式为 "$uri.<ext>" 时，返回空字符串
+	//   - 此设计避免生成 "/.html" 这样的隐藏文件名
+	//   - 建议使用绝对路径回退（如 /index.html）处理根路径
+	//
+	// 示例:
+	//   try_files: ["$uri", "$uri.html", "/index.html"]
+	//   try_files: ["$uri", "$uri/", "/app.html"]
 	TryFiles []string `yaml:"try_files"`
 
 	// TryFilesPass 内部重定向是否触发中间件

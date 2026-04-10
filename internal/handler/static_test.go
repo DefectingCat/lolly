@@ -1448,3 +1448,139 @@ func TestStaticHandler_LargeFileContentType(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveTryFilePathWithDynamicSuffix 测试动态后缀解析
+func TestResolveTryFilePathWithDynamicSuffix(t *testing.T) {
+	handler := NewStaticHandler("/var/www", "/", []string{"index.html"}, false)
+
+	tests := []struct {
+		name       string
+		tryFile    string
+		relPath    string
+		wantResult string
+	}{
+		// 基本占位符
+		{name: "$uri", tryFile: "$uri", relPath: "/api/user", wantResult: "/api/user"},
+		{name: "$uri/", tryFile: "$uri/", relPath: "/api/user", wantResult: "/api/user/"},
+
+		// 动态后缀 - 正常路径
+		{name: "$uri.html 正常", tryFile: "$uri.html", relPath: "/about", wantResult: "/about.html"},
+		{name: "$uri.json 正常", tryFile: "$uri.json", relPath: "/api/data", wantResult: "/api/data.json"},
+		{name: "$uri.css 正常", tryFile: "$uri.css", relPath: "/styles/main", wantResult: "/styles/main.css"},
+
+		// 动态后缀 - 根路径边界（返回空字符串）
+		{name: "$uri.html 根路径", tryFile: "$uri.html", relPath: "/", wantResult: ""},
+		{name: "$uri.json 根路径", tryFile: "$uri.json", relPath: "/", wantResult: ""},
+
+		// 动态后缀 - 子目录路径（正常处理）
+		{name: "$uri.html 子目录", tryFile: "$uri.html", relPath: "/api/", wantResult: "/api/.html"},
+		{name: "$uri.json 子目录", tryFile: "$uri.json", relPath: "/v1/", wantResult: "/v1/.json"},
+
+		// 绝对路径
+		{name: "绝对路径", tryFile: "/index.html", relPath: "/api/user", wantResult: "index.html"},
+		{name: "绝对路径嵌套", tryFile: "/fallback/app.html", relPath: "/any", wantResult: "fallback/app.html"},
+
+		// 相对路径
+		{name: "相对路径", tryFile: "fallback.html", relPath: "/api/user", wantResult: "fallback.html"},
+		{name: "相对路径带连字符", tryFile: "app-shell.html", relPath: "/any", wantResult: "app-shell.html"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := handler.resolveTryFilePath(tt.tryFile, tt.relPath)
+			if got != tt.wantResult {
+				t.Errorf("resolveTryFilePath(%q, %q) = %q, want %q",
+					tt.tryFile, tt.relPath, got, tt.wantResult)
+			}
+		})
+	}
+}
+
+// TestStaticHandler_TryFilesWithDynamicSuffix 测试动态后缀集成
+func TestStaticHandler_TryFilesWithDynamicSuffix(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建测试文件
+	if err := os.WriteFile(filepath.Join(tmpDir, "about.html"), []byte("about page"), 0644); err != nil {
+		t.Fatalf("创建文件失败: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(tmpDir, "api"), 0755); err != nil {
+		t.Fatalf("创建目录失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "api", "data.json"), []byte("{\"data\":true}"), 0644); err != nil {
+		t.Fatalf("创建文件失败: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("fallback"), 0644); err != nil {
+		t.Fatalf("创建文件失败: %v", err)
+	}
+
+	handler := NewStaticHandler(tmpDir, "/", []string{"index.html"}, false)
+	handler.SetTryFiles([]string{"$uri", "$uri.html", "/index.html"}, false, nil)
+
+	tests := []struct {
+		name        string
+		path        string
+		wantStatus  int
+		wantContent string
+	}{
+		{
+			name:        "找到 $uri.html",
+			path:        "/about",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "about page",
+		},
+		{
+			name:        "回退到 /index.html",
+			path:        "/nonexistent",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "fallback",
+		},
+		{
+			name:        "根路径回退到 /index.html",
+			path:        "/",
+			wantStatus:  fasthttp.StatusOK,
+			wantContent: "fallback",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := newTestContext(t, tt.path)
+			handler.Handle(ctx)
+
+			if got := ctx.Response.StatusCode(); got != tt.wantStatus {
+				t.Errorf("状态码 = %d, want %d", got, tt.wantStatus)
+			}
+
+			if got := string(ctx.Response.Body()); got != tt.wantContent {
+				t.Errorf("内容 = %q, want %q", got, tt.wantContent)
+			}
+		})
+	}
+}
+
+// TestStaticHandler_TryFilesRootPathFallback 测试根路径回退
+func TestStaticHandler_TryFilesRootPathFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建 index.html 作为根路径回退
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("root fallback"), 0644); err != nil {
+		t.Fatalf("创建文件失败: %v", err)
+	}
+
+	// 注意：不创建 /.html 文件，测试根路径边界情况
+	handler := NewStaticHandler(tmpDir, "/", []string{"index.html"}, false)
+	handler.SetTryFiles([]string{"$uri", "$uri.html", "/index.html"}, false, nil)
+
+	ctx := newTestContext(t, "/")
+	handler.Handle(ctx)
+
+	// 验证根路径请求正确回退到 /index.html
+	if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+		t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+	}
+
+	if got := string(ctx.Response.Body()); got != "root fallback" {
+		t.Errorf("内容 = %q, want %q", got, "root fallback")
+	}
+}

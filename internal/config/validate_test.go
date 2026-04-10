@@ -1222,3 +1222,175 @@ func TestValidateVariables(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateTryFilesPattern(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		wantErr bool
+		errMsg  string
+	}{
+		// 基本占位符
+		{name: "有效 $uri", pattern: "$uri", wantErr: false},
+		{name: "有效 $uri/", pattern: "$uri/", wantErr: false},
+
+		// 动态后缀
+		{name: "有效 $uri.html", pattern: "$uri.html", wantErr: false},
+		{name: "有效 $uri.json", pattern: "$uri.json", wantErr: false},
+		{name: "有效 $uri.css", pattern: "$uri.css", wantErr: false},
+		{name: "有效 $uri.js", pattern: "$uri.js", wantErr: false},
+		{name: "有效 $uri.xml", pattern: "$uri.xml", wantErr: false},
+		{name: "有效 $uri.webmanifest", pattern: "$uri.webmanifest", wantErr: false},
+		{name: "有效 $uri.txt", pattern: "$uri.txt", wantErr: false},
+		{name: "有效 $uri.svg", pattern: "$uri.svg", wantErr: false},
+		{name: "有效 $uri.woff2", pattern: "$uri.woff2", wantErr: false},
+
+		// 绝对路径回退
+		{name: "有效绝对路径", pattern: "/index.html", wantErr: false},
+		{name: "有效嵌套路径", pattern: "/fallback/index.html", wantErr: false},
+
+		// 相对路径回退
+		{name: "有效文件名", pattern: "fallback.html", wantErr: false},
+		{name: "有效嵌套文件名", pattern: "app-shell.html", wantErr: false},
+
+		// 安全检查 - null byte
+		{name: "拒绝 null byte", pattern: "$uri\x00.html", wantErr: true, errMsg: "null byte"},
+		{name: "拒绝扩展名 null byte", pattern: "$uri.ht\x00ml", wantErr: true, errMsg: "null byte"},
+
+		// 安全检查 - 路径分隔符
+		{name: "拒绝扩展名中斜杠", pattern: "$uri./../etc/passwd", wantErr: true, errMsg: "路径分隔符"},
+		{name: "拒绝扩展名中反斜杠", pattern: "$uri.\\..\\passwd", wantErr: true, errMsg: "路径分隔符"},
+		{name: "拒绝扩展名中单个斜杠", pattern: "$uri.dir/file", wantErr: true, errMsg: "路径分隔符"},
+
+		// 安全检查 - 危险后缀
+		{name: "拒绝 .php 后缀", pattern: "$uri.php", wantErr: true, errMsg: "被禁止"},
+		{name: "拒绝 .exe 后缀", pattern: "$uri.exe", wantErr: true, errMsg: "被禁止"},
+		{name: "拒绝 .bat 后缀", pattern: "$uri.bat", wantErr: true, errMsg: "被禁止"},
+		{name: "拒绝 .sh 后缀", pattern: "$uri.sh", wantErr: true, errMsg: "被禁止"},
+		{name: "拒绝 .cgi 后缀", pattern: "$uri.cgi", wantErr: true, errMsg: "被禁止"},
+		{name: "拒绝 .phtml 后缀", pattern: "$uri.phtml", wantErr: true, errMsg: "被禁止"},
+		{name: "拒绝 .PHP 大写后缀", pattern: "$uri.PHP", wantErr: true, errMsg: "被禁止"},
+
+		// 安全检查 - 非法字符
+		{name: "拒绝扩展名中空格", pattern: "$uri. html", wantErr: true, errMsg: "非法字符"},
+		{name: "拒绝扩展名中特殊字符", pattern: "$uri.<script>", wantErr: true, errMsg: "非法字符"},
+		{name: "拒绝扩展名中百分号", pattern: "$uri.%20", wantErr: true, errMsg: "非法字符"},
+		{name: "拒绝扩展名中中文", pattern: "$uri.测试", wantErr: true, errMsg: "非法字符"},
+
+		// 空模式
+		{name: "拒绝空模式", pattern: "", wantErr: true, errMsg: "不能为空"},
+		{name: "拒绝空扩展名", pattern: "$uri.", wantErr: true, errMsg: "扩展名不能为空"},
+
+		// 路径遍历
+		{name: "拒绝绝对路径遍历", pattern: "/../../../etc/passwd", wantErr: true, errMsg: "路径遍历"},
+		{name: "拒绝文件名路径遍历", pattern: "../etc/passwd", wantErr: true, errMsg: "路径遍历"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateTryFilesPattern(tt.pattern)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateTryFilesPattern(%q) 期望返回错误，但返回 nil", tt.pattern)
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateTryFilesPattern(%q) 期望返回 nil，但返回错误: %v", tt.pattern, err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateStaticsWithTryFiles(t *testing.T) {
+	tests := []struct {
+		name    string
+		statics []StaticConfig
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "有效 try_files 配置",
+			statics: []StaticConfig{
+				{
+					Path:     "/",
+					Root:     "/var/www",
+					TryFiles: []string{"$uri", "$uri.html", "/index.html"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "多静态目录有效配置",
+			statics: []StaticConfig{
+				{
+					Path:     "/",
+					Root:     "/var/www",
+					TryFiles: []string{"$uri", "/index.html"},
+				},
+				{
+					Path:     "/api",
+					Root:     "/var/api",
+					TryFiles: []string{"$uri.json", "/api.json"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "无效 try_files 模式",
+			statics: []StaticConfig{
+				{
+					Path:     "/",
+					Root:     "/var/www",
+					TryFiles: []string{"$uri", "$uri.php"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "try_files[1]",
+		},
+		{
+			name: "空 try_files 配置",
+			statics: []StaticConfig{
+				{
+					Path:     "/",
+					Root:     "/var/www",
+					TryFiles: []string{},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "无 try_files 配置",
+			statics: []StaticConfig{
+				{
+					Path: "/",
+					Root: "/var/www",
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateStatics(tt.statics)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}

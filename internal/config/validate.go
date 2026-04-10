@@ -129,7 +129,164 @@ func validateStatics(statics []StaticConfig) error {
 		if s.Root != "" && strings.Contains(s.Root, "..") {
 			return fmt.Errorf("static[%d]: 根目录路径不能包含 '..'", i)
 		}
+
+		// 验证 try_files 模式
+		for j, pattern := range s.TryFiles {
+			if err := validateTryFilesPattern(pattern); err != nil {
+				return fmt.Errorf("static[%d].try_files[%d]: %w", i, j, err)
+			}
+		}
 	}
+	return nil
+}
+
+// validateTryFilesPattern 验证 try_files 模式的安全性。
+//
+// 检查 try_files 配置项是否包含安全风险的模式。
+// 支持的模式格式：
+//   - $uri - 请求路径
+//   - $uri/ - 请求路径加斜杠
+//   - $uri.<ext> - 请求路径加扩展名（如 $uri.html）
+//   - /path - 绝对路径回退
+//   - filename - 相对路径回退
+//
+// 验证规则：
+//   - 拒绝 null byte（\x00）
+//   - 拒绝路径分隔符（/ 和 \）在扩展名中
+//   - 扩展名仅允许字母、数字、点、下划线、连字符
+//   - 拒绝危险后缀（.php, .exe, .bat, .sh, .cgi 等）
+//
+// 参数：
+//   - pattern: try_files 配置项
+//
+// 返回值：
+//   - error: 验证失败时返回具体错误信息
+func validateTryFilesPattern(pattern string) error {
+	if pattern == "" {
+		return errors.New("try_files 模式不能为空")
+	}
+
+	// 检查 null byte
+	if strings.Contains(pattern, "\x00") {
+		return errors.New("try_files 模式不能包含 null byte")
+	}
+
+	// 定义支持的模式类型
+	// 1. $uri 占位符
+	if pattern == "$uri" || pattern == "$uri/" {
+		return nil
+	}
+
+	// 2. $uri.<ext> 动态后缀
+	if strings.HasPrefix(pattern, "$uri.") {
+		ext := pattern[5:] // 提取扩展名部分
+
+		// 检查扩展名安全性
+		if err := validateTryFilesExtension(ext); err != nil {
+			return fmt.Errorf("try_files 模式 %q: %w", pattern, err)
+		}
+		return nil
+	}
+
+	// 3. 绝对路径回退（以 / 开头）
+	if strings.HasPrefix(pattern, "/") {
+		// 验证路径不包含危险字符
+		if strings.Contains(pattern, "..") {
+			return fmt.Errorf("try_files 模式 %q 不能包含路径遍历", pattern)
+		}
+		return nil
+	}
+
+	// 4. 相对路径回退（文件名）
+	// 检查是否为安全文件名
+	if err := validateTryFilesFilename(pattern); err != nil {
+		return fmt.Errorf("try_files 模式 %q: %w", pattern, err)
+	}
+
+	return nil
+}
+
+// validateTryFilesExtension 验证动态后缀扩展名的安全性。
+//
+// 检查扩展名是否包含危险字符或属于危险后缀列表。
+//
+// 参数：
+//   - ext: 扩展名字符串（不包含前导点）
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息
+func validateTryFilesExtension(ext string) error {
+	if ext == "" {
+		return errors.New("扩展名不能为空")
+	}
+
+	// 检查路径分隔符
+	if strings.ContainsAny(ext, "/\\") {
+		return errors.New("扩展名不能包含路径分隔符")
+	}
+
+	// 检查 null byte
+	if strings.Contains(ext, "\x00") {
+		return errors.New("扩展名不能包含 null byte")
+	}
+
+	// 白名单字符检查：仅允许字母、数字、点、下划线、连字符
+	for i, c := range ext {
+		isLetter := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+		isDigit := c >= '0' && c <= '9'
+		isAllowed := c == '.' || c == '_' || c == '-'
+		if !isLetter && !isDigit && !isAllowed {
+			return fmt.Errorf("扩展名包含非法字符 %q (位置 %d)", c, i)
+		}
+	}
+
+	// 危险后缀黑名单（不含前导点，与 ext 格式一致）
+	dangerousExtensions := []string{
+		"php", "php3", "php4", "php5", "phtml",
+		"exe", "bat", "cmd", "sh", "bash",
+		"cgi", "pl", "py", "rb",
+		"asp", "aspx", "jsp",
+	}
+
+	extLower := strings.ToLower(ext)
+	for _, dangerous := range dangerousExtensions {
+		if extLower == dangerous || strings.HasSuffix(extLower, "."+dangerous) {
+			return fmt.Errorf("扩展名 %q 被禁止（潜在安全风险）", ext)
+		}
+	}
+
+	return nil
+}
+
+// validateTryFilesFilename 验证回退文件名的安全性。
+//
+// 检查文件名是否包含路径遍历或危险字符。
+//
+// 参数：
+//   - filename: 文件名字符串
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息
+func validateTryFilesFilename(filename string) error {
+	if filename == "" {
+		return errors.New("文件名不能为空")
+	}
+
+	// 检查路径遍历
+	if strings.Contains(filename, "..") {
+		return errors.New("文件名不能包含路径遍历")
+	}
+
+	// 检查路径分隔符
+	if strings.ContainsAny(filename, "/\\") {
+		return errors.New("文件名不能包含路径分隔符")
+	}
+
+	// 检查 null byte
+	if strings.Contains(filename, "\x00") {
+		return errors.New("文件名不能包含 null byte")
+	}
+
 	return nil
 }
 
