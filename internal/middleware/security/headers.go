@@ -288,11 +288,11 @@ func (sh *HeadersMiddleware) GetConfig() *config.SecurityHeaders {
 	return sh.config
 }
 
-// DefaultSecurityHeaders 返回安全的安全头默认配置。
+// defaultSecurityHeaders 返回安全的安全头默认配置。
 //
 // 返回值：
 //   - *config.SecurityHeaders: 包含安全默认值的配置对象
-func DefaultSecurityHeaders() *config.SecurityHeaders {
+func defaultSecurityHeaders() *config.SecurityHeaders {
 	return &config.SecurityHeaders{
 		XFrameOptions:       "DENY",
 		XContentTypeOptions: "nosniff",
@@ -300,13 +300,13 @@ func DefaultSecurityHeaders() *config.SecurityHeaders {
 	}
 }
 
-// StrictSecurityHeaders 返回严格模式的安全头配置。
+// strictSecurityHeaders 返回严格模式的安全头配置。
 //
 // 适用于高安全要求的应用场景，包含严格的 CSP 和权限策略。
 //
 // 返回值：
 //   - *config.SecurityHeaders: 包含严格安全值的配置对象
-func StrictSecurityHeaders() *config.SecurityHeaders {
+func strictSecurityHeaders() *config.SecurityHeaders {
 	return &config.SecurityHeaders{
 		XFrameOptions:         "DENY",
 		XContentTypeOptions:   "nosniff",
@@ -316,13 +316,13 @@ func StrictSecurityHeaders() *config.SecurityHeaders {
 	}
 }
 
-// DevelopmentSecurityHeaders 返回开发环境使用的宽松安全头配置。
+// developmentSecurityHeaders 返回开发环境使用的宽松安全头配置。
 //
 // 警告：请勿在生产环境使用此配置，安全性较低。
 //
 // 返回值：
 //   - *config.SecurityHeaders: 包含宽松安全值的配置对象
-func DevelopmentSecurityHeaders() *config.SecurityHeaders {
+func developmentSecurityHeaders() *config.SecurityHeaders {
 	return &config.SecurityHeaders{
 		XFrameOptions:       "SAMEORIGIN",
 		XContentTypeOptions: "nosniff",

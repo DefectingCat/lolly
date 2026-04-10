@@ -182,7 +182,7 @@ func TestUpdateConfig(t *testing.T) {
 }
 
 func TestDefaultSecurityHeaders(t *testing.T) {
-	cfg := DefaultSecurityHeaders()
+	cfg := defaultSecurityHeaders()
 
 	if cfg.XFrameOptions != "DENY" {
 		t.Errorf("Expected default X-Frame-Options 'DENY', got %s", cfg.XFrameOptions)
@@ -193,7 +193,7 @@ func TestDefaultSecurityHeaders(t *testing.T) {
 }
 
 func TestStrictSecurityHeaders(t *testing.T) {
-	cfg := StrictSecurityHeaders()
+	cfg := strictSecurityHeaders()
 
 	if cfg.XFrameOptions != "DENY" {
 		t.Errorf("Expected X-Frame-Options 'DENY', got %s", cfg.XFrameOptions)
@@ -207,7 +207,7 @@ func TestStrictSecurityHeaders(t *testing.T) {
 }
 
 func TestDevelopmentSecurityHeaders(t *testing.T) {
-	cfg := DevelopmentSecurityHeaders()
+	cfg := developmentSecurityHeaders()
 
 	if cfg.XFrameOptions != "SAMEORIGIN" {
 		t.Errorf("Expected X-Frame-Options 'SAMEORIGIN' for dev, got %s", cfg.XFrameOptions)
