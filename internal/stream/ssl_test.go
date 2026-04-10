@@ -67,14 +67,14 @@ func generateTestCertificate(t *testing.T, certFile, keyFile string) {
 	}
 }
 
-func TestNewStreamSSLManager_Disabled(t *testing.T) {
+func TestNewSSLManager_Disabled(t *testing.T) {
 	cfg := config.StreamSSLConfig{
 		Enabled: false,
 	}
 
-	mgr, err := NewStreamSSLManager(cfg)
+	mgr, err := NewSSLManager(cfg)
 	if err != nil {
-		t.Fatalf("NewStreamSSLManager failed: %v", err)
+		t.Fatalf("NewSSLManager failed: %v", err)
 	}
 
 	if mgr.IsEnabled() {
@@ -87,7 +87,7 @@ func TestNewStreamSSLManager_Disabled(t *testing.T) {
 	}
 }
 
-func TestNewStreamSSLManager_Enabled(t *testing.T) {
+func TestNewSSLManager_Enabled(t *testing.T) {
 	tempDir := t.TempDir()
 	certFile := filepath.Join(tempDir, "server.crt")
 	keyFile := filepath.Join(tempDir, "server.key")
@@ -101,9 +101,9 @@ func TestNewStreamSSLManager_Enabled(t *testing.T) {
 		Protocols: []string{"TLSv1.2", "TLSv1.3"},
 	}
 
-	mgr, err := NewStreamSSLManager(cfg)
+	mgr, err := NewSSLManager(cfg)
 	if err != nil {
-		t.Fatalf("NewStreamSSLManager failed: %v", err)
+		t.Fatalf("NewSSLManager failed: %v", err)
 	}
 
 	if !mgr.IsEnabled() {
@@ -124,27 +124,27 @@ func TestNewStreamSSLManager_Enabled(t *testing.T) {
 	}
 }
 
-func TestNewStreamSSLManager_InvalidCert(t *testing.T) {
+func TestNewSSLManager_InvalidCert(t *testing.T) {
 	cfg := config.StreamSSLConfig{
 		Enabled: true,
 		Cert:    "/nonexistent/cert.pem",
 		Key:     "/nonexistent/key.pem",
 	}
 
-	_, err := NewStreamSSLManager(cfg)
+	_, err := NewSSLManager(cfg)
 	if err == nil {
 		t.Error("Expected error for invalid certificate path")
 	}
 }
 
-func TestNewStreamProxySSLManager_Disabled(t *testing.T) {
+func TestNewProxySSLManager_Disabled(t *testing.T) {
 	cfg := config.StreamProxySSLConfig{
 		Enabled: false,
 	}
 
-	mgr, err := NewStreamProxySSLManager(cfg)
+	mgr, err := NewProxySSLManager(cfg)
 	if err != nil {
-		t.Fatalf("NewStreamProxySSLManager failed: %v", err)
+		t.Fatalf("NewProxySSLManager failed: %v", err)
 	}
 
 	if mgr.IsEnabled() {
@@ -157,7 +157,7 @@ func TestNewStreamProxySSLManager_Disabled(t *testing.T) {
 	}
 }
 
-func TestNewStreamProxySSLManager_Enabled(t *testing.T) {
+func TestNewProxySSLManager_Enabled(t *testing.T) {
 	tempDir := t.TempDir()
 	certFile := filepath.Join(tempDir, "client.crt")
 	keyFile := filepath.Join(tempDir, "client.key")
@@ -174,9 +174,9 @@ func TestNewStreamProxySSLManager_Enabled(t *testing.T) {
 		SessionReuse: true,
 	}
 
-	mgr, err := NewStreamProxySSLManager(cfg)
+	mgr, err := NewProxySSLManager(cfg)
 	if err != nil {
-		t.Fatalf("NewStreamProxySSLManager failed: %v", err)
+		t.Fatalf("NewProxySSLManager failed: %v", err)
 	}
 
 	if !mgr.IsEnabled() {
@@ -209,7 +209,7 @@ func TestNewStreamProxySSLManager_Enabled(t *testing.T) {
 	}
 }
 
-func TestNewStreamProxySSLManager_WithVerify(t *testing.T) {
+func TestNewProxySSLManager_WithVerify(t *testing.T) {
 	tempDir := t.TempDir()
 	caFile := filepath.Join(tempDir, "ca.crt")
 
@@ -249,9 +249,9 @@ func TestNewStreamProxySSLManager_WithVerify(t *testing.T) {
 		ServerName: "backend.example.com",
 	}
 
-	mgr, err := NewStreamProxySSLManager(cfg)
+	mgr, err := NewProxySSLManager(cfg)
 	if err != nil {
-		t.Fatalf("NewStreamProxySSLManager failed: %v", err)
+		t.Fatalf("NewProxySSLManager failed: %v", err)
 	}
 
 	tlsConfig := mgr.GetClientTLSConfig("")
@@ -381,7 +381,7 @@ func TestLoadCertPool(t *testing.T) {
 	})
 }
 
-func TestStreamSSLManager_GetTLSConfig_WithClientCA(t *testing.T) {
+func TestSSLManager_GetTLSConfig_WithClientCA(t *testing.T) {
 	tempDir := t.TempDir()
 	certFile := filepath.Join(tempDir, "server.crt")
 	keyFile := filepath.Join(tempDir, "server.key")
@@ -419,9 +419,9 @@ func TestStreamSSLManager_GetTLSConfig_WithClientCA(t *testing.T) {
 		Protocols: []string{"TLSv1.2"},
 	}
 
-	mgr, err := NewStreamSSLManager(cfg)
+	mgr, err := NewSSLManager(cfg)
 	if err != nil {
-		t.Fatalf("NewStreamSSLManager failed: %v", err)
+		t.Fatalf("NewSSLManager failed: %v", err)
 	}
 
 	tlsConfig := mgr.GetTLSConfig()
@@ -440,16 +440,16 @@ func TestStreamSSLManager_GetTLSConfig_WithClientCA(t *testing.T) {
 	}
 }
 
-func TestStreamProxySSLManager_GetClientTLSConfig_WithServerNameOverride(t *testing.T) {
+func TestProxySSLManager_GetClientTLSConfig_WithServerNameOverride(t *testing.T) {
 	cfg := config.StreamProxySSLConfig{
 		Enabled:    true,
 		Verify:     false,
 		ServerName: "configured.example.com",
 	}
 
-	mgr, err := NewStreamProxySSLManager(cfg)
+	mgr, err := NewProxySSLManager(cfg)
 	if err != nil {
-		t.Fatalf("NewStreamProxySSLManager failed: %v", err)
+		t.Fatalf("NewProxySSLManager failed: %v", err)
 	}
 
 	// 即使传入不同的 serverName，也应该使用配置的

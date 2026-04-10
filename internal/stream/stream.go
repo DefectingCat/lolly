@@ -171,7 +171,7 @@ func (w *weightedRoundRobin) Select(targets []*Target) *Target {
 	totalWeight := 0
 	for _, t := range healthy {
 		if t.weight <= 0 {
-			totalWeight += 1 // 最小权重为 1
+			totalWeight++ // 最小权重为 1
 		} else {
 			totalWeight += t.weight
 		}
@@ -510,7 +510,7 @@ func (s *Server) acceptLoop(addr string, listener net.Listener) {
 // 参数：
 //   - clientConn: 客户端连接
 //   - addr: 监听地址
-func (s *Server) handleConnection(clientConn net.Conn, addr string) {
+func (s *Server) handleConnection(clientConn net.Conn, _ string) {
 	defer func() {
 		_ = clientConn.Close()
 		s.connCount--

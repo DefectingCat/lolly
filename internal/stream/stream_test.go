@@ -272,7 +272,7 @@ func TestHealthChecker(t *testing.T) {
 	}
 }
 
-func TestHealthCheckerStartStop(t *testing.T) {
+func TestHealthCheckerStartStop(_ *testing.T) {
 	u := &Upstream{
 		targets: []*Target{
 			{addr: "localhost:99998"}, // 不存在的端口
@@ -720,7 +720,7 @@ func TestUDPSessionOperations(t *testing.T) {
 	}
 }
 
-func TestUDPSessionClose(t *testing.T) {
+func TestUDPSessionClose(_ *testing.T) {
 	// 创建两个 UDP 连接用于测试
 	udpAddr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	conn1, _ := net.ListenUDP("udp", udpAddr1)

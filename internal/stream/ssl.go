@@ -19,10 +19,10 @@ import (
 	"rua.plus/lolly/internal/config"
 )
 
-// StreamSSLManager 管理 Stream SSL/TLS 配置。
+// SSLManager 管理 Stream SSL/TLS 配置。
 //
 // 负责加载证书、配置 TLS 连接，支持服务端和客户端两种模式。
-type StreamSSLManager struct {
+type SSLManager struct {
 	// config SSL 配置
 	config config.StreamSSLConfig
 
@@ -36,10 +36,10 @@ type StreamSSLManager struct {
 	mu sync.RWMutex
 }
 
-// StreamProxySSLManager 管理上游 SSL 连接。
+// ProxySSLManager 管理上游 SSL 连接。
 //
 // 负责创建到上游服务器的 TLS 连接，支持证书验证和客户端证书。
-type StreamProxySSLManager struct {
+type ProxySSLManager struct {
 	// config 代理 SSL 配置
 	config config.StreamProxySSLConfig
 
@@ -53,17 +53,17 @@ type StreamProxySSLManager struct {
 	mu sync.RWMutex
 }
 
-// NewStreamSSLManager 创建 Stream SSL 管理器。
+// NewSSLManager 创建 Stream SSL 管理器。
 //
 // 参数：
 //   - cfg: SSL 配置
 //
 // 返回值：
-//   - *StreamSSLManager: SSL 管理器实例
+//   - *SSLManager: SSL 管理器实例
 //   - error: 证书加载失败时返回错误
-func NewStreamSSLManager(cfg config.StreamSSLConfig) (*StreamSSLManager, error) {
+func NewSSLManager(cfg config.StreamSSLConfig) (*SSLManager, error) {
 	if !cfg.Enabled {
-		return &StreamSSLManager{config: cfg}, nil
+		return &SSLManager{config: cfg}, nil
 	}
 
 	// 加载服务器证书
@@ -72,7 +72,7 @@ func NewStreamSSLManager(cfg config.StreamSSLConfig) (*StreamSSLManager, error) 
 		return nil, fmt.Errorf("failed to load server certificate: %w", err)
 	}
 
-	mgr := &StreamSSLManager{
+	mgr := &SSLManager{
 		config: cfg,
 		cert:   cert,
 	}
@@ -89,20 +89,20 @@ func NewStreamSSLManager(cfg config.StreamSSLConfig) (*StreamSSLManager, error) 
 	return mgr, nil
 }
 
-// NewStreamProxySSLManager 创建上游 SSL 管理器。
+// NewProxySSLManager 创建上游 SSL 管理器。
 //
 // 参数：
 //   - cfg: 代理 SSL 配置
 //
 // 返回值：
-//   - *StreamProxySSLManager: 代理 SSL 管理器实例
+//   - *ProxySSLManager: 代理 SSL 管理器实例
 //   - error: 证书加载失败时返回错误
-func NewStreamProxySSLManager(cfg config.StreamProxySSLConfig) (*StreamProxySSLManager, error) {
+func NewProxySSLManager(cfg config.StreamProxySSLConfig) (*ProxySSLManager, error) {
 	if !cfg.Enabled {
-		return &StreamProxySSLManager{config: cfg}, nil
+		return &ProxySSLManager{config: cfg}, nil
 	}
 
-	mgr := &StreamProxySSLManager{config: cfg}
+	mgr := &ProxySSLManager{config: cfg}
 
 	// 加载客户端证书（mTLS）
 	if cfg.Cert != "" && cfg.Key != "" {
@@ -129,7 +129,7 @@ func NewStreamProxySSLManager(cfg config.StreamProxySSLConfig) (*StreamProxySSLM
 //
 // 返回值：
 //   - *tls.Config: TLS 配置对象
-func (m *StreamSSLManager) GetTLSConfig() *tls.Config {
+func (m *SSLManager) GetTLSConfig() *tls.Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -170,7 +170,7 @@ func (m *StreamSSLManager) GetTLSConfig() *tls.Config {
 //
 // 返回值：
 //   - *tls.Config: TLS 配置对象
-func (m *StreamProxySSLManager) GetClientTLSConfig(serverName string) *tls.Config {
+func (m *ProxySSLManager) GetClientTLSConfig(serverName string) *tls.Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -216,12 +216,12 @@ func (m *StreamProxySSLManager) GetClientTLSConfig(serverName string) *tls.Confi
 }
 
 // IsEnabled 检查是否启用 SSL。
-func (m *StreamSSLManager) IsEnabled() bool {
+func (m *SSLManager) IsEnabled() bool {
 	return m.config.Enabled
 }
 
 // IsEnabled 检查是否启用代理 SSL。
-func (m *StreamProxySSLManager) IsEnabled() bool {
+func (m *ProxySSLManager) IsEnabled() bool {
 	return m.config.Enabled
 }
 
