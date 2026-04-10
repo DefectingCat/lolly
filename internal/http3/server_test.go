@@ -21,7 +21,7 @@ import (
 
 // TestNewServer_NilConfig 测试空配置错误
 func TestNewServer_NilConfig(t *testing.T) {
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, err := NewServer(nil, handler, &tls.Config{})
 
@@ -64,7 +64,7 @@ func TestNewServer_NilTLS(t *testing.T) {
 		Listen:     ":443",
 		Enable0RTT: true,
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, err := NewServer(cfg, handler, nil)
 
@@ -87,7 +87,7 @@ func TestNewServer_Success(t *testing.T) {
 		Enable0RTT: true,
 		MaxStreams: 100,
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{},
 	}
@@ -128,7 +128,7 @@ func TestGetAltSvcHeader_DefaultPort(t *testing.T) {
 		Enabled: true,
 		Listen:  ":443",
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -146,7 +146,7 @@ func TestGetAltSvcHeader_CustomPort(t *testing.T) {
 		Enabled: true,
 		Listen:  ":8443",
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -164,7 +164,7 @@ func TestGetAltSvcHeader_Disabled(t *testing.T) {
 		Enabled: false,
 		Listen:  ":443",
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -181,7 +181,7 @@ func TestGetAltSvcHeader_EmptyListen(t *testing.T) {
 		Enabled: true,
 		Listen:  "", // 空，使用默认 :443
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -201,7 +201,7 @@ func TestGetStats(t *testing.T) {
 		Enable0RTT: true,
 		MaxStreams: 200,
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -230,7 +230,7 @@ func TestIsRunning(t *testing.T) {
 		Enabled: true,
 		Listen:  ":443",
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -264,7 +264,7 @@ func TestStop_NotRunning(t *testing.T) {
 		Enabled: true,
 		Listen:  ":443",
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -281,7 +281,7 @@ func TestGracefulStop_NotRunning(t *testing.T) {
 		Enabled: true,
 		Listen:  ":443",
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -298,7 +298,7 @@ func TestGracefulStop_WithTimeout(t *testing.T) {
 		Enabled: true,
 		Listen:  ":443",
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -328,7 +328,7 @@ func TestServer_MultipleStop(t *testing.T) {
 		Enabled: true,
 		Listen:  ":443",
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
@@ -347,7 +347,7 @@ func TestServer_MultipleGracefulStop(t *testing.T) {
 		Enabled: true,
 		Listen:  ":443",
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
