@@ -46,6 +46,7 @@ import (
 	"sync"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/netutil"
 )
 
 // TLSManager TLS 配置管理器。
@@ -272,12 +273,7 @@ func (m *TLSManager) GetTLSConfigForHost(host string) *tls.Config {
 	defer m.mu.RUnlock()
 
 	// 从主机名中移除端口（如果存在）
-	for i := 0; i < len(host); i++ {
-		if host[i] == ':' {
-			host = host[:i]
-			break
-		}
-	}
+	host = netutil.StripPort(host)
 
 	if cfg, ok := m.configs[host]; ok {
 		return cfg
