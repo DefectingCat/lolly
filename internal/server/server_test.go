@@ -638,3 +638,130 @@ func TestServer_TrackStats_EmptyBody(t *testing.T) {
 		t.Errorf("Expected 0 bytes sent, got %d", s.bytesSent.Load())
 	}
 }
+
+// TestStart_Success 测试服务器配置初始化
+func TestStart_Success(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+	}
+
+	s := New(cfg)
+
+	// 验证服务器正确初始化
+	if s == nil {
+		t.Fatal("New() returned nil, expected non-nil Server")
+	}
+
+	if s.config != cfg {
+		t.Error("Server.config not set correctly")
+	}
+}
+
+// TestStart_WithStaticFiles 测试静态文件配置
+func TestStart_WithStaticFiles(t *testing.T) {
+	// 创建临时目录
+	tempDir := t.TempDir()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+			Static: []config.StaticConfig{{
+				Path:  "/static",
+				Root:  tempDir,
+				Index: []string{"index.html"},
+			}},
+		},
+	}
+
+	s := New(cfg)
+
+	if s == nil {
+		t.Fatal("New() returned nil")
+	}
+}
+
+// TestStart_WithGoroutinePool 测试 GoroutinePool 配置
+func TestStart_WithGoroutinePool(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+		Performance: config.PerformanceConfig{
+			GoroutinePool: config.GoroutinePoolConfig{
+				Enabled:     true,
+				MaxWorkers:  100,
+				MinWorkers:  10,
+				IdleTimeout: 30 * time.Second,
+			},
+		},
+	}
+
+	s := New(cfg)
+
+	if s == nil {
+		t.Fatal("New() returned nil")
+	}
+}
+
+// TestStart_WithFileCache 测试文件缓存配置
+func TestStart_WithFileCache(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":8080",
+		},
+		Performance: config.PerformanceConfig{
+			FileCache: config.FileCacheConfig{
+				MaxEntries: 1000,
+				MaxSize:    100 * 1024 * 1024,
+			},
+		},
+	}
+
+	s := New(cfg)
+
+	if s == nil {
+		t.Fatal("New() returned nil")
+	}
+}
+
+// TestStop_Graceful 测试优雅停止（无 race 模式）
+func TestStop_Graceful(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0",
+		},
+	}
+
+	s := New(cfg)
+
+	// 在未启动时调用 GracefulStop，应返回 nil
+	err := s.GracefulStop(1 * time.Second)
+	if err != nil {
+		t.Errorf("GracefulStop() on non-started server returned error: %v", err)
+	}
+}
+
+// TestGetTLSConfig_Nil 测试无 TLS 配置
+func TestGetTLSConfig_Nil(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0",
+		},
+	}
+
+	s := New(cfg)
+
+	tlsCfg, err := s.GetTLSConfig()
+	if err == nil {
+		t.Error("GetTLSConfig() should return error when TLS not configured")
+	}
+	if tlsCfg != nil {
+		t.Error("GetTLSConfig() should return nil when TLS not configured")
+	}
+}
