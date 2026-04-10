@@ -618,7 +618,7 @@ func TestServer_TrackStats_EmptyBody(t *testing.T) {
 
 	s := New(cfg)
 
-	handler := func(ctx *fasthttp.RequestCtx) {
+	handler := func(_ *fasthttp.RequestCtx) {
 		// 空响应
 	}
 

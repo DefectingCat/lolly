@@ -274,7 +274,7 @@ type PoolStats struct {
 func (p *GoroutinePool) WrapHandler(handler fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		// 使用池执行处理器
-		_ = p.Submit(ctx, func(innerCtx *fasthttp.RequestCtx) {
+		_ = p.Submit(ctx, func(_ *fasthttp.RequestCtx) {
 			handler(ctx)
 		})
 	}

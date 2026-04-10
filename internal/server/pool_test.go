@@ -83,7 +83,7 @@ func TestPoolSubmit(t *testing.T) {
 	defer p.Stop()
 
 	var executed atomic.Bool
-	task := func(ctx *fasthttp.RequestCtx) {
+	task := func(*fasthttp.RequestCtx) {
 		executed.Store(true)
 	}
 
@@ -142,7 +142,7 @@ func TestPoolConcurrentSubmit(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_ = p.Submit(nil, func(ctx *fasthttp.RequestCtx) {
+			_ = p.Submit(nil, func(_ *fasthttp.RequestCtx) {
 				counter.Add(1)
 			})
 		}()
@@ -165,7 +165,7 @@ func TestPoolSubmitWhenStopped(t *testing.T) {
 
 	// 不启动池
 	var executed atomic.Bool
-	task := func(ctx *fasthttp.RequestCtx) {
+	task := func(_ *fasthttp.RequestCtx) {
 		executed.Store(true)
 	}
 
@@ -219,7 +219,7 @@ func TestPoolWrapHandler_WhenStopped(t *testing.T) {
 	// 不启动池
 
 	var executed atomic.Bool
-	originalHandler := func(ctx *fasthttp.RequestCtx) {
+	originalHandler := func(*fasthttp.RequestCtx) {
 		executed.Store(true)
 	}
 

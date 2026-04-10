@@ -296,7 +296,7 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 		serverCfg.Security.Headers.ContentSecurityPolicy != "" ||
 		serverCfg.Security.Headers.ReferrerPolicy != "" ||
 		serverCfg.Security.Headers.PermissionsPolicy != "" {
-		headers := security.NewSecurityHeadersWithHSTS(&serverCfg.Security.Headers, &serverCfg.SSL.HSTS)
+		headers := security.NewHeadersWithHSTS(&serverCfg.Security.Headers, &serverCfg.SSL.HSTS)
 		middlewares = append(middlewares, headers)
 	}
 
