@@ -31,6 +31,9 @@ const (
 	// MinSendfileSize 使用 sendfile 的最小文件大小（8KB）。
 	// 小于该值的文件使用普通 io.Copy，避免系统调用开销。
 	MinSendfileSize = 8 * 1024
+
+	// platformLinux Linux 平台标识符。
+	platformLinux = "linux"
 )
 
 // SendFile 零拷贝文件传输。
@@ -135,7 +138,7 @@ func copyFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 //   - error: 传输错误或不支持时返回 ENOTSUP
 func platformSendfile(conn net.Conn, file *os.File, offset, length int64) error {
 	switch runtime.GOOS {
-	case "linux":
+	case platformLinux:
 		return linuxSendfile(conn, file.Fd(), offset, length)
 	case "darwin":
 		// macOS sendfile 签名复杂，简化使用 fallback

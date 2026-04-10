@@ -143,7 +143,7 @@ func TestCopyFile(t *testing.T) {
 
 // TestPlatformSendfile_NonLinux 测试非 Linux 平台的 sendfile 行为
 func TestPlatformSendfile_NonLinux(t *testing.T) {
-	if runtime.GOOS == "linux" {
+	if runtime.GOOS == platformLinux {
 		t.Skip("this test is for non-Linux platforms")
 	}
 
@@ -341,7 +341,7 @@ func TestCopyFile_Error(t *testing.T) {
 
 // TestLinuxSendfile_NilConn 测试 linuxSendfile 空连接
 func TestLinuxSendfile_NilConn(t *testing.T) {
-	if runtime.GOOS != "linux" {
+	if runtime.GOOS != platformLinux {
 		t.Skip("This test is for Linux only")
 	}
 
