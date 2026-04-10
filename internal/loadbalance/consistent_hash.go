@@ -197,7 +197,7 @@ func (c *ConsistentHash) GetVirtualNodes() int {
 	return c.virtualNodes
 }
 
-// Stats 返回一致性哈希统计信息。
+// ConsistentHashStats 返回一致性哈希统计信息。
 type ConsistentHashStats struct {
 	// VirtualNodes 每个目标的虚拟节点数量
 	VirtualNodes int

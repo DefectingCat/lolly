@@ -118,7 +118,7 @@ func (w *WeightedRoundRobin) Select(targets []*Target) *Target {
 	totalWeight := 0
 	for _, t := range healthy {
 		if t.Weight <= 0 {
-			totalWeight += 1 // 最小权重为 1
+			totalWeight++ // 最小权重为 1
 		} else {
 			totalWeight += t.Weight
 		}
@@ -284,7 +284,7 @@ func (w *WeightedRoundRobin) SelectExcluding(targets []*Target, excluded []*Targ
 	totalWeight := 0
 	for _, t := range available {
 		if t.Weight <= 0 {
-			totalWeight += 1 // 最小权重为 1
+			totalWeight++ // 最小权重为 1
 		} else {
 			totalWeight += t.Weight
 		}
