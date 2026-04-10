@@ -42,6 +42,8 @@ import (
 	"rua.plus/lolly/internal/netutil"
 )
 
+const rateLimitHeader = "header"
+
 // RateLimiter 基于令牌桶算法的请求速率限制器。
 //
 // 实现请求限流功能，支持按 IP 或自定义键值进行限流。
@@ -133,7 +135,7 @@ func newTokenBucketLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
 	switch cfg.Key {
 	case "ip", "":
 		rl.keyFunc = keyByIP
-	case "header":
+	case rateLimitHeader:
 		rl.keyFunc = keyByHeader
 	default:
 		return nil, fmt.Errorf("unknown key type: %s", cfg.Key)
@@ -157,7 +159,7 @@ func NewSlidingWindowLimiterWrapper(cfg *config.RateLimitConfig, window time.Dur
 	switch cfg.Key {
 	case "ip", "":
 		keyFunc = keyByIP
-	case "header":
+	case rateLimitHeader:
 		keyFunc = keyByHeader
 	default:
 		return nil, fmt.Errorf("unknown key type: %s", cfg.Key)
@@ -485,13 +487,13 @@ type ConnLimiter struct {
 // 返回值：
 //   - *ConnLimiter: 配置好的连接限制器
 //   - error: 配置无效时返回错误
-func NewConnLimiter(max int, perKey bool, keyType string) (*ConnLimiter, error) {
-	if max <= 0 {
+func NewConnLimiter(maxConns int, perKey bool, keyType string) (*ConnLimiter, error) {
+	if maxConns <= 0 {
 		return nil, errors.New("max connections must be positive")
 	}
 
 	cl := &ConnLimiter{
-		max:    max,
+		max:    maxConns,
 		perKey: perKey,
 		counts: make(map[string]int64),
 	}
@@ -500,7 +502,7 @@ func NewConnLimiter(max int, perKey bool, keyType string) (*ConnLimiter, error) 
 		switch keyType {
 		case "ip", "":
 			cl.keyFunc = keyByIP
-		case "header":
+		case rateLimitHeader:
 			cl.keyFunc = keyByHeader
 		default:
 			return nil, fmt.Errorf("unknown key type: %s", keyType)

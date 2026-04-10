@@ -17,7 +17,7 @@ import (
 	"rua.plus/lolly/internal/config"
 )
 
-func TestNewSecurityHeaders(t *testing.T) {
+func TestNewHeaders(t *testing.T) {
 	tests := []struct {
 		name string
 		cfg  *config.SecurityHeaders
@@ -38,22 +38,22 @@ func TestNewSecurityHeaders(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sh := NewSecurityHeaders(tt.cfg)
+			sh := NewHeaders(tt.cfg)
 			if sh == nil {
-				t.Error("Expected non-nil SecurityHeadersMiddleware")
+				t.Error("Expected non-nil HeadersMiddleware")
 			}
 		})
 	}
 }
 
-func TestSecurityHeadersName(t *testing.T) {
-	sh := NewSecurityHeaders(nil)
+func TestHeadersName(t *testing.T) {
+	sh := NewHeaders(nil)
 	if sh.Name() != "security_headers" {
 		t.Errorf("Expected name 'security_headers', got %s", sh.Name())
 	}
 }
 
-func TestSecurityHeadersProcess(t *testing.T) {
+func TestHeadersProcess(t *testing.T) {
 	cfg := &config.SecurityHeaders{
 		XFrameOptions:         "DENY",
 		XContentTypeOptions:   "nosniff",
@@ -62,7 +62,7 @@ func TestSecurityHeadersProcess(t *testing.T) {
 		PermissionsPolicy:     "geolocation=()",
 	}
 
-	sh := NewSecurityHeaders(cfg)
+	sh := NewHeaders(cfg)
 
 	handlerCalled := false
 	nextHandler := func(ctx *fasthttp.RequestCtx) {
@@ -107,15 +107,14 @@ func TestSecurityHeadersProcess(t *testing.T) {
 	}
 }
 
-func TestSecurityHeadersHSTS(t *testing.T) {
+func TestHeadersHSTS(_ *testing.T) {
 	cfg := &config.SecurityHeaders{
 		XFrameOptions: "DENY",
 	}
 
-	sh := NewSecurityHeaders(cfg)
+	sh := NewHeaders(cfg)
 
-	nextHandler := func(ctx *fasthttp.RequestCtx) {
-		_, _ = ctx.WriteString("OK")
+	nextHandler := func(_ *fasthttp.RequestCtx) {
 	}
 
 	handler := sh.Process(nextHandler)
@@ -131,8 +130,8 @@ func TestSecurityHeadersHSTS(t *testing.T) {
 	// In this test we verify the handler doesn't panic
 }
 
-func TestSecurityHeadersUpdate(t *testing.T) {
-	sh := NewSecurityHeaders(nil)
+func TestHeadersUpdate(t *testing.T) {
+	sh := NewHeaders(nil)
 
 	// Update X-Frame-Options
 	sh.SetXFrameOptions("SAMEORIGIN")
@@ -164,7 +163,7 @@ func TestSecurityHeadersUpdate(t *testing.T) {
 }
 
 func TestUpdateConfig(t *testing.T) {
-	sh := NewSecurityHeaders(nil)
+	sh := NewHeaders(nil)
 
 	newCfg := &config.SecurityHeaders{
 		XFrameOptions:  "DENY",

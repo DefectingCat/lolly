@@ -35,7 +35,7 @@ import (
 	"rua.plus/lolly/internal/middleware"
 )
 
-// SecurityHeadersMiddleware 安全响应头中间件。
+// HeadersMiddleware 安全响应头中间件。
 //
 // 为 HTTP 响应添加安全相关的头部字段，防止常见的 Web 安全漏洞。
 // 支持配置各种安全头的值，并提供安全的默认配置。
@@ -43,13 +43,13 @@ import (
 // 注意事项：
 //   - 所有方法均为并发安全
 //   - HSTS 头仅在 TLS 连接时添加
-type SecurityHeadersMiddleware struct {
+type HeadersMiddleware struct {
 	config *config.SecurityHeaders // 安全头配置
 	hsts   string                  // 预格式化的 HSTS 头值
 	mu     sync.RWMutex            // 读写锁，保护并发访问
 }
 
-// NewSecurityHeaders 创建新的安全响应头中间件。
+// NewHeaders 创建新的安全响应头中间件。
 //
 // 根据配置创建中间件实例，如果配置为 nil 则使用安全的默认值。
 //
@@ -57,12 +57,12 @@ type SecurityHeadersMiddleware struct {
 //   - cfg: 安全头配置，可以为 nil 使用默认配置
 //
 // 返回值：
-//   - *SecurityHeadersMiddleware: 配置好的中间件实例
-func NewSecurityHeaders(cfg *config.SecurityHeaders) *SecurityHeadersMiddleware {
-	return NewSecurityHeadersWithHSTS(cfg, nil)
+//   - *HeadersMiddleware: 配置好的中间件实例
+func NewHeaders(cfg *config.SecurityHeaders) *HeadersMiddleware {
+	return NewHeadersWithHSTS(cfg, nil)
 }
 
-// NewSecurityHeadersWithHSTS 创建新的安全响应头中间件，支持 HSTS 配置。
+// NewHeadersWithHSTS 创建新的安全响应头中间件，支持 HSTS 配置。
 //
 // 根据配置创建中间件实例，如果配置为 nil 则使用安全的默认值。
 //
@@ -71,9 +71,9 @@ func NewSecurityHeaders(cfg *config.SecurityHeaders) *SecurityHeadersMiddleware 
 //   - hstsCfg: HSTS 配置，可以为 nil 使用默认值
 //
 // 返回值：
-//   - *SecurityHeadersMiddleware: 配置好的中间件实例
-func NewSecurityHeadersWithHSTS(cfg *config.SecurityHeaders, hstsCfg *config.HSTSConfig) *SecurityHeadersMiddleware {
-	sh := &SecurityHeadersMiddleware{}
+//   - *HeadersMiddleware: 配置好的中间件实例
+func NewHeadersWithHSTS(cfg *config.SecurityHeaders, hstsCfg *config.HSTSConfig) *HeadersMiddleware {
+	sh := &HeadersMiddleware{}
 
 	if cfg != nil {
 		sh.config = cfg
@@ -93,7 +93,7 @@ func NewSecurityHeadersWithHSTS(cfg *config.SecurityHeaders, hstsCfg *config.HST
 }
 
 // formatHSTSFromConfig 根据配置格式化 HSTS 头值。
-func (sh *SecurityHeadersMiddleware) formatHSTSFromConfig(hstsCfg *config.HSTSConfig) {
+func (sh *HeadersMiddleware) formatHSTSFromConfig(hstsCfg *config.HSTSConfig) {
 	if hstsCfg != nil {
 		maxAge := hstsCfg.MaxAge
 		if maxAge <= 0 {
@@ -109,7 +109,7 @@ func (sh *SecurityHeadersMiddleware) formatHSTSFromConfig(hstsCfg *config.HSTSCo
 //
 // 返回值：
 //   - string: 中间件标识名 "security_headers"
-func (sh *SecurityHeadersMiddleware) Name() string {
+func (sh *HeadersMiddleware) Name() string {
 	return "security_headers"
 }
 
@@ -122,7 +122,7 @@ func (sh *SecurityHeadersMiddleware) Name() string {
 //
 // 返回值：
 //   - fasthttp.RequestHandler: 包装后的处理器
-func (sh *SecurityHeadersMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+func (sh *HeadersMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		// 先调用下一个处理器
 		next(ctx)
@@ -138,7 +138,7 @@ func (sh *SecurityHeadersMiddleware) Process(next fasthttp.RequestHandler) fasth
 //
 // 参数：
 //   - ctx: FastHTTP 请求上下文
-func (sh *SecurityHeadersMiddleware) addHeaders(ctx *fasthttp.RequestCtx) {
+func (sh *HeadersMiddleware) addHeaders(ctx *fasthttp.RequestCtx) {
 	headers := &ctx.Response.Header
 
 	sh.mu.RLock()
@@ -183,7 +183,7 @@ func (sh *SecurityHeadersMiddleware) addHeaders(ctx *fasthttp.RequestCtx) {
 //
 // HSTS（HTTP Strict Transport Security）用于强制浏览器使用 HTTPS 连接。
 // 默认配置为 1 年有效期，包含子域名。
-func (sh *SecurityHeadersMiddleware) formatHSTS() {
+func (sh *HeadersMiddleware) formatHSTS() {
 	// 默认 HSTS 值
 	maxAge := 31536000        // 1 年有效期（秒）
 	includeSubDomains := true // 包含所有子域名
@@ -223,7 +223,7 @@ func formatHSTSValue(maxAge int, includeSubDomains bool, preload bool) string {
 //
 // 参数：
 //   - cfg: 新的安全头配置
-func (sh *SecurityHeadersMiddleware) UpdateConfig(cfg *config.SecurityHeaders) {
+func (sh *HeadersMiddleware) UpdateConfig(cfg *config.SecurityHeaders) {
 	sh.mu.Lock()
 	sh.config = cfg
 	sh.formatHSTS()
@@ -234,7 +234,7 @@ func (sh *SecurityHeadersMiddleware) UpdateConfig(cfg *config.SecurityHeaders) {
 //
 // 参数：
 //   - value: 新的 X-Frame-Options 值（如 "DENY"、"SAMEORIGIN"）
-func (sh *SecurityHeadersMiddleware) SetXFrameOptions(value string) {
+func (sh *HeadersMiddleware) SetXFrameOptions(value string) {
 	sh.mu.Lock()
 	if sh.config != nil {
 		sh.config.XFrameOptions = value
@@ -246,7 +246,7 @@ func (sh *SecurityHeadersMiddleware) SetXFrameOptions(value string) {
 //
 // 参数：
 //   - value: 新的 Content-Security-Policy 值
-func (sh *SecurityHeadersMiddleware) SetContentSecurityPolicy(value string) {
+func (sh *HeadersMiddleware) SetContentSecurityPolicy(value string) {
 	sh.mu.Lock()
 	if sh.config != nil {
 		sh.config.ContentSecurityPolicy = value
@@ -258,7 +258,7 @@ func (sh *SecurityHeadersMiddleware) SetContentSecurityPolicy(value string) {
 //
 // 参数：
 //   - value: 新的 Referrer-Policy 值（如 "no-referrer"、"strict-origin"）
-func (sh *SecurityHeadersMiddleware) SetReferrerPolicy(value string) {
+func (sh *HeadersMiddleware) SetReferrerPolicy(value string) {
 	sh.mu.Lock()
 	if sh.config != nil {
 		sh.config.ReferrerPolicy = value
@@ -270,7 +270,7 @@ func (sh *SecurityHeadersMiddleware) SetReferrerPolicy(value string) {
 //
 // 参数：
 //   - value: 新的 Permissions-Policy 值
-func (sh *SecurityHeadersMiddleware) SetPermissionsPolicy(value string) {
+func (sh *HeadersMiddleware) SetPermissionsPolicy(value string) {
 	sh.mu.Lock()
 	if sh.config != nil {
 		sh.config.PermissionsPolicy = value
@@ -282,7 +282,7 @@ func (sh *SecurityHeadersMiddleware) SetPermissionsPolicy(value string) {
 //
 // 返回值：
 //   - *config.SecurityHeaders: 当前配置的副本
-func (sh *SecurityHeadersMiddleware) GetConfig() *config.SecurityHeaders {
+func (sh *HeadersMiddleware) GetConfig() *config.SecurityHeaders {
 	sh.mu.RLock()
 	defer sh.mu.RUnlock()
 	return sh.config
@@ -331,4 +331,4 @@ func DevelopmentSecurityHeaders() *config.SecurityHeaders {
 }
 
 // 验证接口实现
-var _ middleware.Middleware = (*SecurityHeadersMiddleware)(nil)
+var _ middleware.Middleware = (*HeadersMiddleware)(nil)

@@ -43,6 +43,9 @@ const (
 	ActionAllow Action = iota
 	// ActionDeny 拒绝请求（返回 403 Forbidden）
 	ActionDeny
+
+	accessAllow = "allow"
+	accessDeny  = "deny"
 )
 
 // AccessControl 实现 IP 访问控制中间件。
@@ -112,9 +115,9 @@ func NewAccessControl(cfg *config.AccessConfig) (*AccessControl, error) {
 
 	// 设置默认操作
 	switch strings.ToLower(cfg.Default) {
-	case "allow", "":
+	case accessAllow, "":
 		ac.defaultAction = ActionAllow
-	case "deny":
+	case accessDeny:
 		ac.defaultAction = ActionDeny
 	default:
 		return nil, fmt.Errorf("invalid default action: %s", cfg.Default)
@@ -259,9 +262,9 @@ func (ac *AccessControl) SetDefault(action string) error {
 	defer ac.mu.Unlock()
 
 	switch strings.ToLower(action) {
-	case "allow":
+	case accessAllow:
 		ac.defaultAction = ActionAllow
-	case "deny":
+	case accessDeny:
 		ac.defaultAction = ActionDeny
 	default:
 		return fmt.Errorf("invalid action: %s", action)
@@ -436,7 +439,7 @@ func actionToString(action Action) string {
 	case ActionAllow:
 		return "allow"
 	case ActionDeny:
-		return "deny"
+		return accessDeny
 	default:
 		return "unknown"
 	}

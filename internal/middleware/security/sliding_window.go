@@ -206,7 +206,7 @@ func (s *SlidingWindowLimiter) Cleanup(maxAge time.Duration) {
 	}
 }
 
-// Stats 返回限流器统计信息。
+// SlidingWindowStats 返回限流器统计信息。
 type SlidingWindowStats struct {
 	Window      time.Duration // 窗口大小
 	Limit       int           // 窗口内最大请求数

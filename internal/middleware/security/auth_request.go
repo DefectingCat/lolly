@@ -313,8 +313,8 @@ func (a *AuthRequest) expandVars(ctx *fasthttp.RequestCtx, template string) stri
 	}
 
 	// 创建变量上下文
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	return vc.Expand(template)
 }
