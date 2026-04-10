@@ -1402,3 +1402,49 @@ func TestStaticHandler_TryFilesEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// TestStaticHandler_LargeFileContentType 测试大文件 sendfile 路径的 Content-Type
+func TestStaticHandler_LargeFileContentType(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建大于 8KB 的文件
+	largeContent := make([]byte, 16*1024)
+	for i := range largeContent {
+		largeContent[i] = byte(i % 256)
+	}
+
+	tests := []struct {
+		ext      string
+		expected string
+	}{
+		{".css", "text/css; charset=utf-8"},
+		{".js", "text/javascript; charset=utf-8"},
+		{".webmanifest", "application/manifest+json"},
+		{".webm", "video/webm"},
+		{".otf", "font/otf"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.ext, func(t *testing.T) {
+			filePath := filepath.Join(tmpDir, "large"+tc.ext)
+			if err := os.WriteFile(filePath, largeContent, 0644); err != nil {
+				t.Fatalf("创建文件失败: %v", err)
+			}
+
+			handler := NewStaticHandler(tmpDir, "/", nil, true) // 启用 sendfile
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.SetRequestURI("/large" + tc.ext)
+
+			handler.Handle(ctx)
+
+			if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+				t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+			}
+
+			ct := string(ctx.Response.Header.ContentType())
+			if ct != tc.expected {
+				t.Errorf("Content-Type = %q, want %q", ct, tc.expected)
+			}
+		})
+	}
+}

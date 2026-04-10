@@ -19,10 +19,11 @@
 package handler
 
 import (
-	"mime"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"rua.plus/lolly/internal/mimeutil"
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/cache"
@@ -462,7 +463,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 			if entry.ModTime.Equal(info.ModTime()) {
 				// 缓存命中且文件未修改
 				ctx.Response.SetBody(entry.Data)
-				ctx.Response.Header.SetContentType(mime.TypeByExtension(filepath.Ext(filePath)))
+				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
 				return
 			}
 			// 文件已修改，删除旧缓存
@@ -472,6 +473,9 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 
 	// 大文件使用零拷贝传输
 	if h.useSendfile && info.Size() >= MinSendfileSize {
+		// 设置 Content-Type (sendfile 不会自动设置)
+		ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+
 		file, err := os.Open(filePath)
 		if err == nil {
 			defer func() { _ = file.Close() }()
@@ -495,5 +499,5 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 	}
 
 	ctx.Response.SetBody(data)
-	ctx.Response.Header.SetContentType(mime.TypeByExtension(filepath.Ext(filePath)))
+	ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
 }

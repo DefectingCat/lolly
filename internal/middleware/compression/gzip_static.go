@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/mimeutil"
 )
 
 // GzipStatic 预压缩文件支持。
@@ -112,6 +113,10 @@ func (g *GzipStatic) ServeFile(ctx *fasthttp.RequestCtx, filePath string) bool {
 			ctx.Response.Header.Set("Content-Encoding", "gzip")
 		}
 		ctx.Response.Header.Set("Vary", "Accept-Encoding")
+		// 设置原始文件的 Content-Type
+		// filePath 是原始文件路径 (如 "test.js")，直接使用即可
+		ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+
 		fasthttp.ServeFile(ctx, fullPath)
 		return true
 	}
