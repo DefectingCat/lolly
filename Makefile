@@ -13,7 +13,7 @@ BUILD_DIR := bin
 # 静态构建（禁用 CGO）
 CGO_DISABLE := CGO_ENABLED=0
 
-# 生产构建标志（体积优化）
+# 生产构建标志
 LDFLAGS := -ldflags "-s -w \
 	-X 'rua.plus/lolly/internal/app.Version=$(VERSION)' \
 	-X 'rua.plus/lolly/internal/app.GitCommit=$(GIT_COMMIT)' \
@@ -36,23 +36,8 @@ MAIN_PATH := main.go
 # 构建命令
 # ============================================
 
-# 本地构建（静态链接）
-build:
-	@echo "Building $(APP_NAME) (static)..."
-	@mkdir -p $(BUILD_DIR)
-	$(CGO_DISABLE) go build $(LDFLAGS) -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
-	@echo "Built: $(BUILD_DIR)/$(APP_NAME)"
-	@echo "Version: $(VERSION) | Commit: $(GIT_COMMIT) | Platform: $(BUILD_PLATFORM)"
-
-# 生产构建（体积优化，静态链接）
-# build-size:
-# 	@echo "Building $(APP_NAME) for production (static)..."
-# 	@mkdir -p $(BUILD_DIR)
-# 	$(CGO_DISABLE) go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
-# 	@echo "Production build complete: $(BUILD_DIR)/$(APP_NAME)"
-
 # 生产构建（最大运行时性能，静态链接）
-build-prod:
+build:
 	@echo "Building $(APP_NAME) with max runtime performance (static)..."
 	@mkdir -p $(BUILD_DIR)
 	$(CGO_DISABLE) go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
