@@ -36,19 +36,25 @@ const (
 	VerifyOptional
 	// VerifyOptionalNoCA 可选验证但不验证 CA
 	VerifyOptionalNoCA
+
+	// verifyModeOff 验证模式字符串常量
+	verifyModeOff          = "off"
+	verifyModeOn           = "on"
+	verifyModeOptional     = "optional"
+	verifyModeOptionalNoCA = "optional_no_ca"
 )
 
 // String 返回验证模式的字符串表示。
 func (m ClientVerifyMode) String() string {
 	switch m {
 	case VerifyOff:
-		return "off"
+		return verifyModeOff
 	case VerifyOn:
-		return "on"
+		return verifyModeOn
 	case VerifyOptional:
-		return "optional"
+		return verifyModeOptional
 	case VerifyOptionalNoCA:
-		return "optional_no_ca"
+		return verifyModeOptionalNoCA
 	default:
 		return "unknown"
 	}
@@ -64,13 +70,13 @@ func (m ClientVerifyMode) String() string {
 //   - error: 无效模式时返回错误
 func ParseVerifyMode(mode string) (ClientVerifyMode, error) {
 	switch mode {
-	case "off", "":
+	case verifyModeOff, "":
 		return VerifyOff, nil
-	case "on":
+	case verifyModeOn:
 		return VerifyOn, nil
-	case "optional":
+	case verifyModeOptional:
 		return VerifyOptional, nil
-	case "optional_no_ca":
+	case verifyModeOptionalNoCA:
 		return VerifyOptionalNoCA, nil
 	default:
 		return VerifyOff, fmt.Errorf("invalid verify mode: %s", mode)
