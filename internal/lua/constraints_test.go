@@ -4,9 +4,9 @@ package lua
 import (
 	"testing"
 
-	glua "github.com/yuin/gopher-lua"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	glua "github.com/yuin/gopher-lua"
 )
 
 // TestNewEngine 测试引擎创建

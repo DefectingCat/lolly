@@ -19,9 +19,12 @@ import (
 // CacheKeyType 缓存键类型
 type CacheKeyType int
 
+// 缓存键类型常量：内联脚本和文件脚本
 const (
+	// CacheKeyInline 内联脚本缓存键
 	CacheKeyInline CacheKeyType = iota // 内联脚本
-	CacheKeyFile                       // 文件脚本
+	// CacheKeyFile 文件脚本缓存键
+	CacheKeyFile // 文件脚本
 )
 
 // CachedProto 缓存的字节码

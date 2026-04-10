@@ -8,12 +8,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	glua "github.com/yuin/gopher-lua"
 	"github.com/valyala/fasthttp"
+	glua "github.com/yuin/gopher-lua"
 )
 
 // LuaEngine 全局 Lua 引擎
 // 每个 HTTP Server 实例持有一个 LuaEngine
+//
+// 类型命名说明：虽然 lua.LuaEngine 存在 stuttering，但保持此命名以：
+// 1) 与 LuaContext/LuaCoroutine 保持一致的 API 命名风格
+// 2) 明确区分 Lua 引擎与其他引擎类型
+// 3) 保持向后兼容性
 type LuaEngine struct {
 	// 主 LState
 	L *glua.LState
@@ -25,9 +30,9 @@ type LuaEngine struct {
 	codeCache *CodeCache
 
 	// 协程管理
-	activeCount   int32         // 活跃协程数
-	maxCoroutines int           // 最大并发协程数
-	coroutinePool sync.Pool     // 协程对象池（注意：池中的协程已 dead，不可复用，仅复用内存）
+	activeCount   int32     // 活跃协程数
+	maxCoroutines int       // 最大并发协程数
+	coroutinePool sync.Pool // 协程对象池（注意：池中的协程已 dead，不可复用，仅复用内存）
 
 	// 生命周期
 	ctx    context.Context

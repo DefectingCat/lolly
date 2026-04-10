@@ -340,7 +340,7 @@ func TestCodeCacheTTL(t *testing.T) {
 
 	// 检查 stats：两次 miss，因为 TTL 过期后重新编译
 	hits, misses, _ := cache.Stats()
-	assert.Equal(t, uint64(0), hits) // 没有 hit
+	assert.Equal(t, uint64(0), hits)   // 没有 hit
 	assert.Equal(t, uint64(2), misses) // 两次 miss
 }
 

@@ -7,20 +7,28 @@ import (
 	"sync/atomic"
 	"time"
 
-	glua "github.com/yuin/gopher-lua"
 	"github.com/valyala/fasthttp"
+	glua "github.com/yuin/gopher-lua"
 )
 
 // Phase 处理阶段
 type Phase int
 
+// 处理阶段常量，对应 nginx 请求处理生命周期
 const (
+	// PhaseInit 初始化阶段
 	PhaseInit Phase = iota
+	// PhaseRewrite 重写阶段
 	PhaseRewrite
+	// PhaseAccess 访问控制阶段
 	PhaseAccess
+	// PhaseContent 内容生成阶段
 	PhaseContent
+	// PhaseLog 日志记录阶段
 	PhaseLog
+	// PhaseHeaderFilter 响应头过滤阶段
 	PhaseHeaderFilter
+	// PhaseBodyFilter 响应体过滤阶段
 	PhaseBodyFilter
 )
 
@@ -47,6 +55,11 @@ func (p Phase) String() string {
 
 // LuaCoroutine 请求级临时协程
 // 注意：协程在 ResumeOK 后变成 dead 状态，不能复用
+//
+// 类型命名说明：虽然 lua.LuaCoroutine 存在 stuttering，但保持此命名以：
+// 1) 与 LuaEngine/LuaContext 保持一致的 API 命名风格
+// 2) 明确区分 Lua 运行时协程与 Go 协程概念
+// 3) 保持向后兼容性
 type LuaCoroutine struct {
 	// 所属引擎
 	Engine *LuaEngine

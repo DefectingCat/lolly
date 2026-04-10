@@ -6,6 +6,11 @@ import (
 )
 
 // LuaContext 请求级 Lua 上下文
+//
+// 类型命名说明：虽然 lua.LuaContext 存在 stuttering，但保持此命名以：
+// 1) 与 LuaEngine/LuaCoroutine 保持一致的 API 命名风格
+// 2) 明确区分 Lua 上下文与其他上下文类型（如 context.Context）
+// 3) 保持向后兼容性
 type LuaContext struct {
 	// 引擎引用
 	Engine *LuaEngine
@@ -120,7 +125,11 @@ func (c *LuaContext) Release() {
 // FlushOutput 刷新输出到响应
 func (c *LuaContext) FlushOutput() {
 	if len(c.OutputBuffer) > 0 && c.RequestCtx != nil {
-		c.RequestCtx.Write(c.OutputBuffer)
+		// Write 返回写入的字节数和可能的错误
+		// 在响应刷新场景中，我们选择忽略错误，因为：
+		// 1. fasthttp.RequestCtx.Write 内部已经处理了连接状态
+		// 2. 此阶段出错时请求处理已完成，无法向客户端报告
+		_, _ = c.RequestCtx.Write(c.OutputBuffer)
 		c.OutputBuffer = c.OutputBuffer[:0]
 	}
 }
