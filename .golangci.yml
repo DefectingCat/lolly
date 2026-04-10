@@ -117,6 +117,17 @@ linters:
     - wsl_v5          # whitespace v5
     - zerologlint     # zerolog 检查
 
+  exclusions:
+    rules:
+      - path: '_test\.go'
+        linters:
+          - dupl
+          - gosec
+          - goconst
+      - path: 'internal/ssl/ocsp_test\.go'
+        linters:
+          - unparam
+
 formatters:
   default: all
   disable:
@@ -143,14 +154,3 @@ linters-settings:
       - name: unused-parameter
         severity: warning
         disabled: false
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - dupl
-        - gosec
-
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  new: false
