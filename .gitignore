@@ -65,3 +65,4 @@ html/
 default.pgo
 benchmark-*.txt
 lua-nginx-module/
+!docs/lua-nginx-module/
