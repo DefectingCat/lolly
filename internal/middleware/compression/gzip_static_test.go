@@ -363,10 +363,11 @@ func TestGzipStatic_Enabled(t *testing.T) {
 	}
 }
 
-// TestDefaultExtensions 测试 DefaultExtensions 函数
+// TestDefaultExtensions 测试默认扩展名（通过 NewGzipStatic 间接测试）
 func TestDefaultExtensions(t *testing.T) {
 	expected := []string{".html", ".css", ".js", ".json", ".xml", ".svg", ".txt"}
-	got := DefaultExtensions()
+	g := NewGzipStatic(true, "/tmp", nil)
+	got := g.Extensions()
 
 	if len(got) != len(expected) {
 		t.Errorf("默认扩展名数量 = %d, want %d", len(got), len(expected))
@@ -448,7 +449,7 @@ func TestSupportsEncoding(t *testing.T) {
 	}
 }
 
-// TestTryServeFile 测试 TryServeFile 静态方法
+// TestTryServeFile 测试预压缩文件服务（通过 ServeFile 间接测试）
 func TestTryServeFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -461,10 +462,11 @@ func TestTryServeFile(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.Header.Set("Accept-Encoding", "br")
 
-	served := TryServeFile(ctx, tmpDir, "test.js", nil)
+	g := NewGzipStatic(true, tmpDir, nil)
+	served := g.ServeFile(ctx, "test.js")
 
 	if !served {
-		t.Error("TryServeFile() = false, want true")
+		t.Error("ServeFile() = false, want true")
 	}
 
 	encoding := ctx.Response.Header.Peek("Content-Encoding")

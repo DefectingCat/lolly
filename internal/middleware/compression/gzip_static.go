@@ -119,23 +119,6 @@ func (g *GzipStatic) ServeFile(ctx *fasthttp.RequestCtx, filePath string) bool {
 	return false
 }
 
-// TryServeFile 尝试发送预压缩文件的静态方法。
-//
-// 用于在静态文件处理器中调用。
-//
-// 参数：
-//   - ctx: FastHTTP 请求上下文
-//   - root: 静态文件根目录
-//   - filePath: 请求的文件路径
-//   - extensions: 支持的扩展名
-//
-// 返回值：
-//   - bool: true 表示已发送预压缩文件
-func TryServeFile(ctx *fasthttp.RequestCtx, root, filePath string, extensions []string) bool {
-	g := NewGzipStatic(true, root, extensions)
-	return g.ServeFile(ctx, filePath)
-}
-
 // matchExtension 检查文件扩展名是否匹配。
 func (g *GzipStatic) matchExtension(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
@@ -155,11 +138,6 @@ func (g *GzipStatic) Enabled() bool {
 // Extensions 返回支持的扩展名列表。
 func (g *GzipStatic) Extensions() []string {
 	return g.extensions
-}
-
-// DefaultExtensions 返回默认支持的扩展名。
-func DefaultExtensions() []string {
-	return []string{".html", ".css", ".js", ".json", ".xml", ".svg", ".txt"}
 }
 
 // supportsEncoding 检查客户端是否支持指定编码。
