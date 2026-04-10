@@ -436,7 +436,7 @@ func (m *TLSManager) GetOCSPStatus() map[string]OCSPStatusInfo {
 type OCSPStatusInfo struct {
 	Serial      string     // 证书序列号
 	Subject     string     // 证书主题 CN
-	Status      ocspStatus // OCSP 响应状态
+	Status      OCSPStatus // OCSP 响应状态
 	HasResponse bool       // 是否有可用响应
 }
 

@@ -60,16 +60,16 @@ type ocspResponse struct {
 	response   []byte     // 原始 OCSP 响应数据
 	thisUpdate time.Time  // 响应生成时间
 	nextUpdate time.Time  // 响应过期时间
-	status     ocspStatus // 响应状态
+	status     OCSPStatus // 响应状态
 	fetchedAt  time.Time  // 获取响应的时间
 	errors     int        // 连续获取失败的次数
 }
 
-// ocspStatus OCSP 响应状态类型。
-type ocspStatus int
+// OCSPStatus OCSP 响应状态类型。
+type OCSPStatus int
 
 const (
-	statusValid  ocspStatus = iota // 响应有效且新鲜
+	statusValid  OCSPStatus = iota // 响应有效且新鲜
 	statusStale                    // 响应过期但可用（优雅降级）
 	statusFailed                   // 无有效响应可用
 )
@@ -433,7 +433,7 @@ func (m *OCSPManager) RefreshResponse(cert, issuer *x509.Certificate) error {
 // 返回值：
 //   - status: OCSP 响应状态
 //   - hasResponse: 是否有可用响应
-func (m *OCSPManager) GetStatus(serial string) (status ocspStatus, hasResponse bool) {
+func (m *OCSPManager) GetStatus(serial string) (status OCSPStatus, hasResponse bool) {
 	m.mu.RLock()
 	resp, ok := m.responses[serial]
 	m.mu.RUnlock()

@@ -374,12 +374,9 @@ func generateTicketKey() ([]byte, error) {
 	return key, nil
 }
 
-// GetKeyStatus 返回当前密钥状态信息。
+// SessionTicketStatus Session Ticket 密钥状态信息。
 //
 // 用于监控和调试，显示当前密钥数量和轮换状态。
-//
-// 返回值：
-//   - SessionTicketStatus: 密钥状态信息
 type SessionTicketStatus struct {
 	// KeyCount 当前密钥数量
 	KeyCount int
