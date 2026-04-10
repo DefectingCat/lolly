@@ -11,22 +11,30 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// PoolStats 池统计信息
+// PoolStats 池统计信息。
+//
+// 记录 sync.Pool 的使用统计，用于监控和调试。
 type PoolStats struct {
-	Gets     int64 // Get 次数
-	Puts     int64 // Put 次数
-	NewCount int64 // New 创建次数
-	Active   int64 // 当前活跃数量 (Gets - Puts)
+	// Gets 从池中获取对象的次数
+	Gets int64
+	// Puts 放回池中对象的次数
+	Puts int64
+	// NewCount 调用 New 函数创建对象的次数
+	NewCount int64
+	// Active 当前活跃对象数量（Gets - Puts）
+	Active int64
 }
 
 var (
-	// stats 池统计
+	// stats 全局池统计信息
 	stats PoolStats
-	// statsMu 保护统计信息
+	// statsMu 保护统计信息的读写锁
 	statsMu sync.RWMutex
 )
 
-// GetStats 获取池统计信息
+// GetStats 获取池统计信息的副本。
+//
+// 返回当前统计信息的快照，线程安全。
 func GetStats() PoolStats {
 	statsMu.RLock()
 	s := stats
@@ -34,7 +42,7 @@ func GetStats() PoolStats {
 	return s
 }
 
-// GetPool 获取底层的 sync.Pool（用于测试和调试）
+// GetPool 获取底层的 sync.Pool（用于测试和调试）。
 func GetPool() *sync.Pool {
 	return &pool
 }
@@ -71,7 +79,9 @@ func PoolPut(vc *Context) {
 	statsMu.Unlock()
 }
 
-// ResetStats 重置统计信息
+// ResetStats 重置统计信息。
+//
+// 将所有统计计数器清零，线程安全。
 func ResetStats() {
 	statsMu.Lock()
 	stats = PoolStats{}

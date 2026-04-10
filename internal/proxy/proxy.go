@@ -52,7 +52,12 @@ import (
 )
 
 const (
+	// upstreamCache 上游缓存标识
+	// 用于标记请求可直接使用缓存响应，无需转发到上游
 	upstreamCache = "CACHE"
+
+	// protoHTTPS 使用 HTTPS 协议
+	// 标记与上游目标通信时使用 HTTPS 加密传输
 	protoHTTPS    = "https"
 )
 
