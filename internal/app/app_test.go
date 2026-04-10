@@ -483,7 +483,7 @@ func TestHandleSignal_Unknown(t *testing.T) {
 }
 
 // TestShutdownHTTP3_NilServer 测试 HTTP/3 服务器为 nil 时关闭
-func TestShutdownHTTP3_NilServer(t *testing.T) {
+func TestShutdownHTTP3_NilServer(_ *testing.T) {
 	app := NewApp("")
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 
@@ -492,7 +492,7 @@ func TestShutdownHTTP3_NilServer(t *testing.T) {
 }
 
 // TestReopenLogs 测试重开日志
-func TestReopenLogs(t *testing.T) {
+func TestReopenLogs(_ *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
 		Logging: config.LoggingConfig{
@@ -508,7 +508,7 @@ func TestReopenLogs(t *testing.T) {
 }
 
 // TestReloadConfig_FileNotFound 测试重载不存在的配置
-func TestReloadConfig_FileNotFound(t *testing.T) {
+func TestReloadConfig_FileNotFound(_ *testing.T) {
 	app := NewApp("/nonexistent/config.yaml")
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 
@@ -549,7 +549,7 @@ logging:
 }
 
 // TestSetupSignalHandlers 测试信号处理设置
-func TestSetupSignalHandlers(t *testing.T) {
+func TestSetupSignalHandlers(_ *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
 		Server: config.ServerConfig{
@@ -585,7 +585,7 @@ func TestHandleSignal_SIGUSR2(t *testing.T) {
 }
 
 // TestGracefulUpgrade_NoListener 测试无监听器时的热升级
-func TestGracefulUpgrade_NoListener(t *testing.T) {
+func TestGracefulUpgrade_NoListener(_ *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
 		Server: config.ServerConfig{
@@ -652,7 +652,7 @@ func TestAppFields(t *testing.T) {
 }
 
 // TestShutdownHTTP3_WithServer 测试有 HTTP3 服务器时的关闭
-func TestShutdownHTTP3_WithServer(t *testing.T) {
+func TestShutdownHTTP3_WithServer(_ *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
 		Server: config.ServerConfig{
@@ -673,7 +673,7 @@ func TestShutdownHTTP3_WithServer(t *testing.T) {
 }
 
 // TestReopenLogs_WithNilConfig 测试配置为 nil 时重开日志
-func TestReopenLogs_WithNilConfig(t *testing.T) {
+func TestReopenLogs_WithNilConfig(_ *testing.T) {
 	app := NewApp("")
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 

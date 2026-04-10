@@ -111,7 +111,7 @@ func TestStaticHandlerHandle(t *testing.T) {
 		},
 		{
 			name: "文件不存在",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				t.Helper()
 				// 不创建任何文件
 			},
@@ -121,7 +121,7 @@ func TestStaticHandlerHandle(t *testing.T) {
 		},
 		{
 			name: "空路径访问根目录无索引",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				t.Helper()
 				// root 目录没有索引文件
 			},
@@ -188,7 +188,7 @@ func TestStaticHandlerHandle_PathTraversalSecurity(t *testing.T) {
 	}{
 		{
 			name: "文件名包含双点 - 安全检查拦截",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				t.Helper()
 				// 不创建任何文件
 			},
@@ -198,7 +198,7 @@ func TestStaticHandlerHandle_PathTraversalSecurity(t *testing.T) {
 		},
 		{
 			name: "路径末尾双点 - 安全检查拦截",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				t.Helper()
 			},
 			path:        "/foo/..",
@@ -207,7 +207,7 @@ func TestStaticHandlerHandle_PathTraversalSecurity(t *testing.T) {
 		},
 		{
 			name: "隐藏文件 .hidden - 文件不存在",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				t.Helper()
 			},
 			path:        "/.hidden",
@@ -216,7 +216,7 @@ func TestStaticHandlerHandle_PathTraversalSecurity(t *testing.T) {
 		},
 		{
 			name: "文件名包含多点 ...txt - 安全检查拦截",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				t.Helper()
 			},
 			path:        "/file...txt",
@@ -225,7 +225,7 @@ func TestStaticHandlerHandle_PathTraversalSecurity(t *testing.T) {
 		},
 		{
 			name: "fasthttp 规范化后的路径 - 文件不存在",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				t.Helper()
 				// fasthttp 将 /../secret.txt 规范化为 /secret.txt
 			},
@@ -235,7 +235,7 @@ func TestStaticHandlerHandle_PathTraversalSecurity(t *testing.T) {
 		},
 		{
 			name: "URL 编码路径遍历 - fasthttp 规范化",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				t.Helper()
 				// fasthttp 解码 %2e%2e 为 .. 并规范化路径
 			},
@@ -245,7 +245,7 @@ func TestStaticHandlerHandle_PathTraversalSecurity(t *testing.T) {
 		},
 		{
 			name: "混合 URL 编码 - fasthttp 规范化",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				t.Helper()
 			},
 			path:        "/%2e%2e%2fsecret.txt",
@@ -764,7 +764,7 @@ func TestStaticHandler_handleTryFiles(t *testing.T) {
 		},
 		{
 			name: "所有 try_files 都未找到",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				// 不创建任何文件
 			},
 			tryFiles:    []string{"$uri", "$uri/", "/index.html"},
@@ -879,7 +879,7 @@ func TestStaticHandler_handleInternalRedirect(t *testing.T) {
 		},
 		{
 			name: "内部重定向目标不存在",
-			setup: func(t *testing.T, root string) {
+			setup: func(_ *testing.T, _ string) {
 				// 不创建 fallback 文件
 			},
 			tryFiles:     []string{"$uri", "/fallback.html"},
@@ -1156,7 +1156,7 @@ func TestStaticHandler_Alias(t *testing.T) {
 		},
 		{
 			name: "alias 文件不存在",
-			setup: func(t *testing.T, aliasDir string) {
+			setup: func(_ *testing.T, _ string) {
 				// 不创建任何文件
 			},
 			alias:       "/alias/images/",

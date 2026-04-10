@@ -76,6 +76,10 @@ func (mb *MockBackend) handler(ctx *fasthttp.RequestCtx) {
 	mb.mu.RUnlock()
 
 	switch config.Mode {
+	case ModeFixed:
+		ctx.SetStatusCode(config.StatusCode)
+		_, _ = ctx.Write(config.Body)
+
 	case ModeDelay:
 		time.Sleep(config.Delay)
 		ctx.SetStatusCode(config.StatusCode)

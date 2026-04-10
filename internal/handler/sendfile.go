@@ -160,7 +160,7 @@ func platformSendfile(conn net.Conn, file *os.File, offset, length int64) error 
 //
 // 返回值：
 //   - error: 系统调用错误
-func linuxSendfile(conn net.Conn, fileFd uintptr, offset, length int64) error {
+func linuxSendfile(conn net.Conn, fileFd uintptr, _, length int64) error {
 	socketFd, err := getSocketFd(conn)
 	if err != nil {
 		return err

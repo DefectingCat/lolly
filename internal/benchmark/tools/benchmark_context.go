@@ -165,7 +165,7 @@ func (bc *BenchmarkContext) MockResponse() []byte {
 //
 // 返回值:
 //   - []byte: 模拟的响应数据
-func (bc *BenchmarkContext) MockResponseWithContentType(statusCode int, contentType string) []byte {
+func (bc *BenchmarkContext) MockResponseWithContentType(_, _ string) []byte {
 	// 返回响应体，调用者负责设置状态码和 Content-Type
 	return GenerateTestData(bc.ResponseSize)
 }

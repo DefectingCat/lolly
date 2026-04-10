@@ -187,14 +187,14 @@ func TestGetSocketFd_UnsupportedType(t *testing.T) {
 // mockConn 是一个不实现 TCPConn/UnixConn 的连接
 type mockConn struct{}
 
-func (m *mockConn) Read(b []byte) (n int, err error)   { return 0, nil }
-func (m *mockConn) Write(b []byte) (n int, err error)  { return 0, nil }
-func (m *mockConn) Close() error                       { return nil }
-func (m *mockConn) LocalAddr() net.Addr                { return nil }
-func (m *mockConn) RemoteAddr() net.Addr               { return nil }
-func (m *mockConn) SetDeadline(t time.Time) error      { return nil }
-func (m *mockConn) SetReadDeadline(t time.Time) error  { return nil }
-func (m *mockConn) SetWriteDeadline(t time.Time) error { return nil }
+func (m *mockConn) Read([]byte) (n int, err error)   { return 0, nil }
+func (m *mockConn) Write([]byte) (n int, err error)  { return 0, nil }
+func (m *mockConn) Close() error                     { return nil }
+func (m *mockConn) LocalAddr() net.Addr              { return nil }
+func (m *mockConn) RemoteAddr() net.Addr             { return nil }
+func (m *mockConn) SetDeadline(time.Time) error      { return nil }
+func (m *mockConn) SetReadDeadline(time.Time) error  { return nil }
+func (m *mockConn) SetWriteDeadline(time.Time) error { return nil }
 
 // TestSendFile_SmallFile 测试小文件发送（使用 fallback）
 func TestSendFile_SmallFile(t *testing.T) {
@@ -287,7 +287,7 @@ func TestSendFile_ZeroLength(t *testing.T) {
 }
 
 // TestGetNetConn 测试获取底层连接
-func TestGetNetConn(t *testing.T) {
+func TestGetNetConn(_ *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Init(&fasthttp.Request{}, nil, nil)
 

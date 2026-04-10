@@ -478,6 +478,7 @@ func (a *App) gracefulUpgrade() {
 
 // sigName 返回信号名称（用于日志输出）。
 func sigName(sig syscall.Signal) string {
+	//nolint:exhaustive
 	switch sig {
 	case syscall.SIGTERM:
 		return "SIGTERM"

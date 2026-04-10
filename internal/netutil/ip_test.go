@@ -120,7 +120,7 @@ func TestExtractClientIPNet(t *testing.T) {
 	}
 }
 
-func TestGetRemoteAddrIP(t *testing.T) {
+func TestGetRemoteAddrIP(_ *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Init(&fasthttp.Request{}, nil, nil)
 

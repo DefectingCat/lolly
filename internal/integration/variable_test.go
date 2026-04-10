@@ -57,8 +57,8 @@ func TestVariableInProxyHeaders(t *testing.T) {
 	ctx.Request.Header.Set("X-Custom-Header", "original")
 
 	// 测试变量展开
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	// 模拟代理配置中的 header 设置
 	tests := []struct {
@@ -126,7 +126,7 @@ func TestVariableInRewriteRules(t *testing.T) {
 		ctx.Request.SetRequestURI("/redirect/old-page")
 		ctx.Request.Header.SetMethod("GET")
 
-		handler := mw.Process(func(c *fasthttp.RequestCtx) {
+		handler := mw.Process(func(_ *fasthttp.RequestCtx) {
 			t.Error("should not reach next handler for redirect")
 		})
 		handler(ctx)
@@ -150,8 +150,8 @@ func TestVariableCompatibilityWithNginx(t *testing.T) {
 	// 设置响应信息
 	variable.SetResponseInfoInContext(ctx, 201, 2048, 100000000) // 100ms
 
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	// 设置 HTTP 头变量（logging 中会自动设置这些）
 	vc.Set("http_referer", "http://referrer.com")
@@ -190,8 +190,8 @@ func TestVariablePerformance(t *testing.T) {
 	ctx.Request.Header.SetMethod("GET")
 	ctx.Request.Header.SetHost("api.example.com")
 
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	// 常见日志格式模板
 	template := "$remote_addr - $remote_user [$time_local] \"$request_method $request_uri $scheme\" $status $body_bytes_sent \"$http_user_agent\""
@@ -271,8 +271,8 @@ func TestVariableEdgeCases(t *testing.T) {
 			ctx := &fasthttp.RequestCtx{}
 			tt.setup(ctx)
 
-			vc := variable.NewVariableContext(ctx)
-			defer variable.ReleaseVariableContext(vc)
+			vc := variable.NewContext(ctx)
+			defer variable.ReleaseContext(vc)
 
 			result := vc.Expand(tt.template)
 			if result != tt.expected {
@@ -292,8 +292,8 @@ func TestVariableAllBuiltins(t *testing.T) {
 	// 设置响应信息
 	variable.SetResponseInfoInContext(ctx, 200, 1024, 50000000) // 50ms
 
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	// 测试所有内置变量
 	builtinVars := []string{
