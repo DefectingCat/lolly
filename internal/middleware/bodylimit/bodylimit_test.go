@@ -62,10 +62,10 @@ func TestFormatSize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(FormatSize(tt.input), func(t *testing.T) {
-			got := FormatSize(tt.input)
+		t.Run(formatSize(tt.input), func(t *testing.T) {
+			got := formatSize(tt.input)
 			if got != tt.expected {
-				t.Errorf("FormatSize(%d) = %s, want %s", tt.input, got, tt.expected)
+				t.Errorf("formatSize(%d) = %s, want %s", tt.input, got, tt.expected)
 			}
 		})
 	}

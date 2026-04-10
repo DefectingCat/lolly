@@ -279,7 +279,7 @@ func ParseSize(sizeStr string) (int64, error) {
 //
 // 返回值：
 //   - string: 格式化后的字符串，如 "1mb", "10kb" 等
-func FormatSize(size int64) string {
+func formatSize(size int64) string {
 	const (
 		KB = 1024
 		MB = 1024 * KB
