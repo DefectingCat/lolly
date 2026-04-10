@@ -27,6 +27,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// 默认配置常量。
+const (
+	// DefaultPprofPath pprof 端点的默认路径。
+	DefaultPprofPath = "/debug/pprof"
+)
+
 // Config 根配置结构，支持单服务器和多虚拟主机两种模式。
 //
 // 包含服务器配置、日志配置、性能配置和监控配置等模块。

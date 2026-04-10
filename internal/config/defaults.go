@@ -168,7 +168,7 @@ func DefaultConfig() *Config {
 			},
 			Pprof: PprofConfig{
 				Enabled: false,
-				Path:    "/debug/pprof",
+				Path:    DefaultPprofPath,
 				Allow:   []string{"127.0.0.1"},
 			},
 		},

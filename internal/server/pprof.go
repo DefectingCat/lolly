@@ -62,7 +62,7 @@ func NewPprofHandler(cfg *config.PprofConfig) (*PprofHandler, error) {
 
 	path := cfg.Path
 	if path == "" {
-		path = "/debug/pprof"
+		path = config.DefaultPprofPath
 	}
 
 	h := &PprofHandler{path: path}
