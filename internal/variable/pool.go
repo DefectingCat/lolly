@@ -1,6 +1,6 @@
-// pool.go - VariableContext 池管理
+// Package variable 提供 sync.Pool 用于复用 Context，减少 GC 压力。
 //
-// 提供 sync.Pool 复用 VariableContext，减少 GC 压力。
+// 包含池统计信息、Get/Put 包装方法和统计重置功能。
 //
 // 作者：xfy
 package variable
@@ -39,9 +39,9 @@ func GetPool() *sync.Pool {
 	return &pool
 }
 
-// PoolGet 从池中获取 VariableContext（包装方法，用于统计）
-func PoolGet(ctx *fasthttp.RequestCtx) *VariableContext {
-	vc := pool.Get().(*VariableContext)
+// PoolGet 从池中获取 Context（包装方法，用于统计）
+func PoolGet(ctx *fasthttp.RequestCtx) *Context {
+	vc := pool.Get().(*Context)
 
 	// 初始化
 	vc.ctx = ctx
@@ -67,8 +67,8 @@ func PoolGet(ctx *fasthttp.RequestCtx) *VariableContext {
 	return vc
 }
 
-// PoolPut 将 VariableContext 放回池中（包装方法，用于统计）
-func PoolPut(vc *VariableContext) {
+// PoolPut 将 Context 放回池中（包装方法，用于统计）
+func PoolPut(vc *Context) {
 	if vc == nil {
 		return
 	}

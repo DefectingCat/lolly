@@ -1,6 +1,7 @@
-// builtin.go - 内置变量定义
+// Package variable 提供 nginx 风格的内置变量支持，用于日志、代理和重写规则。
 //
-// 提供 18 个 nginx 风格的内置变量，用于日志、代理和重写规则。
+// 包含 18 个内置变量常量、动态变量获取函数（$arg_name、$http_name、$cookie_name）
+// 以及 Context 池管理。
 //
 // 作者：xfy
 package variable
@@ -132,7 +133,7 @@ func init() {
 	})
 
 	// 9. $server_name - 服务器名称
-	// 注意：这个变量需要从 VariableContext 获取
+	// 注意：这个变量需要从 Context 获取
 	RegisterBuiltin(&BuiltinVariable{
 		Name:        VarServerName,
 		Description: "服务器名称",
@@ -167,7 +168,7 @@ func init() {
 	})
 
 	// 11. $status - HTTP 状态码
-	// 需要从 VariableContext 获取
+	// 需要从 Context 获取
 	RegisterBuiltin(&BuiltinVariable{
 		Name:        VarStatus,
 		Description: "HTTP 响应状态码",
@@ -182,7 +183,7 @@ func init() {
 	})
 
 	// 12. $body_bytes_sent - 响应体大小
-	// 需要从 VariableContext 获取
+	// 需要从 Context 获取
 	RegisterBuiltin(&BuiltinVariable{
 		Name:        VarBodyBytesSent,
 		Description: "发送的响应体字节数",
@@ -197,7 +198,7 @@ func init() {
 	})
 
 	// 13. $request_time - 请求处理时间
-	// 需要从 VariableContext 获取
+	// 需要从 Context 获取
 	RegisterBuiltin(&BuiltinVariable{
 		Name:        VarRequestTime,
 		Description: "请求处理时间（秒）",
@@ -215,7 +216,7 @@ func init() {
 	RegisterBuiltin(&BuiltinVariable{
 		Name:        VarTimeLocal,
 		Description: "本地时间（格式：02/Jan/2024:15:04:05 +0800）",
-		Getter: func(ctx *fasthttp.RequestCtx) string {
+		Getter: func(_ *fasthttp.RequestCtx) string {
 			return time.Now().Format("02/Jan/2006:15:04:05 +0800")
 		},
 	})
@@ -224,7 +225,7 @@ func init() {
 	RegisterBuiltin(&BuiltinVariable{
 		Name:        VarTimeISO8601,
 		Description: "ISO8601 格式时间",
-		Getter: func(ctx *fasthttp.RequestCtx) string {
+		Getter: func(_ *fasthttp.RequestCtx) string {
 			return time.Now().Format(time.RFC3339)
 		},
 	})

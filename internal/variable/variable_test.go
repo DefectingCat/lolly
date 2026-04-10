@@ -16,7 +16,7 @@ import (
 )
 
 // mockRequestCtx 创建测试用的 fasthttp.RequestCtx
-func mockRequestCtx(t *testing.T) *fasthttp.RequestCtx {
+func mockRequestCtx(_ *testing.T) *fasthttp.RequestCtx {
 	ctx := &fasthttp.RequestCtx{}
 
 	// 设置请求信息
@@ -51,8 +51,8 @@ func TestBuiltinVariables(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := mockRequestCtx(t)
-			vc := NewVariableContext(ctx)
-			defer ReleaseVariableContext(vc)
+			vc := NewContext(ctx)
+			defer ReleaseContext(vc)
 
 			value, ok := vc.Get(tt.varName)
 			if !ok && !tt.contains {
@@ -76,8 +76,8 @@ func TestBuiltinVariables(t *testing.T) {
 // TestExpandSimple 测试简单变量展开
 func TestExpandSimple(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	tests := []struct {
 		template string
@@ -104,8 +104,8 @@ func TestExpandSimple(t *testing.T) {
 // TestExpandBrace 测试花括号变量展开
 func TestExpandBrace(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	tests := []struct {
 		template string
@@ -132,8 +132,8 @@ func TestExpandBrace(t *testing.T) {
 // TestExpandMixed 测试混合格式展开
 func TestExpandMixed(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	tests := []struct {
 		template string
@@ -157,8 +157,8 @@ func TestExpandMixed(t *testing.T) {
 // TestExpandUndefined 测试未定义变量
 func TestExpandUndefined(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	tests := []struct {
 		template string
@@ -183,8 +183,8 @@ func TestExpandUndefined(t *testing.T) {
 // TestExpandEdgeCases 测试边界情况
 func TestExpandEdgeCases(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	tests := []struct {
 		template string
@@ -212,8 +212,8 @@ func TestExpandEdgeCases(t *testing.T) {
 // TestCustomVariable 测试自定义变量
 func TestCustomVariable(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 设置自定义变量
 	vc.Set("custom_var", "custom_value")
@@ -234,8 +234,8 @@ func TestCustomVariable(t *testing.T) {
 // TestCustomOverridesBuiltin 测试自定义变量覆盖内置变量
 func TestCustomOverridesBuiltin(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 设置同名自定义变量
 	vc.Set("host", "custom.host.com")
@@ -250,8 +250,8 @@ func TestCustomOverridesBuiltin(t *testing.T) {
 // TestResponseInfoVariables 测试响应相关变量
 func TestResponseInfoVariables(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 设置响应信息
 	vc.SetResponseInfo(200, 1024, 15000000) // 15ms
@@ -345,8 +345,8 @@ func BenchmarkExpandSimple(b *testing.B) {
 	ctx.Request.Header.SetMethod("GET")
 	ctx.Request.Header.SetRequestURI("/test")
 
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	template := "$host $request_method $uri"
 
@@ -365,8 +365,8 @@ func BenchmarkExpandComplex(b *testing.B) {
 	ctx.Request.Header.SetMethod("GET")
 	ctx.Request.Header.SetRequestURI("/api/v1/users?page=1&limit=10")
 
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 模拟日志格式
 	template := "$remote_addr - - [$time_local] \"$request_method $request_uri HTTP/1.1\" $status $body_bytes_sent"
@@ -382,8 +382,8 @@ func BenchmarkExpandComplex(b *testing.B) {
 // BenchmarkExpandNoVariable 基准测试：无变量字符串
 func BenchmarkExpandNoVariable(b *testing.B) {
 	ctx := &fasthttp.RequestCtx{}
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	template := "This is a static string without any variables"
 
@@ -401,8 +401,8 @@ func BenchmarkExpandBrace(b *testing.B) {
 	ctx.Request.Header.SetHost("example.com")
 	ctx.Request.Header.SetMethod("GET")
 
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	template := "${scheme}://${host}${uri}"
 
@@ -422,8 +422,8 @@ func BenchmarkPoolGetPut(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vc := NewVariableContext(ctx)
-		ReleaseVariableContext(vc)
+		vc := NewContext(ctx)
+		ReleaseContext(vc)
 	}
 }
 
@@ -456,20 +456,20 @@ func TestPoolReuse(t *testing.T) {
 
 	// 获取和释放多个 context，确保没有 panic
 	for i := 0; i < 10; i++ {
-		vc := NewVariableContext(ctx)
+		vc := NewContext(ctx)
 		vc.Set("key", "value")
 		if v, ok := vc.Get("key"); !ok || v != "value" {
 			t.Errorf("iteration %d: expected key=value, got %s", i, v)
 		}
-		ReleaseVariableContext(vc)
+		ReleaseContext(vc)
 	}
 
 	// 验证池在复用（第二次获取应该清除之前的值）
-	vc2 := NewVariableContext(ctx)
+	vc2 := NewContext(ctx)
 	if v, ok := vc2.Get("key"); ok {
 		t.Errorf("expected key to be cleared after release, got %s", v)
 	}
-	ReleaseVariableContext(vc2)
+	ReleaseContext(vc2)
 }
 
 // TestMoreBuiltinVariables 测试更多内置变量
@@ -483,21 +483,21 @@ func TestMoreBuiltinVariables(t *testing.T) {
 	}{
 		{
 			name:        "server_port with local addr",
-			setupFunc:   func(ctx *fasthttp.RequestCtx) {},
+			setupFunc:   func(_ *fasthttp.RequestCtx) {},
 			varName:     VarServerPort,
 			expected:    "0", // 没有设置 local addr 时返回 "0"
 			shouldExist: true,
 		},
 		{
 			name:        "remote_addr without addr",
-			setupFunc:   func(ctx *fasthttp.RequestCtx) {},
+			setupFunc:   func(_ *fasthttp.RequestCtx) {},
 			varName:     VarRemoteAddr,
 			expected:    "0.0.0.0:0", // mock ctx 返回默认值
 			shouldExist: true,
 		},
 		{
 			name:        "remote_port without addr",
-			setupFunc:   func(ctx *fasthttp.RequestCtx) {},
+			setupFunc:   func(_ *fasthttp.RequestCtx) {},
 			varName:     VarRemotePort,
 			expected:    "0",
 			shouldExist: true,
@@ -526,8 +526,8 @@ func TestMoreBuiltinVariables(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := mockRequestCtx(t)
 			tt.setupFunc(ctx)
-			vc := NewVariableContext(ctx)
-			defer ReleaseVariableContext(vc)
+			vc := NewContext(ctx)
+			defer ReleaseContext(vc)
 
 			value, ok := vc.Get(tt.varName)
 			if tt.shouldExist && !ok {
@@ -542,9 +542,9 @@ func TestMoreBuiltinVariables(t *testing.T) {
 }
 
 // TestReleaseNilContext 测试释放 nil context
-func TestReleaseNilContext(t *testing.T) {
+func TestReleaseNilContext(_ *testing.T) {
 	// 不应该 panic
-	ReleaseVariableContext(nil)
+	ReleaseContext(nil)
 }
 
 // TestGetBuiltin 测试获取内置变量定义
@@ -633,8 +633,8 @@ func TestGetCookieVariable(t *testing.T) {
 // TestEmptyTemplate 测试空模板
 func TestEmptyTemplate(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	result := vc.Expand("")
 	if result != "" {
@@ -642,17 +642,17 @@ func TestEmptyTemplate(t *testing.T) {
 	}
 }
 
-// TestReleaseVariableContextWithNil 测试释放 nil
-func TestReleaseVariableContextWithNil(t *testing.T) {
+// TestReleaseContextWithNil 测试释放 nil
+func TestReleaseContextWithNil(_ *testing.T) {
 	// 不应该 panic
-	ReleaseVariableContext(nil)
+	ReleaseContext(nil)
 }
 
 // TestExpandOnlyDollar 测试只有 $ 的情况
 func TestExpandOnlyDollar(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	tests := []struct {
 		template string
@@ -698,7 +698,7 @@ func TestPoolFunctions(t *testing.T) {
 }
 
 // TestPoolPutNil 测试 PoolPut nil
-func TestPoolPutNil(t *testing.T) {
+func TestPoolPutNil(_ *testing.T) {
 	// 不应该 panic
 	PoolPut(nil)
 }
@@ -724,8 +724,8 @@ func TestStatsFunctions(t *testing.T) {
 // TestSetResponseInfo 测试 SetResponseInfo
 func TestSetResponseInfo(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 设置响应信息
 	vc.SetResponseInfo(404, 512, 25000000) // 25ms
@@ -744,8 +744,8 @@ func TestSetResponseInfo(t *testing.T) {
 // TestSetServerName 测试 SetServerName
 func TestSetServerName(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	vc.SetServerName("my-server")
 	if vc.serverName != "my-server" {
@@ -755,7 +755,7 @@ func TestSetServerName(t *testing.T) {
 
 // TestEmptyExpandString 测试空模板 ExpandString
 func TestEmptyExpandString(t *testing.T) {
-	lookup := func(name string) string { return "" }
+	lookup := func(_ string) string { return "" }
 	result := ExpandString("", lookup)
 	if result != "" {
 		t.Errorf("ExpandString('') = %q, want empty", result)
@@ -764,7 +764,7 @@ func TestEmptyExpandString(t *testing.T) {
 
 // TestExpandStringNoVar 测试无变量模板
 func TestExpandStringNoVar(t *testing.T) {
-	lookup := func(name string) string { return "" }
+	lookup := func(_ string) string { return "" }
 	result := ExpandString("hello world", lookup)
 	if result != "hello world" {
 		t.Errorf("ExpandString = %q, want 'hello world'", result)
@@ -780,8 +780,8 @@ func TestTLSBuiltin(t *testing.T) {
 	// 由于无法直接设置 TLS，scheme 变量会检查 ctx.IsTLS()
 	// 这里我们测试它返回 http（默认值）
 
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	scheme, ok := vc.Get("scheme")
 	if !ok {
@@ -795,8 +795,8 @@ func TestTLSBuiltin(t *testing.T) {
 // TestEmptyVarNameBrace 测试空变量名 ${}
 func TestEmptyVarNameBrace(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// ${} 应该保持为 ${}
 	result := vc.Expand("${}")
@@ -835,8 +835,8 @@ func TestBuiltinVarNames(t *testing.T) {
 // TestUpstreamVariables 测试上游变量
 func TestUpstreamVariables(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 未设置时应该返回默认值 "-"
 	tests := []struct {
@@ -895,8 +895,8 @@ func TestUpstreamVariables(t *testing.T) {
 // TestUpstreamVariablesInExpand 测试在模板中展开上游变量
 func TestUpstreamVariablesInExpand(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 设置上游变量
 	vc.SetUpstreamVars("http://backend:8080", 200, 0.123, 0.001, 0.045)
@@ -913,8 +913,8 @@ func TestUpstreamVariablesInExpand(t *testing.T) {
 // TestUpstreamVariablesErrorCases 测试上游变量错误情况
 func TestUpstreamVariablesErrorCases(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 测试各种错误场景
 	tests := []struct {
@@ -982,8 +982,8 @@ func TestUpstreamVariablesErrorCases(t *testing.T) {
 // TestUpstreamVariablesZeroValues 测试上游变量零值处理
 func TestUpstreamVariablesZeroValues(t *testing.T) {
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 测试零值应该返回 "-"
 	vc.SetUpstreamVars("", 0, 0, 0, 0)
@@ -1020,8 +1020,8 @@ func BenchmarkUpstreamVariables(b *testing.B) {
 	ctx.Request.Header.SetMethod("GET")
 	ctx.Request.Header.SetRequestURI("/test")
 
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 设置上游变量
 	vc.SetUpstreamVars("http://backend:8080", 200, 0.123, 0.001, 0.045)
@@ -1075,8 +1075,8 @@ func TestGlobalVariables(t *testing.T) {
 	SetGlobalVariables(nil)
 }
 
-// TestNewVariableContextWithGlobals 测试全局变量注入到请求上下文
-func TestNewVariableContextWithGlobals(t *testing.T) {
+// TestNewContextWithGlobals 测试全局变量注入到请求上下文
+func TestNewContextWithGlobals(t *testing.T) {
 	// 设置全局变量
 	SetGlobalVariables(map[string]string{
 		"global_var": "global_value",
@@ -1084,8 +1084,8 @@ func TestNewVariableContextWithGlobals(t *testing.T) {
 	defer SetGlobalVariables(nil)
 
 	ctx := mockRequestCtx(t)
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 全局变量应该被注入
 	if v, ok := vc.Get("global_var"); !ok || v != "global_value" {
@@ -1100,7 +1100,7 @@ func TestNewVariableContextWithGlobals(t *testing.T) {
 }
 
 // TestGlobalVariablesConcurrent 测试全局变量并发访问
-func TestGlobalVariablesConcurrent(t *testing.T) {
+func TestGlobalVariablesConcurrent(_ *testing.T) {
 	SetGlobalVariables(map[string]string{
 		"counter": "0",
 	})

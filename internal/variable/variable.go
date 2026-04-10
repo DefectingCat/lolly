@@ -25,8 +25,8 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// VariableStore 变量存储接口
-type VariableStore interface {
+// Store 变量存储接口
+type Store interface {
 	// Get 获取变量值
 	Get(name string) (string, bool)
 	// Set 设置变量值（用于自定义变量）
@@ -40,8 +40,8 @@ type BuiltinVariable struct {
 	Getter      func(ctx *fasthttp.RequestCtx) string
 }
 
-// VariableContext 变量上下文，绑定到请求
-type VariableContext struct {
+// Context 变量上下文，绑定到请求
+type Context struct {
 	ctx        *fasthttp.RequestCtx
 	store      map[string]string // 自定义变量存储
 	cache      map[string]string // 内置变量缓存
@@ -57,10 +57,10 @@ type VariableContext struct {
 	upstreamHeaderTime   float64 // 上游首字节时间（秒）
 }
 
-// pool 用于复用 VariableContext
+// pool 用于复用 Context
 var pool = sync.Pool{
 	New: func() interface{} {
-		return &VariableContext{
+		return &Context{
 			store: make(map[string]string),
 			cache: make(map[string]string),
 		}
@@ -124,9 +124,9 @@ func GetBuiltin(name string) *BuiltinVariable {
 	return builtinVars[name]
 }
 
-// NewVariableContext 从池中获取 VariableContext，并注入全局变量。
-func NewVariableContext(ctx *fasthttp.RequestCtx) *VariableContext {
-	vc := pool.Get().(*VariableContext)
+// NewContext 从池中获取 Context，并注入全局变量。
+func NewContext(ctx *fasthttp.RequestCtx) *Context {
+	vc := pool.Get().(*Context)
 	vc.ctx = ctx
 	vc.status = 0
 	vc.bodySize = 0
@@ -153,8 +153,13 @@ func NewVariableContext(ctx *fasthttp.RequestCtx) *VariableContext {
 	return vc
 }
 
-// ReleaseVariableContext 释放 VariableContext 回池中
-func ReleaseVariableContext(vc *VariableContext) {
+// NewVariableContext 是 NewContext 的别名（向后兼容）
+func NewVariableContext(ctx *fasthttp.RequestCtx) *Context {
+	return NewContext(ctx)
+}
+
+// ReleaseContext 释放 Context 回池中
+func ReleaseContext(vc *Context) {
 	if vc == nil {
 		return
 	}
@@ -171,20 +176,25 @@ func ReleaseVariableContext(vc *VariableContext) {
 	pool.Put(vc)
 }
 
+// ReleaseVariableContext 是 ReleaseContext 的别名（向后兼容）
+func ReleaseVariableContext(vc *Context) {
+	ReleaseContext(vc)
+}
+
 // SetResponseInfo 设置响应信息（用于需要 status、body_bytes_sent、request_time 的场景）
-func (vc *VariableContext) SetResponseInfo(status int, bodySize int64, durationNs int64) {
+func (vc *Context) SetResponseInfo(status int, bodySize int64, durationNs int64) {
 	vc.status = status
 	vc.bodySize = bodySize
 	vc.duration = durationNs
 }
 
 // SetServerName 设置服务器名称
-func (vc *VariableContext) SetServerName(name string) {
+func (vc *Context) SetServerName(name string) {
 	vc.serverName = name
 }
 
 // SetUpstreamVars 设置上游变量
-func (vc *VariableContext) SetUpstreamVars(addr string, status int, responseTime, connectTime, headerTime float64) {
+func (vc *Context) SetUpstreamVars(addr string, status int, responseTime, connectTime, headerTime float64) {
 	vc.upstreamAddr = addr
 	vc.upstreamStatus = status
 	vc.upstreamResponseTime = responseTime
@@ -193,7 +203,7 @@ func (vc *VariableContext) SetUpstreamVars(addr string, status int, responseTime
 }
 
 // Get 获取变量值（优先自定义变量，再查内置变量）
-func (vc *VariableContext) Get(name string) (string, bool) {
+func (vc *Context) Get(name string) (string, bool) {
 	// 1. 先查自定义变量
 	if v, ok := vc.store[name]; ok {
 		return v, true
@@ -281,12 +291,12 @@ func (vc *VariableContext) Get(name string) (string, bool) {
 }
 
 // Set 设置自定义变量
-func (vc *VariableContext) Set(name string, value string) {
+func (vc *Context) Set(name string, value string) {
 	vc.store[name] = value
 }
 
 // evalBuiltin 求值内置变量
-func (vc *VariableContext) evalBuiltin(name string) (string, bool) {
+func (vc *Context) evalBuiltin(name string) (string, bool) {
 	builtin := builtinVars[name]
 	if builtin == nil || builtin.Getter == nil {
 		return "", false
@@ -297,7 +307,7 @@ func (vc *VariableContext) evalBuiltin(name string) (string, bool) {
 // Expand 展开模板字符串中的变量
 // 支持 $var 和 ${var} 两种格式
 // 对于未定义的变量，保持原样不变
-func (vc *VariableContext) Expand(template string) string {
+func (vc *Context) Expand(template string) string {
 	if template == "" {
 		return ""
 	}

@@ -30,8 +30,8 @@ func setupBenchmarkRequestCtx() *fasthttp.RequestCtx {
 // 模板: "$remote_addr - $request_method"
 func BenchmarkVariableExpandSimple(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	template := "$remote_addr - $request_method"
 
@@ -47,9 +47,9 @@ func BenchmarkVariableExpandSimple(b *testing.B) {
 // "$remote_addr - [$time_local] \"$request_method $uri $args\" $status $body_bytes_sent"
 func BenchmarkVariableExpandComplex(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
-	vc := NewVariableContext(ctx)
+	vc := NewContext(ctx)
 	vc.SetResponseInfo(200, 1024, 1000000) // status, bodySize, durationNs
-	defer ReleaseVariableContext(vc)
+	defer ReleaseContext(vc)
 
 	template := "$remote_addr - [$time_local] \"$request_method $uri $args\" $status $body_bytes_sent"
 
@@ -62,8 +62,8 @@ func BenchmarkVariableExpandComplex(b *testing.B) {
 // BenchmarkVariableExpandMixed 测试混合 ${var} 和 $var 格式的展开性能。
 func BenchmarkVariableExpandMixed(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	template := "${remote_addr} - $request_method ${uri}?${args}"
 
@@ -76,8 +76,8 @@ func BenchmarkVariableExpandMixed(b *testing.B) {
 // BenchmarkVariableExpandNoVar 测试无变量模板的性能（快速路径）。
 func BenchmarkVariableExpandNoVar(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	template := "This is a plain string with no variables"
 
@@ -93,8 +93,8 @@ func BenchmarkVariableContextPool(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		vc := NewVariableContext(ctx)
-		ReleaseVariableContext(vc)
+		vc := NewContext(ctx)
+		ReleaseContext(vc)
 	}
 }
 
@@ -104,8 +104,8 @@ func BenchmarkVariableContextPoolParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		ctx := setupBenchmarkRequestCtx()
 		for pb.Next() {
-			vc := NewVariableContext(ctx)
-			ReleaseVariableContext(vc)
+			vc := NewContext(ctx)
+			ReleaseContext(vc)
 		}
 	})
 }
@@ -115,8 +115,8 @@ func BenchmarkVariableContextPoolParallel(b *testing.B) {
 // 首次获取变量会求值并缓存，后续获取命中缓存。
 func BenchmarkVariableGetCache(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	// 预热缓存
 	_, _ = vc.Get("remote_addr")
@@ -135,17 +135,17 @@ func BenchmarkVariableGetNoCache(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		vc := NewVariableContext(ctx)
+		vc := NewContext(ctx)
 		vc.Get("remote_addr")
-		ReleaseVariableContext(vc)
+		ReleaseContext(vc)
 	}
 }
 
 // BenchmarkVariableGetMultiple 测试获取多个内置变量的性能。
 func BenchmarkVariableGetMultiple(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	vars := []string{
 		"remote_addr", "request_method", "uri", "args",
@@ -163,8 +163,8 @@ func BenchmarkVariableGetMultiple(b *testing.B) {
 // BenchmarkVariableSetAndGet 测试设置和获取自定义变量的性能。
 func BenchmarkVariableSetAndGet(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
-	vc := NewVariableContext(ctx)
-	defer ReleaseVariableContext(vc)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -198,10 +198,10 @@ func BenchmarkExpandStringStaticWithLookup(b *testing.B) {
 // 模拟完整访问日志格式，约 200 字符。
 func BenchmarkVariableExpandLongTemplate(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
-	vc := NewVariableContext(ctx)
+	vc := NewContext(ctx)
 	vc.SetResponseInfo(200, 4096, 15000000)
 	vc.SetServerName("api.example.com")
-	defer ReleaseVariableContext(vc)
+	defer ReleaseContext(vc)
 
 	template := "$remote_addr - [$time_local] \"$request_method $uri?$args\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\" $request_time $server_name"
 

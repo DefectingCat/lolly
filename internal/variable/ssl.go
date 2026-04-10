@@ -31,6 +31,8 @@ const (
 	VarSSLClientNotAfter    = "ssl_client_notafter"
 	VarSSLClientDNS         = "ssl_client_s_dn"
 	VarSSLClientEmail       = "ssl_client_email"
+
+	sslProtocolNone = "NONE"
 )
 
 // init 注册 SSL 变量
@@ -125,12 +127,12 @@ func init() {
 //   - "NONE": 未提供证书
 func GetSSLClientVerify(ctx *fasthttp.RequestCtx) string {
 	if ctx == nil {
-		return "NONE"
+		return sslProtocolNone
 	}
 
 	// 检查是否有 TLS 连接信息
 	if !ctx.IsTLS() {
-		return "NONE"
+		return sslProtocolNone
 	}
 
 	// 从 UserValue 获取验证状态（由连接处理器设置）
@@ -145,7 +147,7 @@ func GetSSLClientVerify(ctx *fasthttp.RequestCtx) string {
 		return "SUCCESS"
 	}
 
-	return "NONE"
+	return sslProtocolNone
 }
 
 // GetSSLClientSerial 获取客户端证书序列号。
@@ -283,7 +285,7 @@ func calculateFingerprint(raw []byte) string {
 //   - *pem.Block: 解析后的 PEM 块
 //   - []byte: 剩余数据
 //
-// nolint:unused // 保留用于未来 SSL 变量解析功能
+//nolint:unused // 保留用于未来 SSL 变量解析功能
 func parsePEMCertificate(pemData []byte) (*pem.Block, []byte) {
 	return pem.Decode(pemData)
 }

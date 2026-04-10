@@ -18,7 +18,7 @@ import (
 )
 
 // TestVariableInAccessLog 测试访问日志中的变量展开
-func TestVariableInAccessLog(t *testing.T) {
+func TestVariableInAccessLog(_ *testing.T) {
 	// 创建测试请求上下文
 	cfg := &config.LoggingConfig{
 		Access: config.AccessLogConfig{
@@ -91,8 +91,8 @@ func TestVariableCompatibility(t *testing.T) {
 	// 设置响应信息（模拟日志场景）
 	variable.SetResponseInfoInContext(ctx, 201, 2048, 100000000) // 100ms
 
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	tests := []struct {
 		template string
@@ -129,8 +129,8 @@ func TestVariableExpansionPerformance(t *testing.T) {
 	ctx.Request.Header.SetMethod("GET")
 	ctx.Request.Header.SetHost("api.example.com")
 
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	// 常见日志格式模板
 	template := "$remote_addr - $remote_user [$time_local] \"$request_method $request_uri $scheme\" $status $body_bytes_sent \"$http_user_agent\""
@@ -160,8 +160,8 @@ func TestMixedVariableFormats(t *testing.T) {
 	ctx.Request.Header.SetMethod("GET")
 	ctx.Request.Header.SetHost("example.com")
 
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	tests := []struct {
 		template string
@@ -188,8 +188,8 @@ func TestUndefinedVariableInIntegration(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.SetRequestURI("/test")
 
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	// 未定义变量应该保持原样
 	template := "$host $undefined_var $uri"
@@ -213,14 +213,14 @@ func TestVariableContextReuse(t *testing.T) {
 	ctx2.Request.Header.SetHost("second.com")
 
 	// 使用第一个上下文
-	vc1 := variable.NewVariableContext(ctx1)
+	vc1 := variable.NewContext(ctx1)
 	result1 := vc1.Expand("$host$uri")
-	variable.ReleaseVariableContext(vc1)
+	variable.ReleaseContext(vc1)
 
 	// 复用（从池中获取）用于第二个上下文
-	vc2 := variable.NewVariableContext(ctx2)
+	vc2 := variable.NewContext(ctx2)
 	result2 := vc2.Expand("$host$uri")
-	variable.ReleaseVariableContext(vc2)
+	variable.ReleaseContext(vc2)
 
 	// 验证结果正确
 	if result1 != "first.com/first" {
