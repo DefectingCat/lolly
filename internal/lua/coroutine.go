@@ -101,7 +101,53 @@ func (c *LuaCoroutine) SetupSandbox() error {
 	// 将 _ENV 设置到协程
 	c.Co.SetGlobal("_ENV", env)
 
+	// Layer 1 & 2: 设置安全的协程库（移除危险函数）
+	c.setupSecureCoroutineLib()
+
 	return nil
+}
+
+// setupSecureCoroutineLib 创建安全的协程库替换
+// 移除 coroutine.create/wrap/resume，仅保留 yield/status
+func (c *LuaCoroutine) setupSecureCoroutineLib() {
+	// 获取原始 coroutine 表
+	originalCoroutine := c.Engine.L.GetGlobal("coroutine")
+	if originalCoroutine == glua.LNil {
+		return // coroutine 库未加载
+	}
+
+	origTable, ok := originalCoroutine.(*glua.LTable)
+	if !ok {
+		return
+	}
+
+	// 创建安全的 coroutine 表
+	safeCoroutine := c.Co.NewTable()
+
+	// 仅保留安全的函数：yield 和 status
+	if yield := origTable.RawGetString("yield"); yield != glua.LNil {
+		safeCoroutine.RawSetString("yield", yield)
+	}
+	if status := origTable.RawGetString("status"); status != glua.LNil {
+		safeCoroutine.RawSetString("status", status)
+	}
+
+	// 拦截函数 - 返回友好错误
+	blockFn := c.Co.NewFunction(func(L *glua.LState) int {
+		L.RaiseError("coroutine creation is blocked in sandbox (use engine-provided coroutine instead)")
+		return 0
+	})
+	safeCoroutine.RawSetString("create", blockFn)
+	safeCoroutine.RawSetString("wrap", blockFn)
+	safeCoroutine.RawSetString("resume", blockFn)
+	safeCoroutine.RawSetString("running", blockFn) // 防止信息泄露
+
+	// 替换协程的 coroutine 全局变量
+	c.Co.SetGlobal("coroutine", safeCoroutine)
+
+	// 注意：不修改引擎级全局表 origTable，避免并发竞态条件
+	// _G.coroutine 的访问通过沙箱的 __index 元表机制被隔离
+	// 因为协程继承的是引擎全局环境，而我们在协程级别设置了独立的 coroutine 表
 }
 
 // Execute 在协程中执行 Lua 脚本（支持 Yield/Resume）
