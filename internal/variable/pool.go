@@ -40,23 +40,10 @@ func GetPool() *sync.Pool {
 }
 
 // PoolGet 从池中获取 Context（包装方法，用于统计）
+//
+// Deprecated: 使用 NewContext 代替，该函数保持向后兼容。
 func PoolGet(ctx *fasthttp.RequestCtx) *Context {
-	vc := pool.Get().(*Context)
-
-	// 初始化
-	vc.ctx = ctx
-	vc.status = 0
-	vc.bodySize = 0
-	vc.duration = 0
-	vc.serverName = ""
-
-	// 清空缓存和自定义变量
-	for k := range vc.cache {
-		delete(vc.cache, k)
-	}
-	for k := range vc.store {
-		delete(vc.store, k)
-	}
+	vc := NewContext(ctx)
 
 	// 更新统计
 	statsMu.Lock()
@@ -68,19 +55,14 @@ func PoolGet(ctx *fasthttp.RequestCtx) *Context {
 }
 
 // PoolPut 将 Context 放回池中（包装方法，用于统计）
+//
+// Deprecated: 使用 ReleaseContext 代替，该函数保持向后兼容。
 func PoolPut(vc *Context) {
 	if vc == nil {
 		return
 	}
 
-	// 清理引用
-	vc.ctx = nil
-	vc.status = 0
-	vc.bodySize = 0
-	vc.duration = 0
-	vc.serverName = ""
-
-	pool.Put(vc)
+	ReleaseContext(vc)
 
 	// 更新统计
 	statsMu.Lock()
