@@ -223,6 +223,18 @@ func (u *UpgradeManager) GracefulUpgrade(newBinary string) error {
 		_ = os.WriteFile(u.pidFile, []byte(fmt.Sprintf("%d", newPid)), 0644)
 	}
 
+	// 启动 goroutine 等待子进程结束，避免产生僵尸进程
+	// cmd.Wait() 会回收子进程资源，确保不会产生 defunct 进程
+	go func() {
+		_ = cmd.Wait()
+	}()
+
+	// 关闭父进程中的文件描述符副本（子进程已继承）
+	// 避免文件描述符泄漏
+	for _, file := range files {
+		_ = file.Close()
+	}
+
 	return nil
 }
 

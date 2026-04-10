@@ -328,6 +328,9 @@ func (a *App) Run() int {
 		}
 	}()
 
+	// SIGINT 计数器，用于强制退出
+	sigintCount := 0
+
 	// 等待信号或启动错误
 	for {
 		select {
@@ -335,6 +338,14 @@ func (a *App) Run() int {
 			a.logger.Error().Err(err).Msg("服务器启动失败")
 			return 1
 		case sig := <-sigChan:
+			// 多次 SIGINT 强制退出
+			if sig == syscall.SIGINT {
+				sigintCount++
+				if sigintCount >= 3 {
+					a.logger.LogShutdown("收到 3 次 SIGINT，强制退出")
+					return 1
+				}
+			}
 			if !a.handleSignal(sig) {
 				// 返回 false 表示退出
 				a.logger.LogShutdown("服务器已停止")

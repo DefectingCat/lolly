@@ -126,12 +126,26 @@ func (p *GoroutinePool) Start() {
 
 // Stop 停止 Goroutine 池。
 //
-// 取消所有 worker，等待它们退出完成。
+// 取消所有 worker，等待它们退出完成（最多等待 5 秒）。
 // 调用后池将不再接受新任务。
 func (p *GoroutinePool) Stop() {
 	p.running.Store(false)
 	p.cancel()
-	p.wg.Wait()
+
+	// 使用超时等待，防止 wg.Wait() 无限阻塞
+	done := make(chan struct{})
+	go func() {
+		p.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// 所有 worker 正常退出
+	case <-time.After(5 * time.Second):
+		// 超时，强制退出（worker 会在收到 ctx.Done() 后自行退出）
+		// 不再等待，直接返回
+	}
 }
 
 // Submit 提交任务到池。
