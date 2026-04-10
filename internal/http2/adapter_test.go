@@ -494,7 +494,7 @@ func TestStreamRequestBody(t *testing.T) {
 }
 
 // TestAdapterPoolReuse 测试对象池复用。
-func TestAdapterPoolReuse(t *testing.T) {
+func TestAdapterPoolReuse(_ *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
 		ctx.WriteString("Test") //nolint:errcheck
 		ctx.SetStatusCode(fasthttp.StatusOK)

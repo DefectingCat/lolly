@@ -102,7 +102,7 @@ func NewServer(cfg *config.HTTP2Config, handler fasthttp.RequestHandler, tlsConf
 		IdleTimeout:          idleTimeout,
 		MaxReadFrameSize:     uint32(maxHeaderListSize),
 		NewWriteScheduler:    func() http2.WriteScheduler { return http2.NewPriorityWriteScheduler(nil) },
-		CountError:           func(errType string) {},
+		CountError:           func(_ string) {},
 	}
 
 	return &Server{
@@ -227,7 +227,7 @@ func (s *Server) serveHTTP1(conn net.Conn) {
 	}
 
 	// 使用 fasthttp 的连接处理
-	_ = server.ServeConn(conn) //nolint:errcheck // HTTP/1.1 回退连接处理错误由内部处理
+	_ = server.ServeConn(conn)
 }
 
 // Stop 停止 HTTP/2 服务器。
@@ -354,13 +354,13 @@ func (s *Server) IsH2CEnabled() bool {
 // 返回值：
 //   - bool: 如果成功处理 H2C 升级返回 true
 //   - error: 处理失败时返回错误
-func (s *Server) HandleH2C(conn net.Conn) (bool, error) {
+func (s *Server) HandleH2C(_ net.Conn) (bool, error) {
 	// HTTP/2 需要 TLS，不支持 H2C
 	return false, nil
 }
 
-// unused: h2cConn and related code kept for potential H2C support in future
-var _ = h2cConn{} //nolint:unused // reserved for future H2C support
+// h2cConn and related code kept for potential H2C support in future
+var _ = h2cConn{} // reserved for future H2C support
 
 // h2cConn 包装 net.Conn 以支持 H2C 协议检测。
 type h2cConn struct {
@@ -369,7 +369,7 @@ type h2cConn struct {
 }
 
 // Read 从连接读取数据。
-func (c *h2cConn) Read(p []byte) (n int, err error) { //nolint:unused // reserved for future H2C support
+func (c *h2cConn) Read(p []byte) (n int, err error) {
 	if c.reader != nil {
 		n, err = c.reader.Read(p)
 		if err == io.EOF && n > 0 {
@@ -448,8 +448,8 @@ func SupportsHTTP2(r *http.Request) bool {
 	return false
 }
 
-// HTTP2Settings HTTP/2 连接设置。
-type HTTP2Settings struct {
+// Settings HTTP/2 连接设置。
+type Settings struct {
 	HeaderTableSize      uint32 // SETTINGS_HEADER_TABLE_SIZE
 	EnablePush           bool   // SETTINGS_ENABLE_PUSH
 	MaxConcurrentStreams uint32 // SETTINGS_MAX_CONCURRENT_STREAMS
@@ -458,9 +458,9 @@ type HTTP2Settings struct {
 	MaxHeaderListSize    uint32 // SETTINGS_MAX_HEADER_LIST_SIZE
 }
 
-// DefaultHTTP2Settings 返回默认 HTTP/2 设置。
-func DefaultHTTP2Settings() HTTP2Settings {
-	return HTTP2Settings{
+// DefaultSettings 返回默认 HTTP/2 设置。
+func DefaultSettings() Settings {
+	return Settings{
 		HeaderTableSize:      4096,
 		EnablePush:           true,
 		MaxConcurrentStreams: 250,
@@ -470,14 +470,14 @@ func DefaultHTTP2Settings() HTTP2Settings {
 	}
 }
 
-// ValidateHTTP2Settings 验证 HTTP/2 设置的有效性。
+// ValidateSettings 验证 HTTP/2 设置的有效性。
 //
 // 参数：
 //   - settings: HTTP/2 设置
 //
 // 返回值：
 //   - error: 设置无效时返回错误
-func ValidateHTTP2Settings(settings HTTP2Settings) error {
+func ValidateSettings(settings Settings) error {
 	if settings.MaxConcurrentStreams == 0 {
 		return errors.New("max concurrent streams cannot be zero")
 	}
@@ -493,15 +493,15 @@ func ValidateHTTP2Settings(settings HTTP2Settings) error {
 	return nil
 }
 
-// ParseHTTP2Settings 从配置解析 HTTP/2 设置。
+// ParseSettings 从配置解析 HTTP/2 设置。
 //
 // 参数：
 //   - cfg: HTTP/2 配置
 //
 // 返回值：
-//   - HTTP2Settings: 解析后的 HTTP/2 设置
-func ParseHTTP2Settings(cfg *config.HTTP2Config) HTTP2Settings {
-	settings := DefaultHTTP2Settings()
+//   - Settings: 解析后的 HTTP/2 设置
+func ParseSettings(cfg *config.HTTP2Config) Settings {
+	settings := DefaultSettings()
 
 	if cfg.MaxConcurrentStreams > 0 {
 		settings.MaxConcurrentStreams = uint32(cfg.MaxConcurrentStreams)

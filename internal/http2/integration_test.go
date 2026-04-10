@@ -389,7 +389,7 @@ func BenchmarkServerCreation(b *testing.B) {
 		Enabled:              true,
 		MaxConcurrentStreams: 100,
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	b.ResetTimer()
 	b.ReportAllocs()

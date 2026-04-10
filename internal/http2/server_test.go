@@ -37,20 +37,20 @@ func TestNewServer(t *testing.T) {
 				PushEnabled:          false,
 				H2CEnabled:           false,
 			},
-			handler:   func(ctx *fasthttp.RequestCtx) {},
+			handler:   func(_ *fasthttp.RequestCtx) {},
 			tlsConfig: nil,
 			wantErr:   false,
 		},
 		{
 			name:    "默认配置",
 			cfg:     &config.HTTP2Config{},
-			handler: func(ctx *fasthttp.RequestCtx) {},
+			handler: func(_ *fasthttp.RequestCtx) {},
 			wantErr: false,
 		},
 		{
 			name:    "nil配置",
 			cfg:     nil,
-			handler: func(ctx *fasthttp.RequestCtx) {},
+			handler: func(_ *fasthttp.RequestCtx) {},
 			wantErr: true,
 		},
 		{
@@ -67,7 +67,7 @@ func TestNewServer(t *testing.T) {
 				Enabled:              true,
 				MaxConcurrentStreams: 256,
 			},
-			handler: func(ctx *fasthttp.RequestCtx) {},
+			handler: func(_ *fasthttp.RequestCtx) {},
 			wantErr: false,
 		},
 	}
@@ -106,7 +106,7 @@ func TestServerDefaultValues(t *testing.T) {
 	cfg := &config.HTTP2Config{
 		Enabled: true,
 	}
-	handler := func(ctx *fasthttp.RequestCtx) {}
+	handler := func(_ *fasthttp.RequestCtx) {}
 
 	server, err := NewServer(cfg, handler, nil)
 	if err != nil {
@@ -127,7 +127,7 @@ func TestServerDefaultValues(t *testing.T) {
 // TestServerIsRunning 测试服务器运行状态。
 func TestServerIsRunning(t *testing.T) {
 	cfg := &config.HTTP2Config{Enabled: true}
-	server, err := NewServer(cfg, func(ctx *fasthttp.RequestCtx) {}, nil)
+	server, err := NewServer(cfg, func(_ *fasthttp.RequestCtx) {}, nil)
 	if err != nil {
 		t.Fatalf("NewServer() error: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestServerGetConfig(t *testing.T) {
 		Enabled:              true,
 		MaxConcurrentStreams: 100,
 	}
-	server, err := NewServer(cfg, func(ctx *fasthttp.RequestCtx) {}, nil)
+	server, err := NewServer(cfg, func(_ *fasthttp.RequestCtx) {}, nil)
 	if err != nil {
 		t.Fatalf("NewServer() error: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestServerGetConfig(t *testing.T) {
 // TestALPNConfig 测试 ALPN 配置。
 func TestALPNConfig(t *testing.T) {
 	cfg := &config.HTTP2Config{Enabled: true}
-	server, err := NewServer(cfg, func(ctx *fasthttp.RequestCtx) {}, nil)
+	server, err := NewServer(cfg, func(_ *fasthttp.RequestCtx) {}, nil)
 	if err != nil {
 		t.Fatalf("NewServer() error: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestIsH2CEnabled(t *testing.T) {
 				Enabled:    true,
 				H2CEnabled: tt.h2cEnabled,
 			}
-			server, err := NewServer(cfg, func(ctx *fasthttp.RequestCtx) {}, nil)
+			server, err := NewServer(cfg, func(_ *fasthttp.RequestCtx) {}, nil)
 			if err != nil {
 				t.Fatalf("NewServer() error: %v", err)
 			}
@@ -279,23 +279,23 @@ func TestIsHTTP2Request(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			// 这里只测试基本的逻辑，完整测试需要创建 http.Request
 			// 在实际集成测试中会覆盖
 		})
 	}
 }
 
-// TestHTTP2Settings 测试 HTTP/2 设置。
-func TestHTTP2Settings(t *testing.T) {
+// TestSettings 测试 HTTP/2 设置。
+func TestSettings(t *testing.T) {
 	tests := []struct {
 		name     string
-		settings HTTP2Settings
+		settings Settings
 		wantErr  bool
 	}{
 		{
 			name: "默认设置",
-			settings: HTTP2Settings{
+			settings: Settings{
 				HeaderTableSize:      4096,
 				EnablePush:           true,
 				MaxConcurrentStreams: 250,
@@ -307,14 +307,14 @@ func TestHTTP2Settings(t *testing.T) {
 		},
 		{
 			name: "零并发流",
-			settings: HTTP2Settings{
+			settings: Settings{
 				MaxConcurrentStreams: 0,
 			},
 			wantErr: true,
 		},
 		{
 			name: "无效帧大小",
-			settings: HTTP2Settings{
+			settings: Settings{
 				MaxConcurrentStreams: 100,
 				MaxFrameSize:         1024, // 小于最小值 16384
 			},
@@ -322,7 +322,7 @@ func TestHTTP2Settings(t *testing.T) {
 		},
 		{
 			name: "帧大小过大",
-			settings: HTTP2Settings{
+			settings: Settings{
 				MaxConcurrentStreams: 100,
 				MaxFrameSize:         16777216, // 超过最大值 16777215
 			},
@@ -330,7 +330,7 @@ func TestHTTP2Settings(t *testing.T) {
 		},
 		{
 			name: "零头部列表大小",
-			settings: HTTP2Settings{
+			settings: Settings{
 				MaxConcurrentStreams: 100,
 				MaxHeaderListSize:    0,
 			},
@@ -340,23 +340,23 @@ func TestHTTP2Settings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateHTTP2Settings(tt.settings)
+			err := ValidateSettings(tt.settings)
 			if tt.wantErr {
 				if err == nil {
-					t.Errorf("ValidateHTTP2Settings() expected error, got nil")
+					t.Errorf("ValidateSettings() expected error, got nil")
 				}
 				return
 			}
 			if err != nil {
-				t.Errorf("ValidateHTTP2Settings() unexpected error: %v", err)
+				t.Errorf("ValidateSettings() unexpected error: %v", err)
 			}
 		})
 	}
 }
 
-// TestDefaultHTTP2Settings 测试默认 HTTP/2 设置。
-func TestDefaultHTTP2Settings(t *testing.T) {
-	settings := DefaultHTTP2Settings()
+// TestDefaultSettings 测试默认 HTTP/2 设置。
+func TestDefaultSettings(t *testing.T) {
+	settings := DefaultSettings()
 
 	if settings.HeaderTableSize == 0 {
 		t.Error("Default HeaderTableSize should not be zero")
@@ -375,8 +375,8 @@ func TestDefaultHTTP2Settings(t *testing.T) {
 	}
 }
 
-// TestParseHTTP2Settings 测试从配置解析 HTTP/2 设置。
-func TestParseHTTP2Settings(t *testing.T) {
+// TestParseSettings 测试从配置解析 HTTP/2 设置。
+func TestParseSettings(t *testing.T) {
 	cfg := &config.HTTP2Config{
 		Enabled:              true,
 		MaxConcurrentStreams: 200,
@@ -384,16 +384,16 @@ func TestParseHTTP2Settings(t *testing.T) {
 		PushEnabled:          true,
 	}
 
-	settings := ParseHTTP2Settings(cfg)
+	settings := ParseSettings(cfg)
 
 	if settings.MaxConcurrentStreams != 200 {
-		t.Errorf("ParseHTTP2Settings() MaxConcurrentStreams = %d, want 200", settings.MaxConcurrentStreams)
+		t.Errorf("ParseSettings() MaxConcurrentStreams = %d, want 200", settings.MaxConcurrentStreams)
 	}
 	if settings.MaxHeaderListSize != 2097152 {
-		t.Errorf("ParseHTTP2Settings() MaxHeaderListSize = %d, want 2097152", settings.MaxHeaderListSize)
+		t.Errorf("ParseSettings() MaxHeaderListSize = %d, want 2097152", settings.MaxHeaderListSize)
 	}
 	if !settings.EnablePush {
-		t.Error("ParseHTTP2Settings() EnablePush should be true")
+		t.Error("ParseSettings() EnablePush should be true")
 	}
 }
 
