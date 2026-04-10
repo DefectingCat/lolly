@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-04-10
+
+### Added
+
+#### 核心基础设施
+
+- 变量系统模块，支持内置变量、SSL 客户端证书变量、上游变量，自动注入请求上下文
+- DNS 解析器模块，支持自定义 DNS 服务器配置，集成到代理请求处理
+- HTTP/2 协议支持，集成到服务器和应用层
+
+#### SSL/TLS 增强
+
+- Session Tickets 支持，含密钥轮换和内存/文件存储后端
+- mTLS 客户端证书验证，支持可选/强制验证模式
+- TCP/UDP Stream SSL/TLS 支持，完整证书配置
+
+#### 中间件与处理
+
+- auth_request 外部认证中间件，支持子请求验证流程
+- static handler alias 指令，支持路径别名映射
+- 代理响应临时文件处理，保护内存避免大响应OOM
+- rate limiting 后台自动清理和优雅关闭
+
+#### 可观测性
+
+- Prometheus 格式状态输出支持
+- 缓存清理 API 端点
+- 分层性能回归检测策略与基准测试套件
+
+#### 配置与构建
+
+- Resolver/SSL 默认值完善及 YAML 配置示例输出
+- 负载均衡算法配置验证
+- golangci-lint 静态检查配置
+- 所有构建命令启用静态链接支持
+- goimports 替代 go fmt 格式化代码
+
+### Changed
+
+- resolver/variable/ssl 等核心类型重命名，移除冗余前缀
+- HeadersMiddleware 重命名移除冗余前缀
+- HTTP/2 使用 textproto.CanonicalMIMEHeaderKey 替代手动实现
+- 配置废弃字段标记与移除
+
+### Performance
+
+- 一致性哈希虚拟节点哈希值预计算
+- 代理缓存使用 uint64 哈希键优化性能
+
+### Documentation
+
+- 新增 variable/resolver 等 AGENTS.md 模块文档
+- nginx 健康检查详解与高级模块文档
+- 配置字段完整参考文档
+
+### Tests
+
+- 变量系统单元测试与基准测试
+- SSL Session Tickets/Stream SSL 测试
+- try_files、错误页面、pprof 单元测试
+
+---
+
 ## [0.1.0] - 2026-04-07
 
 ### Added

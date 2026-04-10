@@ -2,7 +2,7 @@
 
 # 版本信息
 APP_NAME := lolly
-VERSION := 0.1.0
+VERSION := 0.2.0
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u '+%Y-%m-%d %H:%M:%S UTC')
@@ -45,14 +45,14 @@ build:
 	@echo "Version: $(VERSION) | Commit: $(GIT_COMMIT) | Platform: $(BUILD_PLATFORM)"
 
 # 生产构建（体积优化，静态链接）
-build-prod:
-	@echo "Building $(APP_NAME) for production (static)..."
-	@mkdir -p $(BUILD_DIR)
-	$(CGO_DISABLE) go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
-	@echo "Production build complete: $(BUILD_DIR)/$(APP_NAME)"
+# build-size:
+# 	@echo "Building $(APP_NAME) for production (static)..."
+# 	@mkdir -p $(BUILD_DIR)
+# 	$(CGO_DISABLE) go build $(LDFLAGS) -trimpath -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
+# 	@echo "Production build complete: $(BUILD_DIR)/$(APP_NAME)"
 
 # 生产构建（最大运行时性能，静态链接）
-build-perf:
+build-prod:
 	@echo "Building $(APP_NAME) with max runtime performance (static)..."
 	@mkdir -p $(BUILD_DIR)
 	$(CGO_DISABLE) go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
