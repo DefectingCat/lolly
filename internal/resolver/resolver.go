@@ -44,11 +44,11 @@ type Resolver interface {
 	Stop() error
 
 	// Stats 返回统计信息
-	Stats() ResolverStats
+	Stats() Stats
 }
 
-// ResolverStats 解析器统计信息。
-type ResolverStats struct {
+// Stats 解析器统计信息。
+type Stats struct {
 	CacheHits      int64         // 缓存命中次数
 	CacheMisses    int64         // 缓存未命中次数
 	CacheEntries   int           // 当前缓存条目数
@@ -59,7 +59,7 @@ type ResolverStats struct {
 // DNSResolver 实现 Resolver 接口的 DNS 解析器。
 type DNSResolver struct {
 	config    *config.ResolverConfig
-	cache     sync.Map // key: hostname, value: *dnsCacheEntry
+	cache     sync.Map // key: hostname, value: *DNSCacheEntry
 	serverIdx atomic.Uint32
 
 	// 统计信息
@@ -76,8 +76,8 @@ type DNSResolver struct {
 	refreshHosts map[string]struct{} // 需要刷新的主机列表
 }
 
-// dnsCacheEntry DNS 缓存条目。
-type dnsCacheEntry struct {
+// DNSCacheEntry DNS 缓存条目。
+type DNSCacheEntry struct {
 	IPs        []string
 	ExpiresAt  time.Time
 	LastLookup time.Time
@@ -136,7 +136,7 @@ func (r *DNSResolver) lookup(ctx context.Context, host string, useCache bool) ([
 	// 尝试从缓存获取
 	if useCache {
 		if entry, ok := r.cache.Load(host); ok {
-			cacheEntry := entry.(*dnsCacheEntry)
+			cacheEntry := entry.(*DNSCacheEntry)
 			cacheEntry.mu.RLock()
 			ips := cacheEntry.IPs
 			expiresAt := cacheEntry.ExpiresAt
@@ -169,7 +169,7 @@ func (r *DNSResolver) lookup(ctx context.Context, host string, useCache bool) ([
 	}
 
 	// 更新缓存
-	entry := &dnsCacheEntry{
+	entry := &DNSCacheEntry{
 		IPs:        ips,
 		ExpiresAt:  time.Now().Add(r.config.TTL()),
 		LastLookup: time.Now(),
@@ -218,7 +218,7 @@ func (r *DNSResolver) queryWithResolver(ctx context.Context, host, server string
 	if server != "" {
 		resolver = &net.Resolver{
 			PreferGo: true,
-			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
 				d := net.Dialer{}
 				return d.DialContext(ctx, "udp", server)
 			},
@@ -362,13 +362,13 @@ func (r *DNSResolver) Stop() error {
 }
 
 // Stats 返回统计信息。
-func (r *DNSResolver) Stats() ResolverStats {
+func (r *DNSResolver) Stats() Stats {
 	hits := r.hits.Load()
 	misses := r.misses.Load()
 
 	// 统计缓存条目数
 	var entries int
-	r.cache.Range(func(key, value interface{}) bool {
+	r.cache.Range(func(_, _ interface{}) bool {
 		entries++
 		return true
 	})
@@ -380,7 +380,7 @@ func (r *DNSResolver) Stats() ResolverStats {
 		avgLatency = time.Duration(r.latencyNs.Load() / count)
 	}
 
-	return ResolverStats{
+	return Stats{
 		CacheHits:      hits,
 		CacheMisses:    misses,
 		CacheEntries:   entries,
@@ -392,7 +392,7 @@ func (r *DNSResolver) Stats() ResolverStats {
 // noopResolver 是禁用状态下的空实现。
 type noopResolver struct{}
 
-func (n *noopResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
+func (n *noopResolver) LookupHost(_ context.Context, _ string) ([]string, error) {
 	return nil, fmt.Errorf("resolver is disabled")
 }
 
@@ -400,7 +400,7 @@ func (n *noopResolver) LookupHostWithCache(ctx context.Context, host string) ([]
 	return n.LookupHost(ctx, host)
 }
 
-func (n *noopResolver) Refresh(host string) error {
+func (n *noopResolver) Refresh(_ string) error {
 	return nil
 }
 
@@ -412,6 +412,6 @@ func (n *noopResolver) Stop() error {
 	return nil
 }
 
-func (n *noopResolver) Stats() ResolverStats {
-	return ResolverStats{}
+func (n *noopResolver) Stats() Stats {
+	return Stats{}
 }

@@ -108,7 +108,7 @@ func TestCache(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 模拟缓存条目
-	r.cache.Store("test.example.com", &dnsCacheEntry{
+	r.cache.Store("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1", "192.168.1.2"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -133,7 +133,7 @@ func TestCache(t *testing.T) {
 
 	// 测试缓存过期
 	// 更新缓存条目为过期
-	r.cache.Store("test.example.com", &dnsCacheEntry{
+	r.cache.Store("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(-1 * time.Second), // 已过期
 	})
@@ -157,13 +157,13 @@ func TestIsCached(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加未过期的缓存
-	r.cache.Store("active.example.com", &dnsCacheEntry{
+	r.cache.Store("active.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
 
 	// 添加已过期的缓存
-	r.cache.Store("expired.example.com", &dnsCacheEntry{
+	r.cache.Store("expired.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.2"},
 		ExpiresAt: time.Now().Add(-1 * time.Second),
 	})
@@ -194,7 +194,7 @@ func TestCacheHitRate(t *testing.T) {
 	}
 
 	// 模拟缓存命中
-	r.cache.Store("test.example.com", &dnsCacheEntry{
+	r.cache.Store("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -227,11 +227,11 @@ func TestStats(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加缓存条目
-	r.cache.Store("test1.example.com", &dnsCacheEntry{
+	r.cache.Store("test1.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
-	r.cache.Store("test2.example.com", &dnsCacheEntry{
+	r.cache.Store("test2.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.2"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -329,7 +329,7 @@ func TestDeleteCacheEntry(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加缓存
-	r.cache.Store("test.example.com", &dnsCacheEntry{
+	r.cache.Store("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -358,7 +358,7 @@ func TestClearCache(t *testing.T) {
 	// 添加多个缓存
 	for i := 0; i < 5; i++ {
 		host := fmt.Sprintf("test%d.example.com", i)
-		r.cache.Store(host, &dnsCacheEntry{
+		r.cache.Store(host, &DNSCacheEntry{
 			IPs:       []string{fmt.Sprintf("192.168.1.%d", i)},
 			ExpiresAt: time.Now().Add(1 * time.Minute),
 		})
@@ -387,7 +387,7 @@ func TestConcurrentAccess(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加测试缓存
-	r.cache.Store("test.example.com", &dnsCacheEntry{
+	r.cache.Store("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -533,13 +533,13 @@ func TestCacheStats(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加活跃缓存
-	r.cache.Store("active.example.com", &dnsCacheEntry{
+	r.cache.Store("active.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
 
 	// 添加过期缓存
-	r.cache.Store("expired.example.com", &dnsCacheEntry{
+	r.cache.Store("expired.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.2"},
 		ExpiresAt: time.Now().Add(-1 * time.Second),
 	})

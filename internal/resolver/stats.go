@@ -20,7 +20,7 @@ type StatsCollector interface {
 	// RecordLatency 记录解析延迟
 	RecordLatency(latency time.Duration)
 	// GetStats 获取当前统计
-	GetStats() ResolverStats
+	GetStats() Stats
 }
 
 // ResetStats 重置所有统计信息。
