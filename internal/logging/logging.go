@@ -49,6 +49,8 @@ type AppLogger struct {
 
 var log zerolog.Logger
 
+const formatJSON = "json"
+
 // Init 初始化日志系统（兼容旧接口）。
 func Init(level string, pretty bool) {
 	l := parseLevel(level)
@@ -120,7 +122,7 @@ func LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.D
 // LogAccess 记录访问日志，支持模板格式或 JSON。
 func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.Duration) {
 	// JSON 格式或空格式：输出结构化 JSON
-	if l.accessFormat == "json" || l.accessFormat == "" {
+	if l.accessFormat == formatJSON || l.accessFormat == "" {
 		l.accessLog.Info().
 			Str("remote_addr", ctx.RemoteAddr().String()).
 			Str("request", string(ctx.Method())+" "+string(ctx.Path())).
@@ -170,8 +172,8 @@ func (l *Logger) formatAccessLog(ctx *fasthttp.RequestCtx, status int, size int6
 	}
 
 	// 创建变量上下文
-	vc := variable.NewVariableContext(ctx)
-	defer variable.ReleaseVariableContext(vc)
+	vc := variable.NewContext(ctx)
+	defer variable.ReleaseContext(vc)
 
 	// 设置响应信息（同时设置到 ctx 供 builtin getter 使用）
 	vc.SetResponseInfo(status, size, duration.Nanoseconds())
@@ -289,7 +291,7 @@ func NewAppLogger(cfg *config.LoggingConfig) *AppLogger {
 
 // LogStartup 记录启动消息。
 func (l *AppLogger) LogStartup(msg string, fields map[string]string) {
-	if l.format == "json" {
+	if l.format == formatJSON {
 		event := l.errorLog.Info()
 		for k, v := range fields {
 			event.Str(k, v)
@@ -315,7 +317,7 @@ func (l *AppLogger) LogStartup(msg string, fields map[string]string) {
 
 // LogShutdown 记录停止消息。
 func (l *AppLogger) LogShutdown(msg string) {
-	if l.format == "json" {
+	if l.format == formatJSON {
 		l.errorLog.Info().Msg(msg)
 		return
 	}
@@ -326,7 +328,7 @@ func (l *AppLogger) LogShutdown(msg string) {
 
 // LogSignal 记录信号处理消息。
 func (l *AppLogger) LogSignal(sig string, action string) {
-	if l.format == "json" {
+	if l.format == formatJSON {
 		l.errorLog.Info().Str("signal", sig).Str("action", action).Msg("")
 		return
 	}

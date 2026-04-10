@@ -69,7 +69,7 @@ func TestParseLevel(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			result := parseLevel(tt.input)
 			if result != tt.expected {
 				t.Errorf("parseLevel(%q) = %v, want %v", tt.input, result, tt.expected)
@@ -90,7 +90,7 @@ func TestNewLogger(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			logger := New(tt.cfg)
 			if logger == nil {
 				t.Error("Expected non-nil Logger")
@@ -233,7 +233,7 @@ func TestInit(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			Init(tt.level, tt.pretty)
 			// 验证全局 logger 已初始化
 			Debug().Msg("test debug")
@@ -244,7 +244,7 @@ func TestInit(t *testing.T) {
 	}
 }
 
-func TestGlobalLogFunctions(t *testing.T) {
+func TestGlobalLogFunctions(_ *testing.T) {
 	Init("debug", false)
 
 	// 测试全局日志函数
@@ -254,7 +254,7 @@ func TestGlobalLogFunctions(t *testing.T) {
 	Error().Str("key", "value").Msg("global error")
 }
 
-func TestLogAccessGlobal(t *testing.T) {
+func TestLogAccessGlobal(_ *testing.T) {
 	Init("info", false)
 
 	ctx := &fasthttp.RequestCtx{}
@@ -348,7 +348,7 @@ func TestNewAppLogger(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			logger := NewAppLogger(tt.cfg)
 			if logger == nil {
 				t.Error("Expected non-nil AppLogger")
@@ -370,7 +370,7 @@ func TestAppLoggerLogStartup(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			logger := NewAppLogger(&config.LoggingConfig{Format: tt.format})
 			logger.LogStartup("server started", tt.fields)
 		})
@@ -387,7 +387,7 @@ func TestAppLoggerLogShutdown(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			logger := NewAppLogger(&config.LoggingConfig{Format: tt.format})
 			logger.LogShutdown("server stopped")
 		})
@@ -406,14 +406,14 @@ func TestAppLoggerLogSignal(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name, func(_ *testing.T) {
 			logger := NewAppLogger(&config.LoggingConfig{Format: tt.format})
 			logger.LogSignal(tt.sig, tt.action)
 		})
 	}
 }
 
-func TestAppLoggerMethods(t *testing.T) {
+func TestAppLoggerMethods(_ *testing.T) {
 	logger := NewAppLogger(&config.LoggingConfig{Format: "json", Error: config.ErrorLogConfig{Level: "debug"}})
 
 	logger.Info().Str("test", "value").Msg("app info")
