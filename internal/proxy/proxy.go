@@ -58,7 +58,7 @@ const (
 
 	// protoHTTPS 使用 HTTPS 协议
 	// 标记与上游目标通信时使用 HTTPS 加密传输
-	protoHTTPS    = "https"
+	protoHTTPS = "https"
 )
 
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
