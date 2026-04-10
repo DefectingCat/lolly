@@ -21,6 +21,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/netutil"
 )
 
 // StatusHandler 状态监控处理器。
@@ -333,7 +334,7 @@ func (h *StatusHandler) checkAccess(ctx *fasthttp.RequestCtx) bool {
 		return true
 	}
 
-	clientIP := getClientIPForStatus(ctx)
+	clientIP := netutil.ExtractClientIPNet(ctx)
 
 	// 检查是否在允许列表中
 	for _, network := range h.allowed {
@@ -343,47 +344,6 @@ func (h *StatusHandler) checkAccess(ctx *fasthttp.RequestCtx) bool {
 	}
 
 	return false
-}
-
-// getClientIPForStatus 从请求上下文提取客户端 IP。
-//
-// 按优先级依次检查：X-Forwarded-For、X-Real-IP、RemoteAddr。
-// 用于状态端点的 IP 访问控制。
-//
-// 参数：
-//   - ctx: FastHTTP 请求上下文
-//
-// 返回值：
-//   - net.IP: 客户端 IP 地址，无法获取时返回 nil
-func getClientIPForStatus(ctx *fasthttp.RequestCtx) net.IP {
-	// 检查 X-Forwarded-For 头部
-	if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
-		ips := strings.Split(string(xff), ",")
-		if len(ips) > 0 {
-			ipStr := strings.TrimSpace(ips[0])
-			ip := net.ParseIP(ipStr)
-			if ip != nil {
-				return ip
-			}
-		}
-	}
-
-	// 检查 X-Real-IP 头部
-	if xri := ctx.Request.Header.Peek("X-Real-IP"); len(xri) > 0 {
-		ip := net.ParseIP(string(xri))
-		if ip != nil {
-			return ip
-		}
-	}
-
-	// 使用 RemoteAddr
-	if addr := ctx.RemoteAddr(); addr != nil {
-		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
-			return tcpAddr.IP
-		}
-	}
-
-	return nil
 }
 
 // collectStatus 收集服务器状态数据。

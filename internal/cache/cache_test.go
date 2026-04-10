@@ -339,9 +339,9 @@ func TestPathMatch(t *testing.T) {
 			if pattern[0] != '/' && pattern != "*" {
 				pattern = "/" + pattern
 			}
-			result := pathMatch(pattern, tt.path)
+			result := MatchPattern(pattern, tt.path)
 			if result != tt.want {
-				t.Errorf("pathMatch(%s, %s) = %v, want %v", pattern, tt.path, result, tt.want)
+				t.Errorf("MatchPattern(%s, %s) = %v, want %v", pattern, tt.path, result, tt.want)
 			}
 		})
 	}

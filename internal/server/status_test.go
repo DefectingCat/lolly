@@ -20,6 +20,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/netutil"
 )
 
 func TestNewStatusHandler_CIDR(t *testing.T) {
@@ -340,7 +341,7 @@ func TestGetClientIPForStatus_XForwardedFor(t *testing.T) {
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Request.Header.Set("X-Forwarded-For", tt.xff)
 
-			gotIP := getClientIPForStatus(ctx)
+			gotIP := netutil.ExtractClientIPNet(ctx)
 			if gotIP == nil {
 				t.Errorf("expected IP %s, got nil", tt.wantIP)
 			} else if gotIP.String() != tt.wantIP {
@@ -377,7 +378,7 @@ func TestGetClientIPForStatus_XRealIP(t *testing.T) {
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Request.Header.Set("X-Real-IP", tt.xri)
 
-			gotIP := getClientIPForStatus(ctx)
+			gotIP := netutil.ExtractClientIPNet(ctx)
 			if gotIP == nil {
 				t.Errorf("expected IP %s, got nil", tt.wantIP)
 			} else if gotIP.String() != tt.wantIP {
@@ -393,7 +394,7 @@ func TestGetClientIPForStatus_Priority(t *testing.T) {
 	ctx.Request.Header.Set("X-Forwarded-For", "10.0.0.1")
 	ctx.Request.Header.Set("X-Real-IP", "10.0.0.2")
 
-	gotIP := getClientIPForStatus(ctx)
+	gotIP := netutil.ExtractClientIPNet(ctx)
 	if gotIP == nil {
 		t.Error("expected IP, got nil")
 	} else if gotIP.String() != "10.0.0.1" {

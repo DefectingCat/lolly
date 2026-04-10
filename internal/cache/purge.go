@@ -19,6 +19,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/netutil"
 )
 
 // PurgeAPI 缓存清理 API 处理器。
@@ -211,34 +212,7 @@ func (p *PurgeAPI) checkAuth(ctx *fasthttp.RequestCtx) bool {
 
 // getClientIP 从请求上下文提取客户端 IP。
 func (p *PurgeAPI) getClientIP(ctx *fasthttp.RequestCtx) net.IP {
-	// 检查 X-Forwarded-For 头部
-	if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
-		ips := strings.Split(string(xff), ",")
-		if len(ips) > 0 {
-			ipStr := strings.TrimSpace(ips[0])
-			ip := net.ParseIP(ipStr)
-			if ip != nil {
-				return ip
-			}
-		}
-	}
-
-	// 检查 X-Real-IP 头部
-	if xri := ctx.Request.Header.Peek("X-Real-IP"); len(xri) > 0 {
-		ip := net.ParseIP(string(xri))
-		if ip != nil {
-			return ip
-		}
-	}
-
-	// 使用 RemoteAddr
-	if addr := ctx.RemoteAddr(); addr != nil {
-		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
-			return tcpAddr.IP
-		}
-	}
-
-	return nil
+	return netutil.ExtractClientIPNet(ctx)
 }
 
 // purgeByPath 按精确路径清理缓存。
@@ -293,12 +267,30 @@ func hashPath(path string) uint64 {
 	return h.Sum64()
 }
 
-// matchPattern 检查路径是否匹配通配符模式。
-// 仅支持 * 通配符，匹配任意字符。
-func matchPattern(pattern, path string) bool {
+// MatchPattern 检查路径是否匹配通配符模式。
+//
+// 支持以下匹配模式：
+//   - "*"：匹配所有路径
+//   - 以 "*" 结尾：前缀匹配（如 "/api/*" 匹配 "/api/xxx"）
+//   - 以 "/" 结尾：目录前缀匹配
+//   - 中间通配符："/api/*/users" 匹配 "/api/v1/users"
+//   - 其他：精确匹配
+//
+// 参数：
+//   - pattern: 匹配模式，支持通配符
+//   - path: 待检查的路径
+//
+// 返回值：
+//   - bool: true 表示匹配，false 表示不匹配
+func MatchPattern(pattern, path string) bool {
 	// 特殊情况：* 匹配所有
 	if pattern == "*" {
 		return true
+	}
+
+	// 目录前缀匹配（pattern 以 / 结尾）
+	if strings.HasSuffix(pattern, "/") {
+		return strings.HasPrefix(path, pattern)
 	}
 
 	// 检查是否有通配符
@@ -319,6 +311,11 @@ func matchPattern(pattern, path string) bool {
 
 	// 复杂模式不支持，返回 false
 	return false
+}
+
+// matchPattern 是 MatchPattern 的内部别名，保持向后兼容。
+func matchPattern(pattern, path string) bool {
+	return MatchPattern(pattern, path)
 }
 
 // sendError 发送错误响应。

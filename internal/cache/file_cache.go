@@ -19,7 +19,6 @@ package cache
 
 import (
 	"container/list"
-	"strings"
 	"sync"
 	"time"
 )
@@ -425,7 +424,7 @@ func (c *ProxyCache) ReleaseLock(hashKey uint64, err error) {
 func (c *ProxyCache) MatchRule(path, method string, status int) *ProxyCacheRule {
 	for _, rule := range c.rules {
 		// 检查路径匹配（简单前缀匹配）
-		if rule.Path != "" && !pathMatch(rule.Path, path) {
+		if rule.Path != "" && !MatchPattern(rule.Path, path) {
 			continue
 		}
 
@@ -442,37 +441,6 @@ func (c *ProxyCache) MatchRule(path, method string, status int) *ProxyCacheRule 
 		return &rule
 	}
 	return nil
-}
-
-// pathMatch 检查路径是否匹配指定模式。
-//
-// 支持以下匹配模式：
-//   - "*"：匹配所有路径
-//   - 以 "*" 结尾：前缀匹配（如 "/api/*" 匹配 "/api/xxx"）
-//   - 以 "/" 结尾：目录前缀匹配
-//   - 其他：精确匹配
-//
-// 参数：
-//   - pattern: 匹配模式，支持通配符
-//   - path: 待检查的路径
-//
-// 返回值：
-//   - bool: true 表示匹配，false 表示不匹配
-func pathMatch(pattern, path string) bool {
-	if pattern == "*" {
-		return true
-	}
-	// 通配符匹配
-	if pattern[len(pattern)-1] == '*' {
-		prefix := pattern[:len(pattern)-1]
-		return strings.HasPrefix(path, prefix)
-	}
-	// 前缀匹配（pattern 以 / 结尾）
-	if pattern[len(pattern)-1] == '/' {
-		return strings.HasPrefix(path, pattern)
-	}
-	// 精确匹配
-	return path == pattern
 }
 
 // contains 检查字符串切片是否包含某值。
