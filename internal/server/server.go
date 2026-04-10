@@ -248,6 +248,15 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 		middlewares = append(middlewares, auth)
 	}
 
+	// 4.3 Security: AuthRequest (外部认证子请求)
+	if serverCfg.Security.AuthRequest.Enabled && serverCfg.Security.AuthRequest.URI != "" {
+		authReq, err := security.NewAuthRequest(serverCfg.Security.AuthRequest)
+		if err != nil {
+			return nil, fmt.Errorf("创建外部认证中间件失败: %w", err)
+		}
+		middlewares = append(middlewares, authReq)
+	}
+
 	// 4.5 BodyLimit (请求体大小限制)
 	// 创建 bodylimit 中间件，使用全局配置或默认值
 	bodyLimitMiddleware := bodylimit.NewWithDefault()
