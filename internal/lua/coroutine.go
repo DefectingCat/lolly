@@ -169,15 +169,11 @@ func (c *LuaCoroutine) setupSecureCoroutineLib() {
 // setupNgxAPI 创建 ngx API
 // 注册 ngx.req、ngx.resp、ngx.var、ngx.ctx、ngx.log 和 ngx.socket API
 func (c *LuaCoroutine) setupNgxAPI() {
-	// 检查是否已有 ngx 表（可能已由其他 API 注册）
-	existingNgx := c.Co.GetGlobal("ngx")
-	var ngx *glua.LTable
-	if existingTbl, ok := existingNgx.(*glua.LTable); ok {
-		ngx = existingTbl
-	} else {
-		// 创建 ngx 表
-		ngx = c.Co.NewTable()
-	}
+	// 创建 ngx 表
+	ngx := c.Co.NewTable()
+
+	// 先设置到全局，让所有注册函数使用同一个 ngx 表
+	c.Co.SetGlobal("ngx", ngx)
 
 	// 注册 ngx.req API
 	if c.RequestCtx != nil {
@@ -203,9 +199,6 @@ func (c *LuaCoroutine) setupNgxAPI() {
 
 	// 注册 ngx.socket API
 	RegisterTCPSocketAPI(c.Co, c.Engine)
-
-	// 将 ngx 表设置到协程环境
-	c.Co.SetGlobal("ngx", ngx)
 }
 
 // Execute 在协程中执行 Lua 脚本（支持 Yield/Resume）

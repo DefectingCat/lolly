@@ -30,9 +30,10 @@ func newNgxRespAPI(ctx *fasthttp.RequestCtx) *ngxRespAPI {
 // RegisterNgxRespAPI 在 Lua 状态机中注册 ngx.resp API
 // 这是主入口函数，由 LuaEngine 在初始化时调用
 func RegisterNgxRespAPI(L *glua.LState, api *ngxRespAPI) {
-	// 获取已存在的 ngx 表，如果不存在则创建
+	// 获取已存在的 ngx 表（必须已设置全局）
 	ngx := L.GetGlobal("ngx")
 	if ngx == nil || ngx.Type() != glua.LTTable {
+		// 如果不存在，创建新表并设置全局
 		ngx = L.NewTable()
 		L.SetGlobal("ngx", ngx)
 	}
