@@ -34,6 +34,7 @@ import (
 	"rua.plus/lolly/internal/handler"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/logging"
+	"rua.plus/lolly/internal/lua"
 	"rua.plus/lolly/internal/middleware"
 	"rua.plus/lolly/internal/middleware/accesslog"
 	"rua.plus/lolly/internal/middleware/bodylimit"
@@ -111,6 +112,9 @@ type Server struct {
 
 	// resolver DNS 解析器（可选）
 	resolver resolver.Resolver
+
+	// luaEngine Lua 引擎（可选）
+	luaEngine *lua.LuaEngine
 }
 
 // New 创建 HTTP 服务器实例。
@@ -316,7 +320,106 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 		middlewares = append(middlewares, ei)
 	}
 
+	// Lua 中间件（可选）
+	if s.luaEngine != nil && serverCfg.Lua != nil && serverCfg.Lua.Enabled {
+		luaMiddlewares, err := s.buildLuaMiddlewares(serverCfg.Lua)
+		if err != nil {
+			return nil, fmt.Errorf("创建 Lua 中间件失败: %w", err)
+		}
+		middlewares = append(middlewares, luaMiddlewares...)
+	}
+
 	return middleware.NewChain(middlewares...), nil
+}
+
+// buildLuaMiddlewares 根据 Lua 配置创建中间件。
+//
+// 根据 Scripts 配置创建 LuaMiddleware 或 MultiPhaseLuaMiddleware。
+// 支持单脚本和多阶段脚本配置。
+//
+// 参数：
+//   - luaCfg: Lua 配置对象
+//
+// 返回值：
+//   - []middleware.Middleware: 创建的中间件列表
+//   - error: 创建过程中遇到的错误
+func (s *Server) buildLuaMiddlewares(luaCfg *config.LuaMiddlewareConfig) ([]middleware.Middleware, error) {
+	if s.luaEngine == nil {
+		return nil, nil
+	}
+
+	// 按阶段分组脚本
+	phaseScripts := make(map[string][]config.LuaScriptConfig)
+	for _, script := range luaCfg.Scripts {
+		// 默认启用
+		enabled := script.Enabled
+		if !enabled && script.Timeout == 0 && script.Path != "" {
+			enabled = true // 零值时默认启用
+		}
+		if enabled {
+			phaseScripts[script.Phase] = append(phaseScripts[script.Phase], script)
+		}
+	}
+
+	var middlewares []middleware.Middleware
+
+	// 为每个阶段创建中间件
+	for phase, scripts := range phaseScripts {
+		if len(scripts) == 0 {
+			continue
+		}
+
+		// 单脚本：直接创建 LuaMiddleware
+		if len(scripts) == 1 {
+			script := scripts[0]
+			luaPhase, err := lua.ParsePhase(phase)
+			if err != nil {
+				return nil, fmt.Errorf("无效的阶段 '%s': %w", phase, err)
+			}
+
+			timeout := script.Timeout
+			if timeout == 0 {
+				timeout = 30 * time.Second
+			}
+
+			cfg := lua.LuaMiddlewareConfig{
+				ScriptPath: script.Path,
+				Phase:      luaPhase,
+				Timeout:    timeout,
+				Name:       fmt.Sprintf("lua-%s", phase),
+			}
+
+			mw, err := lua.NewLuaMiddleware(s.luaEngine, cfg)
+			if err != nil {
+				return nil, fmt.Errorf("创建 Lua 中间件失败 (phase=%s): %w", phase, err)
+			}
+
+			middlewares = append(middlewares, mw)
+		} else {
+			// 多脚本：创建 MultiPhaseLuaMiddleware
+			multi := lua.NewMultiPhaseLuaMiddleware(s.luaEngine, fmt.Sprintf("lua-multi-%s", phase))
+			for _, script := range scripts {
+				luaPhase, err := lua.ParsePhase(phase)
+				if err != nil {
+					return nil, fmt.Errorf("无效的阶段 '%s': %w", phase, err)
+				}
+
+				timeout := script.Timeout
+				if timeout == 0 {
+					timeout = 30 * time.Second
+				}
+
+				err = multi.AddPhase(luaPhase, script.Path, timeout)
+				if err != nil {
+					return nil, fmt.Errorf("添加 Lua 阶段失败 (phase=%s): %w", phase, err)
+				}
+			}
+
+			middlewares = append(middlewares, multi)
+		}
+	}
+
+	return middlewares, nil
 }
 
 // Start 启动 HTTP 服务器。
@@ -369,6 +472,41 @@ func (s *Server) Start() error {
 				return fmt.Errorf("加载错误页面失败: %w", err)
 			}
 		}
+	}
+
+	// 初始化 Lua 引擎（如果配置）
+	if s.config.Server.Lua != nil && s.config.Server.Lua.Enabled {
+		engineCfg := &lua.Config{
+			MaxConcurrentCoroutines: s.config.Server.Lua.GlobalSettings.MaxConcurrentCoroutines,
+			CoroutineTimeout:        s.config.Server.Lua.GlobalSettings.CoroutineTimeout,
+			CodeCacheSize:           s.config.Server.Lua.GlobalSettings.CodeCacheSize,
+			CodeCacheTTL:            time.Hour, // 默认值
+			EnableFileWatch:         s.config.Server.Lua.GlobalSettings.EnableFileWatch,
+			MaxExecutionTime:        s.config.Server.Lua.GlobalSettings.MaxExecutionTime,
+			EnableOSLib:             false, // 安全默认值
+			EnableIOLib:             false,
+			EnableLoadLib:           false,
+		}
+		// 设置默认值
+		if engineCfg.MaxConcurrentCoroutines == 0 {
+			engineCfg.MaxConcurrentCoroutines = 1000
+		}
+		if engineCfg.CoroutineTimeout == 0 {
+			engineCfg.CoroutineTimeout = 30 * time.Second
+		}
+		if engineCfg.CodeCacheSize == 0 {
+			engineCfg.CodeCacheSize = 1000
+		}
+		if engineCfg.MaxExecutionTime == 0 {
+			engineCfg.MaxExecutionTime = 30 * time.Second
+		}
+
+		var err error
+		s.luaEngine, err = lua.NewEngine(engineCfg)
+		if err != nil {
+			return fmt.Errorf("初始化 Lua 引擎失败: %w", err)
+		}
+		logging.Info().Msg("Lua 引擎已启动")
 	}
 
 	if s.config.HasServers() {
@@ -674,6 +812,12 @@ func (s *Server) Stop() error {
 		s.tlsManager.Close()
 	}
 
+	// 关闭 Lua 引擎
+	if s.luaEngine != nil {
+		s.luaEngine.Close()
+		logging.Info().Msg("Lua 引擎已关闭")
+	}
+
 	if s.fastServer != nil {
 		return s.fastServer.Shutdown()
 	}
@@ -715,6 +859,12 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 	// 关闭 TLS 管理器
 	if s.tlsManager != nil {
 		s.tlsManager.Close()
+	}
+
+	// 关闭 Lua 引擎
+	if s.luaEngine != nil {
+		s.luaEngine.Close()
+		logging.Info().Msg("Lua 引擎已关闭")
 	}
 
 	if s.fastServer != nil {
