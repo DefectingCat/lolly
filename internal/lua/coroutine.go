@@ -117,6 +117,9 @@ func (c *LuaCoroutine) SetupSandbox() error {
 	// Layer 1 & 2: 设置安全的协程库（移除危险函数）
 	c.setupSecureCoroutineLib()
 
+	// Layer 3: 设置 ngx API
+	c.setupNgxAPI()
+
 	return nil
 }
 
@@ -161,6 +164,48 @@ func (c *LuaCoroutine) setupSecureCoroutineLib() {
 	// 注意：不修改引擎级全局表 origTable，避免并发竞态条件
 	// _G.coroutine 的访问通过沙箱的 __index 元表机制被隔离
 	// 因为协程继承的是引擎全局环境，而我们在协程级别设置了独立的 coroutine 表
+}
+
+// setupNgxAPI 创建 ngx API
+// 注册 ngx.req、ngx.resp、ngx.var、ngx.ctx、ngx.log 和 ngx.socket API
+func (c *LuaCoroutine) setupNgxAPI() {
+	// 检查是否已有 ngx 表（可能已由其他 API 注册）
+	existingNgx := c.Co.GetGlobal("ngx")
+	var ngx *glua.LTable
+	if existingTbl, ok := existingNgx.(*glua.LTable); ok {
+		ngx = existingTbl
+	} else {
+		// 创建 ngx 表
+		ngx = c.Co.NewTable()
+	}
+
+	// 注册 ngx.req API
+	if c.RequestCtx != nil {
+		reqAPI := newNgxReqAPI(c.RequestCtx)
+		RegisterNgxReqAPI(c.Co, reqAPI, ngx)
+
+		// 注册 ngx.resp API
+		respAPI := newNgxRespAPI(c.RequestCtx)
+		RegisterNgxRespAPI(c.Co, respAPI)
+
+		// 注册 ngx.log API (logger 为 nil 时禁用日志输出)
+		// ngx.say/print/flush 直接写入 RequestCtx
+		logAPI := newNgxLogAPI(c.RequestCtx, nil, nil)
+		RegisterNgxLogAPI(c.Co, logAPI)
+	}
+
+	// 注册 ngx.var API
+	varAPI := newNgxVarAPI(c.RequestCtx)
+	RegisterNgxVarAPI(c.Co, varAPI, ngx)
+
+	// 注册 ngx.ctx API
+	RegisterNgxCtxAPI(c.Co, ngx)
+
+	// 注册 ngx.socket API
+	RegisterTCPSocketAPI(c.Co, c.Engine)
+
+	// 将 ngx 表设置到协程环境
+	c.Co.SetGlobal("ngx", ngx)
 }
 
 // Execute 在协程中执行 Lua 脚本（支持 Yield/Resume）

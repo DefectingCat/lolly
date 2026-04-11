@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 )
 
 // TestLuaContext 测试 LuaContext 基础功能
@@ -455,4 +456,119 @@ func TestConfig(t *testing.T) {
 	defer engine.Close()
 
 	assert.Equal(t, 100, engine.maxCoroutines)
+}
+
+// TestNgxAPIRegistrationInSandbox 测试所有 ngx API 在沙箱中的注册
+func TestNgxAPIRegistrationInSandbox(t *testing.T) {
+	engine, err := NewEngine(DefaultConfig())
+	require.NoError(t, err)
+	defer engine.Close()
+
+	// 创建 mock RequestCtx（ngx.req/resp/log API 需要 RequestCtx）
+	mockCtx := &fasthttp.RequestCtx{}
+
+	coro, err := engine.NewCoroutine(mockCtx)
+	require.NoError(t, err)
+	defer coro.Close()
+
+	err = coro.SetupSandbox()
+	require.NoError(t, err)
+
+	// 验证 ngx 表存在
+	err = coro.Execute(`
+		assert(ngx ~= nil, "ngx table should exist")
+		assert(type(ngx) == "table", "ngx should be a table")
+	`)
+	assert.NoError(t, err)
+
+	// 验证 ngx.req API 存在
+	coro2, err := engine.NewCoroutine(mockCtx)
+	require.NoError(t, err)
+	defer coro2.Close()
+	err = coro2.SetupSandbox()
+	require.NoError(t, err)
+	err = coro2.Execute(`
+		assert(ngx.req ~= nil, "ngx.req should exist")
+		assert(type(ngx.req.get_method) == "function", "ngx.req.get_method should be a function")
+		assert(type(ngx.req.get_uri) == "function", "ngx.req.get_uri should be a function")
+		assert(type(ngx.req.set_uri) == "function", "ngx.req.set_uri should be a function")
+		assert(type(ngx.req.get_uri_args) == "function", "ngx.req.get_uri_args should be a function")
+		assert(type(ngx.req.get_headers) == "function", "ngx.req.get_headers should be a function")
+		assert(type(ngx.req.set_header) == "function", "ngx.req.set_header should be a function")
+		assert(type(ngx.req.clear_header) == "function", "ngx.req.clear_header should be a function")
+		assert(type(ngx.req.get_body_data) == "function", "ngx.req.get_body_data should be a function")
+	`)
+	assert.NoError(t, err)
+
+	// 验证 ngx.resp API 存在
+	coro3, err := engine.NewCoroutine(mockCtx)
+	require.NoError(t, err)
+	defer coro3.Close()
+	err = coro3.SetupSandbox()
+	require.NoError(t, err)
+	err = coro3.Execute(`
+		assert(ngx.resp ~= nil, "ngx.resp should exist")
+		assert(type(ngx.resp.get_status) == "function", "ngx.resp.get_status should be a function")
+		assert(type(ngx.resp.set_status) == "function", "ngx.resp.set_status should be a function")
+		assert(type(ngx.resp.get_headers) == "function", "ngx.resp.get_headers should be a function")
+		assert(type(ngx.resp.set_header) == "function", "ngx.resp.set_header should be a function")
+		assert(type(ngx.resp.clear_header) == "function", "ngx.resp.clear_header should be a function")
+	`)
+	assert.NoError(t, err)
+
+	// 验证 ngx.var API 存在
+	coro4, err := engine.NewCoroutine(mockCtx)
+	require.NoError(t, err)
+	defer coro4.Close()
+	err = coro4.SetupSandbox()
+	require.NoError(t, err)
+	err = coro4.Execute(`
+		assert(ngx.var ~= nil, "ngx.var should exist")
+	`)
+	assert.NoError(t, err)
+
+	// 验证 ngx.ctx API 存在
+	coro5, err := engine.NewCoroutine(mockCtx)
+	require.NoError(t, err)
+	defer coro5.Close()
+	err = coro5.SetupSandbox()
+	require.NoError(t, err)
+	err = coro5.Execute(`
+		assert(ngx.ctx ~= nil, "ngx.ctx should exist")
+		assert(type(ngx.ctx) == "table", "ngx.ctx should be a table")
+	`)
+	assert.NoError(t, err)
+
+	// 验证 ngx.log API 存在（日志级别常量和函数）
+	coro6, err := engine.NewCoroutine(mockCtx)
+	require.NoError(t, err)
+	defer coro6.Close()
+	err = coro6.SetupSandbox()
+	require.NoError(t, err)
+	err = coro6.Execute(`
+		assert(ngx.log ~= nil, "ngx.log should exist")
+		assert(type(ngx.log) == "function", "ngx.log should be a function")
+		assert(ngx.ERR ~= nil, "ngx.ERR should exist")
+		assert(ngx.WARN ~= nil, "ngx.WARN should exist")
+		assert(ngx.INFO ~= nil, "ngx.INFO should exist")
+		assert(ngx.DEBUG ~= nil, "ngx.DEBUG should exist")
+		assert(type(ngx.say) == "function", "ngx.say should be a function")
+		assert(type(ngx.print) == "function", "ngx.print should be a function")
+		assert(type(ngx.flush) == "function", "ngx.flush should be a function")
+		assert(type(ngx.exit) == "function", "ngx.exit should be a function")
+		assert(type(ngx.redirect) == "function", "ngx.redirect should be a function")
+	`)
+	assert.NoError(t, err)
+
+	// 验证 ngx.socket API 存在
+	coro7, err := engine.NewCoroutine(mockCtx)
+	require.NoError(t, err)
+	defer coro7.Close()
+	err = coro7.SetupSandbox()
+	require.NoError(t, err)
+	err = coro7.Execute(`
+		assert(ngx.socket ~= nil, "ngx.socket should exist")
+		assert(type(ngx.socket.tcp) == "function", "ngx.socket.tcp should be a function")
+	`)
+	assert.NoError(t, err)
 }
