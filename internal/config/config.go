@@ -281,6 +281,10 @@ type ServerConfig struct {
 	// CacheAPI 缓存 API 配置
 	// 用于主动清理代理缓存
 	CacheAPI *CacheAPIConfig `yaml:"cache_api"`
+
+	// Lua Lua 中间件配置
+	// 用于嵌入 Lua 脚本处理请求
+	Lua *LuaMiddlewareConfig `yaml:"lua"`
 }
 
 // StaticConfig 静态文件服务配置。
@@ -1523,6 +1527,102 @@ type CacheAPIAuthConfig struct {
 	// 当 Type 为 "token" 时使用
 	// 支持环境变量替换，如 "${CACHE_API_TOKEN}"
 	Token string `yaml:"token"`
+}
+
+// LuaMiddlewareConfig Lua 中间件配置（配置文件格式）
+//
+// 用于配置 Lua 中间件的行为，包括脚本路径、执行阶段和全局设置。
+//
+// 注意事项：
+//   - Enabled 为 true 时启用 Lua 中间件
+//   - Scripts 配置要执行的脚本列表
+//   - GlobalSettings 控制 Lua 引擎的全局行为
+//
+// 使用示例：
+//
+//	lua:
+//	  enabled: true
+//	  scripts:
+//	    - path: "/scripts/auth.lua"
+//	      phase: "access"
+//	      timeout: 10s
+//	  global_settings:
+//	    max_concurrent_coroutines: 1000
+//	    coroutine_timeout: 30s
+type LuaMiddlewareConfig struct {
+	// Enabled 是否启用 Lua 中间件
+	Enabled bool `yaml:"enabled"`
+
+	// Scripts 脚本配置列表
+	Scripts []LuaScriptConfig `yaml:"scripts"`
+
+	// GlobalSettings 全局设置
+	GlobalSettings LuaGlobalSettings `yaml:"global_settings"`
+}
+
+// LuaScriptConfig 单个脚本配置
+//
+// 定义单个 Lua 脚本的执行参数。
+//
+// 注意事项：
+//   - Path 为脚本文件路径，必需字段
+//   - Phase 为执行阶段，必需字段
+//   - Timeout 控制脚本执行超时
+//
+// 使用示例：
+//
+//	scripts:
+//	  - path: "/scripts/auth.lua"
+//	    phase: "access"
+//	    timeout: 10s
+//	    enabled: true
+type LuaScriptConfig struct {
+	// Path 脚本路径
+	Path string `yaml:"path"`
+
+	// Phase 执行阶段
+	// 可选值：rewrite、access、content、log、header_filter、body_filter
+	Phase string `yaml:"phase"`
+
+	// Timeout 执行超时
+	Timeout time.Duration `yaml:"timeout"`
+
+	// Enabled 是否启用此脚本（默认 true）
+	Enabled bool `yaml:"enabled"`
+}
+
+// LuaGlobalSettings 全局 Lua 设置
+//
+// 控制 Lua 引擎的全局行为。
+//
+// 注意事项：
+//   - MaxConcurrentCoroutines 控制最大并发协程数
+//   - CoroutineTimeout 控制协程执行超时
+//   - CodeCacheSize 控制字节码缓存大小
+//
+// 使用示例：
+//
+//	global_settings:
+//	  max_concurrent_coroutines: 1000
+//	  coroutine_timeout: 30s
+//	  code_cache_size: 1000
+//	  enable_file_watch: true
+//	  max_execution_time: 30s
+type LuaGlobalSettings struct {
+	// MaxConcurrentCoroutines 最大并发协程数
+	MaxConcurrentCoroutines int `yaml:"max_concurrent_coroutines"`
+
+	// CoroutineTimeout 协程执行超时
+	CoroutineTimeout time.Duration `yaml:"coroutine_timeout"`
+
+	// CodeCacheSize 字节码缓存条目数
+	CodeCacheSize int `yaml:"code_cache_size"`
+
+	// EnableFileWatch 启用文件变更检测
+	EnableFileWatch bool `yaml:"enable_file_watch"`
+
+	// MaxExecutionTime 单脚本最大执行时间
+	MaxExecutionTime time.Duration `yaml:"max_execution_time"`
 }
 
 // StreamConfig TCP/UDP Stream 代理配置。

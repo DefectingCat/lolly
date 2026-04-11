@@ -94,6 +94,11 @@ func validateServer(s *ServerConfig, isDefault bool) error {
 		return fmt.Errorf("compression: %w", err)
 	}
 
+	// 验证 Lua 中间件配置
+	if err := validateLua(s.Lua); err != nil {
+		return fmt.Errorf("lua: %w", err)
+	}
+
 	return nil
 }
 
@@ -1023,5 +1028,70 @@ func validateVariables(v *VariablesConfig) error {
 			return fmt.Errorf("变量名 '%s' 与内置变量冲突", name)
 		}
 	}
+	return nil
+}
+
+// validateLua 验证 Lua 中间件配置。
+//
+// 检查 Lua 脚本配置的有效性，包括脚本路径、执行阶段和全局设置。
+//
+// 参数：
+//   - l: Lua 配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - scripts[].path 必填
+//   - scripts[].phase 必须是有效阶段
+//   - global_settings.max_concurrent_coroutines 必须 >= 1
+func validateLua(l *LuaMiddlewareConfig) error {
+	// 未配置时跳过
+	if l == nil || !l.Enabled {
+		return nil
+	}
+
+	// 验证脚本配置
+	for i, script := range l.Scripts {
+		if script.Path == "" {
+			return fmt.Errorf("scripts[%d].path 必填", i)
+		}
+
+		// 验证阶段值
+		validPhases := []string{"rewrite", "access", "content", "log", "header_filter", "body_filter"}
+		valid := false
+		for _, phase := range validPhases {
+			if script.Phase == phase {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("scripts[%d].phase 无效: %s（仅支持 rewrite, access, content, log, header_filter, body_filter）", i, script.Phase)
+		}
+
+		// 超时时间验证
+		if script.Timeout < 0 {
+			return fmt.Errorf("scripts[%d].timeout 不能为负数", i)
+		}
+	}
+
+	// 验证全局设置
+	if l.GlobalSettings.MaxConcurrentCoroutines < 0 {
+		return errors.New("global_settings.max_concurrent_coroutines 不能为负数")
+	}
+	if l.GlobalSettings.MaxConcurrentCoroutines > 0 && l.GlobalSettings.MaxConcurrentCoroutines < 1 {
+		return errors.New("global_settings.max_concurrent_coroutines 至少为 1")
+	}
+	if l.GlobalSettings.CoroutineTimeout < 0 {
+		return errors.New("global_settings.coroutine_timeout 不能为负数")
+	}
+	if l.GlobalSettings.CodeCacheSize < 0 {
+		return errors.New("global_settings.code_cache_size 不能为负数")
+	}
+	if l.GlobalSettings.MaxExecutionTime < 0 {
+		return errors.New("global_settings.max_execution_time 不能为负数")
+	}
+
 	return nil
 }
