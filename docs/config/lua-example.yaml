@@ -1,0 +1,63 @@
+# Lua Middleware 示例配置
+# 此文件演示如何在 lolly 中配置 Lua 中间件
+
+server:
+  listen: ":8080"
+  name: "lua-demo"
+
+  # Lua 中间件配置
+  lua:
+    enabled: true
+
+    # 全局 Lua 引擎设置
+    global_settings:
+      max_concurrent_coroutines: 1000  # 最大并发协程数
+      coroutine_timeout: 30s           # 协程执行超时
+      code_cache_size: 1000            # 字节码缓存条目数
+      enable_file_watch: true          # 启用文件变更检测（热重载）
+      max_execution_time: 30s          # 单脚本最大执行时间
+
+    # 脚本配置列表
+    scripts:
+      # Access 阶段 - 认证检查
+      - path: "/etc/lolly/scripts/auth.lua"
+        phase: "access"
+        timeout: 10s
+        enabled: true
+
+      # Content 阶段 - 内容生成
+      - path: "/etc/lolly/scripts/content.lua"
+        phase: "content"
+        timeout: 30s
+        enabled: true
+
+      # Log 阶段 - 日志记录
+      - path: "/etc/lolly/scripts/log.lua"
+        phase: "log"
+        timeout: 5s
+        enabled: true
+
+  # 其他服务器配置
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 120s
+  max_conns_per_ip: 100
+  max_requests_per_conn: 1000
+
+# 性能配置
+performance:
+  goroutine_pool:
+    enabled: true
+    max_workers: 1000
+    min_workers: 100
+    idle_timeout: 60s
+
+# 日志配置
+logging:
+  format: "json"
+  access:
+    path: "/var/log/lolly/access.log"
+    format: "combined"
+  error:
+    path: "/var/log/lolly/error.log"
+    level: "info"
