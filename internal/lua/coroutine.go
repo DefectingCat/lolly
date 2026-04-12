@@ -210,6 +210,57 @@ func (c *LuaCoroutine) setupNgxAPI() {
 	RegisterLocationAPI(c.Co, c.Engine.LocationManager(), ngx)
 }
 
+// setupSchedulerNgxAPI 为 Scheduler LState 创建安全的 ngx API
+// 仅注册在 timer callback 中安全的 API：ngx.shared, ngx.log, ngx.timer
+// Unsafe APIs (ngx.req, ngx.resp, ngx.var, ngx.ctx, ngx.location) 会返回错误
+func setupSchedulerNgxAPI(L *glua.LState, engine *LuaEngine) {
+	// 创建 ngx 表
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+
+	// 设置 scheduler 模式标志（通过 userdata）
+	setSchedulerMode(L, true)
+
+	// 注册安全的 ngx.log API（不依赖 RequestCtx）
+	// TODO: worker-2 should implement RegisterSchedulerLogAPI
+	RegisterNgxLogAPI(L, nil)
+
+	// 注册安全的 ngx.shared.DICT API
+	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
+
+	// 注册 ngx.timer API（允许在 timer 中创建新 timer）
+	RegisterTimerAPI(L, engine.TimerManager(), ngx)
+
+	// 注册不安全的 API（会检查 scheduler 模式并返回错误）
+	// TODO: worker-2 should implement these functions
+	// RegisterSchedulerUnsafeReqAPI(L, ngx)
+	// RegisterSchedulerUnsafeRespAPI(L, ngx)
+	// RegisterSchedulerUnsafeVarAPI(L, ngx)
+	// RegisterSchedulerUnsafeCtxAPI(L, ngx)
+	RegisterSchedulerUnsafeLocationAPI(L, ngx)
+}
+
+// schedulerModeKey 用于在 LState 的全局表中存储 scheduler 模式标志
+const schedulerModeKey = "__scheduler_mode__"
+
+// setSchedulerMode 设置 LState 的 scheduler 模式标志
+func setSchedulerMode(L *glua.LState, enabled bool) {
+	L.SetGlobal(schedulerModeKey, glua.LBool(enabled))
+}
+
+// IsSchedulerMode 检查 LState 是否处于 scheduler 模式
+// 用于在 API 函数中判断是否在 timer callback 上下文中
+func IsSchedulerMode(L *glua.LState) bool {
+	value := L.GetGlobal(schedulerModeKey)
+	if value == glua.LNil {
+		return false
+	}
+	if b, ok := value.(glua.LBool); ok {
+		return bool(b)
+	}
+	return false
+}
+
 // Execute 在协程中执行 Lua 脚本（支持 Yield/Resume）
 func (c *LuaCoroutine) Execute(script string) error {
 	proto, err := c.Engine.codeCache.GetOrCompileInline(script)

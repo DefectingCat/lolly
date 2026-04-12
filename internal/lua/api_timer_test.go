@@ -102,11 +102,9 @@ func TestTimerLuaAPI(t *testing.T) {
 
 	// 测试 ngx.timer.at
 	err = L.DoString(`
-		local count = 0
-
-		-- 创建定时器
+		-- 创建无 upvalue 的定时器（回调不能捕获外部变量）
 		local handle, err = ngx.timer.at(0.1, function()
-			count = count + 1
+			-- callback body (no upvalues)
 		end)
 
 		assert(handle ~= nil)

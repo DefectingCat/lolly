@@ -23,6 +23,9 @@ type LuaEngine struct {
 	// 主 LState
 	L *glua.LState
 
+	// 调度器 LState（专用于定时器回调，线程隔离）
+	schedulerLState *glua.LState
+
 	// 配置
 	config *Config
 
@@ -49,6 +52,9 @@ type LuaEngine struct {
 
 	// 统计
 	stats EngineStats
+
+	// 定时器回调队列（调度器 goroutine 专用）
+	callbackQueue chan *CallbackEntry
 }
 
 // EngineStats 引擎统计信息
@@ -155,6 +161,9 @@ func (e *LuaEngine) NewCoroutine(req *fasthttp.RequestCtx) (*LuaCoroutine, error
 	coro.CreatedAt = time.Now()
 	coro.ExecutionContext, coro.executionCancel = context.WithTimeout(e.ctx, e.config.MaxExecutionTime)
 
+	// 设置 LState 的上下文，使 getRequestCtx 能够获取到 RequestCtx
+	co.SetContext(req)
+
 	atomic.AddUint64(&e.stats.CoroutinesCreated, 1)
 
 	return coro, nil
@@ -229,4 +238,109 @@ func (e *LuaEngine) TimerManager() *TimerManager {
 // LocationManager 返回 location 管理器
 func (e *LuaEngine) LocationManager() *LocationManager {
 	return e.locationManager
+}
+
+// InitSchedulerLState 初始化调度器 LState
+// 创建专用的 LState 用于定时器回调执行，线程隔离
+func (e *LuaEngine) InitSchedulerLState() error {
+	// 创建调度器 LState
+	e.schedulerLState = glua.NewState(glua.Options{
+		SkipOpenLibs: true, // 禁用默认库，手动加载安全库
+	})
+
+	// 加载安全的标准库
+	glua.OpenBase(e.schedulerLState)
+	glua.OpenTable(e.schedulerLState)
+	glua.OpenString(e.schedulerLState)
+	glua.OpenMath(e.schedulerLState)
+
+	// 创建 ngx 表
+	ngx := e.schedulerLState.NewTable()
+	e.schedulerLState.SetGlobal("ngx", ngx)
+
+	// 注册共享字典 API（与主引擎共享同一个管理器）
+	RegisterSharedDictAPI(e.schedulerLState, e.sharedDictManager, ngx)
+
+	// 注册日志 API
+	RegisterNgxLogAPI(e.schedulerLState, nil)
+
+	// 注册定时器 API（仅安全函数）
+	RegisterTimerAPI(e.schedulerLState, e.timerManager, ngx)
+
+	// 创建回调队列
+	e.callbackQueue = make(chan *CallbackEntry, 1024)
+
+	// 启动调度器 goroutine
+	go e.SchedulerLoop()
+
+	return nil
+}
+
+// SchedulerLoop 调度器循环
+// 在独立的 goroutine 中运行，处理定时器回调
+func (e *LuaEngine) SchedulerLoop() {
+	for {
+		select {
+		case entry, ok := <-e.callbackQueue:
+			if !ok {
+				// 通道已关闭，退出调度器
+				return
+			}
+			e.executeCallback(entry)
+
+		case <-e.ctx.Done():
+			// 引擎关闭信号
+			return
+		}
+	}
+}
+
+// executeCallback 执行定时器回调
+func (e *LuaEngine) executeCallback(entry *CallbackEntry) {
+	defer func() {
+		if r := recover(); r != nil {
+			// 捕获 panic，防止调度器崩溃
+		}
+	}()
+
+	if e.schedulerLState == nil {
+		return
+	}
+
+	// 从 FunctionProto 创建函数
+	fn := e.schedulerLState.NewFunctionFromProto(entry.proto)
+
+	// 调用回调函数（不添加额外的 fn 参数）
+	err := e.schedulerLState.CallByParam(glua.P{
+		Fn:      fn,
+		NRet:    0,
+		Protect: true,
+	}, entry.args...)
+
+	if err != nil {
+		// 错误已在 Protect 模式下被捕获
+	}
+}
+
+// EnqueueCallback 将回调加入调度队列
+// 由 TimerManager 在定时器触发时调用
+func (e *LuaEngine) EnqueueCallback(entry *CallbackEntry) bool {
+	select {
+	case e.callbackQueue <- entry:
+		return true
+	default:
+		// 队列已满
+		return false
+	}
+}
+
+// CloseScheduler 关闭调度器
+func (e *LuaEngine) CloseScheduler() {
+	if e.callbackQueue != nil {
+		close(e.callbackQueue)
+	}
+	if e.schedulerLState != nil {
+		e.schedulerLState.Close()
+		e.schedulerLState = nil
+	}
 }

@@ -2,12 +2,20 @@
 package lua
 
 import (
+	"fmt"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	glua "github.com/yuin/gopher-lua"
 )
+
+// CallbackEntry 回调队列条目
+type CallbackEntry struct {
+	proto *glua.FunctionProto
+	args  []glua.LValue
+}
 
 // TimerManager 定时器管理器
 type TimerManager struct {
@@ -17,17 +25,25 @@ type TimerManager struct {
 	engine   *LuaEngine
 	active   int32
 	stopping int32
+
+	// 调度器
+	callbackQueue chan *CallbackEntry
+	schedulerDone chan struct{} // 调度器 goroutine 退出信号
+	schedulerL    *glua.LState  // 专用调度器 LState
+	queueMu       sync.Mutex    // 保护 callbackQueue 发送/关闭
+	queueClosed   bool
 }
 
 // TimerEntry 定时器条目
 type TimerEntry struct {
-	id       uint64
-	delay    time.Duration
-	callback *glua.LFunction
-	args     []glua.LValue
-	timer    *time.Timer
-	cancel   chan struct{}
-	done     chan struct{}
+	id            uint64
+	delay         time.Duration
+	callback      *glua.LFunction
+	callbackProto *glua.FunctionProto // 编译后的字节码（用于调度器执行）
+	args          []glua.LValue
+	timer         *time.Timer
+	cancel        chan struct{}
+	done          chan struct{}
 }
 
 // TimerHandle 定时器句柄（Lua userdata）
@@ -38,10 +54,32 @@ type TimerHandle struct {
 
 // NewTimerManager 创建定时器管理器
 func NewTimerManager(engine *LuaEngine) *TimerManager {
-	return &TimerManager{
-		timers: make(map[uint64]*TimerEntry),
-		engine: engine,
+	m := &TimerManager{
+		timers:        make(map[uint64]*TimerEntry),
+		engine:        engine,
+		callbackQueue: make(chan *CallbackEntry, 1024),
+		schedulerDone: make(chan struct{}),
 	}
+
+	// 创建专用调度器 LState
+	m.schedulerL = glua.NewState(glua.Options{
+		SkipOpenLibs: true,
+	})
+	glua.OpenBase(m.schedulerL)
+	glua.OpenTable(m.schedulerL)
+	glua.OpenString(m.schedulerL)
+	glua.OpenMath(m.schedulerL)
+
+	// 注册调度器可用的安全 API
+	if engine != nil {
+		RegisterSharedDictAPI(m.schedulerL, engine.SharedDictManager(), m.schedulerL.NewTable())
+		RegisterNgxLogAPI(m.schedulerL, nil)
+	}
+
+	// 启动调度器 goroutine
+	go m.schedulerLoop()
+
+	return m
 }
 
 // At 创建定时器
@@ -56,13 +94,24 @@ func (m *TimerManager) At(delay time.Duration, callback *glua.LFunction, args []
 
 	id := atomic.AddUint64(&m.nextID, 1)
 
+	// 编译回调为 FunctionProto
+	var proto *glua.FunctionProto
+	if callback != nil && callback.Proto != nil {
+		proto = callback.Proto
+		// 拒绝带有 upvalue 的回调
+		if proto.NumUpvalues > 0 {
+			return nil, fmt.Errorf("timer callback cannot capture upvalues (closure variables); use shared dict instead")
+		}
+	}
+
 	entry := &TimerEntry{
-		id:       id,
-		delay:    delay,
-		callback: callback,
-		args:     args,
-		cancel:   make(chan struct{}),
-		done:     make(chan struct{}),
+		id:            id,
+		delay:         delay,
+		callback:      callback,
+		callbackProto: proto,
+		args:          args,
+		cancel:        make(chan struct{}),
+		done:          make(chan struct{}),
 	}
 
 	// 设置定时器
@@ -77,8 +126,7 @@ func (m *TimerManager) At(delay time.Duration, callback *glua.LFunction, args []
 }
 
 // executeTimer 执行定时器回调
-// 注意：由于 gopher-lua 不是线程安全的，定时器回调执行有限制
-// 当前简化版本仅支持记录定时器触发，不执行实际 Lua 回调
+// 通过 channel 将回调调度到调度器 goroutine 执行
 func (m *TimerManager) executeTimer(entry *TimerEntry) {
 	defer func() {
 		atomic.AddInt32(&m.active, -1)
@@ -92,21 +140,59 @@ func (m *TimerManager) executeTimer(entry *TimerEntry) {
 	default:
 	}
 
-	// 检查 engine 是否已关闭
-	if m.engine == nil || m.engine.L == nil {
-		return
-	}
-
-	// 由于 gopher-lua 不是线程安全的，异步 goroutine 中不能直接调用 LState
-	// 完整实现需要使用 channel 将回调调度到主线程执行
-	// 这里简化处理：定时器触发后记录日志（生产环境应该有更好的方案）
-
 	// 清理定时器条目
 	m.mu.Lock()
 	if m.timers != nil {
 		delete(m.timers, entry.id)
 	}
 	m.mu.Unlock()
+
+	// 将回调入队到调度器
+	if entry.callbackProto != nil {
+		cbEntry := &CallbackEntry{
+			proto: entry.callbackProto,
+			args:  entry.args,
+		}
+		m.queueMu.Lock()
+		if m.queueClosed {
+			m.queueMu.Unlock()
+			return // 通道已关闭，放弃回调
+		}
+		select {
+		case m.callbackQueue <- cbEntry:
+			m.queueMu.Unlock()
+		default:
+			m.queueMu.Unlock()
+			log.Printf("[lua] timer callback dropped: queue full")
+		}
+	}
+}
+
+// schedulerLoop 调度器循环，在专用 goroutine 中执行 Lua 回调
+func (m *TimerManager) schedulerLoop() {
+	defer close(m.schedulerDone)
+
+	for entry := range m.callbackQueue {
+		// 检查是否正在关闭
+		if atomic.LoadInt32(&m.stopping) != 0 {
+			// 关闭模式下继续执行剩余回调（drain）
+		}
+
+		// 从字节码重建函数并执行
+		fn := m.schedulerL.NewFunctionFromProto(entry.proto)
+		if fn == nil {
+			log.Printf("[lua] timer callback: failed to create function from proto")
+			continue
+		}
+
+		// 调用函数
+		if err := m.schedulerL.CallByParam(glua.P{
+			Fn:   fn,
+			NRet: 0,
+		}, entry.args...); err != nil {
+			log.Printf("[lua] timer callback error: %v", err)
+		}
+	}
 }
 
 // Cancel 取消定时器
@@ -163,7 +249,35 @@ func (m *TimerManager) WaitAll(timeout time.Duration) bool {
 
 // Close 关闭定时器管理器
 func (m *TimerManager) Close() {
-	m.WaitAll(5 * time.Second)
+	// 1. 停止接受新定时器
+	atomic.StoreInt32(&m.stopping, 1)
+
+	// 2. 优雅关闭：等待回调队列排空
+	m.gracefulShutdown(5 * time.Second)
+
+	// 3. 关闭调度器 LState
+	if m.schedulerL != nil {
+		m.schedulerL.Close()
+		m.schedulerL = nil
+	}
+}
+
+// gracefulShutdown 优雅关闭：排空回调队列，超时后放弃
+func (m *TimerManager) gracefulShutdown(timeout time.Duration) {
+	m.queueMu.Lock()
+	m.queueClosed = true
+	close(m.callbackQueue)
+	m.queueMu.Unlock()
+
+	// 等待调度器 goroutine 退出
+	select {
+	case <-m.schedulerDone:
+	case <-time.After(timeout):
+		abandoned := len(m.callbackQueue)
+		if abandoned > 0 {
+			log.Printf("[lua] shutdown timeout: %d callbacks abandoned", abandoned)
+		}
+	}
 }
 
 // ActiveCount 返回活跃定时器数
