@@ -167,7 +167,7 @@ func (c *LuaCoroutine) setupSecureCoroutineLib() {
 }
 
 // setupNgxAPI 创建 ngx API
-// 注册 ngx.req、ngx.resp、ngx.var、ngx.ctx、ngx.log 和 ngx.socket API
+// 注册 ngx.req、ngx.resp、ngx.var、ngx.ctx、ngx.log、ngx.socket 和 ngx.shared API
 func (c *LuaCoroutine) setupNgxAPI() {
 	// 创建 ngx 表
 	ngx := c.Co.NewTable()
@@ -199,6 +199,15 @@ func (c *LuaCoroutine) setupNgxAPI() {
 
 	// 注册 ngx.socket API
 	RegisterTCPSocketAPI(c.Co, c.Engine)
+
+	// 注册 ngx.shared.DICT API
+	RegisterSharedDictAPI(c.Co, c.Engine.SharedDictManager(), ngx)
+
+	// 注册 ngx.timer API
+	RegisterTimerAPI(c.Co, c.Engine.TimerManager(), ngx)
+
+	// 注册 ngx.location API
+	RegisterLocationAPI(c.Co, c.Engine.LocationManager(), ngx)
 }
 
 // Execute 在协程中执行 Lua 脚本（支持 Yield/Resume）
