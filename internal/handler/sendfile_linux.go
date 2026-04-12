@@ -1,8 +1,8 @@
-//go:build !linux
+//go:build linux
 
 // Package handler 提供 HTTP 请求处理器，包括路由、静态文件服务和零拷贝传输。
 //
-// 该文件包含非 Linux 平台的 sendfile 实现（使用 fallback 方式）。
+// 该文件包含 Linux 平台完整的 sendfile 实现（零拷贝 + 公共函数）。
 //
 // 作者：xfy
 package handler
@@ -22,6 +22,9 @@ const (
 	MinSendfileSize = 8 * 1024
 )
 
+// platformLinux Linux 平台标识符。
+const platformLinux = "linux"
+
 // SendFile 零拷贝文件传输。
 //
 // 大文件使用系统调用直接从文件传输到 socket，避免用户空间拷贝，
@@ -35,17 +38,6 @@ const (
 //
 // 返回值：
 //   - error: 传输过程中的错误
-//
-// 注意事项：
-//   - 小于 8KB 的文件使用普通 io.Copy
-//   - 非 Linux 平台（macOS、Windows）使用 fallback 方式
-//
-// 使用示例：
-//
-//	file, _ := os.Open("large_file.bin")
-//	defer file.Close()
-//	info, _ := file.Stat()
-//	err := SendFile(ctx, file, 0, info.Size())
 func SendFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) error {
 	// 小文件使用普通 io.Copy
 	if length < MinSendfileSize {
@@ -58,8 +50,8 @@ func SendFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 		return copyFile(ctx, file, offset, length)
 	}
 
-	// 非 Linux 平台使用 fallback
-	err := platformSendfile(conn, file, offset, length)
+	// Linux 平台使用 sendfile 系统调用
+	err := linuxSendfile(conn, file.Fd(), offset, length)
 	if err != nil {
 		// sendfile 失败，fallback 到 io.Copy
 		return copyFile(ctx, file, offset, length)
@@ -69,29 +61,11 @@ func SendFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 }
 
 // getNetConn 从 fasthttp.RequestCtx 获取底层 net.Conn。
-//
-// 参数：
-//   - ctx: fasthttp 请求上下文
-//
-// 返回值：
-//   - net.Conn: 底层网络连接，如果无法获取则返回 nil
 func getNetConn(ctx *fasthttp.RequestCtx) net.Conn {
-	// fasthttp 内部使用 net.Conn，通过接口获取
 	return ctx.Conn()
 }
 
 // copyFile 普通文件拷贝（fallback）。
-//
-// 使用 io.Copy 进行文件传输，适用于不支持 sendfile 的平台或小文件。
-//
-// 参数：
-//   - ctx: fasthttp 请求上下文，作为写入目标
-//   - file: 源文件对象
-//   - offset: 文件起始偏移量
-//   - length: 传输长度，0 表示拷贝到文件末尾
-//
-// 返回值：
-//   - error: 拷贝过程中的错误
 func copyFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) error {
 	if offset > 0 {
 		if _, err := file.Seek(offset, io.SeekStart); err != nil {
@@ -99,7 +73,6 @@ func copyFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 		}
 	}
 
-	// 使用 io.CopyN 或 io.Copy
 	if length > 0 {
 		_, err := io.CopyN(ctx, file, length)
 		return err
@@ -109,20 +82,54 @@ func copyFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 	return err
 }
 
-// platformSendfile 非 Linux 平台的 sendfile 实现。
+// linuxSendfile Linux sendfile 系统调用。
 //
-// macOS 和 Windows 不支持 sendfile 系统调用，返回 ENOTSUP 触发 fallback。
+// 使用 Linux 特有的 sendfile 系统调用实现零拷贝传输。
+func linuxSendfile(conn net.Conn, fileFd uintptr, _, length int64) error {
+	socketFd, err := getSocketFd(conn)
+	if err != nil {
+		return err
+	}
+
+	// Linux sendfile: sendfile(out_fd, in_fd, offset, count)
+	var sent int64
+	remain := length
+
+	for remain > 0 {
+		n, err := syscall.Sendfile(int(socketFd), int(fileFd), nil, int(remain))
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			break // EOF
+		}
+		sent += int64(n)
+		remain -= int64(n)
+	}
+
+	return nil
+}
+
+// getSocketFd 获取 socket 文件描述符。
 //
-// 参数：
-//   - conn: 目标网络连接
-//   - file: 源文件对象
-//   - offset: 文件起始偏移量
-//   - length: 传输长度
-//
-// 返回值：
-//   - error: 始终返回 ENOTSUP，表示不支持
-func platformSendfile(conn net.Conn, file *os.File, offset, length int64) error {
-	// macOS sendfile 签名复杂，简化使用 fallback
-	// Windows TransmitFile 需要特殊 API
-	return syscall.ENOTSUP
+// 从网络连接中提取底层的文件描述符，用于 sendfile 系统调用。
+func getSocketFd(conn net.Conn) (uintptr, error) {
+	switch c := conn.(type) {
+	case *net.TCPConn:
+		file, err := c.File()
+		if err != nil {
+			return 0, err
+		}
+		defer func() { _ = file.Close() }()
+		return file.Fd(), nil
+	case *net.UnixConn:
+		file, err := c.File()
+		if err != nil {
+			return 0, err
+		}
+		defer func() { _ = file.Close() }()
+		return file.Fd(), nil
+	default:
+		return 0, syscall.ENOTSUP
+	}
 }

@@ -1,11 +1,8 @@
-//go:build linux
+//go:build !linux
 
-// Package handler 提供 Sendfile 功能的 Linux 平台测试。
+// Package handler 提供 Sendfile 功能的测试（非 Linux 平台）。
 //
-// 该文件测试 Linux 平台特有的 Sendfile 功能，包括：
-//   - Linux sendfile 系统调用
-//   - 套接字文件描述符获取
-//   - 小文件发送 fallback
+// 该文件测试非 Linux 平台的 Sendfile 功能。
 //
 // 作者：xfy
 package handler
@@ -13,12 +10,10 @@ package handler
 import (
 	"bytes"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/valyala/fasthttp"
 )
@@ -26,6 +21,27 @@ import (
 func TestMinSendfileSize(t *testing.T) {
 	if MinSendfileSize != 8*1024 {
 		t.Errorf("Expected MinSendfileSize 8KB, got %d", MinSendfileSize)
+	}
+}
+
+// TestPlatformSendfile_NonLinux 测试非 Linux 平台的 sendfile 行为
+func TestPlatformSendfile_NonLinux(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+	content := []byte("test content")
+	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	err = platformSendfile(nil, file, 0, int64(len(content)))
+	if err != syscall.ENOTSUP {
+		t.Errorf("expected ENOTSUP on non-Linux, got: %v", err)
 	}
 }
 
@@ -109,35 +125,6 @@ func TestCopyFile(t *testing.T) {
 		})
 	}
 }
-
-// TestGetSocketFd_NilConn 测试 nil 连接的情况
-func TestGetSocketFd_NilConn(t *testing.T) {
-	_, err := getSocketFd(nil)
-	if err == nil {
-		t.Error("expected error for nil connection")
-	}
-}
-
-// TestGetSocketFd_UnsupportedType 测试不支持的连接类型
-func TestGetSocketFd_UnsupportedType(t *testing.T) {
-	conn := &mockConn{}
-	_, err := getSocketFd(conn)
-	if err != syscall.ENOTSUP {
-		t.Errorf("expected ENOTSUP for unsupported conn type, got: %v", err)
-	}
-}
-
-// mockConn 是一个不实现 TCPConn/UnixConn 的连接
-type mockConn struct{}
-
-func (m *mockConn) Read([]byte) (n int, err error)   { return 0, nil }
-func (m *mockConn) Write([]byte) (n int, err error)  { return 0, nil }
-func (m *mockConn) Close() error                     { return nil }
-func (m *mockConn) LocalAddr() net.Addr              { return nil }
-func (m *mockConn) RemoteAddr() net.Addr             { return nil }
-func (m *mockConn) SetDeadline(time.Time) error      { return nil }
-func (m *mockConn) SetReadDeadline(time.Time) error  { return nil }
-func (m *mockConn) SetWriteDeadline(time.Time) error { return nil }
 
 // TestSendFile_SmallFile 测试小文件发送（使用 fallback）
 func TestSendFile_SmallFile(t *testing.T) {
@@ -257,24 +244,5 @@ func TestCopyFile_Error(t *testing.T) {
 	err = copyFile(ctx, file, 1000, 10)
 	if err == nil {
 		t.Error("Expected error for offset beyond file size")
-	}
-}
-
-// TestLinuxSendfile_NilConn 测试 linuxSendfile 空连接
-func TestLinuxSendfile_NilConn(t *testing.T) {
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, "test.txt")
-	content := []byte("test")
-	_ = os.WriteFile(tmpFile, content, 0644)
-
-	file, err := os.Open(tmpFile)
-	if err != nil {
-		t.Fatalf("Failed to open file: %v", err)
-	}
-	defer func() { _ = file.Close() }()
-
-	err = linuxSendfile(nil, file.Fd(), 0, int64(len(content)))
-	if err == nil {
-		t.Error("Expected error for nil connection")
 	}
 }
