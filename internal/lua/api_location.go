@@ -54,11 +54,13 @@ func (m *LocationManager) Capture(parentCtx *fasthttp.RequestCtx, location strin
 	// 创建子请求上下文（不设置 Conn）
 	subCtx := &fasthttp.RequestCtx{}
 
-	// 复制父请求作为基础
+	// 复制父请求作为基础（深拷贝）
 	parentCtx.Request.CopyTo(&subCtx.Request)
 
-	// 设置子请求的 URI
-	subCtx.Request.SetRequestURI(location)
+	// 设置子请求的路径，保留父请求的查询参数
+	// 解析 location，分离路径和查询参数
+	uri := subCtx.URI()
+	uri.SetPath(location)
 
 	// 应用选项
 	if opts != nil {
@@ -71,6 +73,13 @@ func (m *LocationManager) Capture(parentCtx *fasthttp.RequestCtx, location strin
 		if headers, ok := opts["headers"].(map[string]string); ok {
 			for k, v := range headers {
 				subCtx.Request.Header.Set(k, v)
+			}
+		}
+		// 如果选项中显式指定了 args，则覆盖父请求的查询参数
+		if args, ok := opts["args"].(map[string]string); ok {
+			uri.QueryArgs().Reset()
+			for k, v := range args {
+				uri.QueryArgs().Add(k, v)
 			}
 		}
 	}
@@ -91,6 +100,18 @@ func (m *LocationManager) Capture(parentCtx *fasthttp.RequestCtx, location strin
 	})
 
 	return result, nil
+}
+
+// getRequestCtx 从当前 Lua 协程的 UserData 中获取 RequestCtx
+// 通过协程关联的 RequestCtx 实现子请求对父请求数据的访问
+func getRequestCtx(L *glua.LState) *fasthttp.RequestCtx {
+	// 获取当前协程的上下文（在创建协程时通过 SetContext 设置）
+	if ctx := L.Context(); ctx != nil {
+		if reqCtx, ok := ctx.(*fasthttp.RequestCtx); ok {
+			return reqCtx
+		}
+	}
+	return nil
 }
 
 // RegisterLocationAPI 注册 ngx.location API
@@ -129,31 +150,36 @@ func RegisterLocationAPI(L *glua.LState, manager *LocationManager, ngx *glua.LTa
 		// 创建结果表
 		result := L.NewTable()
 
-		// 尝试执行子请求
-		// 注意：由于无法直接获取 RequestCtx，这里使用模拟的上下文
-		// 在完整实现中，应该通过 coroutine 传递 RequestCtx
-		if manager != nil {
-			// 创建模拟请求上下文用于子请求执行
+		if manager == nil {
+			// manager 未初始化
+			L.SetField(result, "status", glua.LNumber(500))
+			L.SetField(result, "body", glua.LString("location manager not initialized"))
+			L.Push(result)
+			return 1
+		}
+
+		// 获取父请求上下文（从当前协程）
+		parentCtx := getRequestCtx(L)
+		if parentCtx == nil {
+			// 没有父请求上下文，使用模拟上下文
 			mockCtx := &fasthttp.RequestCtx{}
 			mockCtx.Request.SetRequestURI(uri)
+			parentCtx = mockCtx
+		}
 
-			captureResult, err := manager.Capture(mockCtx, uri, opts)
-			if err == nil && captureResult != nil {
-				L.SetField(result, "status", glua.LNumber(captureResult.Status))
-				L.SetField(result, "body", glua.LString(string(captureResult.Body)))
+		// 执行子请求，传递父请求上下文用于数据复制
+		captureResult, err := manager.Capture(parentCtx, uri, opts)
+		if err == nil && captureResult != nil {
+			L.SetField(result, "status", glua.LNumber(captureResult.Status))
+			L.SetField(result, "body", glua.LString(string(captureResult.Body)))
 
-				// 设置 headers
-				headersTable := headersToLuaTable(L, captureResult.Headers)
-				L.SetField(result, "headers", headersTable)
-			} else {
-				// 执行失败
-				L.SetField(result, "status", glua.LNumber(500))
-				L.SetField(result, "body", glua.LString("subrequest failed"))
-			}
+			// 设置 headers
+			headersTable := headersToLuaTable(L, captureResult.Headers)
+			L.SetField(result, "headers", headersTable)
 		} else {
-			// manager 未初始化
-			L.SetField(result, "status", glua.LNumber(404))
-			L.SetField(result, "body", glua.LString("location manager not initialized"))
+			// 执行失败
+			L.SetField(result, "status", glua.LNumber(500))
+			L.SetField(result, "body", glua.LString("subrequest failed: "+err.Error()))
 		}
 
 		L.Push(result)
@@ -171,4 +197,22 @@ func headersToLuaTable(L *glua.LState, headers map[string]string) *glua.LTable {
 		table.RawSetString(strings.ToLower(k), glua.LString(v))
 	}
 	return table
+}
+
+// RegisterSchedulerUnsafeLocationAPI 为 Scheduler LState 注册不安全的 ngx.location API
+// 这些 API 在 scheduler 模式下会返回错误
+func RegisterSchedulerUnsafeLocationAPI(L *glua.LState, ngx *glua.LTable) {
+	// 创建 ngx.location 表
+	location := L.NewTable()
+
+	// ngx.location.capture 在 scheduler 模式下不可用
+	L.SetField(location, "capture", L.NewFunction(luaSchedulerUnsafeLocation))
+
+	L.SetField(ngx, "location", location)
+}
+
+// luaSchedulerUnsafeLocation 返回 scheduler 模式下不可用的错误
+func luaSchedulerUnsafeLocation(L *glua.LState) int {
+	L.RaiseError("API ngx.location.capture not available in timer callback context")
+	return 0
 }

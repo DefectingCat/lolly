@@ -116,3 +116,33 @@ func TestLocationLuaAPI(t *testing.T) {
 	`)
 	require.NoError(t, err)
 }
+
+// TestLocationCaptureWithParentRequest 测试子请求能够访问父请求数据
+func TestLocationCaptureWithParentRequest(t *testing.T) {
+	engine, err := NewEngine(DefaultConfig())
+	require.NoError(t, err)
+	defer engine.Close()
+
+	// 注册 location handler，它会检查父请求的头信息
+	engine.LocationManager().Register("/api/sub", func(ctx *fasthttp.RequestCtx) {
+		// 检查是否继承了父请求的头
+		parentHeader := ctx.Request.Header.Peek("X-Parent-Header")
+
+		ctx.SetStatusCode(200)
+		ctx.SetBodyString("parent_header: " + string(parentHeader))
+	})
+
+	// 创建父请求上下文
+	parentCtx := &fasthttp.RequestCtx{}
+	parentCtx.Request.SetRequestURI("/parent")
+	parentCtx.Request.Header.Set("X-Parent-Header", "header_value")
+
+	// 使用 Capture 进行子请求
+	result, err := engine.LocationManager().Capture(parentCtx, "/api/sub", nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// 验证子请求能够访问父请求数据（Headers 被继承）
+	assert.Equal(t, 200, result.Status)
+	assert.Contains(t, string(result.Body), "parent_header: header_value")
+}
