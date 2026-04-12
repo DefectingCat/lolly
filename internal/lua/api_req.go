@@ -616,3 +616,27 @@ func parseQueryString(query []byte) map[string][]string {
 
 	return result
 }
+
+// RegisterSchedulerUnsafeReqAPI 为 Scheduler LState 注册不安全的 ngx.req API
+func RegisterSchedulerUnsafeReqAPI(L *glua.LState, ngx *glua.LTable) {
+	ngxReq := L.NewTable()
+
+	ngxReq.RawSetString("get_method", L.NewFunction(luaSchedulerUnsafeReq))
+	ngxReq.RawSetString("get_uri", L.NewFunction(luaSchedulerUnsafeReq))
+	ngxReq.RawSetString("set_uri", L.NewFunction(luaSchedulerUnsafeReq))
+	ngxReq.RawSetString("get_uri_args", L.NewFunction(luaSchedulerUnsafeReq))
+	ngxReq.RawSetString("set_uri_args", L.NewFunction(luaSchedulerUnsafeReq))
+	ngxReq.RawSetString("get_headers", L.NewFunction(luaSchedulerUnsafeReq))
+	ngxReq.RawSetString("set_header", L.NewFunction(luaSchedulerUnsafeReq))
+	ngxReq.RawSetString("clear_header", L.NewFunction(luaSchedulerUnsafeReq))
+	ngxReq.RawSetString("get_body_data", L.NewFunction(luaSchedulerUnsafeReq))
+	ngxReq.RawSetString("read_body", L.NewFunction(luaSchedulerUnsafeReq))
+
+	ngx.RawSetString("req", ngxReq)
+}
+
+// luaSchedulerUnsafeReq 在 scheduler 模式下调用 ngx.req API 时返回错误
+func luaSchedulerUnsafeReq(L *glua.LState) int {
+	L.RaiseError("API ngx.req not available in timer callback context")
+	return 0
+}

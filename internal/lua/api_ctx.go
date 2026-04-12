@@ -58,3 +58,18 @@ func (api *ngxCtxAPI) GetValue(L *glua.LState, key string) glua.LValue {
 	}
 	return glua.LNil
 }
+
+// RegisterSchedulerUnsafeCtxAPI 为 Scheduler LState 注册不安全的 ngx.ctx API
+func RegisterSchedulerUnsafeCtxAPI(L *glua.LState, ngx *glua.LTable) {
+	ctxTable := L.NewTable()
+	mt := L.NewTable()
+	mt.RawSetString("__index", L.NewFunction(luaSchedulerUnsafeCtx))
+	mt.RawSetString("__newindex", L.NewFunction(luaSchedulerUnsafeCtx))
+	L.SetMetatable(ctxTable, mt)
+	ngx.RawSetString("ctx", ctxTable)
+}
+
+func luaSchedulerUnsafeCtx(L *glua.LState) int {
+	L.RaiseError("API ngx.ctx not available in timer callback context")
+	return 0
+}

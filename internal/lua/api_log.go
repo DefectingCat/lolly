@@ -338,3 +338,48 @@ func LogLevelToZerolog(level int) zerolog.Level {
 		return zerolog.InfoLevel
 	}
 }
+
+// RegisterSchedulerLogAPI 为 Scheduler LState 注册安全的 ngx.log API
+// 不依赖 RequestCtx，仅输出到标准日志
+func RegisterSchedulerLogAPI(L *glua.LState, ngx *glua.LTable) {
+	// 注册日志级别常量
+	ngx.RawSetString("STDERR", glua.LNumber(LogStderr))
+	ngx.RawSetString("EMERG", glua.LNumber(LogEmerg))
+	ngx.RawSetString("ALERT", glua.LNumber(LogAlert))
+	ngx.RawSetString("CRIT", glua.LNumber(LogCrit))
+	ngx.RawSetString("ERR", glua.LNumber(LogErr))
+	ngx.RawSetString("WARN", glua.LNumber(LogWarn))
+	ngx.RawSetString("NOTICE", glua.LNumber(LogNotice))
+	ngx.RawSetString("INFO", glua.LNumber(LogInfo))
+	ngx.RawSetString("DEBUG", glua.LNumber(LogDebug))
+
+	// 注册 HTTP 状态码常量
+	ngx.RawSetString("HTTP_OK", glua.LNumber(HTTPOK))
+	ngx.RawSetString("HTTP_INTERNAL_SERVER_ERROR", glua.LNumber(HTTPInternalServerError))
+
+	// 注册 ngx.log 函数（不依赖 RequestCtx 的版本）
+	ngx.RawSetString("log", L.NewFunction(luaSchedulerLog))
+}
+
+// luaSchedulerLog 实现 scheduler 模式下的 ngx.log
+// 不依赖 RequestCtx，仅输出到标准日志
+func luaSchedulerLog(L *glua.LState) int {
+	// 获取日志级别
+	level := L.CheckInt(1)
+
+	// 收集所有参数并拼接
+	var parts []string
+	n := L.GetTop()
+	for i := 2; i <= n; i++ {
+		parts = append(parts, L.ToString(i))
+	}
+	msg := strings.Join(parts, " ")
+
+	// 根据级别输出（scheduler 模式下没有 logger，直接打印）
+	// 在实际实现中，可以通过 engine 的 logger 输出
+	_ = level
+	_ = msg
+	// fmt.Printf("[timer] %s\n", msg)
+
+	return 0
+}

@@ -197,3 +197,22 @@ func (api *ngxRespAPI) SetHeader(name, value string) {
 	api.headersCache = nil
 	api.headersCacheOnce = sync.Once{}
 }
+
+// RegisterSchedulerUnsafeRespAPI 为 Scheduler LState 注册不安全的 ngx.resp API
+func RegisterSchedulerUnsafeRespAPI(L *glua.LState, ngx *glua.LTable) {
+	ngxResp := L.NewTable()
+
+	ngxResp.RawSetString("get_status", L.NewFunction(luaSchedulerUnsafeResp))
+	ngxResp.RawSetString("set_status", L.NewFunction(luaSchedulerUnsafeResp))
+	ngxResp.RawSetString("get_headers", L.NewFunction(luaSchedulerUnsafeResp))
+	ngxResp.RawSetString("set_header", L.NewFunction(luaSchedulerUnsafeResp))
+	ngxResp.RawSetString("clear_header", L.NewFunction(luaSchedulerUnsafeResp))
+
+	ngx.RawSetString("resp", ngxResp)
+}
+
+// luaSchedulerUnsafeResp 在 scheduler 模式下调用 ngx.resp API 时返回错误
+func luaSchedulerUnsafeResp(L *glua.LState) int {
+	L.RaiseError("API ngx.resp not available in timer callback context")
+	return 0
+}

@@ -195,3 +195,23 @@ func (api *ngxVarAPI) GetVariable(name string) (string, bool) {
 	value := api.getVariable(name)
 	return value, value != ""
 }
+
+// RegisterSchedulerUnsafeVarAPI 为 Scheduler LState 注册不安全的 ngx.var API
+func RegisterSchedulerUnsafeVarAPI(L *glua.LState, ngx *glua.LTable) {
+	ngxVar := L.NewTable()
+	mt := L.NewTable()
+	mt.RawSetString("__index", L.NewFunction(luaSchedulerUnsafeVarIndex))
+	mt.RawSetString("__newindex", L.NewFunction(luaSchedulerUnsafeVarNewIndex))
+	L.SetMetatable(ngxVar, mt)
+	ngx.RawSetString("var", ngxVar)
+}
+
+func luaSchedulerUnsafeVarIndex(L *glua.LState) int {
+	L.RaiseError("API ngx.var not available in timer callback context")
+	return 0
+}
+
+func luaSchedulerUnsafeVarNewIndex(L *glua.LState) int {
+	L.RaiseError("API ngx.var not available in timer callback context")
+	return 0
+}
