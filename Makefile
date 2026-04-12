@@ -5,8 +5,8 @@ APP_NAME := lolly
 VERSION := 0.2.0
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-BUILD_TIME := $(shell date -u '+%Y-%m-%d %H:%M:%S UTC')
-GO_VERSION := $(shell go version | awk '{print $$3}')
+BUILD_TIME := $(shell date -u '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "unknown")
+GO_VERSION := $(shell go env GOVERSION)
 BUILD_PLATFORM := $(shell go env GOOS)/$(shell go env GOARCH)
 BUILD_DIR := bin
 
@@ -29,6 +29,13 @@ PERF_ASMFLAGS := -asmflags="-l=4"
 # Go 文件
 MAIN_PATH := main.go
 
+# Windows 可执行文件扩展名
+ifeq ($(OS),Windows_NT)
+EXECUTABLE := $(BUILD_DIR)/$(APP_NAME).exe
+else
+EXECUTABLE := $(BUILD_DIR)/$(APP_NAME)
+endif
+
 # 默认目标
 .DEFAULT_GOAL := build
 
@@ -41,8 +48,8 @@ build:
 	@echo "Building $(APP_NAME) with max runtime performance (static)..."
 	@mkdir -p $(BUILD_DIR)
 	$(CGO_DISABLE) go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
-		-o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH)
-	@echo "Performance build complete: $(BUILD_DIR)/$(APP_NAME)"
+		-o $(EXECUTABLE) $(MAIN_PATH)
+	@echo "Performance build complete: $(EXECUTABLE)"
 
 # PGO 构建（需先收集 profile，静态链接）
 PGO_PROFILE ?= default.pgo
@@ -51,7 +58,7 @@ build-pgo:
 	@mkdir -p $(BUILD_DIR)
 	if [ -f $(PGO_PROFILE) ]; then \
 		$(CGO_DISABLE) go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
-			-pgo=$(PGO_PROFILE) -o $(BUILD_DIR)/$(APP_NAME) $(MAIN_PATH); \
+			-pgo=$(PGO_PROFILE) -o $(EXECUTABLE) $(MAIN_PATH); \
 		echo "PGO build complete using: $(PGO_PROFILE)"; \
 	else \
 		echo "PGO profile not found: $(PGO_PROFILE)"; \
