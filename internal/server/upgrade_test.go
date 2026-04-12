@@ -1,3 +1,5 @@
+//go:build !windows
+
 // Package server 提供优雅升级功能的测试。
 //
 // 该文件测试优雅升级模块的各项功能，包括：
