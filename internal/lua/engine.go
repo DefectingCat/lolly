@@ -38,6 +38,15 @@ type LuaEngine struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
+	// 共享字典管理器
+	sharedDictManager *SharedDictManager
+
+	// 定时器管理器
+	timerManager *TimerManager
+
+	// location 管理器
+	locationManager *LocationManager
+
 	// 统计
 	stats EngineStats
 }
@@ -80,12 +89,13 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	engine := &LuaEngine{
-		L:             L,
-		config:        config,
-		codeCache:     NewCodeCache(config.CodeCacheSize, config.CodeCacheTTL, config.EnableFileWatch),
-		maxCoroutines: config.MaxConcurrentCoroutines,
-		ctx:           ctx,
-		cancel:        cancel,
+		L:                 L,
+		config:            config,
+		codeCache:         NewCodeCache(config.CodeCacheSize, config.CodeCacheTTL, config.EnableFileWatch),
+		maxCoroutines:     config.MaxConcurrentCoroutines,
+		ctx:               ctx,
+		cancel:            cancel,
+		sharedDictManager: NewSharedDictManager(),
 		coroutinePool: sync.Pool{
 			New: func() interface{} {
 				// 注意：这里只是创建空的协程对象结构
@@ -95,12 +105,24 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 		},
 	}
 
+	// 创建定时器管理器（需要在 engine 创建后初始化）
+	engine.timerManager = NewTimerManager(engine)
+
+	// 创建 location 管理器
+	engine.locationManager = NewLocationManager()
+
 	return engine, nil
 }
 
 // Close 关闭引擎
 func (e *LuaEngine) Close() {
 	e.cancel()
+	if e.timerManager != nil {
+		e.timerManager.Close()
+	}
+	if e.sharedDictManager != nil {
+		e.sharedDictManager.Close()
+	}
 	if e.L != nil {
 		e.L.Close()
 	}
@@ -187,4 +209,24 @@ func (e *LuaEngine) Stats() EngineStats {
 // ActiveCoroutines 返回活跃协程数
 func (e *LuaEngine) ActiveCoroutines() int32 {
 	return atomic.LoadInt32(&e.activeCount)
+}
+
+// SharedDictManager 返回共享字典管理器
+func (e *LuaEngine) SharedDictManager() *SharedDictManager {
+	return e.sharedDictManager
+}
+
+// CreateSharedDict 创建共享字典
+func (e *LuaEngine) CreateSharedDict(name string, maxItems int) *SharedDict {
+	return e.sharedDictManager.CreateDict(name, maxItems)
+}
+
+// TimerManager 返回定时器管理器
+func (e *LuaEngine) TimerManager() *TimerManager {
+	return e.timerManager
+}
+
+// LocationManager 返回 location 管理器
+func (e *LuaEngine) LocationManager() *LocationManager {
+	return e.locationManager
 }
