@@ -303,10 +303,10 @@ func (vc *Context) evalBuiltin(name string) (string, bool) {
 	return builtin.Getter(vc.ctx), true
 }
 
-// Expand 展开模板字符串中的变量
-// 支持 $var 和 ${var} 两种格式
-// 对于未定义的变量，保持原样不变
-func (vc *Context) Expand(template string) string {
+// expandCore 是变量展开的核心实现
+// lookup: 变量查找函数，返回变量值和是否找到
+// keepOriginal: 当变量未找到时，是否保持原样（true=保持原样，false=替换为空字符串）
+func expandCore(template string, lookup func(name string) (value string, found bool), keepOriginal bool) string {
 	if template == "" {
 		return ""
 	}
@@ -359,9 +359,9 @@ func (vc *Context) Expand(template string) string {
 				continue
 			}
 			// 获取变量值
-			if v, ok := vc.Get(varName); ok {
+			if v, ok := lookup(varName); ok {
 				result.WriteString(v)
-			} else {
+			} else if keepOriginal {
 				// 未定义变量，保持原样
 				result.WriteString("${")
 				result.WriteString(varName)
@@ -391,9 +391,9 @@ func (vc *Context) Expand(template string) string {
 		}
 
 		varName := template[i+1 : j]
-		if v, ok := vc.Get(varName); ok {
+		if v, ok := lookup(varName); ok {
 			result.WriteString(v)
-		} else {
+		} else if keepOriginal {
 			// 未定义变量，保持原样
 			result.WriteByte('$')
 			result.WriteString(varName)
@@ -404,91 +404,20 @@ func (vc *Context) Expand(template string) string {
 	return result.String()
 }
 
+// Expand 展开模板字符串中的变量
+// 支持 $var 和 ${var} 两种格式
+// 对于未定义的变量，保持原样不变
+func (vc *Context) Expand(template string) string {
+	return expandCore(template, func(name string) (string, bool) {
+		return vc.Get(name)
+	}, true)
+}
+
 // ExpandString 展开字符串（静态函数，用于简单场景）
 // 需要提供变量值查找函数
 func ExpandString(template string, lookup func(string) string) string {
-	if template == "" {
-		return ""
-	}
-
-	// 快速路径
-	hasVar := false
-	for i := 0; i < len(template); i++ {
-		if template[i] == '$' {
-			hasVar = true
-			break
-		}
-	}
-	if !hasVar {
-		return template
-	}
-
-	var result strings.Builder
-	result.Grow(len(template) * 2)
-
-	i := 0
-	for i < len(template) {
-		if template[i] != '$' {
-			result.WriteByte(template[i])
-			i++
-			continue
-		}
-
-		if i+1 >= len(template) {
-			result.WriteByte('$')
-			i++
-			continue
-		}
-
-		if template[i+1] == '{' {
-			end := strings.IndexByte(template[i+2:], '}')
-			if end == -1 {
-				result.WriteByte('$')
-				i++
-				continue
-			}
-			varName := template[i+2 : i+2+end]
-			if varName == "" {
-				result.WriteByte('$')
-				i += 2
-				continue
-			}
-			if v := lookup(varName); v != "" {
-				result.WriteString(v)
-			} else {
-				result.WriteString("${")
-				result.WriteString(varName)
-				result.WriteByte('}')
-			}
-			i += 2 + end + 1
-			continue
-		}
-
-		j := i + 1
-		for j < len(template) {
-			c := template[j]
-			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' {
-				j++
-			} else {
-				break
-			}
-		}
-
-		if j == i+1 {
-			result.WriteByte('$')
-			i++
-			continue
-		}
-
-		varName := template[i+1 : j]
-		if v := lookup(varName); v != "" {
-			result.WriteString(v)
-		} else {
-			result.WriteByte('$')
-			result.WriteString(varName)
-		}
-		i = j
-	}
-
-	return result.String()
+	return expandCore(template, func(name string) (string, bool) {
+		v := lookup(name)
+		return v, v != ""
+	}, true)
 }
