@@ -19,8 +19,13 @@ func RegisterNgxCtxAPI(L *glua.LState, ngxTable *glua.LTable) {
 func RegisterSchedulerUnsafeCtxAPI(L *glua.LState, ngx *glua.LTable) {
 	ctxTable := L.NewTable()
 	mt := L.NewTable()
-	mt.RawSetString("__index", L.NewFunction(luaSchedulerUnsafeCtx))
-	mt.RawSetString("__newindex", L.NewFunction(luaSchedulerUnsafeCtx))
+
+	methods := []APIMethod{
+		{Name: "__index", Func: luaSchedulerUnsafeCtx},
+		{Name: "__newindex", Func: luaSchedulerUnsafeCtx},
+	}
+	RegisterAPIMethods(L, mt, methods)
+
 	L.SetMetatable(ctxTable, mt)
 	ngx.RawSetString("ctx", ctxTable)
 }
