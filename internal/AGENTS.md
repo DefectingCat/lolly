@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-02 | Updated: 2026-04-09 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-13 -->
 
 # internal
 
@@ -20,13 +20,17 @@
 | `integration/` | 集成测试（多模块端到端协作验证） |
 | `loadbalance/` | 负载均衡策略（轮询、最少连接、健康检查） |
 | `logging/` | 日志系统（zerolog 初始化、访问日志） |
+| `lua/` | Lua 脚本引擎（OpenResty 风格沙箱、ngx API） |
 | `middleware/` | 中间件框架（接口定义、链式组合） |
+| `mimeutil/` | MIME 类型检测（扩展名映射、类型推断） |
 | `netutil/` | 网络工具函数（客户端 IP 提取、URL 解析） |
 | `proxy/` | 反向代理模块（HTTP/WebSocket 代理） |
 | `resolver/` | DNS 解析器（缓存、后台刷新、域名动态解析） |
 | `server/` | HTTP 服务器核心、虚拟主机、热升级、状态监控 |
 | `ssl/` | SSL/TLS 管理（证书加载、OCSP Stapling） |
+| `sslutil/` | SSL 工具函数（证书池加载、CA 信任链） |
 | `stream/` | TCP/UDP Stream 代理模块 |
+| `utils/` | HTTP 错误处理（统一错误响应助手） |
 | `variable/` | 变量系统（nginx 风格变量展开、日志格式模板） |
 
 ## For AI Agents

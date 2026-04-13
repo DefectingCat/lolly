@@ -1,4 +1,4 @@
-<!-- Generated: 2026-04-02 | Updated: 2026-04-09 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-13 -->
 
 # lolly
 
@@ -24,6 +24,8 @@
 | `internal/` | 核心业务代码（不可被外部导入） |
 | `bin/` | 编译输出目录 |
 | `docs/` | 项目文档和实现计划 |
+| `examples/` | Lua 脚本示例 |
+| `html/` | 静态 HTML 文件（测试/示例） |
 | `scripts/` | 构建/测试辅助脚本（回归检测） |
 | `.github/` | CI/CD 工作流定义 |
 

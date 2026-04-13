@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-02 | Updated: 2026-04-03 -->
+<!-- Generated: 2026-04-02 | Updated: 2026-04-13 -->
 
 # docs
 
@@ -15,6 +15,14 @@
 | `prompts.md` | 开发提示和 AI 交互指南 |
 | `comments.md` | 代码注释规范（必须遵循） |
 | `13-git-commit-guide.md` | Git 提交规范指南 |
+
+## Subdirectories
+
+| Directory | Purpose |
+|-----------|---------|
+| `config/` | nginx 配置示例和功能对照表 |
+| `lua/` | Lua 功能文档和 API 参考 |
+| `lua-nginx-module/` | lua-nginx-module 文档 |
 
 ### nginx 功能参考文档
 
