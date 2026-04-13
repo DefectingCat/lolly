@@ -628,32 +628,9 @@ func (p *Proxy) getClient(targetURL string) *fasthttp.HostClient {
 func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, _ *loadbalance.Target) {
 	headers := &ctx.Request.Header
 
-	// 添加 X-Real-IP 请求头
-	clientIP := netutil.ExtractClientIP(ctx)
-	if clientIP != "" {
-		headers.Set("X-Real-IP", clientIP)
-	}
-
-	// 添加/追加 X-Forwarded-For 请求头
-	existingXFF := headers.Peek("X-Forwarded-For")
-	if len(existingXFF) > 0 {
-		headers.Set("X-Forwarded-For", string(existingXFF)+", "+clientIP)
-	} else {
-		headers.Set("X-Forwarded-For", clientIP)
-	}
-
-	// 添加 X-Forwarded-Host 请求头
-	host := string(ctx.Host())
-	if host != "" {
-		headers.Set("X-Forwarded-Host", host)
-	}
-
-	// 添加 X-Forwarded-Proto 请求头
-	proto := "http"
-	if ctx.IsTLS() {
-		proto = protoHTTPS
-	}
-	headers.Set("X-Forwarded-Proto", proto)
+	// 提取并设置 X-Forwarded 系列头
+	fh := ExtractForwardedHeaders(ctx)
+	SetForwardedHeaders(headers, fh, true)
 
 	// 从配置设置自定义请求头（支持变量展开）
 	if p.config.Headers.SetRequest != nil {

@@ -287,22 +287,8 @@ func buildWebSocketUpgradeRequest(ctx *fasthttp.RequestCtx, targetHost string) s
 	}
 
 	// 添加 X-Forwarded 头
-	clientIP := netutil.ExtractClientIP(ctx)
-	if clientIP != "" {
-		fmt.Fprintf(&req, "X-Forwarded-For: %s\r\n", clientIP)
-		fmt.Fprintf(&req, "X-Real-IP: %s\r\n", clientIP)
-	}
-
-	host := string(ctx.Host())
-	if host != "" {
-		fmt.Fprintf(&req, "X-Forwarded-Host: %s\r\n", host)
-	}
-
-	proto := "http"
-	if ctx.IsTLS() {
-		proto = "https"
-	}
-	fmt.Fprintf(&req, "X-Forwarded-Proto: %s\r\n", proto)
+	fh := ExtractForwardedHeaders(ctx)
+	WriteForwardedHeaders(&req, fh)
 
 	// 结束请求头
 	req.WriteString("\r\n")
