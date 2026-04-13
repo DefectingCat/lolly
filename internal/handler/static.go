@@ -50,6 +50,7 @@ type StaticHandler struct {
 	tryFiles     []string
 	useSendfile  bool
 	tryFilesPass bool
+	symlinkCheck bool
 }
 
 // NewStaticHandler 创建静态文件处理器。
@@ -188,6 +189,17 @@ func (h *StaticHandler) SetTryFiles(tryFiles []string, tryFilesPass bool, router
 	h.tryFiles = tryFiles
 	h.tryFilesPass = tryFilesPass
 	h.router = router
+}
+
+// SetSymlinkCheck 设置符号链接安全检查。
+//
+// 启用后，服务文件前会验证符号链接指向的文件是否在允许的根目录范围内。
+// 防止通过符号链接访问敏感文件（如 /etc/passwd）。
+//
+// 参数：
+//   - enabled: 是否启用符号链接安全检查
+func (h *StaticHandler) SetSymlinkCheck(enabled bool) {
+	h.symlinkCheck = enabled
 }
 
 // Handle 处理静态文件请求。
@@ -423,6 +435,14 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 		return
 	}
 
+	// 符号链接安全检查
+	if h.symlinkCheck {
+		if err := h.validateSymlink(filePath); err != nil {
+			utils.SendError(ctx, utils.ErrForbidden)
+			return
+		}
+	}
+
 	// 如果是目录，尝试索引文件
 	if info.IsDir() {
 		for _, idx := range h.index {
@@ -503,4 +523,64 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 
 	ctx.Response.SetBody(data)
 	ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+}
+
+// validateSymlink 验证符号链接是否安全。
+//
+// 检查文件是否是符号链接，如果是则验证链接指向的文件
+// 是否在允许的根目录（root 或 alias）范围内。
+// 防止通过符号链接访问敏感文件（如 /etc/passwd）。
+//
+// 参数：
+//   - filePath: 要验证的文件路径
+//
+// 返回值：
+//   - error: 如果符号链接不安全或解析失败，返回错误
+func (h *StaticHandler) validateSymlink(filePath string) error {
+	// 获取文件信息（不跟随符号链接）
+	info, err := os.Lstat(filePath)
+	if err != nil {
+		return err
+	}
+
+	// 如果不是符号链接，直接返回成功
+	if info.Mode()&os.ModeSymlink == 0 {
+		return nil
+	}
+
+	// 获取符号链接指向的实际路径
+	realPath, err := filepath.EvalSymlinks(filePath)
+	if err != nil {
+		return err
+	}
+
+	// 获取允许的基础路径
+	basePath := h.root
+	if h.alias != "" {
+		basePath = h.alias
+	}
+
+	// 如果没有配置根目录，拒绝符号链接
+	if basePath == "" {
+		return os.ErrPermission
+	}
+
+	// 解析基础路径为绝对路径
+	absBase, err := filepath.Abs(basePath)
+	if err != nil {
+		return err
+	}
+
+	// 解析目标路径为绝对路径
+	absTarget, err := filepath.Abs(realPath)
+	if err != nil {
+		return err
+	}
+
+	// 确保目标路径在基础路径范围内
+	if !strings.HasPrefix(absTarget, absBase+string(filepath.Separator)) && absTarget != absBase {
+		return os.ErrPermission
+	}
+
+	return nil
 }

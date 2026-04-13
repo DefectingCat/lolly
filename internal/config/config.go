@@ -248,6 +248,11 @@ type StaticConfig struct {
 	// 默认为 false，内部重定向不触发中间件
 	// 设置为 true 时，try_files 回退会重新进入中间件链
 	TryFilesPass bool `yaml:"try_files_pass"`
+
+	// SymlinkCheck 是否启用符号链接安全检查
+	// 默认为 false，启用后会验证符号链接指向的文件是否在允许的路径范围内
+	// 防止通过符号链接访问敏感文件（如 /etc/passwd）
+	SymlinkCheck bool `yaml:"symlink_check"`
 }
 
 // ProxyConfig 反向代理配置，支持负载均衡和健康检查。
