@@ -104,14 +104,19 @@ func RegisterSharedDictAPI(L *glua.LState, manager *SharedDictManager, ngx *glua
 	L.SetField(mt, "methods", methods)
 }
 
-// dictIndex 字典索引方法
-func dictIndex(L *glua.LState) int {
+// checkSharedDict 检查并获取 SharedDict
+func checkSharedDict(L *glua.LState) *SharedDict {
 	ud := L.CheckUserData(1)
 	dict, ok := ud.Value.(*SharedDict)
 	if !ok {
 		L.RaiseError("invalid shared dict")
-		return 0
 	}
+	return dict
+}
+
+// dictIndex 字典索引方法
+func dictIndex(L *glua.LState) int {
+	dict := checkSharedDict(L)
 
 	key := L.CheckString(2)
 
@@ -144,12 +149,7 @@ func dictIndex(L *glua.LState) int {
 
 // dictNewIndex 字典设置方法
 func dictNewIndex(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	key := L.CheckString(2)
 	value := L.CheckString(3)
@@ -170,12 +170,7 @@ func dictNewIndex(L *glua.LState) int {
 
 // dictToString 字典字符串表示
 func dictToString(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.Push(glua.LString("invalid shared dict"))
-		return 1
-	}
+	dict := checkSharedDict(L)
 	L.Push(glua.LString("ngx.shared.dict:" + dict.name))
 	return 1
 }
@@ -183,12 +178,7 @@ func dictToString(L *glua.LState) int {
 // dictGet 获取值
 // dict:get(key) -> value, flags | nil, err
 func dictGet(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	key := L.CheckString(2)
 
@@ -215,12 +205,7 @@ func dictGet(L *glua.LState) int {
 // dictSet 设置值
 // dict:set(key, value, exptime?, flags?) -> ok, err
 func dictSet(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	key := L.CheckString(2)
 	value := L.CheckString(3)
@@ -250,12 +235,7 @@ func dictSet(L *glua.LState) int {
 // dictAdd 添加值（不存在时）
 // dict:add(key, value, exptime?, flags?) -> ok, err
 func dictAdd(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	key := L.CheckString(2)
 	value := L.CheckString(3)
@@ -283,12 +263,7 @@ func dictAdd(L *glua.LState) int {
 // dictReplace 替换值（存在时）
 // dict:replace(key, value, exptime?, flags?) -> ok, err
 func dictReplace(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	key := L.CheckString(2)
 	value := L.CheckString(3)
@@ -324,12 +299,7 @@ func dictReplace(L *glua.LState) int {
 // dictIncr 自增数值
 // dict:incr(key, value) -> new_value, err
 func dictIncr(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	key := L.CheckString(2)
 	increment := int(L.CheckNumber(3))
@@ -347,12 +317,7 @@ func dictIncr(L *glua.LState) int {
 // dictDelete 删除条目
 // dict:delete(key) -> ok
 func dictDelete(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	key := L.CheckString(2)
 	dict.Delete(key) //nolint:errcheck
@@ -363,12 +328,7 @@ func dictDelete(L *glua.LState) int {
 // dictFlushAll 清空字典
 // dict:flush_all()
 func dictFlushAll(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	dict.FlushAll() //nolint:errcheck
 	return 0
@@ -377,12 +337,7 @@ func dictFlushAll(L *glua.LState) int {
 // dictFlushExpired 清除过期条目
 // dict:flush_expired(max_count?) -> flushed_count
 func dictFlushExpired(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	count := dict.FlushExpired()
 	L.Push(glua.LNumber(count))
@@ -392,12 +347,8 @@ func dictFlushExpired(L *glua.LState) int {
 // dictGetKeys 获取所有键
 // dict:get_keys(max_count?) -> keys
 func dictGetKeys(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	_, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	//nolint:ineffassign,unused
+	_ = checkSharedDict(L)
 
 	// 暂不实现完整版，返回空表
 	keys := L.NewTable()
@@ -408,12 +359,7 @@ func dictGetKeys(L *glua.LState) int {
 // dictSize 获取条目数
 // dict:size() -> count
 func dictSize(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	L.Push(glua.LNumber(dict.Size()))
 	return 1
@@ -422,12 +368,7 @@ func dictSize(L *glua.LState) int {
 // dictFreeSpace 获取剩余容量
 // dict:free_space() -> slots
 func dictFreeSpace(L *glua.LState) int {
-	ud := L.CheckUserData(1)
-	dict, ok := ud.Value.(*SharedDict)
-	if !ok {
-		L.RaiseError("invalid shared dict")
-		return 0
-	}
+	dict := checkSharedDict(L)
 
 	L.Push(glua.LNumber(dict.FreeSlots()))
 	return 1
