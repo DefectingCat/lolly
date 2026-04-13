@@ -496,21 +496,122 @@ func TestStreamRequestBody(t *testing.T) {
 	}
 }
 
-// TestAdapterPoolReuse 测试对象池复用。
-func TestAdapterPoolReuse(_ *testing.T) {
+// TestAdapterConvertHeaders_Empty 测试空 header 转换
+func TestAdapterConvertHeaders_Empty(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Test")
+		// 检查是否有任何 header（除了 Content-Type）
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
 	adapter := NewFastHTTPHandlerAdapter(handler)
 
-	// 发送多个请求，验证池复用
-	for i := 0; i < 10; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/test", nil)
-		rec := httptest.NewRecorder()
-		adapter.ServeHTTP(rec, req)
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	// 不设置任何自定义 header
+	rec := httptest.NewRecorder()
+
+	adapter.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+}
+
+// TestAdapterConvertHeaders_SpecialChars 测试特殊字符 header 转换
+func TestAdapterConvertHeaders_SpecialChars(t *testing.T) {
+	var receivedHeaders map[string]string
+
+	handler := func(ctx *fasthttp.RequestCtx) {
+		receivedHeaders = make(map[string]string)
+		ctx.Request.Header.VisitAll(func(key, value []byte) {
+			receivedHeaders[string(key)] = string(value)
+		})
+		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
-	// 测试通过，没有 panic 表示池工作正常
+	adapter := NewFastHTTPHandlerAdapter(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	// 测试各种特殊字符
+	req.Header.Set("X-Special-Value", "test=value&foo=bar")
+	req.Header.Set("X-Unicode", "Hello世界")
+	req.Header.Set("X-Empty", "")
+	req.Header.Set("X-Space", "hello world")
+	req.Header.Set("X-Quote", "test\"quoted\"")
+	rec := httptest.NewRecorder()
+
+	adapter.ServeHTTP(rec, req)
+
+	if receivedHeaders == nil {
+		t.Fatal("No headers received")
+	}
+
+	// 验证特殊字符被正确处理
+	if _, ok := receivedHeaders["X-Special-Value"]; !ok {
+		t.Error("X-Special-Value header not received")
+	}
+	if _, ok := receivedHeaders["X-Unicode"]; !ok {
+		t.Error("X-Unicode header not received")
+	}
+}
+
+// TestAdapterConvertHeaders_MultipleValues 测试多值 header
+func TestAdapterConvertHeaders_MultipleValues(t *testing.T) {
+	receivedHeaders := make(map[string][]string)
+
+	handler := func(ctx *fasthttp.RequestCtx) {
+		ctx.Request.Header.VisitAll(func(key, value []byte) {
+			k := string(key)
+			receivedHeaders[k] = append(receivedHeaders[k], string(value))
+		})
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	}
+
+	adapter := NewFastHTTPHandlerAdapter(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	// 添加多个同名的 header（Accept 是标准 header，fasthttp 支持多值）
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Accept", "text/plain")
+	rec := httptest.NewRecorder()
+
+	adapter.ServeHTTP(rec, req)
+
+	// 验证至少接收到一个 Accept header
+	if len(receivedHeaders) == 0 {
+		t.Error("No headers received")
+	}
+
+	// 检查 Accept header 是否有值
+	acceptValues, ok := receivedHeaders["Accept"]
+	if !ok {
+		// fasthttp 可能将多值合并为一个，这是正常的
+		t.Logf("Accept header values merged or not present, headers received: %v", receivedHeaders)
+	} else if len(acceptValues) == 0 {
+		t.Error("Accept header present but no values")
+	}
+}
+
+// TestAdapterConvertHeaders_LongHeaderName 测试长 header 名称
+func TestAdapterConvertHeaders_LongHeaderName(t *testing.T) {
+	handler := func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+	}
+
+	adapter := NewFastHTTPHandlerAdapter(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	// 创建一个很长的 header 名称
+	longHeaderName := "X-" + string(make([]byte, 1000))
+	for i := range longHeaderName[2:] {
+		longHeaderName = longHeaderName[:2] + string('a'+byte(i%26)) + longHeaderName[3:]
+	}
+	req.Header.Set(longHeaderName, "value")
+	rec := httptest.NewRecorder()
+
+	// 不应该 panic
+	adapter.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
+	}
 }

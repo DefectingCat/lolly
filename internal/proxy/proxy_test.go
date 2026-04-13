@@ -1314,3 +1314,45 @@ func TestUpstreamTimingZero(t *testing.T) {
 		t.Errorf("GetConnectTime() after MarkConnectStart = %v, want 0", timing.GetConnectTime())
 	}
 }
+
+// TestUpstreamTiming_ZeroValues 测试 UpstreamTiming 完全零值情况
+func TestUpstreamTiming_ZeroValues(t *testing.T) {
+	// 创建一个零值的时间记录器（模拟未初始化的状态）
+	timing := &UpstreamTiming{}
+
+	// 所有时间应该返回 0
+	if timing.GetConnectTime() != 0 {
+		t.Errorf("Zero timing GetConnectTime() = %v, want 0", timing.GetConnectTime())
+	}
+	if timing.GetHeaderTime() != 0 {
+		t.Errorf("Zero timing GetHeaderTime() = %v, want 0", timing.GetHeaderTime())
+	}
+	if timing.GetResponseTime() != 0 {
+		t.Errorf("Zero timing GetResponseTime() = %v, want 0", timing.GetResponseTime())
+	}
+}
+
+// TestUpstreamTiming_PartialMarks 测试部分标记的情况
+func TestUpstreamTiming_PartialMarks(t *testing.T) {
+	timing := NewUpstreamTiming()
+
+	// 只标记 connectEnd，不标记 connectStart
+	timing.MarkConnectEnd()
+	if timing.GetConnectTime() != 0 {
+		t.Errorf("GetConnectTime() with only end marked = %v, want 0", timing.GetConnectTime())
+	}
+
+	// 重置并测试只有 headerReceived 的情况
+	timing = NewUpstreamTiming()
+	timing.MarkHeaderReceived()
+	if timing.GetHeaderTime() != 0 {
+		t.Errorf("GetHeaderTime() without connectEnd = %v, want 0", timing.GetHeaderTime())
+	}
+
+	// 重置并测试只有 responseEnd 的情况
+	timing = NewUpstreamTiming()
+	timing.MarkResponseEnd()
+	if timing.GetResponseTime() != 0 {
+		t.Errorf("GetResponseTime() without connectEnd = %v, want 0", timing.GetResponseTime())
+	}
+}

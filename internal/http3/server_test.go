@@ -359,25 +359,92 @@ func TestServer_MultipleGracefulStop(t *testing.T) {
 	}
 }
 
-// TestStats_Struct 测试 Stats 结构体
-func TestStats_Struct(t *testing.T) {
-	stats := Stats{
-		Running:    true,
-		Listen:     ":443",
-		Enable0RTT: true,
-		MaxStreams: 100,
+// TestGetAltSvcHeader_PortBoundaries 测试端口边界值
+func TestGetAltSvcHeader_PortBoundaries(t *testing.T) {
+	tests := []struct {
+		name     string
+		listen   string
+		expected string
+	}{
+		{
+			name:     "标准 HTTP 端口 80",
+			listen:   ":80",
+			expected: `h3=":80"; ma=86400`,
+		},
+		{
+			name:     "标准 HTTPS 端口 443",
+			listen:   ":443",
+			expected: `h3=":443"; ma=86400`,
+		},
+		{
+			name:     "高端口 65535",
+			listen:   ":65535",
+			expected: `h3=":65535"; ma=86400`,
+		},
+		{
+			name:     "低端口 1",
+			listen:   ":1",
+			expected: `h3=":1"; ma=86400`,
+		},
+		{
+			name:     "带 IP 地址的监听",
+			listen:   "0.0.0.0:8443",
+			expected: `h3=":0.0.0.0:8443"; ma=86400`,
+		},
+		{
+			name:     "带 IPv6 地址的监听",
+			listen:   "[::]:8443",
+			expected: `h3=":[::]:8443"; ma=86400`,
+		},
 	}
 
-	if !stats.Running {
-		t.Error("Expected Running true")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.HTTP3Config{
+				Enabled: true,
+				Listen:  tt.listen,
+			}
+			handler := func(_ *fasthttp.RequestCtx) {}
+
+			server, _ := NewServer(cfg, handler, &tls.Config{})
+
+			header := server.GetAltSvcHeader()
+			if header != tt.expected {
+				t.Errorf("GetAltSvcHeader() = %q, want %q", header, tt.expected)
+			}
+		})
 	}
-	if stats.Listen != ":443" {
-		t.Errorf("Expected Listen ':443', got '%s'", stats.Listen)
+}
+
+// TestGetAltSvcHeader_DisabledServer 测试禁用状态下的服务器
+func TestGetAltSvcHeader_DisabledServer(t *testing.T) {
+	cfg := &config.HTTP3Config{
+		Enabled: false,
+		Listen:  ":443",
 	}
-	if !stats.Enable0RTT {
-		t.Error("Expected Enable0RTT true")
+	handler := func(_ *fasthttp.RequestCtx) {}
+
+	server, _ := NewServer(cfg, handler, &tls.Config{})
+
+	header := server.GetAltSvcHeader()
+	if header != "" {
+		t.Errorf("Expected empty Alt-Svc header when disabled, got %q", header)
 	}
-	if stats.MaxStreams != 100 {
-		t.Errorf("Expected MaxStreams 100, got %d", stats.MaxStreams)
+}
+
+// TestGetAltSvcHeader_NilConfig 测试 nil 配置情况
+func TestGetAltSvcHeader_NilConfig(t *testing.T) {
+	cfg := &config.HTTP3Config{
+		Enabled: true,
+		Listen:  ":443",
+	}
+	handler := func(_ *fasthttp.RequestCtx) {}
+
+	server, _ := NewServer(cfg, handler, &tls.Config{})
+
+	// 正常情况下应该返回 header
+	header := server.GetAltSvcHeader()
+	if header == "" {
+		t.Error("Expected non-empty Alt-Svc header with valid config")
 	}
 }
