@@ -14,7 +14,6 @@ package variable
 
 import (
 	"crypto/tls"
-	"encoding/pem"
 	"fmt"
 
 	"github.com/valyala/fasthttp"
@@ -274,18 +273,4 @@ func calculateFingerprint(raw []byte) string {
 
 	// 格式化为十六进制
 	return fmt.Sprintf("%X", hash)
-}
-
-// parsePEMCertificate 解析 PEM 格式的证书。
-//
-// 参数：
-//   - pemData: PEM 编码的证书数据
-//
-// 返回值：
-//   - *pem.Block: 解析后的 PEM 块
-//   - []byte: 剩余数据
-//
-//nolint:unused // 保留用于未来 SSL 变量解析功能
-func parsePEMCertificate(pemData []byte) (*pem.Block, []byte) {
-	return pem.Decode(pemData)
 }

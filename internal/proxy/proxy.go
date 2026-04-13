@@ -680,19 +680,6 @@ func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
 	return strings.EqualFold(string(upgrade), "websocket")
 }
 
-// handleWebSocket 处理 WebSocket 升级请求（保留用于兼容性，实际逻辑在 ServeHTTP 中）
-//
-//nolint:unused // 保留用于未来 WebSocket 功能扩展
-func (p *Proxy) handleWebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, _ *fasthttp.HostClient) {
-	timeout := p.config.Timeout.Connect
-	if timeout == 0 {
-		timeout = 30 * time.Second
-	}
-	if err := WebSocket(ctx, target, timeout); err != nil {
-		logging.Error().Msgf("WebSocket proxy error: %v", err)
-	}
-}
-
 // UpdateTargets 更新代理目标并重新初始化客户端。
 // 适用于动态配置更新。
 func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
