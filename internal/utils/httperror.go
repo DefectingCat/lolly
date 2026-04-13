@@ -14,14 +14,14 @@ type HTTPError struct {
 
 // Predefined common HTTP errors.
 var (
-	ErrNotFound            = HTTPError{Message: "Not Found", StatusCode: fasthttp.StatusNotFound}
-	ErrForbidden           = HTTPError{Message: "Forbidden", StatusCode: fasthttp.StatusForbidden}
-	ErrUnauthorized        = HTTPError{Message: "Unauthorized", StatusCode: fasthttp.StatusUnauthorized}
-	ErrBadGateway          = HTTPError{Message: "Bad Gateway", StatusCode: fasthttp.StatusBadGateway}
-	ErrGatewayTimeout      = HTTPError{Message: "Gateway Timeout", StatusCode: fasthttp.StatusGatewayTimeout}
-	ErrInternalError       = HTTPError{Message: "Internal Server Error", StatusCode: fasthttp.StatusInternalServerError}
-	ErrTooManyRequests     = HTTPError{Message: "Too Many Requests", StatusCode: fasthttp.StatusTooManyRequests}
-	ErrServiceUnavailable  = HTTPError{Message: "Service Unavailable", StatusCode: fasthttp.StatusServiceUnavailable}
+	ErrNotFound           = HTTPError{Message: "Not Found", StatusCode: fasthttp.StatusNotFound}
+	ErrForbidden          = HTTPError{Message: "Forbidden", StatusCode: fasthttp.StatusForbidden}
+	ErrUnauthorized       = HTTPError{Message: "Unauthorized", StatusCode: fasthttp.StatusUnauthorized}
+	ErrBadGateway         = HTTPError{Message: "Bad Gateway", StatusCode: fasthttp.StatusBadGateway}
+	ErrGatewayTimeout     = HTTPError{Message: "Gateway Timeout", StatusCode: fasthttp.StatusGatewayTimeout}
+	ErrInternalError      = HTTPError{Message: "Internal Server Error", StatusCode: fasthttp.StatusInternalServerError}
+	ErrTooManyRequests    = HTTPError{Message: "Too Many Requests", StatusCode: fasthttp.StatusTooManyRequests}
+	ErrServiceUnavailable = HTTPError{Message: "Service Unavailable", StatusCode: fasthttp.StatusServiceUnavailable}
 )
 
 // SendError sends an HTTP error response to the client.
