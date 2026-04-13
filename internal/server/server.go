@@ -405,73 +405,23 @@ func (s *Server) Start() error {
 	// 记录启动时间
 	s.startTime = time.Now()
 
-	// 启用 GoroutinePool（如果配置）
-	if s.config.Performance.GoroutinePool.Enabled {
-		s.pool = NewGoroutinePool(PoolConfig{
-			MaxWorkers:  s.config.Performance.GoroutinePool.MaxWorkers,
-			MinWorkers:  s.config.Performance.GoroutinePool.MinWorkers,
-			IdleTimeout: s.config.Performance.GoroutinePool.IdleTimeout,
-		})
-		s.pool.Start()
+	// 初始化 GoroutinePool
+	s.pool = initGoroutinePool(&s.config.Performance)
+
+	// 初始化文件缓存
+	s.fileCache = initFileCache(&s.config.Performance)
+
+	// 初始化错误页面管理器
+	var err error
+	s.errorPageManager, err = initErrorPageManager(&s.config.Server.Security.ErrorPage)
+	if err != nil {
+		return err
 	}
 
-	// 启用文件缓存（如果配置）
-	if s.config.Performance.FileCache.MaxEntries > 0 || s.config.Performance.FileCache.MaxSize > 0 {
-		s.fileCache = cache.NewFileCache(
-			s.config.Performance.FileCache.MaxEntries,
-			s.config.Performance.FileCache.MaxSize,
-			s.config.Performance.FileCache.Inactive,
-		)
-	}
-
-	// 预加载错误页面（如果配置）
-	if s.config.Server.Security.ErrorPage.Pages != nil || s.config.Server.Security.ErrorPage.Default != "" {
-		var err error
-		s.errorPageManager, err = handler.NewErrorPageManager(&s.config.Server.Security.ErrorPage)
-		if err != nil {
-			// 检查是否是部分加载失败
-			if _, ok := err.(*handler.PartialLoadError); ok {
-				logging.Warn().Msg("部分错误页面加载失败: " + err.Error())
-			} else {
-				// 全部加载失败，阻止启动
-				return fmt.Errorf("加载错误页面失败: %w", err)
-			}
-		}
-	}
-
-	// 初始化 Lua 引擎（如果配置）
-	if s.config.Server.Lua != nil && s.config.Server.Lua.Enabled {
-		engineCfg := &lua.Config{
-			MaxConcurrentCoroutines: s.config.Server.Lua.GlobalSettings.MaxConcurrentCoroutines,
-			CoroutineTimeout:        s.config.Server.Lua.GlobalSettings.CoroutineTimeout,
-			CodeCacheSize:           s.config.Server.Lua.GlobalSettings.CodeCacheSize,
-			CodeCacheTTL:            time.Hour, // 默认值
-			EnableFileWatch:         s.config.Server.Lua.GlobalSettings.EnableFileWatch,
-			MaxExecutionTime:        s.config.Server.Lua.GlobalSettings.MaxExecutionTime,
-			EnableOSLib:             false, // 安全默认值
-			EnableIOLib:             false,
-			EnableLoadLib:           false,
-		}
-		// 设置默认值
-		if engineCfg.MaxConcurrentCoroutines == 0 {
-			engineCfg.MaxConcurrentCoroutines = 1000
-		}
-		if engineCfg.CoroutineTimeout == 0 {
-			engineCfg.CoroutineTimeout = 30 * time.Second
-		}
-		if engineCfg.CodeCacheSize == 0 {
-			engineCfg.CodeCacheSize = 1000
-		}
-		if engineCfg.MaxExecutionTime == 0 {
-			engineCfg.MaxExecutionTime = 30 * time.Second
-		}
-
-		var err error
-		s.luaEngine, err = lua.NewEngine(engineCfg)
-		if err != nil {
-			return fmt.Errorf("初始化 Lua 引擎失败: %w", err)
-		}
-		logging.Info().Msg("Lua 引擎已启动")
+	// 初始化 Lua 引擎
+	s.luaEngine, err = initLuaEngine(s.config.Server.Lua)
+	if err != nil {
+		return err
 	}
 
 	if s.config.HasServers() {

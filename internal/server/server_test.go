@@ -769,3 +769,32 @@ func TestGetTLSConfig_Nil(t *testing.T) {
 		t.Error("GetTLSConfig() should return nil when TLS not configured")
 	}
 }
+
+// TestGetTLSConfig_NilServer 测试 nil 服务器调用 GetTLSConfig
+func TestGetTLSConfig_NilServer(t *testing.T) {
+	var s *Server
+	// 防御性：如果 s 为 nil，调用方法会 panic，这是预期的行为
+	// 这里我们只测试非 nil 但 tlsManager 为 nil 的情况
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Listen: ":0",
+		},
+	}
+	s = New(cfg)
+
+	// 确保 tlsManager 为 nil
+	if s.tlsManager != nil {
+		t.Skip("tlsManager should be nil initially")
+	}
+
+	tlsCfg, err := s.GetTLSConfig()
+	if err == nil {
+		t.Error("Expected error when tlsManager is nil")
+	}
+	if tlsCfg != nil {
+		t.Error("Expected nil TLS config when tlsManager is nil")
+	}
+	if err.Error() != "TLS not configured" {
+		t.Errorf("Expected error 'TLS not configured', got: %v", err)
+	}
+}
