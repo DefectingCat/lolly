@@ -93,7 +93,7 @@ func NewTempFileManager(tempPath, threshold, maxSize string) (*TempFileManager, 
 	}
 
 	// 确保临时目录存在
-	if err := os.MkdirAll(tempPath, 0755); err != nil {
+	if err := os.MkdirAll(tempPath, 0o755); err != nil {
 		return nil, fmt.Errorf("创建临时目录失败: %w", err)
 	}
 
@@ -456,8 +456,10 @@ func (w *DynamicTempFileWriter) Cleanup() {
 }
 
 // defaultTempFileManager 默认临时文件管理器（未配置时使用）。
-var defaultTempFileManager *TempFileManager
-var defaultTempFileManagerOnce sync.Once
+var (
+	defaultTempFileManager     *TempFileManager
+	defaultTempFileManagerOnce sync.Once
+)
 
 // GetDefaultTempFileManager 获取默认临时文件管理器。
 //

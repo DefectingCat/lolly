@@ -35,7 +35,7 @@ func TestCopyFile(t *testing.T) {
 	tmpFile := filepath.Join(tmpDir, "test.txt")
 
 	content := []byte("Hello, World! This is test content for copyFile.")
-	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
@@ -145,7 +145,7 @@ func TestSendFile_SmallFile(t *testing.T) {
 	tmpFile := filepath.Join(tmpDir, "small.txt")
 
 	content := []byte("small file content")
-	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
@@ -174,7 +174,7 @@ func TestSendFile_WithOffset(t *testing.T) {
 	tmpFile := filepath.Join(tmpDir, "test.txt")
 
 	content := []byte("0123456789ABCDEF")
-	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
@@ -203,7 +203,7 @@ func TestSendFile_ZeroLength(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "empty.txt")
 
-	if err := os.WriteFile(tmpFile, []byte{}, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte{}, 0o644); err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
@@ -241,7 +241,7 @@ func TestCopyFile_Error(t *testing.T) {
 	tmpFile := filepath.Join(tmpDir, "test.txt")
 
 	content := []byte("test content")
-	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 
@@ -265,7 +265,7 @@ func TestLinuxSendfile_NilConn(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.txt")
 	content := []byte("test")
-	_ = os.WriteFile(tmpFile, content, 0644)
+	_ = os.WriteFile(tmpFile, content, 0o644)
 
 	file, err := os.Open(tmpFile)
 	if err != nil {

@@ -189,7 +189,6 @@ func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 
 	// 执行带超时的健康检查
 	err := h.client.DoTimeout(req, resp, h.timeout)
-
 	if err != nil {
 		// 连接失败或超时 - 标记为不健康
 		target.Healthy.Store(false)
