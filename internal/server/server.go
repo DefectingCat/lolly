@@ -744,17 +744,26 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 	}
 }
 
-// Stop 快速停止服务器。
+// StopWithTimeout 快速停止服务器（支持自定义超时）。
 //
 // 立即停止服务器，不等待正在处理的请求完成。
 // 停止所有健康检查器和访问日志中间件。
+//
+// 参数：
+//   - timeout: 快速关闭的最大等待时间
 //
 // 返回值：
 //   - error: 停止过程中遇到的错误
 //
 // 注意事项：
 //   - 对于生产环境，建议使用 GracefulStop 实现优雅关闭
-func (s *Server) Stop() error {
+//   - timeout <= 0 时会使用默认 5s 超时
+func (s *Server) StopWithTimeout(timeout time.Duration) error {
+	// 防御性检查：如果 timeout <= 0，使用默认值
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+
 	s.running = false
 
 	// 停止 Goroutine 池
@@ -785,8 +794,8 @@ func (s *Server) Stop() error {
 	}
 
 	if s.fastServer != nil {
-		// 快速停止也需要 timeout，防止无限等待空闲连接
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// 使用传入的 timeout
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		done := make(chan struct{})
@@ -805,6 +814,23 @@ func (s *Server) Stop() error {
 		}
 	}
 	return nil
+}
+
+// Stop 快速停止服务器（向后兼容，使用默认 5s 超时）。
+//
+// 立即停止服务器，不等待正在处理的请求完成。
+// 停止所有健康检查器和访问日志中间件。
+//
+// 返回值：
+//   - error: 停止过程中遇到的错误
+//
+// 注意事项：
+//   - 对于生产环境，建议使用 GracefulStop 实现优雅关闭
+//   - 此方法使用默认 5s 超时，如需自定义超时请使用 StopWithTimeout
+//
+// Deprecated: 使用 StopWithTimeout 替代以支持自定义超时
+func (s *Server) Stop() error {
+	return s.StopWithTimeout(5 * time.Second)
 }
 
 // GracefulStop 优雅停止服务器。
