@@ -52,7 +52,10 @@ func NewAdapter() *Adapter {
 func (a *Adapter) Wrap(handler fasthttp.RequestHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 从池中获取 RequestCtx
-		ctx := a.ctxPool.Get().(*fasthttp.RequestCtx) //nolint:errcheck // sync.Pool 类型转换
+		ctx, ok := a.ctxPool.Get().(*fasthttp.RequestCtx)
+		if !ok {
+			ctx = &fasthttp.RequestCtx{}
+		}
 		defer a.ctxPool.Put(ctx)
 
 		// 初始化 ctx（fasthttp 的 RequestCtx 需要 Init 方法）
@@ -104,7 +107,7 @@ func (a *Adapter) convertRequest(r *http.Request, ctx *fasthttp.RequestCtx) {
 		if err == nil {
 			ctx.Request.SetBody(body)
 		}
-		_ = r.Body.Close() //nolint:errcheck // 忽略关闭错误，只读操作
+		_ = r.Body.Close()
 	}
 
 	// 设置远程地址
@@ -141,7 +144,7 @@ func (a *Adapter) convertResponse(ctx *fasthttp.RequestCtx, w http.ResponseWrite
 	// 写入响应体
 	body := ctx.Response.Body()
 	if len(body) > 0 {
-		_, _ = w.Write(body) //nolint:errcheck // 忽略写入错误，无法恢复
+		_, _ = w.Write(body)
 	}
 }
 

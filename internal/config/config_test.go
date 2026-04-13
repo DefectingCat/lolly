@@ -38,7 +38,7 @@ monitoring:
 `
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "config.yaml")
-		if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
 			t.Fatalf("创建临时配置文件失败: %v", err)
 		}
 
@@ -74,7 +74,7 @@ server:
 `
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "invalid.yaml")
-		if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
 			t.Fatalf("创建临时配置文件失败: %v", err)
 		}
 
@@ -92,7 +92,7 @@ logging:
 `
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "no_server.yaml")
-		if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
 			t.Fatalf("创建临时配置文件失败: %v", err)
 		}
 
@@ -112,7 +112,7 @@ servers:
 `
 		tmpDir := t.TempDir()
 		tmpFile := filepath.Join(tmpDir, "multi.yaml")
-		if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(tmpFile, []byte(content), 0o644); err != nil {
 			t.Fatalf("创建临时配置文件失败: %v", err)
 		}
 

@@ -361,7 +361,7 @@ func (s *TCPSocket) Close() error {
 
 	// 关闭连接
 	if s.conn != nil {
-		s.conn.Close() //nolint:errcheck
+		s.conn.Close()
 		s.conn = nil
 	}
 
@@ -493,8 +493,11 @@ func newTCPSocketFunc(_ *LuaEngine) func(*glua.LState) int {
 		// 创建 userdata
 		ud := L.NewUserData()
 		ud.Value = socket
-		//nolint:errcheck // 类型断言检查
-		L.SetMetatable(ud, L.GetGlobal(tcpSocketMT).(*glua.LTable))
+		// 类型断言检查
+		mt, ok := L.GetGlobal(tcpSocketMT).(*glua.LTable)
+		if ok {
+			L.SetMetatable(ud, mt)
+		}
 
 		L.Push(ud)
 		return 1
@@ -731,7 +734,7 @@ func tcpSocketSetTimeouts(L *glua.LState) int {
 // tcpSocketGC __gc 元方法
 func tcpSocketGC(L *glua.LState) int {
 	socket := checkTCPSocket(L, 1)
-	socket.Close() //nolint:errcheck
+	socket.Close()
 	return 0
 }
 

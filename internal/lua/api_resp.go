@@ -57,8 +57,12 @@ func RegisterNgxRespAPI(L *glua.LState, api *ngxRespAPI) {
 	ngxResp.RawSetString("clear_header", L.NewFunction(api.luaClearHeader))
 
 	// 将 ngx.resp 添加到 ngx
-	//nolint:errcheck // 类型断言检查
-	ngx.(*glua.LTable).RawSetString("resp", ngxResp)
+	// 类型断言检查
+	ngxTable, ok := ngx.(*glua.LTable)
+	if !ok {
+		return
+	}
+	ngxTable.RawSetString("resp", ngxResp)
 }
 
 // ==================== API 实现 ====================

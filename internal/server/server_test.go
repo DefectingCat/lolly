@@ -407,7 +407,6 @@ func TestSetListeners(t *testing.T) {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer func() {
-
 		_ = listener1.Close()
 	}()
 
@@ -416,7 +415,6 @@ func TestSetListeners(t *testing.T) {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer func() {
-
 		_ = listener2.Close()
 	}()
 

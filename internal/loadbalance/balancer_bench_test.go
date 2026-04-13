@@ -186,6 +186,7 @@ func BenchmarkConsistentHashSelectExcluding(b *testing.B) {
 		})
 	}
 }
+
 func BenchmarkLeastConnSelect(b *testing.B) {
 	testCases := []struct {
 		name    string

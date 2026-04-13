@@ -283,8 +283,10 @@ var ResponseInterceptorPool = sync.Pool{
 
 // AcquireResponseInterceptor 从池中获取拦截器
 func AcquireResponseInterceptor(ctx *fasthttp.RequestCtx) *ResponseInterceptor {
-	//nolint:errcheck // 类型断言检查
-	ri := ResponseInterceptorPool.Get().(*ResponseInterceptor)
+	ri, ok := ResponseInterceptorPool.Get().(*ResponseInterceptor)
+	if !ok {
+		ri = &ResponseInterceptor{}
+	}
 	ri.ctx = ctx
 	ri.statusCode = 200
 	ri.customHeaders = make(map[string]string)
@@ -399,7 +401,6 @@ func (drw *DelayedResponseWriter) SetBodyStream(bodyStream io.Reader, bodySize i
 	// 流式 body 无法缓冲，直接设置
 	// 但在设置前应用 header filter
 	if drw.interceptor.headerFilterFunc != nil {
-		//nolint:errcheck // 错误可忽略
 		_ = drw.interceptor.headerFilterFunc()
 	}
 	drw.ctx.SetBodyStream(bodyStream, bodySize)
@@ -439,7 +440,6 @@ func (drw *DelayedResponseWriter) Redirect(uri string, statusCode int) {
 	}
 	// 重定向前应用 header filter
 	if drw.interceptor.headerFilterFunc != nil {
-		//nolint:errcheck // 错误可忽略
 		_ = drw.interceptor.headerFilterFunc()
 	}
 	drw.ctx.Redirect(uri, statusCode)
@@ -456,8 +456,11 @@ var bufferPool = sync.Pool{
 
 // acquireBuffer 获取缓冲区
 func acquireBuffer() []byte {
-	//nolint:errcheck // 类型断言检查
-	return *(bufferPool.Get().(*[]byte))
+	buf, ok := bufferPool.Get().(*[]byte)
+	if !ok {
+		return []byte{}
+	}
+	return *buf
 }
 
 // releaseBuffer 释放缓冲区

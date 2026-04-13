@@ -65,6 +65,7 @@ type Server struct {
 	handler             fasthttp.RequestHandler
 	accessLogMiddleware *accesslog.AccessLog
 	luaEngine           *lua.LuaEngine
+	accessControl       *security.AccessControl
 	errorPageManager    *handler.ErrorPageManager
 	fileCache           *cache.FileCache
 	pool                *GoroutinePool
@@ -186,6 +187,7 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 			return nil, fmt.Errorf("创建访问控制中间件失败: %w", err)
 		}
 		middlewares = append(middlewares, ac)
+		s.accessControl = ac
 	}
 
 	// 3. Security: RateLimiter (速率限制)
@@ -709,8 +711,8 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 			targets[j].Healthy.Store(true)
 		}
 
-		// 传递 Transport 配置
-		p, err := proxy.NewProxy(proxyCfg, targets, &s.config.Performance.Transport)
+		// 传递 Transport 配置和 Lua 引擎
+		p, err := proxy.NewProxy(proxyCfg, targets, &s.config.Performance.Transport, s.luaEngine)
 		if err != nil {
 			logging.Error().Msg("创建代理失败: " + err.Error())
 			continue
@@ -778,13 +780,19 @@ func (s *Server) StopWithTimeout(timeout time.Duration) error {
 
 	// 关闭访问日志
 	if s.accessLogMiddleware != nil {
-		//nolint:errcheck
 		_ = s.accessLogMiddleware.Close()
 	}
 
 	// 关闭 TLS 管理器
 	if s.tlsManager != nil {
 		s.tlsManager.Close()
+	}
+
+	// 关闭 AccessControl (释放 GeoIP 资源)
+	if s.accessControl != nil {
+		if err := s.accessControl.Close(); err != nil {
+			logging.Warn().Err(err).Msg("关闭 AccessControl 失败")
+		}
 	}
 
 	// 关闭 Lua 引擎
@@ -800,7 +808,6 @@ func (s *Server) StopWithTimeout(timeout time.Duration) error {
 
 		done := make(chan struct{})
 		go func() {
-			//nolint:errcheck
 			_ = s.fastServer.Shutdown()
 			close(done)
 		}()
@@ -862,13 +869,19 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 
 	// 关闭访问日志
 	if s.accessLogMiddleware != nil {
-		//nolint:errcheck
 		_ = s.accessLogMiddleware.Close()
 	}
 
 	// 关闭 TLS 管理器
 	if s.tlsManager != nil {
 		s.tlsManager.Close()
+	}
+
+	// 关闭 AccessControl (释放 GeoIP 资源)
+	if s.accessControl != nil {
+		if err := s.accessControl.Close(); err != nil {
+			logging.Warn().Err(err).Msg("关闭 AccessControl 失败")
+		}
 	}
 
 	// 关闭 Lua 引擎
@@ -883,7 +896,6 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 
 		done := make(chan struct{})
 		go func() {
-			//nolint:errcheck
 			_ = s.fastServer.Shutdown()
 			close(done)
 		}()

@@ -9,7 +9,6 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttputil"
-
 	"rua.plus/lolly/internal/benchmark/tools"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
@@ -73,7 +72,7 @@ func BenchmarkProxyForward(b *testing.B) {
 			}
 			targets[0].Healthy.Store(true)
 
-			p, err := NewProxy(cfg, targets, nil)
+			p, err := NewProxy(cfg, targets, nil, nil)
 			if err != nil {
 				b.Fatalf("NewProxy() error: %v", err)
 			}
@@ -116,7 +115,7 @@ func BenchmarkProxyForwardSmallRequest(b *testing.B) {
 	}
 	targets[0].Healthy.Store(true)
 
-	p, err := NewProxy(cfg, targets, nil)
+	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
 		b.Fatalf("NewProxy() error: %v", err)
 	}
@@ -163,7 +162,7 @@ func BenchmarkProxyForwardLargeRequest(b *testing.B) {
 	}
 	targets[0].Healthy.Store(true)
 
-	p, err := NewProxy(cfg, targets, nil)
+	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
 		b.Fatalf("NewProxy() error: %v", err)
 	}
@@ -213,7 +212,7 @@ func BenchmarkProxyForwardMultipleTargets(b *testing.B) {
 		},
 	}
 
-	p, err := NewProxy(cfg, targets, nil)
+	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
 		b.Fatalf("NewProxy() error: %v", err)
 	}
@@ -313,7 +312,7 @@ func BenchmarkProxyWithMockBackend(b *testing.B) {
 	}
 	targets[0].Healthy.Store(true)
 
-	p, err := NewProxy(cfg, targets, nil)
+	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
 		b.Fatalf("NewProxy() error: %v", err)
 	}
@@ -364,7 +363,7 @@ func BenchmarkProxyLoadBalancerSelection(b *testing.B) {
 				},
 			}
 
-			p, err := NewProxy(cfg, targets, nil)
+			p, err := NewProxy(cfg, targets, nil, nil)
 			if err != nil {
 				b.Fatalf("NewProxy() error: %v", err)
 			}
@@ -411,7 +410,7 @@ func BenchmarkProxyHeaderProcessing(b *testing.B) {
 	}
 	targets[0].Healthy.Store(true)
 
-	p, err := NewProxy(cfg, targets, nil)
+	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
 		b.Fatalf("NewProxy() error: %v", err)
 	}

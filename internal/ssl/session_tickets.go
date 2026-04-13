@@ -238,7 +238,7 @@ func (m *SessionTicketManager) scheduleRotation() {
 		case <-m.stopCh:
 			return
 		default:
-			_ = m.RotateKey() //nolint:errcheck
+			_ = m.RotateKey()
 			m.scheduleRotation()
 		}
 	})
@@ -319,7 +319,7 @@ func (m *SessionTicketManager) saveKeys() error {
 	}
 
 	// 使用 0600 权限写入文件（敏感数据，限制访问）
-	if err := os.WriteFile(m.config.KeyFile, data, 0600); err != nil {
+	if err := os.WriteFile(m.config.KeyFile, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write key file: %w", err)
 	}
 

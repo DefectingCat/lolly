@@ -288,7 +288,7 @@ func (a *App) handleSignal(sig os.Signal) bool {
 		a.logger.LogSignal(sigName(sig.(syscall.Signal)), "停止服务器")
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
-		_ = a.srv.StopWithTimeout(timeout) //nolint:errcheck // 使用新方法
+		_ = a.srv.StopWithTimeout(timeout)
 		return false
 	default:
 		a.logger.Info().Str("signal", sig.String()).Msg("收到信号（Windows 忽略）")

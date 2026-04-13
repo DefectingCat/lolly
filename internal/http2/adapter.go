@@ -216,7 +216,6 @@ func (a *FastHTTPHandlerAdapter) streamRequestBody(r *http.Request, ctx *fasthtt
 		return
 	}
 
-	//nolint:errcheck // defer 中忽略关闭错误是常见做法
 	defer func() {
 		_ = r.Body.Close()
 	}()

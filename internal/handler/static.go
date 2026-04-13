@@ -23,11 +23,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"rua.plus/lolly/internal/mimeutil"
-
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/middleware/compression"
+	"rua.plus/lolly/internal/mimeutil"
 	"rua.plus/lolly/internal/utils"
 )
 
@@ -481,7 +480,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 		file, err := os.Open(filePath)
 		if err == nil {
 			defer func() {
-				_ = file.Close() //nolint:errcheck
+				_ = file.Close()
 			}()
 			if err := SendFile(ctx, file, 0, info.Size()); err == nil {
 				return
@@ -499,7 +498,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 
 	// 存入缓存（仅对小文件缓存）
 	if h.fileCache != nil && info.Size() < 1024*1024 { // < 1MB
-		_ = h.fileCache.Set(filePath, data, info.Size(), info.ModTime()) //nolint:errcheck
+		_ = h.fileCache.Set(filePath, data, info.Size(), info.ModTime())
 	}
 
 	ctx.Response.SetBody(data)

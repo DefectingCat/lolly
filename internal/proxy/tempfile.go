@@ -219,7 +219,7 @@ func (tf *TempFile) WriteTo(ctx *fasthttp.RequestCtx, statusCode int) error {
 		return fmt.Errorf("打开临时文件失败: %w", err)
 	}
 	defer func() {
-		_ = file.Close() //nolint:errcheck
+		_ = file.Close()
 	}()
 
 	// 设置状态码
@@ -246,10 +246,10 @@ func (tf *TempFile) WriteTo(ctx *fasthttp.RequestCtx, statusCode int) error {
 // Close 关闭并删除临时文件。
 func (tf *TempFile) Close() error {
 	if tf.file != nil {
-		_ = tf.file.Close() //nolint:errcheck
+		_ = tf.file.Close()
 	}
 	if tf.path != "" {
-		_ = os.Remove(tf.path) //nolint:errcheck
+		_ = os.Remove(tf.path)
 	}
 	return nil
 }
@@ -402,7 +402,7 @@ func (w *DynamicTempFileWriter) Finalize(ctx *fasthttp.RequestCtx, statusCode in
 			return fmt.Errorf("打开临时文件失败: %w", err)
 		}
 		defer func() {
-			_ = file.Close() //nolint:errcheck
+			_ = file.Close()
 		}()
 
 		// 流式传输文件内容
@@ -416,14 +416,14 @@ func (w *DynamicTempFileWriter) Finalize(ctx *fasthttp.RequestCtx, statusCode in
 				break
 			}
 			if err != nil {
-				_ = file.Close() //nolint:errcheck
+				_ = file.Close()
 				return fmt.Errorf("读取临时文件失败: %w", err)
 			}
 		}
-		_ = file.Close() //nolint:errcheck
+		_ = file.Close()
 
 		// 删除临时文件
-		_ = os.Remove(w.tempFile.path) //nolint:errcheck
+		_ = os.Remove(w.tempFile.path)
 		w.manager.RemoveTempFile(w.tempFile.path)
 		return nil
 	}
@@ -446,7 +446,7 @@ func (w *DynamicTempFileWriter) GetTotalSize() int64 {
 // Cleanup 清理资源。
 func (w *DynamicTempFileWriter) Cleanup() {
 	if w.tempFile != nil {
-		_ = w.tempFile.Close() //nolint:errcheck
+		_ = w.tempFile.Close()
 		if w.tempFile.path != "" {
 			w.manager.RemoveTempFile(w.tempFile.path)
 		}

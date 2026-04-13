@@ -85,9 +85,9 @@ func NewPurgeAPI(cache *ProxyCache, cfg *config.CacheAPIConfig) (*PurgeAPI, erro
 			}
 			// 转换为 CIDR 格式
 			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32") //nolint:errcheck
+				_, network, _ = net.ParseCIDR(cidr + "/32")
 			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128") //nolint:errcheck
+				_, network, _ = net.ParseCIDR(cidr + "/128")
 			}
 		}
 		if network != nil {
@@ -150,7 +150,7 @@ func (p *PurgeAPI) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// 返回响应
 	ctx.SetContentType("application/json; charset=utf-8")
 	ctx.SetStatusCode(fasthttp.StatusOK)
-	json.NewEncoder(ctx).Encode(PurgeResponse{Deleted: deleted}) //nolint:errcheck
+	_ = json.NewEncoder(ctx).Encode(PurgeResponse{Deleted: deleted})
 }
 
 // checkAccess 检查客户端 IP 是否在允许列表中。
@@ -315,5 +315,5 @@ func matchPattern(pattern, path string) bool {
 func (p *PurgeAPI) sendError(ctx *fasthttp.RequestCtx, status int, errMsg string) {
 	ctx.SetContentType("application/json; charset=utf-8")
 	ctx.SetStatusCode(status)
-	json.NewEncoder(ctx).Encode(PurgeErrorResponse{Error: errMsg}) //nolint:errcheck
+	_ = json.NewEncoder(ctx).Encode(PurgeErrorResponse{Error: errMsg})
 }

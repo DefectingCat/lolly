@@ -121,8 +121,13 @@ func dictIndex(L *glua.LState) int {
 	key := L.CheckString(2)
 
 	// 检查是否是方法
-	//nolint:errcheck // 类型断言检查
-	methods := L.GetField(L.Get(1).(*glua.LUserData).Metatable, "methods")
+
+	ud, ok := L.Get(1).(*glua.LUserData)
+	if !ok {
+		L.RaiseError("expected userdata")
+		return 0
+	}
+	methods := L.GetField(ud.Metatable, "methods")
 	if method := L.GetField(methods, key); method != glua.LNil {
 		L.Push(method)
 		return 1
@@ -274,7 +279,7 @@ func dictReplace(L *glua.LState) int {
 	}
 
 	// 检查是否存在
-	_, expired, _ := dict.Get(key) //nolint:errcheck
+	_, expired, _ := dict.Get(key)
 	if expired {
 		L.Push(glua.LFalse)
 		L.Push(glua.LString("not found"))
@@ -320,7 +325,7 @@ func dictDelete(L *glua.LState) int {
 	dict := checkSharedDict(L)
 
 	key := L.CheckString(2)
-	dict.Delete(key) //nolint:errcheck
+	_ = dict.Delete(key) // Delete 返回错误，但在 Lua API 中忽略
 	L.Push(glua.LTrue)
 	return 1
 }
@@ -330,7 +335,7 @@ func dictDelete(L *glua.LState) int {
 func dictFlushAll(L *glua.LState) int {
 	dict := checkSharedDict(L)
 
-	dict.FlushAll() //nolint:errcheck
+	_ = dict.FlushAll() // FlushAll 返回错误，但在 Lua API 中忽略
 	return 0
 }
 

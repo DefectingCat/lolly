@@ -908,6 +908,7 @@ func TestConsistentHashSelectExcludingByKey(t *testing.T) {
 		}
 	})
 }
+
 func TestIsValidAlgorithm(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -247,8 +247,15 @@ func (d *SharedDict) evictExpired() int {
 
 	// 从 LRU 链表尾部（最久未使用）开始检查
 	for elem := d.lruList.Back(); elem != nil; {
-		//nolint:errcheck // 类型断言检查
-		key := elem.Value.(string)
+		// 类型断言检查
+		key, ok := elem.Value.(string)
+		if !ok {
+			// 类型不正确，移除元素
+			next := elem.Prev()
+			d.lruList.Remove(elem)
+			elem = next
+			continue
+		}
 		entry, ok := d.data[key]
 		if !ok {
 			// 数据不一致，跳过
@@ -282,8 +289,13 @@ func (d *SharedDict) evictLRU() bool {
 		return false
 	}
 
-	//nolint:errcheck // 类型断言检查
-	key := elem.Value.(string)
+	// 类型断言检查
+	key, ok := elem.Value.(string)
+	if !ok {
+		// 类型不正确，移除链表元素
+		d.lruList.Remove(elem)
+		return d.evictLRU()
+	}
 	entry, ok := d.data[key]
 	if ok {
 		d.deleteEntry(entry)

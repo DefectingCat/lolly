@@ -165,7 +165,7 @@ func (c *TempFileCleaner) cleanup() {
 
 		// 删除过期文件
 		fullPath := filepath.Join(c.tempPath, name)
-		_ = os.Remove(fullPath) //nolint:errcheck
+		_ = os.Remove(fullPath)
 	}
 }
 

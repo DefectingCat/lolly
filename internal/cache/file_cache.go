@@ -210,7 +210,10 @@ func (c *FileCache) evictLRU() {
 		return
 	}
 
-	entry := element.Value.(*FileEntry) //nolint:errcheck // 类型断言
+	entry, ok := element.Value.(*FileEntry)
+	if !ok {
+		return
+	}
 	c.removeEntry(entry)
 }
 

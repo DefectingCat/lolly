@@ -41,12 +41,7 @@ func TestIsChild(t *testing.T) {
 	}
 
 	// 设置环境变量
-
-	_ = os.Setenv("GRACEFUL_UPGRADE", "1")
-	defer func() {
-
-		_ = os.Unsetenv("GRACEFUL_UPGRADE")
-	}()
+	t.Setenv("GRACEFUL_UPGRADE", "1")
 
 	if !mgr.IsChild() {
 		t.Error("Expected IsChild to be true when GRACEFUL_UPGRADE=1")
@@ -56,7 +51,6 @@ func TestIsChild(t *testing.T) {
 func TestPidFile(t *testing.T) {
 	tmpFile := "/tmp/lolly-test.pid"
 	defer func() {
-
 		_ = os.Remove(tmpFile)
 	}()
 
@@ -132,7 +126,6 @@ func TestUpgradeSetListeners(t *testing.T) {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer func() {
-
 		_ = listener1.Close()
 	}()
 
@@ -141,7 +134,6 @@ func TestUpgradeSetListeners(t *testing.T) {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer func() {
-
 		_ = listener2.Close()
 	}()
 
@@ -168,12 +160,11 @@ func TestWritePid_NoPidFile(t *testing.T) {
 func TestReadOldPid_InvalidContent(t *testing.T) {
 	tmpFile := "/tmp/lolly-test-invalid.pid"
 	defer func() {
-
 		_ = os.Remove(tmpFile)
 	}()
 
 	// 写入无效内容
-	if err := os.WriteFile(tmpFile, []byte("not-a-pid"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("not-a-pid"), 0o644); err != nil {
 		t.Fatalf("Failed to write temp file: %v", err)
 	}
 
@@ -188,13 +179,6 @@ func TestReadOldPid_InvalidContent(t *testing.T) {
 
 // TestGetInheritedListeners_InvalidFds 测试 LISTEN_FDS 环境变量格式无效
 func TestGetInheritedListeners_InvalidFds(t *testing.T) {
-	// 保存原始环境变量
-	origFds := os.Getenv("LISTEN_FDS")
-	defer func() {
-
-		_ = os.Setenv("LISTEN_FDS", origFds)
-	}()
-
 	tests := []struct {
 		name    string
 		fdsEnv  string
@@ -219,8 +203,7 @@ func TestGetInheritedListeners_InvalidFds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
-			_ = os.Setenv("LISTEN_FDS", tt.fdsEnv)
+			t.Setenv("LISTEN_FDS", tt.fdsEnv)
 
 			mgr := NewUpgradeManager(nil)
 			_, err := mgr.GetInheritedListeners()
@@ -258,7 +241,6 @@ func TestListenerFile_TCPListener(t *testing.T) {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 	defer func() {
-
 		_ = listener.Close()
 	}()
 
@@ -267,7 +249,6 @@ func TestListenerFile_TCPListener(t *testing.T) {
 		t.Errorf("Failed to get listener file: %v", err)
 	}
 	if file != nil {
-
 		_ = file.Close()
 	}
 }
@@ -316,12 +297,11 @@ func TestNotifyOldProcess_WithCurrentPid(t *testing.T) {
 func TestReadOldPid_EmptyFile(t *testing.T) {
 	tmpFile := "/tmp/lolly-test-empty.pid"
 	defer func() {
-
 		_ = os.Remove(tmpFile)
 	}()
 
 	// 写入空内容
-	if err := os.WriteFile(tmpFile, []byte(""), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte(""), 0o644); err != nil {
 		t.Fatalf("Failed to write temp file: %v", err)
 	}
 

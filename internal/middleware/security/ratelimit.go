@@ -636,5 +636,7 @@ func addInt64(ptr *int64, delta int64) {
 
 // 验证接口实现
 // 验证接口实现
-var _ middleware.Middleware = (*RateLimiter)(nil)
-var _ middleware.Middleware = (*connLimiterMiddleware)(nil)
+var (
+	_ middleware.Middleware = (*RateLimiter)(nil)
+	_ middleware.Middleware = (*connLimiterMiddleware)(nil)
+)

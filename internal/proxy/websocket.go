@@ -227,11 +227,11 @@ func dialTarget(targetURL string, timeout time.Duration) (net.Conn, error) {
 			ServerName:         strings.Split(addr, ":")[0],
 		})
 		if err := tlsConn.SetDeadline(time.Now().Add(timeout)); err != nil {
-			_ = conn.Close() //nolint:errcheck // 错误处理中关闭连接
+			_ = conn.Close()
 			return nil, fmt.Errorf("failed to set TLS deadline: %w", err)
 		}
 		if err := tlsConn.Handshake(); err != nil {
-			_ = conn.Close() //nolint:errcheck // 错误处理中关闭连接
+			_ = conn.Close()
 			return nil, fmt.Errorf("TLS handshake failed: %w", err)
 		}
 		return tlsConn, nil
@@ -354,14 +354,14 @@ func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout tim
 	// 步骤1: 建立到后端目标的连接
 	targetConn, err := dialTarget(target.URL, timeout)
 	if err != nil {
-		_ = clientConn.Close() //nolint:errcheck
+		_ = clientConn.Close()
 		return fmt.Errorf("failed to connect to backend: %w", err)
 	}
 
 	// 创建桥接器管理两个连接
 	bridge := NewWebSocketBridge(clientConn, targetConn)
 	defer func() {
-		_ = bridge.Close() //nolint:errcheck
+		_ = bridge.Close()
 	}()
 
 	// 步骤2: 从目标 URL 提取主机地址
@@ -382,14 +382,14 @@ func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout tim
 	// 步骤5: 检查响应状态码（期望 101 Switching Protocols）
 	if resp.StatusCode != http.StatusSwitchingProtocols {
 		// 关闭响应 body（升级失败时）
-		_ = resp.Body.Close() //nolint:errcheck // 错误处理中关闭响应体
+		_ = resp.Body.Close()
 		return fmt.Errorf("backend rejected WebSocket upgrade: %s", resp.Status)
 	}
 
 	// 步骤6: 将升级响应发送回客户端
 	if err := writeUpgradeResponse(clientConn, resp); err != nil {
 		// 关闭响应 body（写入失败时）
-		_ = resp.Body.Close() //nolint:errcheck // 错误处理中关闭响应体
+		_ = resp.Body.Close()
 		return fmt.Errorf("failed to send upgrade response to client: %w", err)
 	}
 

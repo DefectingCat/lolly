@@ -345,8 +345,13 @@ func timerHandleIndex(L *glua.LState) int {
 	}
 
 	// 检查是否是方法
-	//nolint:errcheck // 类型断言检查
-	methods := L.GetField(L.Get(1).(*glua.LUserData).Metatable, "methods")
+	// 类型断言检查 - 使用已声明的 ud
+	userdata, ok := L.Get(1).(*glua.LUserData)
+	if !ok {
+		L.Push(glua.LNil)
+		return 1
+	}
+	methods := L.GetField(userdata.Metatable, "methods")
 	if method := L.GetField(methods, L.CheckString(2)); method != glua.LNil {
 		L.Push(method)
 		return 1

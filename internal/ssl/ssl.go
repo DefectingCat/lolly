@@ -176,7 +176,7 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 						manager.issuers[serial] = issuerCert
 						// 注册证书用于 OCSP Stapling
 						// 错误会记录日志但不会阻止 TLS 工作
-						_ = ocspMgr.RegisterCertificate(parsedCert, issuerCert) //nolint:errcheck
+						_ = ocspMgr.RegisterCertificate(parsedCert, issuerCert)
 					}
 				}
 

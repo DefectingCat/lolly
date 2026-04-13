@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 	glua "github.com/yuin/gopher-lua"
-
 	"rua.plus/lolly/internal/testutil"
 )
 

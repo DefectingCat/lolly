@@ -139,8 +139,12 @@ func RegisterLocationAPI(L *glua.LState, manager *LocationManager, ngx *glua.LTa
 					// 处理 headers 表
 					if keyStr == "headers" {
 						headers := make(map[string]string)
-						//nolint:errcheck // ForEach 错误在 glua 中不返回
-						value.(*glua.LTable).ForEach(func(hKey, hValue glua.LValue) {
+						// ForEach 不返回错误，但在类型断言前需要检查
+						tbl, ok := value.(*glua.LTable)
+						if !ok {
+							return // 跳过当前 ForEach 回调
+						}
+						tbl.ForEach(func(hKey, hValue glua.LValue) {
 							headers[glua.LVAsString(hKey)] = glua.LVAsString(hValue)
 						})
 						opts[keyStr] = headers

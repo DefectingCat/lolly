@@ -38,7 +38,6 @@ import (
 	"github.com/valyala/fasthttp"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/bcrypt"
-
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/middleware"
 )

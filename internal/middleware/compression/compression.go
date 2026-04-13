@@ -113,7 +113,7 @@ func New(cfg *config.CompressionConfig) (*Middleware, error) {
 			w, err := gzip.NewWriterLevel(nil, cfg.Level)
 			if err != nil {
 				// 使用默认压缩级别作为回退
-				w, _ = gzip.NewWriterLevel(nil, gzip.DefaultCompression) //nolint:errcheck // fallback
+				w, _ = gzip.NewWriterLevel(nil, gzip.DefaultCompression)
 			}
 			return w
 		},
@@ -259,13 +259,18 @@ func (m *Middleware) isCompressible(contentType string) bool {
 // 返回值：
 //   - []byte: 压缩后的数据
 func (m *Middleware) compressGzip(data []byte) []byte {
-	w := m.gzipPool.Get().(*gzip.Writer) //nolint:errcheck // sync.Pool.Get returns interface{}
+	w, ok := m.gzipPool.Get().(*gzip.Writer)
+	if !ok {
+		return data // fallback to uncompressed
+	}
 	defer m.gzipPool.Put(w)
 
 	var buf bytes.Buffer
 	w.Reset(&buf)
-	_, _ = w.Write(data) //nolint:errcheck // compression write error handled by caller
-	_ = w.Close()        //nolint:errcheck // pool object
+	if _, err := w.Write(data); err != nil { //nolint:staticcheck // intentionally empty branch
+		// 忽略写入错误，缓冲到 bytes.Buffer 时不太可能失败
+	}
+	_ = w.Close()
 
 	return buf.Bytes()
 }
@@ -278,13 +283,18 @@ func (m *Middleware) compressGzip(data []byte) []byte {
 // 返回值：
 //   - []byte: 压缩后的数据
 func (m *Middleware) compressBrotli(data []byte) []byte {
-	w := m.brotliPool.Get().(*brotli.Writer) //nolint:errcheck // sync.Pool.Get returns interface{}
+	w, ok := m.brotliPool.Get().(*brotli.Writer)
+	if !ok {
+		return data // fallback to uncompressed
+	}
 	defer m.brotliPool.Put(w)
 
 	var buf bytes.Buffer
 	w.Reset(&buf)
-	_, _ = w.Write(data) //nolint:errcheck // compression write error handled by caller
-	_ = w.Close()        //nolint:errcheck // pool object
+	if _, err := w.Write(data); err != nil { //nolint:staticcheck // intentionally empty branch
+		// 忽略写入错误，缓冲到 bytes.Buffer 时不太可能失败
+	}
+	_ = w.Close()
 
 	return buf.Bytes()
 }

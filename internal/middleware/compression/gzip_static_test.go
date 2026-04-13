@@ -28,10 +28,10 @@ func TestGzipStaticServeFile_BrotliPriority(t *testing.T) {
 	brFile := filepath.Join(tmpDir, "test.js.br")
 	gzFile := filepath.Join(tmpDir, "test.js.gz")
 
-	if err := os.WriteFile(brFile, []byte("br content"), 0644); err != nil {
+	if err := os.WriteFile(brFile, []byte("br content"), 0o644); err != nil {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
-	if err := os.WriteFile(gzFile, []byte("gz content"), 0644); err != nil {
+	if err := os.WriteFile(gzFile, []byte("gz content"), 0o644); err != nil {
 		t.Fatalf("创建 .gz 文件失败: %v", err)
 	}
 
@@ -115,7 +115,7 @@ func TestGzipStaticServeFile_GzipFallback(t *testing.T) {
 
 	// 只创建 .gz 文件
 	gzFile := filepath.Join(tmpDir, "test.css.gz")
-	if err := os.WriteFile(gzFile, []byte("gz content"), 0644); err != nil {
+	if err := os.WriteFile(gzFile, []byte("gz content"), 0o644); err != nil {
 		t.Fatalf("创建 .gz 文件失败: %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestGzipStaticServeFile_AcceptEncodingParsing(t *testing.T) {
 
 	// 创建测试文件
 	brFile := filepath.Join(tmpDir, "test.html.br")
-	if err := os.WriteFile(brFile, []byte("br content"), 0644); err != nil {
+	if err := os.WriteFile(brFile, []byte("br content"), 0o644); err != nil {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 
@@ -236,7 +236,7 @@ func TestGzipStaticServeFile_Disabled(t *testing.T) {
 
 	// 创建测试文件
 	brFile := filepath.Join(tmpDir, "test.js.br")
-	if err := os.WriteFile(brFile, []byte("br content"), 0644); err != nil {
+	if err := os.WriteFile(brFile, []byte("br content"), 0o644); err != nil {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 
@@ -259,7 +259,7 @@ func TestGzipStaticServeFile_InvalidExtension(t *testing.T) {
 
 	// 创建测试文件
 	brFile := filepath.Join(tmpDir, "test.exe.br")
-	if err := os.WriteFile(brFile, []byte("br content"), 0644); err != nil {
+	if err := os.WriteFile(brFile, []byte("br content"), 0o644); err != nil {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 
@@ -281,7 +281,7 @@ func TestGzipStaticServeFile_PathTraversal(t *testing.T) {
 
 	// 创建测试文件
 	brFile := filepath.Join(tmpDir, "test.js.br")
-	if err := os.WriteFile(brFile, []byte("br content"), 0644); err != nil {
+	if err := os.WriteFile(brFile, []byte("br content"), 0o644); err != nil {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 
@@ -304,7 +304,7 @@ func TestGzipStaticServeFile_VaryHeader(t *testing.T) {
 
 	// 创建测试文件
 	brFile := filepath.Join(tmpDir, "test.js.br")
-	if err := os.WriteFile(brFile, []byte("br content"), 0644); err != nil {
+	if err := os.WriteFile(brFile, []byte("br content"), 0o644); err != nil {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 
@@ -455,7 +455,7 @@ func TestTryServeFile(t *testing.T) {
 
 	// 创建测试文件
 	brFile := filepath.Join(tmpDir, "test.js.br")
-	if err := os.WriteFile(brFile, []byte("br content"), 0644); err != nil {
+	if err := os.WriteFile(brFile, []byte("br content"), 0o644); err != nil {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 

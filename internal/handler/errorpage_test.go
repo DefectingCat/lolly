@@ -77,7 +77,7 @@ func TestNewErrorPageManager_PartialLoadFailure(t *testing.T) {
 
 	// 创建有效的错误页面文件
 	validPage := filepath.Join(tmpDir, "404.html")
-	if err := os.WriteFile(validPage, []byte("404 page"), 0644); err != nil {
+	if err := os.WriteFile(validPage, []byte("404 page"), 0o644); err != nil {
 		t.Fatalf("创建测试文件失败: %v", err)
 	}
 
@@ -284,13 +284,13 @@ func TestErrorPageManager_GetPage(t *testing.T) {
 	page500 := filepath.Join(tmpDir, "500.html")
 	pageDefault := filepath.Join(tmpDir, "default.html")
 
-	if err := os.WriteFile(page404, []byte("404 page content"), 0644); err != nil {
+	if err := os.WriteFile(page404, []byte("404 page content"), 0o644); err != nil {
 		t.Fatalf("创建 404 页面失败: %v", err)
 	}
-	if err := os.WriteFile(page500, []byte("500 page content"), 0644); err != nil {
+	if err := os.WriteFile(page500, []byte("500 page content"), 0o644); err != nil {
 		t.Fatalf("创建 500 页面失败: %v", err)
 	}
-	if err := os.WriteFile(pageDefault, []byte("default page content"), 0644); err != nil {
+	if err := os.WriteFile(pageDefault, []byte("default page content"), 0o644); err != nil {
 		t.Fatalf("创建默认页面失败: %v", err)
 	}
 
@@ -392,7 +392,7 @@ func TestErrorPageManager_GetPage_WithResponseCodeOverride(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	page404 := filepath.Join(tmpDir, "404.html")
-	if err := os.WriteFile(page404, []byte("404 page"), 0644); err != nil {
+	if err := os.WriteFile(page404, []byte("404 page"), 0o644); err != nil {
 		t.Fatalf("创建测试文件失败: %v", err)
 	}
 
@@ -437,10 +437,10 @@ func TestErrorPageManager_HasPage(t *testing.T) {
 	page404 := filepath.Join(tmpDir, "404.html")
 	pageDefault := filepath.Join(tmpDir, "default.html")
 
-	if err := os.WriteFile(page404, []byte("404"), 0644); err != nil {
+	if err := os.WriteFile(page404, []byte("404"), 0o644); err != nil {
 		t.Fatalf("创建测试文件失败: %v", err)
 	}
-	if err := os.WriteFile(pageDefault, []byte("default"), 0644); err != nil {
+	if err := os.WriteFile(pageDefault, []byte("default"), 0o644); err != nil {
 		t.Fatalf("创建测试文件失败: %v", err)
 	}
 
@@ -547,10 +547,10 @@ func TestErrorPageManager_IsConfigured(t *testing.T) {
 	page404 := filepath.Join(tmpDir, "404.html")
 	pageDefault := filepath.Join(tmpDir, "default.html")
 
-	if err := os.WriteFile(page404, []byte("404"), 0644); err != nil {
+	if err := os.WriteFile(page404, []byte("404"), 0o644); err != nil {
 		t.Fatalf("创建测试文件失败: %v", err)
 	}
-	if err := os.WriteFile(pageDefault, []byte("default"), 0644); err != nil {
+	if err := os.WriteFile(pageDefault, []byte("default"), 0o644); err != nil {
 		t.Fatalf("创建测试文件失败: %v", err)
 	}
 
@@ -616,11 +616,11 @@ func TestErrorPageManager_SuccessfulLoad(t *testing.T) {
 
 	for code, path := range pages {
 		content := []byte(fmt.Sprintf("Error %d page", code))
-		if err := os.WriteFile(path, content, 0644); err != nil {
+		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("创建页面 %d 失败: %v", code, err)
 		}
 	}
-	if err := os.WriteFile(defaultPage, []byte("Default error page"), 0644); err != nil {
+	if err := os.WriteFile(defaultPage, []byte("Default error page"), 0o644); err != nil {
 		t.Fatalf("创建默认页面失败: %v", err)
 	}
 

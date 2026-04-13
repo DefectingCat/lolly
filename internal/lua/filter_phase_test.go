@@ -284,7 +284,7 @@ func TestConcurrentAccess(t *testing.T) {
 	close(errors)
 
 	// 收集错误
-	var errList []error
+	errList := make([]error, 0, 100)
 	for err := range errors {
 		errList = append(errList, err)
 	}

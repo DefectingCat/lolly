@@ -37,7 +37,18 @@ import (
 	"time"
 )
 
-// Balancer 负载均衡器接口（stream 专用）。
+// Balancer Stream 代理（L4 层）负载均衡器接口。
+//
+// Stream Balancer 特性（区别于 HTTP Balancer）：
+//   - 仅 Select(): 按算法策略选择健康目标
+//   - 无 SelectExcluding(): Stream 代理无 failover 重试机制
+//
+// 语义差异说明：
+//   - Stream 代理工作在传输层（L4），连接建立后直接转发数据，无应用层重试
+//   - HTTP 代理工作在应用层（L7），支持 next_upstream 配置的失败重试
+//   - 因此 Stream Balancer 接口签名更简单，仅需要 Select 方法
+//   - HTTP Balancer 需要 SelectExcluding 用于排除失败节点
+//   - 两种 Balancer 接口签名不同，不可合并
 type Balancer interface {
 	Select(targets []*Target) *Target
 }
@@ -284,7 +295,18 @@ type Upstream struct {
 	mu        sync.RWMutex
 }
 
-// Target Stream 目标服务器。
+// Target Stream 代理（L4 层）的目标服务器。
+//
+// Stream Target 特性（区别于 HTTP Target）：
+//   - 简单地址：仅支持 host:port 格式，无 URL 解析
+//   - 无 DNS 缓存：直接连接目标地址，无需动态 DNS 解析
+//   - 无 failover：Stream 代理无重试机制，仅记录健康状态
+//
+// 语义差异说明：
+//   - Stream 代理工作在传输层（L4），直接转发 TCP/UDP 数据
+//   - HTTP 代理工作在应用层（L7），需要 URL 解析和 DNS 动态解析
+//   - 因此 Stream Target 保持简单结构，HTTP Target 需要 DNS 缓存等复杂功能
+//   - 两种 Target 必须保持独立定义，不可合并
 type Target struct {
 	// addr 目标地址（host:port）
 	addr string
@@ -503,7 +525,7 @@ func (s *Server) acceptLoop(addr string, listener net.Listener) {
 //   - addr: 监听地址
 func (s *Server) handleConnection(clientConn net.Conn, _ string) {
 	defer func() {
-		_ = clientConn.Close() //nolint:errcheck
+		_ = clientConn.Close()
 		s.connCount--
 	}()
 
@@ -535,11 +557,11 @@ func (s *Server) handleConnection(clientConn net.Conn, _ string) {
 		target.healthy.Store(false)
 		return
 	}
-	defer func() { _ = targetConn.Close() }() //nolint:errcheck
+	defer func() { _ = targetConn.Close() }()
 
 	// 双向数据转发
-	go func() { _, _ = io.Copy(targetConn, clientConn) }() //nolint:errcheck
-	_, _ = io.Copy(clientConn, targetConn)                 //nolint:errcheck
+	go func() { _, _ = io.Copy(targetConn, clientConn) }()
+	_, _ = io.Copy(clientConn, targetConn)
 }
 
 // Select 选择健康的上游目标。
@@ -588,7 +610,7 @@ func (h *HealthChecker) check() {
 		if err != nil {
 			target.healthy.Store(false)
 		} else {
-			_ = conn.Close() //nolint:errcheck
+			_ = conn.Close()
 			target.healthy.Store(true)
 		}
 	}
@@ -608,7 +630,7 @@ func (s *Server) Stop() error {
 
 	// 关闭所有 TCP 监听器
 	for _, listener := range s.listeners {
-		_ = listener.Close() //nolint:errcheck
+		_ = listener.Close()
 	}
 
 	// 停止所有 UDP 服务器
@@ -838,7 +860,7 @@ func (s *udpServer) removeSession(clientAddr *net.UDPAddr) {
 func (sess *udpSession) close() {
 	sess.closeOnce.Do(func() {
 		if sess.targetConn != nil {
-			_ = sess.targetConn.Close() //nolint:errcheck
+			_ = sess.targetConn.Close()
 		}
 	})
 }
@@ -857,7 +879,7 @@ func (sess *udpSession) handleBackendResponse() {
 	buf := make([]byte, 65535)
 	for {
 		// 设置读取超时
-		_ = sess.targetConn.SetReadDeadline(time.Now().Add(sess.srv.timeout)) //nolint:errcheck
+		_ = sess.targetConn.SetReadDeadline(time.Now().Add(sess.srv.timeout))
 
 		n, err := sess.targetConn.Read(buf)
 		if err != nil {
@@ -908,7 +930,7 @@ func (s *udpServer) serve() {
 	buf := make([]byte, 65535)
 	for s.running.Load() {
 		// 设置读取超时，以便定期检查 stopCh
-		_ = s.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond)) //nolint:errcheck
+		_ = s.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 
 		n, clientAddr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
@@ -997,5 +1019,5 @@ func (s *udpServer) stop() {
 	s.wg.Wait()
 
 	// 关闭连接
-	_ = s.conn.Close() //nolint:errcheck
+	_ = s.conn.Close()
 }

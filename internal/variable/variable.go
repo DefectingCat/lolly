@@ -122,7 +122,11 @@ func GetBuiltin(name string) *BuiltinVariable {
 
 // NewContext 从池中获取 Context，并注入全局变量。
 func NewContext(ctx *fasthttp.RequestCtx) *Context {
-	vc := pool.Get().(*Context) //nolint:errcheck // 类型断言
+	vc, ok := pool.Get().(*Context)
+	if !ok {
+		// 池中类型不正确时返回新 Context
+		return &Context{ctx: ctx}
+	}
 	vc.ctx = ctx
 	vc.status = 0
 	vc.bodySize = 0

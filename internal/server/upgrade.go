@@ -94,7 +94,7 @@ func (u *UpgradeManager) WritePid() error {
 	}
 
 	pid := os.Getpid()
-	return os.WriteFile(u.pidFile, []byte(fmt.Sprintf("%d", pid)), 0644)
+	return os.WriteFile(u.pidFile, []byte(fmt.Sprintf("%d", pid)), 0o644)
 }
 
 // ReadOldPid 读取旧进程 PID。
@@ -161,7 +161,7 @@ func (u *UpgradeManager) GetInheritedListeners() ([]net.Listener, error) {
 
 		listener, err := net.FileListener(file)
 		if err != nil {
-			//nolint:errcheck
+
 			_ = file.Close()
 			continue
 		}
@@ -223,21 +223,21 @@ func (u *UpgradeManager) GracefulUpgrade(newBinary string) error {
 
 	// 写入新 PID 到文件
 	if u.pidFile != "" {
-		//nolint:errcheck
-		_ = os.WriteFile(u.pidFile, []byte(fmt.Sprintf("%d", newPid)), 0644)
+
+		_ = os.WriteFile(u.pidFile, []byte(fmt.Sprintf("%d", newPid)), 0o644)
 	}
 
 	// 启动 goroutine 等待子进程结束，避免产生僵尸进程
 	// cmd.Wait() 会回收子进程资源，确保不会产生 defunct 进程
 	go func() {
-		//nolint:errcheck
+
 		_ = cmd.Wait()
 	}()
 
 	// 关闭父进程中的文件描述符副本（子进程已继承）
 	// 避免文件描述符泄漏
 	for _, file := range files {
-		//nolint:errcheck
+
 		_ = file.Close()
 	}
 
@@ -294,8 +294,8 @@ func (u *UpgradeManager) WaitForShutdown(timeout time.Duration) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	process, _ := os.FindProcess(u.oldPid) //nolint:errcheck
-	//nolint:errcheck
+	process, _ := os.FindProcess(u.oldPid)
+
 	_ = process.Signal(syscall.SIGKILL)
 	return fmt.Errorf("old process did not shutdown gracefully")
 }
@@ -334,7 +334,7 @@ func (u *UpgradeManager) SetupSignalHandlers(newBinary string) {
 	go func() {
 		for sig := range sigCh {
 			if sig == syscall.SIGUSR2 {
-				//nolint:errcheck
+
 				_ = u.GracefulUpgrade(newBinary)
 			}
 		}

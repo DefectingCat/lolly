@@ -116,7 +116,7 @@ func (c *LuaContext) FlushOutput() {
 		// 在响应刷新场景中，我们选择忽略错误，因为：
 		// 1. fasthttp.RequestCtx.Write 内部已经处理了连接状态
 		// 2. 此阶段出错时请求处理已完成，无法向客户端报告
-		_, _ = c.RequestCtx.Write(c.OutputBuffer) //nolint:errcheck
+		_, _ = c.RequestCtx.Write(c.OutputBuffer)
 		c.OutputBuffer = c.OutputBuffer[:0]
 	}
 }

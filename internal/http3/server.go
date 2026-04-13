@@ -28,6 +28,10 @@ import (
 	"rua.plus/lolly/internal/logging"
 )
 
+const (
+	defaultHTTP3Listen = ":443"
+)
+
 // Server HTTP/3 服务器。
 //
 // 使用 QUIC 协议提供 HTTP/3 服务，与现有的 TCP 服务器并行运行。
@@ -132,7 +136,7 @@ func (s *Server) Start() error {
 	// 创建 UDP 监听器
 	listenAddr := s.config.Listen
 	if listenAddr == "" {
-		listenAddr = ":443"
+		listenAddr = defaultHTTP3Listen
 	}
 
 	udpAddr, err := net.ResolveUDPAddr("udp", listenAddr)
@@ -148,7 +152,7 @@ func (s *Server) Start() error {
 	// 创建 QUIC 监听器
 	s.listener, err = quic.ListenEarly(udpConn, s.tlsConfig, quicConfig)
 	if err != nil {
-		_ = udpConn.Close() //nolint:errcheck // 忽略关闭错误
+		_ = udpConn.Close()
 		return fmt.Errorf("failed to listen QUIC: %w", err)
 	}
 
@@ -229,7 +233,7 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 
 		done := make(chan struct{})
 		go func() {
-			_ = s.http3Server.Close() //nolint:errcheck // 忽略关闭错误
+			_ = s.http3Server.Close()
 			close(done)
 		}()
 
@@ -264,7 +268,7 @@ func (s *Server) GetAltSvcHeader() string {
 
 	listen := s.config.Listen
 	if listen == "" {
-		listen = ":443"
+		listen = defaultHTTP3Listen
 	}
 
 	// 移除前导冒号，保留端口

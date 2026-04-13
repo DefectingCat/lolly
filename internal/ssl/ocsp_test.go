@@ -212,10 +212,10 @@ func TestTLSManagerWithOCSPDisabled(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	certPEM, keyPEM := generateTestCertWithOCSP(t, nil)
-	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -245,10 +245,10 @@ func TestTLSManagerGetOCSPStatus(t *testing.T) {
 
 	// Generate cert without OCSP server
 	certPEM, keyPEM := generateTestCertWithOCSP(t, nil)
-	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -283,10 +283,10 @@ func TestTLSManagerClose(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	certPEM, keyPEM := generateTestCertWithOCSP(t, nil)
-	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 

@@ -173,6 +173,7 @@ func TestSigName(t *testing.T) {
 		})
 	}
 }
+
 func TestRun(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -425,7 +426,7 @@ logging:
   error:
     level: "info"
 `
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
 	}
 
@@ -530,7 +531,7 @@ logging:
   error:
     level: "debug"
 `
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
 	}
 
@@ -696,7 +697,7 @@ logging:
   error:
     level: "info"
 `
-	if err := os.WriteFile(cfgPath1, []byte(cfgContent1), 0644); err != nil {
+	if err := os.WriteFile(cfgPath1, []byte(cfgContent1), 0o644); err != nil {
 		t.Fatalf("Failed to write config1: %v", err)
 	}
 
@@ -709,7 +710,7 @@ logging:
   error:
     level: "debug"
 `
-	if err := os.WriteFile(cfgPath2, []byte(cfgContent2), 0644); err != nil {
+	if err := os.WriteFile(cfgPath2, []byte(cfgContent2), 0o644); err != nil {
 		t.Fatalf("Failed to write config2: %v", err)
 	}
 
@@ -746,7 +747,7 @@ logging:
   error:
     level: "info"
 `
-	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(cfgContent), 0o644); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
 	}
 

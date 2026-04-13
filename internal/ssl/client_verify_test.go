@@ -161,7 +161,7 @@ func TestLoadCACertPool(t *testing.T) {
 	caFile := filepath.Join(tempDir, "ca.crt")
 
 	_, _, caPEM := generateTestCA(t)
-	if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 		t.Fatalf("Failed to write CA file: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func TestLoadCACertPool(t *testing.T) {
 
 	// 测试无效证书
 	invalidFile := filepath.Join(tempDir, "invalid.crt")
-	if err := os.WriteFile(invalidFile, []byte("invalid data"), 0644); err != nil {
+	if err := os.WriteFile(invalidFile, []byte("invalid data"), 0o644); err != nil {
 		t.Fatalf("写入无效证书文件失败: %v", err)
 	}
 	_, err = sslutil.LoadCACertPool(invalidFile)
@@ -221,7 +221,7 @@ func TestNewClientVerifier_WithCA(t *testing.T) {
 	caFile := filepath.Join(tempDir, "ca.crt")
 
 	_, _, caPEM := generateTestCA(t)
-	if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 		t.Fatalf("Failed to write CA file: %v", err)
 	}
 
@@ -251,7 +251,7 @@ func TestClientVerifier_ConfigureTLS(t *testing.T) {
 	caFile := filepath.Join(tempDir, "ca.crt")
 
 	_, _, caPEM := generateTestCA(t)
-	if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 		t.Fatalf("Failed to write CA file: %v", err)
 	}
 
@@ -353,7 +353,7 @@ func TestGetMode(t *testing.T) {
 			tempDir := t.TempDir()
 			caFile := filepath.Join(tempDir, "ca.crt")
 			_, _, caPEM := generateTestCA(t)
-			if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+			if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 				t.Fatalf("写入 CA 文件失败: %v", err)
 			}
 
@@ -420,7 +420,7 @@ func TestLoadCRL(t *testing.T) {
 	// 写入临时文件
 	tempDir := t.TempDir()
 	crlFile := filepath.Join(tempDir, "crl.pem")
-	if err := os.WriteFile(crlFile, crlPEM, 0644); err != nil {
+	if err := os.WriteFile(crlFile, crlPEM, 0o644); err != nil {
 		t.Fatalf("写入 CRL 文件失败: %v", err)
 	}
 
@@ -444,7 +444,7 @@ func TestLoadCRL(t *testing.T) {
 
 	// 测试无效 CRL
 	invalidFile := filepath.Join(tempDir, "invalid.crl")
-	if err := os.WriteFile(invalidFile, []byte("invalid data"), 0644); err != nil {
+	if err := os.WriteFile(invalidFile, []byte("invalid data"), 0o644); err != nil {
 		t.Fatalf("写入无效文件失败: %v", err)
 	}
 	_, err = LoadCRL(invalidFile)
@@ -472,10 +472,10 @@ func TestCheckCRL(t *testing.T) {
 	crlFile := filepath.Join(tempDir, "crl.pem")
 	caFile := filepath.Join(tempDir, "ca.crt")
 	_, _, caPEM := generateTestCA(t)
-	if err := os.WriteFile(crlFile, crlPEM, 0644); err != nil {
+	if err := os.WriteFile(crlFile, crlPEM, 0o644); err != nil {
 		t.Fatalf("写入 CRL 文件失败: %v", err)
 	}
-	if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 		t.Fatalf("写入 CA 文件失败: %v", err)
 	}
 
@@ -515,10 +515,10 @@ func TestCheckCRL_EmptyCRL(t *testing.T) {
 	crlFile := filepath.Join(tempDir, "crl.pem")
 	caFile := filepath.Join(tempDir, "ca.crt")
 	_, _, caPEM := generateTestCA(t)
-	if err := os.WriteFile(crlFile, crlPEM, 0644); err != nil {
+	if err := os.WriteFile(crlFile, crlPEM, 0o644); err != nil {
 		t.Fatalf("写入 CRL 文件失败: %v", err)
 	}
-	if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 		t.Fatalf("写入 CA 文件失败: %v", err)
 	}
 
@@ -553,7 +553,7 @@ func TestValidateClientCertificate(t *testing.T) {
 	tempDir := t.TempDir()
 	caFile := filepath.Join(tempDir, "ca.crt")
 	_, _, caPEM := generateTestCA(t)
-	if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 		t.Fatalf("写入 CA 文件失败: %v", err)
 	}
 
@@ -592,10 +592,10 @@ func TestVerifyConnection(t *testing.T) {
 	crlFile := filepath.Join(tempDir, "crl.pem")
 	caFile := filepath.Join(tempDir, "ca.crt")
 	_, _, caPEM := generateTestCA(t)
-	if err := os.WriteFile(crlFile, crlPEM, 0644); err != nil {
+	if err := os.WriteFile(crlFile, crlPEM, 0o644); err != nil {
 		t.Fatalf("写入 CRL 文件失败: %v", err)
 	}
-	if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 		t.Fatalf("写入 CA 文件失败: %v", err)
 	}
 
@@ -646,7 +646,7 @@ func TestVerifyConnection_DepthLimit(t *testing.T) {
 	tempDir := t.TempDir()
 	caFile := filepath.Join(tempDir, "ca.crt")
 	_, _, caPEM := generateTestCA(t)
-	if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 		t.Fatalf("写入 CA 文件失败: %v", err)
 	}
 
@@ -687,7 +687,7 @@ func BenchmarkLoadCACertPool(b *testing.B) {
 
 	// 生成 CA
 	_, _, caPEM := generateTestCA(&testing.T{})
-	if err := os.WriteFile(caFile, caPEM, 0644); err != nil {
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
 		b.Fatalf("写入 CA 文件失败: %v", err)
 	}
 

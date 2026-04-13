@@ -93,7 +93,6 @@ func TestNewServer_Success(t *testing.T) {
 	}
 
 	server, err := NewServer(cfg, handler, tlsConfig)
-
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}

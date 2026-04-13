@@ -117,14 +117,14 @@ func getSocketFd(conn net.Conn) (uintptr, error) {
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = file.Close() }() //nolint:errcheck
+		defer func() { _ = file.Close() }()
 		return file.Fd(), nil
 	case *net.UnixConn:
 		file, err := c.File()
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = file.Close() }() //nolint:errcheck
+		defer func() { _ = file.Close() }()
 		return file.Fd(), nil
 	default:
 		return 0, syscall.ENOTSUP

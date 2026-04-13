@@ -297,14 +297,20 @@ func (api *ngxReqAPI) luaSetURIArgs(L *glua.LState) int {
 	switch argType.Type() {
 	case glua.LTString:
 		// 如果是字符串，直接解析并设置
-		//nolint:errcheck // 类型断言检查
-		queryStr := string(argType.(glua.LString))
-		api.ctx.Request.URI().SetQueryString(queryStr)
+		// 类型断言检查
+		queryStr, ok := argType.(glua.LString)
+		if !ok {
+			return 0
+		}
+		api.ctx.Request.URI().SetQueryString(string(queryStr))
 
 	case glua.LTTable:
 		// 如果是 table，构建查询字符串
-		//nolint:errcheck // 类型断言
-		table := argType.(*glua.LTable)
+		// 类型断言检查
+		table, ok := argType.(*glua.LTable)
+		if !ok {
+			return 0
+		}
 		args := make(map[string][]string)
 
 		table.ForEach(func(key, value glua.LValue) {
@@ -312,14 +318,19 @@ func (api *ngxReqAPI) luaSetURIArgs(L *glua.LState) int {
 			//nolint:exhaustive // 只处理特定类型
 			switch value.Type() {
 			case glua.LTString:
-				//nolint:errcheck // 类型断言
-				args[keyStr] = []string{string(value.(glua.LString))}
+				// 类型断言检查
+				if strVal, ok := value.(glua.LString); ok {
+					args[keyStr] = []string{string(strVal)}
+				}
 			case glua.LTNumber:
 				args[keyStr] = []string{glua.LVAsString(value)}
 			case glua.LTTable:
 				// 数组形式的多值
-				//nolint:errcheck // 类型断言
-				arr := value.(*glua.LTable)
+				// 类型断言检查
+				arr, ok := value.(*glua.LTable)
+				if !ok {
+					return // 跳过当前回调
+				}
 				values := []string{}
 				arr.ForEach(func(_, v glua.LValue) {
 					values = append(values, glua.LVAsString(v))

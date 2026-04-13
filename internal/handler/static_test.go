@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/valyala/fasthttp"
-
 	"rua.plus/lolly/internal/testutil"
 )
 

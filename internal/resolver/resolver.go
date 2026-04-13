@@ -132,20 +132,22 @@ func (r *DNSResolver) lookup(ctx context.Context, host string, useCache bool) ([
 	// 尝试从缓存获取
 	if useCache {
 		if entry, ok := r.cache.Load(host); ok {
-			cacheEntry := entry.(*DNSCacheEntry) //nolint:errcheck // 类型断言
-			cacheEntry.mu.RLock()
-			ips := cacheEntry.IPs
-			expiresAt := cacheEntry.ExpiresAt
-			cacheErr := cacheEntry.Error
-			cacheEntry.mu.RUnlock()
+			cacheEntry, ok := entry.(*DNSCacheEntry)
+			if ok {
+				cacheEntry.mu.RLock()
+				ips := cacheEntry.IPs
+				expiresAt := cacheEntry.ExpiresAt
+				cacheErr := cacheEntry.Error
+				cacheEntry.mu.RUnlock()
 
-			// 缓存未过期，返回缓存结果
-			if time.Now().Before(expiresAt) {
-				r.hits.Add(1)
-				if cacheErr != nil {
-					return nil, cacheErr
+				// 缓存未过期，返回缓存结果
+				if time.Now().Before(expiresAt) {
+					r.hits.Add(1)
+					if cacheErr != nil {
+						return nil, cacheErr
+					}
+					return ips, nil
 				}
-				return ips, nil
 			}
 		}
 	}
@@ -341,7 +343,7 @@ func (r *DNSResolver) doRefresh() {
 
 	for _, host := range hosts {
 		ctx, cancel := context.WithTimeout(context.Background(), r.config.Timeout)
-		_, _ = r.LookupHost(ctx, host) //nolint:errcheck // 刷新缓存
+		_, _ = r.LookupHost(ctx, host)
 		cancel()
 	}
 }

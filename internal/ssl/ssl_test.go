@@ -90,10 +90,10 @@ func TestNewTLSManagerWithCert(t *testing.T) {
 
 	// Generate a self-signed certificate for testing
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -328,7 +328,7 @@ func TestValidateCertificate(t *testing.T) {
 
 	t.Run("valid file", func(t *testing.T) {
 		tmpFile := filepath.Join(t.TempDir(), "cert.pem")
-		if err := os.WriteFile(tmpFile, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(tmpFile, []byte("test"), 0o644); err != nil {
 			t.Fatalf("Failed to create temp file: %v", err)
 		}
 
@@ -349,7 +349,7 @@ func TestValidateKey(t *testing.T) {
 
 	t.Run("valid file", func(t *testing.T) {
 		tmpFile := filepath.Join(t.TempDir(), "key.pem")
-		if err := os.WriteFile(tmpFile, []byte("test"), 0600); err != nil {
+		if err := os.WriteFile(tmpFile, []byte("test"), 0o600); err != nil {
 			t.Fatalf("Failed to create temp file: %v", err)
 		}
 
@@ -427,10 +427,10 @@ func TestGetTLSConfig(t *testing.T) {
 
 	// 生成自签名证书
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -464,10 +464,10 @@ func TestGetTLSConfig_WithProtocols(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -504,10 +504,10 @@ func TestClose(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -592,10 +592,10 @@ func TestNewTLSManager_InvalidCipher(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -618,10 +618,10 @@ func TestNewTLSManager_InsecureCipher(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -644,10 +644,10 @@ func TestNewMultiTLSManager(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -698,10 +698,10 @@ func TestGetCertificate(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -743,10 +743,10 @@ func TestAddCertificate(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -782,10 +782,10 @@ func TestAddCertificate_Error(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -814,10 +814,10 @@ func TestRemoveCertificate(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 
@@ -857,10 +857,10 @@ func TestGetOCSPStatus_NoManager(t *testing.T) {
 	keyPath := filepath.Join(tmpDir, "key.pem")
 
 	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0644); err != nil {
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
 		t.Fatalf("Failed to write cert: %v", err)
 	}
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 		t.Fatalf("Failed to write key: %v", err)
 	}
 

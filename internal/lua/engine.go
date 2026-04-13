@@ -132,8 +132,10 @@ func (e *LuaEngine) NewCoroutine(req *fasthttp.RequestCtx) (*LuaCoroutine, error
 	}
 
 	// 从池中获取协程对象结构（复用内存，不复用协程状态）
-	//nolint:errcheck // 类型断言检查
-	coro := e.coroutinePool.Get().(*LuaCoroutine)
+	coro, ok := e.coroutinePool.Get().(*LuaCoroutine)
+	if !ok {
+		coro = &LuaCoroutine{}
+	}
 	coro.Engine = e
 	coro.Co = co
 	coro.Cancel = cancel
@@ -294,7 +296,7 @@ func (e *LuaEngine) executeCallback(entry *CallbackEntry) {
 	fn := e.schedulerLState.NewFunctionFromProto(entry.proto)
 
 	// 调用回调函数（不添加额外的 fn 参数）
-	_ = e.schedulerLState.CallByParam(glua.P{ //nolint:errcheck
+	_ = e.schedulerLState.CallByParam(glua.P{
 		Fn:      fn,
 		NRet:    0,
 		Protect: true,

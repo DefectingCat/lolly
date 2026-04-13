@@ -145,10 +145,10 @@ func NewStatusHandler(server *Server, cfg *config.StatusConfig) (*StatusHandler,
 			}
 			// 转换为 CIDR 格式
 			if ip.To4() != nil {
-				//nolint:errcheck
+
 				_, network, _ = net.ParseCIDR(cidr + "/32")
 			} else {
-				//nolint:errcheck
+
 				_, network, _ = net.ParseCIDR(cidr + "/128")
 			}
 		}
@@ -206,7 +206,9 @@ func (h *StatusHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	ctx.Write(data) //nolint:errcheck
+	if _, err := ctx.Write(data); err != nil {
+		log.Printf("failed to write status response: %v", err)
+	}
 }
 
 // servePrometheus 以 Prometheus 格式输出指标。

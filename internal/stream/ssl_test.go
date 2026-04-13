@@ -371,7 +371,7 @@ func TestLoadCertPool(t *testing.T) {
 	t.Run("invalid content", func(t *testing.T) {
 		tempDir := t.TempDir()
 		certFile := filepath.Join(tempDir, "invalid.crt")
-		if err := os.WriteFile(certFile, []byte("not a certificate"), 0644); err != nil {
+		if err := os.WriteFile(certFile, []byte("not a certificate"), 0o644); err != nil {
 			t.Fatalf("写入无效证书文件失败: %v", err)
 		}
 

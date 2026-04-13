@@ -1,18 +1,14 @@
-version: "2"
-
 run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
 
 output:
-  formats:
-    text:
-      path: stdout
-      colors: true
+  print-issued-lines: true
+  print-linter-name: true
 
 linters:
-  default: all
+  enable-all: true
   disable:
     # 合理禁用 - 项目有中文注释/标识符
     - asciicheck
@@ -27,7 +23,6 @@ linters:
     - tagalign
     - nlreturn
     - wsl
-    - wsl_v5
     - nestif
 
     # 重复/噪音
@@ -36,7 +31,6 @@ linters:
     - misspell
 
     # 注释风格
-    - godoclint
     - godot
     - godox
     - goheader
@@ -50,7 +44,6 @@ linters:
     - thelper
 
     # 框架/工具特定 - 项目不使用
-    - arangolint
     - ginkgolinter
     - promlinter
     - protogetter
@@ -59,8 +52,6 @@ linters:
 
     # 声明/结构风格
     - decorder
-    - funcorder
-    - embeddedstructfieldcheck
     - exhaustruct
     - iface
 
@@ -73,7 +64,6 @@ linters:
     - bidichk
     - rowserrcheck
     - sqlclosecheck
-    - unqueryvet
 
     # 可配置而非禁用
     - forbidigo
@@ -110,19 +100,16 @@ linters:
     - gochecknoinits
     - nilerr
     - nilnil
-    - modernize
     - musttag
     - noctx
     - intrange
     - reassign
-    - iotamixing
-    - noinlineerr
     - perfsprint
     - wastedassign
     - wrapcheck
     - errchkjson
 
-    # 额外禁用（来自 1f13120）
+    # 额外禁用
     - bodyclose
     - contextcheck
     - errorlint
@@ -143,60 +130,53 @@ linters:
     - unconvert
     - whitespace
 
-  exclusions:
+issues:
+  exclude-rules:
+    - path: '_test\.go'
+      linters:
+        - dupl
+        - goconst
+        - errcheck
+        - govet
+        - revive
+        - staticcheck
+        - unused
+    - path: 'internal/ssl/ocsp_test\.go'
+      linters:
+        - unparam
+    - path: 'internal/lua/'
+      text: "stutters"
+      linters:
+        - revive
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: false
+
+  govet:
+    enable-all: true
+
+  staticcheck:
+    checks: ["all", "-ST1000", "-ST1003"]
+
+  revive:
+    severity: warning
     rules:
-      - path: '_test\.go'
-        linters:
-          - dupl
-          - goconst
-          - errcheck
-          - govet
-          - revive
-          - staticcheck
-          - unused
-      - path: 'internal/ssl/ocsp_test\.go'
-        linters:
-          - unparam
-      - path: 'internal/lua/'
-        text: "stutters"
-        linters:
-          - revive
+      - name: unused-parameter
+        severity: warning
+      - name: unreachable-code
+        severity: error
+      - name: context-as-argument
+        severity: warning
+      - name: error-naming
+        severity: warning
+      - name: error-return
+        severity: error
+      - name: exported
+        severity: warning
+        arguments:
+          - "disableStutteringCheck"
 
-  settings:
-    errcheck:
-      check-type-assertions: true
-      check-blank: true
-
-    govet:
-      enable-all: true
-
-    staticcheck:
-      checks:
-        - all
-        - -ST1000
-        - -ST1003
-
-    revive:
-      severity: warning
-      rules:
-        - name: unused-parameter
-          severity: warning
-        - name: unreachable-code
-          severity: error
-        - name: context-as-argument
-          severity: warning
-        - name: error-naming
-          severity: warning
-        - name: error-return
-          severity: error
-        - name: exported
-          severity: warning
-          arguments:
-            - "disableStutteringCheck"
-
-formatters:
-  enable:
-    - gofmt
-  settings:
-    gofmt:
-      simplify: true
+  gofmt:
+    simplify: true

@@ -171,13 +171,13 @@ func TestErrorIntercept_Process_ErrorStatus_Intercepted(t *testing.T) {
 	page500 := filepath.Join(tempDir, "500.html")
 	pageDefault := filepath.Join(tempDir, "default.html")
 
-	if err := os.WriteFile(page404, []byte("<html>404 Not Found</html>"), 0644); err != nil {
+	if err := os.WriteFile(page404, []byte("<html>404 Not Found</html>"), 0o644); err != nil {
 		t.Fatalf("创建 404.html 失败: %v", err)
 	}
-	if err := os.WriteFile(page500, []byte("<html>500 Error</html>"), 0644); err != nil {
+	if err := os.WriteFile(page500, []byte("<html>500 Error</html>"), 0o644); err != nil {
 		t.Fatalf("创建 500.html 失败: %v", err)
 	}
-	if err := os.WriteFile(pageDefault, []byte("<html>Default Error</html>"), 0644); err != nil {
+	if err := os.WriteFile(pageDefault, []byte("<html>Default Error</html>"), 0o644); err != nil {
 		t.Fatalf("创建 default.html 失败: %v", err)
 	}
 
@@ -264,7 +264,7 @@ func TestErrorIntercept_Process_WithResponseCodeOverride(t *testing.T) {
 	tempDir := t.TempDir()
 
 	page404 := filepath.Join(tempDir, "404.html")
-	if err := os.WriteFile(page404, []byte("<html>404 Not Found</html>"), 0644); err != nil {
+	if err := os.WriteFile(page404, []byte("<html>404 Not Found</html>"), 0o644); err != nil {
 		t.Fatalf("创建 404.html 失败: %v", err)
 	}
 
@@ -309,7 +309,7 @@ func TestErrorIntercept_Process_NoMatchingPage(t *testing.T) {
 
 	// 只创建 404 页面，没有默认页面
 	page404 := filepath.Join(tempDir, "404.html")
-	if err := os.WriteFile(page404, []byte("<html>404 Not Found</html>"), 0644); err != nil {
+	if err := os.WriteFile(page404, []byte("<html>404 Not Found</html>"), 0o644); err != nil {
 		t.Fatalf("创建 404.html 失败: %v", err)
 	}
 
@@ -355,7 +355,7 @@ func TestErrorIntercept_Process_4xxErrors(t *testing.T) {
 
 	// 创建默认错误页面
 	pageDefault := filepath.Join(tempDir, "default.html")
-	if err := os.WriteFile(pageDefault, []byte("<html>Error</html>"), 0644); err != nil {
+	if err := os.WriteFile(pageDefault, []byte("<html>Error</html>"), 0o644); err != nil {
 		t.Fatalf("创建 default.html 失败: %v", err)
 	}
 
@@ -404,7 +404,7 @@ func TestErrorIntercept_Process_5xxErrors(t *testing.T) {
 
 	// 创建默认错误页面
 	pageDefault := filepath.Join(tempDir, "default.html")
-	if err := os.WriteFile(pageDefault, []byte("<html>Server Error</html>"), 0644); err != nil {
+	if err := os.WriteFile(pageDefault, []byte("<html>Server Error</html>"), 0o644); err != nil {
 		t.Fatalf("创建 default.html 失败: %v", err)
 	}
 
@@ -513,7 +513,7 @@ func createConfiguredManager(t *testing.T) *handler.ErrorPageManager {
 
 	// 创建一个简单的错误页面
 	pageDefault := filepath.Join(tempDir, "default.html")
-	if err := os.WriteFile(pageDefault, []byte("<html>Error</html>"), 0644); err != nil {
+	if err := os.WriteFile(pageDefault, []byte("<html>Error</html>"), 0o644); err != nil {
 		t.Fatalf("创建 default.html 失败: %v", err)
 	}
 

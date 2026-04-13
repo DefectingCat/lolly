@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
-
 	"rua.plus/lolly/internal/config"
 )
 
