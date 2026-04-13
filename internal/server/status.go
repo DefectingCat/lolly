@@ -145,10 +145,8 @@ func NewStatusHandler(server *Server, cfg *config.StatusConfig) (*StatusHandler,
 			}
 			// 转换为 CIDR 格式
 			if ip.To4() != nil {
-
 				_, network, _ = net.ParseCIDR(cidr + "/32")
 			} else {
-
 				_, network, _ = net.ParseCIDR(cidr + "/128")
 			}
 		}

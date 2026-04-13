@@ -21,7 +21,7 @@ func TestLuaMiddlewareCreation(t *testing.T) {
 	// 创建临时脚本文件
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte("ngx.say('hello')"), 0644)
+	err = os.WriteFile(scriptPath, []byte("ngx.say('hello')"), 0o644)
 	require.NoError(t, err)
 
 	config := LuaMiddlewareConfig{
@@ -52,7 +52,7 @@ func TestLuaMiddlewareDefaultConfig(t *testing.T) {
 	// 创建临时脚本文件
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte("return 1"), 0644)
+	err = os.WriteFile(scriptPath, []byte("return 1"), 0o644)
 	require.NoError(t, err)
 
 	// 使用默认配置
@@ -98,7 +98,7 @@ func TestLuaMiddlewareProcess(t *testing.T) {
 	// 创建脚本文件
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte(`ngx.say("hello from lua")`), 0644)
+	err = os.WriteFile(scriptPath, []byte(`ngx.say("hello from lua")`), 0o644)
 	require.NoError(t, err)
 
 	config := LuaMiddlewareConfig{
@@ -139,7 +139,7 @@ func TestLuaMiddlewareDisabled(t *testing.T) {
 	// 创建脚本文件
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte(`ngx.say("lua output")`), 0644)
+	err = os.WriteFile(scriptPath, []byte(`ngx.say("lua output")`), 0o644)
 	require.NoError(t, err)
 
 	config := LuaMiddlewareConfig{
@@ -180,7 +180,7 @@ func TestLuaMiddlewareSetters(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte("return 1"), 0644)
+	err = os.WriteFile(scriptPath, []byte("return 1"), 0o644)
 	require.NoError(t, err)
 
 	config := DefaultLuaMiddlewareConfig()
@@ -232,7 +232,7 @@ func TestMultiPhaseLuaMiddlewareAddPhase(t *testing.T) {
 
 	// 添加 rewrite 阶段
 	rewriteScript := filepath.Join(tmpDir, "rewrite.lua")
-	err = os.WriteFile(rewriteScript, []byte("ngx.var.uri = '/rewritten'"), 0644)
+	err = os.WriteFile(rewriteScript, []byte("ngx.var.uri = '/rewritten'"), 0o644)
 	require.NoError(t, err)
 
 	err = multi.AddPhase(PhaseRewrite, rewriteScript, 10*time.Second)
@@ -243,7 +243,7 @@ func TestMultiPhaseLuaMiddlewareAddPhase(t *testing.T) {
 
 	// 添加 access 阶段
 	accessScript := filepath.Join(tmpDir, "access.lua")
-	err = os.WriteFile(accessScript, []byte("ngx.exit(403)"), 0644)
+	err = os.WriteFile(accessScript, []byte("ngx.exit(403)"), 0o644)
 	require.NoError(t, err)
 
 	err = multi.AddPhase(PhaseAccess, accessScript, 10*time.Second)
@@ -264,7 +264,7 @@ func TestMultiPhaseLuaMiddlewareRemovePhase(t *testing.T) {
 	multi := NewMultiPhaseLuaMiddleware(engine, "multi-test")
 
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte("return 1"), 0644)
+	err = os.WriteFile(scriptPath, []byte("return 1"), 0o644)
 	require.NoError(t, err)
 
 	err = multi.AddPhase(PhaseRewrite, scriptPath, 10*time.Second)
@@ -289,7 +289,7 @@ func TestMultiPhaseLuaMiddlewareProcess(t *testing.T) {
 
 	// rewrite 阎段脚本
 	rewriteScript := filepath.Join(tmpDir, "rewrite.lua")
-	err = os.WriteFile(rewriteScript, []byte(`ngx.say("rewrite")`), 0644)
+	err = os.WriteFile(rewriteScript, []byte(`ngx.say("rewrite")`), 0o644)
 	require.NoError(t, err)
 
 	err = multi.AddPhase(PhaseRewrite, rewriteScript, 10*time.Second)
@@ -297,7 +297,7 @@ func TestMultiPhaseLuaMiddlewareProcess(t *testing.T) {
 
 	// content 阎段脚本
 	contentScript := filepath.Join(tmpDir, "content.lua")
-	err = os.WriteFile(contentScript, []byte(`ngx.say("content")`), 0644)
+	err = os.WriteFile(contentScript, []byte(`ngx.say("content")`), 0o644)
 	require.NoError(t, err)
 
 	err = multi.AddPhase(PhaseContent, contentScript, 10*time.Second)
@@ -335,7 +335,7 @@ func TestMultiPhaseLuaMiddlewareGetPhaseMiddleware(t *testing.T) {
 	multi := NewMultiPhaseLuaMiddleware(engine, "multi-test")
 
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte("return 1"), 0644)
+	err = os.WriteFile(scriptPath, []byte("return 1"), 0o644)
 	require.NoError(t, err)
 
 	err = multi.AddPhase(PhaseRewrite, scriptPath, 10*time.Second)
@@ -360,7 +360,7 @@ func TestLuaMiddlewareIntegrationWithChain(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte(`ngx.say("lua middleware")`), 0644)
+	err = os.WriteFile(scriptPath, []byte(`ngx.say("lua middleware")`), 0o644)
 	require.NoError(t, err)
 
 	config := LuaMiddlewareConfig{
@@ -401,7 +401,7 @@ func TestLuaMiddlewareExecutionError(t *testing.T) {
 	// 创建有语法错误的脚本
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "error.lua")
-	err = os.WriteFile(scriptPath, []byte("invalid lua syntax !!!"), 0644)
+	err = os.WriteFile(scriptPath, []byte("invalid lua syntax !!!"), 0o644)
 	require.NoError(t, err)
 
 	config := LuaMiddlewareConfig{
@@ -432,7 +432,7 @@ func TestLuaMiddlewareExit(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "exit.lua")
-	err = os.WriteFile(scriptPath, []byte(`ngx.say("before exit"); ngx.exit(200)`), 0644)
+	err = os.WriteFile(scriptPath, []byte(`ngx.say("before exit"); ngx.exit(200)`), 0o644)
 	require.NoError(t, err)
 
 	config := LuaMiddlewareConfig{

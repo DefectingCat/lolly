@@ -22,7 +22,7 @@ func BenchmarkLuaMiddlewareOverhead(b *testing.B) {
 	// 创建简单的 Lua 脚本
 	tmpDir := b.TempDir()
 	scriptPath := filepath.Join(tmpDir, "simple.lua")
-	err = os.WriteFile(scriptPath, []byte(`ngx.say("ok")`), 0644)
+	err = os.WriteFile(scriptPath, []byte(`ngx.say("ok")`), 0o644)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func BenchmarkLuaMiddlewareMultiPhase(b *testing.B) {
 
 	// rewrite phase
 	rewriteScript := filepath.Join(tmpDir, "rewrite.lua")
-	err = os.WriteFile(rewriteScript, []byte(`-- simple rewrite`), 0644)
+	err = os.WriteFile(rewriteScript, []byte(`-- simple rewrite`), 0o644)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func BenchmarkLuaMiddlewareMultiPhase(b *testing.B) {
 
 	// content phase
 	contentScript := filepath.Join(tmpDir, "content.lua")
-	err = os.WriteFile(contentScript, []byte(`ngx.say("content")`), 0644)
+	err = os.WriteFile(contentScript, []byte(`ngx.say("content")`), 0o644)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func BenchmarkLuaMiddlewareNgxExit(b *testing.B) {
 
 	tmpDir := b.TempDir()
 	scriptPath := filepath.Join(tmpDir, "exit.lua")
-	err = os.WriteFile(scriptPath, []byte(`ngx.exit(200)`), 0644)
+	err = os.WriteFile(scriptPath, []byte(`ngx.exit(200)`), 0o644)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestLuaMiddlewarePerformanceOverhead(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "perf.lua")
-	err = os.WriteFile(scriptPath, []byte(`ngx.say("performance test")`), 0644)
+	err = os.WriteFile(scriptPath, []byte(`ngx.say("performance test")`), 0o644)
 	if err != nil {
 		t.Fatal(err)
 	}

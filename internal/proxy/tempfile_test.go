@@ -427,7 +427,7 @@ func TestTempFileCleaner(t *testing.T) {
 
 		// 创建一个过期的临时文件
 		oldFile := filepath.Join(tempDir, TempFilePrefix+"old")
-		if err := os.WriteFile(oldFile, []byte("old"), 0644); err != nil {
+		if err := os.WriteFile(oldFile, []byte("old"), 0o644); err != nil {
 			t.Fatalf("创建测试文件失败: %v", err)
 		}
 
@@ -439,7 +439,7 @@ func TestTempFileCleaner(t *testing.T) {
 
 		// 创建一个非过期的临时文件
 		newFile := filepath.Join(tempDir, TempFilePrefix+"new")
-		if err := os.WriteFile(newFile, []byte("new"), 0644); err != nil {
+		if err := os.WriteFile(newFile, []byte("new"), 0o644); err != nil {
 			t.Fatalf("创建测试文件失败: %v", err)
 		}
 
@@ -463,7 +463,7 @@ func TestTempFileCleaner(t *testing.T) {
 
 		// 创建一个非 lolly 前缀的文件
 		otherFile := filepath.Join(tempDir, "other-file")
-		if err := os.WriteFile(otherFile, []byte("other"), 0644); err != nil {
+		if err := os.WriteFile(otherFile, []byte("other"), 0o644); err != nil {
 			t.Fatalf("创建测试文件失败: %v", err)
 		}
 
@@ -488,7 +488,7 @@ func TestTempFileCleaner(t *testing.T) {
 
 		// 创建孤儿文件
 		orphanFile := filepath.Join(tempDir, TempFilePrefix+"orphan")
-		if err := os.WriteFile(orphanFile, []byte("orphan"), 0644); err != nil {
+		if err := os.WriteFile(orphanFile, []byte("orphan"), 0o644); err != nil {
 			t.Fatalf("创建测试文件失败: %v", err)
 		}
 

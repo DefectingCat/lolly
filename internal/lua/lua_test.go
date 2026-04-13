@@ -122,7 +122,7 @@ func TestLuaContextExecuteFile(t *testing.T) {
 	// 创建临时 Lua 文件
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte("return 42"), 0644)
+	err = os.WriteFile(scriptPath, []byte("return 42"), 0o644)
 	require.NoError(t, err)
 
 	// 执行文件
@@ -185,7 +185,7 @@ func TestLuaCoroutineExecuteFile(t *testing.T) {
 	// 创建临时文件
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte("return 42"), 0644)
+	err = os.WriteFile(scriptPath, []byte("return 42"), 0o644)
 	require.NoError(t, err)
 
 	err = coro.ExecuteFile(scriptPath)
@@ -279,7 +279,7 @@ func TestCodeCacheFile(t *testing.T) {
 	scriptPath := filepath.Join(tmpDir, "test.lua")
 	scriptContent := "return 42"
 
-	err := os.WriteFile(scriptPath, []byte(scriptContent), 0644)
+	err := os.WriteFile(scriptPath, []byte(scriptContent), 0o644)
 	require.NoError(t, err)
 
 	cache := NewCodeCache(100, time.Hour, true)

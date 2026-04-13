@@ -53,7 +53,7 @@ func TestStaticHandlerHandle(t *testing.T) {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 				content := "hello world"
-				if err := os.WriteFile(filepath.Join(root, "test.txt"), []byte(content), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "test.txt"), []byte(content), 0o644); err != nil {
 					t.Fatalf("创建测试文件失败: %v", err)
 				}
 			},
@@ -66,11 +66,11 @@ func TestStaticHandlerHandle(t *testing.T) {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 				subDir := filepath.Join(root, "sub", "dir")
-				if err := os.MkdirAll(subDir, 0755); err != nil {
+				if err := os.MkdirAll(subDir, 0o755); err != nil {
 					t.Fatalf("创建子目录失败: %v", err)
 				}
 				content := "nested file content"
-				if err := os.WriteFile(filepath.Join(subDir, "nested.txt"), []byte(content), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(subDir, "nested.txt"), []byte(content), 0o644); err != nil {
 					t.Fatalf("创建嵌套文件失败: %v", err)
 				}
 			},
@@ -83,11 +83,11 @@ func TestStaticHandlerHandle(t *testing.T) {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 				dir := filepath.Join(root, "withindex")
-				if err := os.MkdirAll(dir, 0755); err != nil {
+				if err := os.MkdirAll(dir, 0o755); err != nil {
 					t.Fatalf("创建目录失败: %v", err)
 				}
 				content := "index page"
-				if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(content), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(content), 0o644); err != nil {
 					t.Fatalf("创建索引文件失败: %v", err)
 				}
 			},
@@ -100,7 +100,7 @@ func TestStaticHandlerHandle(t *testing.T) {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 				dir := filepath.Join(root, "noindex")
-				if err := os.MkdirAll(dir, 0755); err != nil {
+				if err := os.MkdirAll(dir, 0o755); err != nil {
 					t.Fatalf("创建目录失败: %v", err)
 				}
 			},
@@ -133,7 +133,7 @@ func TestStaticHandlerHandle(t *testing.T) {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 				content := "root index"
-				if err := os.WriteFile(filepath.Join(root, "index.html"), []byte(content), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "index.html"), []byte(content), 0o644); err != nil {
 					t.Fatalf("创建根索引文件失败: %v", err)
 				}
 			},
@@ -256,7 +256,7 @@ func TestStaticHandlerHandle_PathTraversalSecurity(t *testing.T) {
 			setup: func(t *testing.T, root string) {
 				t.Helper()
 				// 创建目标文件供测试
-				if err := os.WriteFile(filepath.Join(root, "bar.txt"), []byte("bar"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "bar.txt"), []byte("bar"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -288,15 +288,15 @@ func TestStaticHandlerHandle_IndexFallback(t *testing.T) {
 	t.Run("优先 index.html", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		dir := filepath.Join(tmpDir, "testdir")
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("创建目录失败: %v", err)
 		}
 
 		// 创建两个索引文件
-		if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("html content"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("html content"), 0o644); err != nil {
 			t.Fatalf("创建 index.html 失败: %v", err)
 		}
-		if err := os.WriteFile(filepath.Join(dir, "index.htm"), []byte("htm content"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "index.htm"), []byte("htm content"), 0o644); err != nil {
 			t.Fatalf("创建 index.htm 失败: %v", err)
 		}
 
@@ -318,12 +318,12 @@ func TestStaticHandlerHandle_IndexFallback(t *testing.T) {
 	t.Run("无 index.html 时使用 index.htm", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		dir := filepath.Join(tmpDir, "testdir")
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("创建目录失败: %v", err)
 		}
 
 		// 仅创建 index.htm
-		if err := os.WriteFile(filepath.Join(dir, "index.htm"), []byte("htm content"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "index.htm"), []byte("htm content"), 0o644); err != nil {
 			t.Fatalf("创建 index.htm 失败: %v", err)
 		}
 
@@ -344,12 +344,12 @@ func TestStaticHandlerHandle_IndexFallback(t *testing.T) {
 	t.Run("无索引文件时返回 403", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		dir := filepath.Join(tmpDir, "testdir")
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("创建目录失败: %v", err)
 		}
 
 		// 创建一个非索引文件
-		if err := os.WriteFile(filepath.Join(dir, "other.txt"), []byte("other content"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "other.txt"), []byte("other content"), 0o644); err != nil {
 			t.Fatalf("创建 other.txt 失败: %v", err)
 		}
 
@@ -365,12 +365,12 @@ func TestStaticHandlerHandle_IndexFallback(t *testing.T) {
 	t.Run("目录不带斜杠结尾", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		dir := filepath.Join(tmpDir, "testdir")
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("创建目录失败: %v", err)
 		}
 
 		// 创建索引文件
-		if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("index"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("index"), 0o644); err != nil {
 			t.Fatalf("创建 index.html 失败: %v", err)
 		}
 
@@ -447,7 +447,7 @@ func TestStaticHandler_SetGzipStatic(t *testing.T) {
 func TestStaticHandler_Handle_HeadRequest(t *testing.T) {
 	tmpDir := t.TempDir()
 	content := "head request test"
-	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0o644); err != nil {
 		t.Fatalf("创建测试文件失败: %v", err)
 	}
 
@@ -474,7 +474,7 @@ func TestStaticHandler_Handle_HeadRequest(t *testing.T) {
 func TestStaticHandler_Handle_WithCache(t *testing.T) {
 	tmpDir := t.TempDir()
 	content := "cached content test"
-	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0o644); err != nil {
 		t.Fatalf("创建测试文件失败: %v", err)
 	}
 
@@ -498,13 +498,13 @@ func TestStaticHandler_Handle_Precompressed(t *testing.T) {
 
 	// 创建原始文件和 gzip 压缩版本
 	content := "test content for gzip"
-	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0o644); err != nil {
 		t.Fatalf("创建测试文件失败: %v", err)
 	}
 
 	// 创建 .gz 文件（模拟预压缩）
 	gzContent := []byte("gzipped content")
-	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt.gz"), gzContent, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt.gz"), gzContent, 0o644); err != nil {
 		t.Fatalf("创建 gzip 文件失败: %v", err)
 	}
 
@@ -534,7 +534,7 @@ func TestStaticHandler_Handle_LargeFile(t *testing.T) {
 	}
 
 	tmpFile := filepath.Join(tmpDir, "large.bin")
-	if err := os.WriteFile(tmpFile, largeContent, 0644); err != nil {
+	if err := os.WriteFile(tmpFile, largeContent, 0o644); err != nil {
 		t.Fatalf("创建大文件失败: %v", err)
 	}
 
@@ -558,7 +558,7 @@ func TestStaticHandler_Handle_Symlink(t *testing.T) {
 	// 创建目标文件
 	targetContent := "symlink target"
 	targetFile := filepath.Join(tmpDir, "target.txt")
-	if err := os.WriteFile(targetFile, []byte(targetContent), 0644); err != nil {
+	if err := os.WriteFile(targetFile, []byte(targetContent), 0o644); err != nil {
 		t.Fatalf("创建目标文件失败: %v", err)
 	}
 
@@ -724,7 +724,7 @@ func TestStaticHandler_handleTryFiles(t *testing.T) {
 		{
 			name: "$uri 找到文件",
 			setup: func(t *testing.T, root string) {
-				if err := os.WriteFile(filepath.Join(root, "app.js"), []byte("app content"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "app.js"), []byte("app content"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -737,10 +737,10 @@ func TestStaticHandler_handleTryFiles(t *testing.T) {
 			name: "$uri 未找到回退到 $uri/",
 			setup: func(t *testing.T, root string) {
 				dir := filepath.Join(root, "assets")
-				if err := os.MkdirAll(dir, 0755); err != nil {
+				if err := os.MkdirAll(dir, 0o755); err != nil {
 					t.Fatalf("创建目录失败: %v", err)
 				}
-				if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("assets index"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("assets index"), 0o644); err != nil {
 					t.Fatalf("创建索引文件失败: %v", err)
 				}
 			},
@@ -752,7 +752,7 @@ func TestStaticHandler_handleTryFiles(t *testing.T) {
 		{
 			name: "回退到 fallback 文件",
 			setup: func(t *testing.T, root string) {
-				if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("spa fallback"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("spa fallback"), 0o644); err != nil {
 					t.Fatalf("创建 fallback 文件失败: %v", err)
 				}
 			},
@@ -774,7 +774,7 @@ func TestStaticHandler_handleTryFiles(t *testing.T) {
 		{
 			name: "嵌套目录回退",
 			setup: func(t *testing.T, root string) {
-				if err := os.WriteFile(filepath.Join(root, "app.html"), []byte("app shell"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "app.html"), []byte("app shell"), 0o644); err != nil {
 					t.Fatalf("创建 fallback 文件失败: %v", err)
 				}
 			},
@@ -787,10 +787,10 @@ func TestStaticHandler_handleTryFiles(t *testing.T) {
 			name: "路径前缀剥离",
 			setup: func(t *testing.T, root string) {
 				apiDir := filepath.Join(root, "api")
-				if err := os.MkdirAll(apiDir, 0755); err != nil {
+				if err := os.MkdirAll(apiDir, 0o755); err != nil {
 					t.Fatalf("创建目录失败: %v", err)
 				}
-				if err := os.WriteFile(filepath.Join(apiDir, "data.json"), []byte("json data"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(apiDir, "data.json"), []byte("json data"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -802,7 +802,7 @@ func TestStaticHandler_handleTryFiles(t *testing.T) {
 		{
 			name: "空 try_files 数组",
 			setup: func(t *testing.T, root string) {
-				if err := os.WriteFile(filepath.Join(root, "test.txt"), []byte("test"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "test.txt"), []byte("test"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -853,7 +853,7 @@ func TestStaticHandler_handleInternalRedirect(t *testing.T) {
 		{
 			name: "tryFilesPass false 直接服务文件",
 			setup: func(t *testing.T, root string) {
-				if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("index content"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("index content"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -866,7 +866,7 @@ func TestStaticHandler_handleInternalRedirect(t *testing.T) {
 		{
 			name: "tryFilesPass true 触发重定向",
 			setup: func(t *testing.T, root string) {
-				if err := os.WriteFile(filepath.Join(root, "fallback.txt"), []byte("fallback content"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(root, "fallback.txt"), []byte("fallback content"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -891,11 +891,11 @@ func TestStaticHandler_handleInternalRedirect(t *testing.T) {
 			name: "内部重定向目标是目录",
 			setup: func(t *testing.T, root string) {
 				dir := filepath.Join(root, "fallback")
-				if err := os.MkdirAll(dir, 0755); err != nil {
+				if err := os.MkdirAll(dir, 0o755); err != nil {
 					t.Fatalf("创建目录失败: %v", err)
 				}
 				// 在 fallback 目录中创建一个 index.html
-				if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("fallback index"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("fallback index"), 0o644); err != nil {
 					t.Fatalf("创建 index.html 失败: %v", err)
 				}
 			},
@@ -957,19 +957,19 @@ func TestStaticHandler_TryFilesSPA(t *testing.T) {
 
 	// 创建 SPA 文件结构
 	// index.html - 主应用入口
-	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("<!DOCTYPE html><html><body>SPA App</body></html>"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("<!DOCTYPE html><html><body>SPA App</body></html>"), 0o644); err != nil {
 		t.Fatalf("创建 index.html 失败: %v", err)
 	}
 
 	// 静态资源文件
 	assetsDir := filepath.Join(tmpDir, "assets")
-	if err := os.MkdirAll(assetsDir, 0755); err != nil {
+	if err := os.MkdirAll(assetsDir, 0o755); err != nil {
 		t.Fatalf("创建 assets 目录失败: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(assetsDir, "app.js"), []byte("console.log('app')"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(assetsDir, "app.js"), []byte("console.log('app')"), 0o644); err != nil {
 		t.Fatalf("创建 app.js 失败: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(assetsDir, "style.css"), []byte("body { margin: 0 }"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(assetsDir, "style.css"), []byte("body { margin: 0 }"), 0o644); err != nil {
 		t.Fatalf("创建 style.css 失败: %v", err)
 	}
 
@@ -1037,15 +1037,15 @@ func TestStaticHandler_TryFilesWithPathPrefix(t *testing.T) {
 
 	// 创建 API 模拟文件
 	apiDir := filepath.Join(tmpDir, "api")
-	if err := os.MkdirAll(apiDir, 0755); err != nil {
+	if err := os.MkdirAll(apiDir, 0o755); err != nil {
 		t.Fatalf("创建 api 目录失败: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(apiDir, "users.json"), []byte("[]"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(apiDir, "users.json"), []byte("[]"), 0o644); err != nil {
 		t.Fatalf("创建 users.json 失败: %v", err)
 	}
 
 	// 创建静态文件
-	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("static index"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("static index"), 0o644); err != nil {
 		t.Fatalf("创建 index.html 失败: %v", err)
 	}
 
@@ -1113,7 +1113,7 @@ func TestStaticHandler_Alias(t *testing.T) {
 		{
 			name: "alias 基础替换",
 			setup: func(t *testing.T, aliasDir string) {
-				if err := os.WriteFile(filepath.Join(aliasDir, "logo.png"), []byte("png content"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(aliasDir, "logo.png"), []byte("png content"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -1127,10 +1127,10 @@ func TestStaticHandler_Alias(t *testing.T) {
 			name: "alias 嵌套路径",
 			setup: func(t *testing.T, aliasDir string) {
 				subDir := filepath.Join(aliasDir, "icons")
-				if err := os.MkdirAll(subDir, 0755); err != nil {
+				if err := os.MkdirAll(subDir, 0o755); err != nil {
 					t.Fatalf("创建目录失败: %v", err)
 				}
-				if err := os.WriteFile(filepath.Join(subDir, "app.png"), []byte("app icon"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(subDir, "app.png"), []byte("app icon"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -1143,7 +1143,7 @@ func TestStaticHandler_Alias(t *testing.T) {
 		{
 			name: "alias 目录索引",
 			setup: func(t *testing.T, aliasDir string) {
-				if err := os.WriteFile(filepath.Join(aliasDir, "index.html"), []byte("alias index"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(aliasDir, "index.html"), []byte("alias index"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -1167,7 +1167,7 @@ func TestStaticHandler_Alias(t *testing.T) {
 		{
 			name: "root 与 alias 互斥 - 使用 alias",
 			setup: func(t *testing.T, aliasDir string) {
-				if err := os.WriteFile(filepath.Join(aliasDir, "file.txt"), []byte("from alias"), 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(aliasDir, "file.txt"), []byte("from alias"), 0o644); err != nil {
 					t.Fatalf("创建文件失败: %v", err)
 				}
 			},
@@ -1214,13 +1214,13 @@ func TestStaticHandler_AliasVsRoot(t *testing.T) {
 
 	// 在 root 创建子目录和文件
 	imagesDir := filepath.Join(rootDir, "images")
-	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+	if err := os.MkdirAll(imagesDir, 0o755); err != nil {
 		t.Fatalf("创建 images 目录失败: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(imagesDir, "logo.png"), []byte("from root"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(imagesDir, "logo.png"), []byte("from root"), 0o644); err != nil {
 		t.Fatalf("创建 root 文件失败: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(aliasDir, "logo.png"), []byte("from alias"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(aliasDir, "logo.png"), []byte("from alias"), 0o644); err != nil {
 		t.Fatalf("创建 alias 文件失败: %v", err)
 	}
 
@@ -1299,10 +1299,10 @@ func TestStaticHandler_AliasWithTryFiles(t *testing.T) {
 	aliasDir := t.TempDir()
 
 	// 创建测试文件
-	if err := os.WriteFile(filepath.Join(aliasDir, "app.js"), []byte("app content"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(aliasDir, "app.js"), []byte("app content"), 0o644); err != nil {
 		t.Fatalf("创建文件失败: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(aliasDir, "index.html"), []byte("fallback"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(aliasDir, "index.html"), []byte("fallback"), 0o644); err != nil {
 		t.Fatalf("创建文件失败: %v", err)
 	}
 
@@ -1366,7 +1366,7 @@ func TestStaticHandler_TryFilesEdgeCases(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// 创建测试文件
-	if err := os.WriteFile(filepath.Join(tmpDir, "file with spaces.txt"), []byte("spaces"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "file with spaces.txt"), []byte("spaces"), 0o644); err != nil {
 		t.Fatalf("创建带空格文件失败: %v", err)
 	}
 
@@ -1426,7 +1426,7 @@ func TestStaticHandler_LargeFileContentType(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.ext, func(t *testing.T) {
 			filePath := filepath.Join(tmpDir, "large"+tc.ext)
-			if err := os.WriteFile(filePath, largeContent, 0644); err != nil {
+			if err := os.WriteFile(filePath, largeContent, 0o644); err != nil {
 				t.Fatalf("创建文件失败: %v", err)
 			}
 
@@ -1500,16 +1500,16 @@ func TestStaticHandler_TryFilesWithDynamicSuffix(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// 创建测试文件
-	if err := os.WriteFile(filepath.Join(tmpDir, "about.html"), []byte("about page"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "about.html"), []byte("about page"), 0o644); err != nil {
 		t.Fatalf("创建文件失败: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(tmpDir, "api"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(tmpDir, "api"), 0o755); err != nil {
 		t.Fatalf("创建目录失败: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "api", "data.json"), []byte("{\"data\":true}"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "api", "data.json"), []byte("{\"data\":true}"), 0o644); err != nil {
 		t.Fatalf("创建文件失败: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("fallback"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("fallback"), 0o644); err != nil {
 		t.Fatalf("创建文件失败: %v", err)
 	}
 
@@ -1563,7 +1563,7 @@ func TestStaticHandler_TryFilesRootPathFallback(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// 创建 index.html 作为根路径回退
-	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("root fallback"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte("root fallback"), 0o644); err != nil {
 		t.Fatalf("创建文件失败: %v", err)
 	}
 

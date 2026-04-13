@@ -91,7 +91,7 @@ func generateConfig(outputPath string) int {
 	if outputPath == "" {
 		fmt.Print(string(yamlData))
 	} else {
-		if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
+		if err := os.WriteFile(outputPath, yamlData, 0o644); err != nil {
 			fmt.Fprintf(os.Stderr, "写入文件失败: %v\n", err)
 			return 1
 		}

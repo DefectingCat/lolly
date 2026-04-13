@@ -31,10 +31,10 @@ func setupStaticTestDir() (string, func()) {
 
 	for path, content := range testFiles {
 		fullPath := filepath.Join(dir, path)
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 			panic(err)
 		}
-		if err := os.WriteFile(fullPath, content, 0644); err != nil {
+		if err := os.WriteFile(fullPath, content, 0o644); err != nil {
 			panic(err)
 		}
 	}

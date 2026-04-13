@@ -225,8 +225,10 @@ func (c *TempFileCleaner) CountOrphanFiles() int {
 }
 
 // globalCleaner 全局清理器实例。
-var globalCleaner *TempFileCleaner
-var globalCleanerMu sync.RWMutex
+var (
+	globalCleaner   *TempFileCleaner
+	globalCleanerMu sync.RWMutex
+)
 
 // StartGlobalTempFileCleaner 启动全局临时文件清理器。
 //

@@ -212,11 +212,11 @@ bench-check:
 
 # 格式化代码（使用 goimports 替代 go fmt）
 fmt:
-	@echo "Formatting code with goimports..."
-	@if command -v goimports >/dev/null 2>&1; then \
-		goimports -w .; \
+	@echo "Formatting code with gofumpt..."
+	@if command -v gofumpt >/dev/null 2>&1; then \
+		gofumpt -w .; \
 	else \
-		echo "goimports not installed. Run: go install golang.org/x/tools/cmd/goimports@latest"; \
+		echo "gofumpt not installed. Run: go install mvdan.cc/gofumpt@latest"; \
 		exit 1; \
 	fi
 
