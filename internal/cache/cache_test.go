@@ -346,21 +346,3 @@ func TestPathMatch(t *testing.T) {
 		})
 	}
 }
-
-func TestContains(t *testing.T) {
-	if !contains([]string{"GET", "POST"}, "GET") {
-		t.Error("Expected to find GET")
-	}
-	if contains([]string{"GET", "POST"}, "DELETE") {
-		t.Error("Expected not to find DELETE")
-	}
-}
-
-func TestContainsInt(t *testing.T) {
-	if !containsInt([]int{200, 301, 302}, 200) {
-		t.Error("Expected to find 200")
-	}
-	if containsInt([]int{200, 301, 302}, 404) {
-		t.Error("Expected not to find 404")
-	}
-}
