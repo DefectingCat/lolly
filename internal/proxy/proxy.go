@@ -33,6 +33,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -43,10 +44,12 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
+	glua "github.com/yuin/gopher-lua"
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/logging"
+	"rua.plus/lolly/internal/lua"
 	"rua.plus/lolly/internal/netutil"
 	"rua.plus/lolly/internal/resolver"
 	"rua.plus/lolly/internal/utils"
@@ -57,6 +60,13 @@ const (
 	// upstreamCache 上游缓存标识
 	// 用于标记请求可直接使用缓存响应，无需转发到上游
 	upstreamCache = "CACHE"
+
+	// 负载均衡算法名称
+	lbRoundRobin         = "round_robin"
+	lbWeightedRoundRobin = "weighted_round_robin"
+	lbLeastConn          = "least_conn"
+	lbIPHash             = "ip_hash"
+	lbConsistentHash     = "consistent_hash"
 )
 
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
@@ -67,16 +77,18 @@ const (
 //   - 所有公开方法均为并发安全
 //   - 使用前需确保 targets 中至少有一个健康目标
 type Proxy struct {
-	balancer      loadbalance.Balancer
-	resolver      resolver.Resolver
-	clients       map[string]*fasthttp.HostClient
-	config        *config.ProxyConfig
-	cache         *cache.ProxyCache
-	healthChecker *HealthChecker
-	stopCh        chan struct{}
-	targets       []*loadbalance.Target
-	mu            sync.RWMutex
-	started       atomic.Bool
+	balancer         loadbalance.Balancer
+	fallbackBalancer loadbalance.Balancer // Lua 失败时的备用均衡器
+	resolver         resolver.Resolver
+	clients          map[string]*fasthttp.HostClient
+	config           *config.ProxyConfig
+	cache            *cache.ProxyCache
+	healthChecker    *HealthChecker
+	luaEngine        *lua.LuaEngine // Lua 引擎引用
+	stopCh           chan struct{}
+	targets          []*loadbalance.Target
+	mu               sync.RWMutex
+	started          atomic.Bool
 }
 
 // NewProxy 使用给定的配置和后台目标创建一个新的反向代理实例。
@@ -86,11 +98,12 @@ type Proxy struct {
 //   - cfg: 代理配置，包括超时时间、请求头和负载均衡策略
 //   - targets: 要代理请求的后端目标列表
 //   - transportCfg: 可选的 Transport 连接池配置，nil 时使用默认值
+//   - luaEngine: 可选的 Lua 引擎，用于 balancer_by_lua 功能
 //
 // 返回值：
 //   - *Proxy: 配置完成并可处理请求的代理实例
 //   - error: 初始化失败时非空（无效配置、没有健康目标等）
-func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportCfg *config.TransportConfig) (*Proxy, error) {
+func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportCfg *config.TransportConfig, luaEngine *lua.LuaEngine) (*Proxy, error) {
 	if cfg == nil {
 		return nil, errors.New("proxy config is nil")
 	}
@@ -105,12 +118,24 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 		return nil, err
 	}
 
+	// 创建 fallback 负载均衡器
+	fallbackAlgo := cfg.BalancerByLua.Fallback
+	if fallbackAlgo == "" {
+		fallbackAlgo = lbRoundRobin
+	}
+	fallbackBalancer, err := createBalancerByName(fallbackAlgo, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("create fallback balancer: %w", err)
+	}
+
 	p := &Proxy{
-		targets:  targets,
-		clients:  make(map[string]*fasthttp.HostClient),
-		balancer: balancer,
-		config:   cfg,
-		stopCh:   make(chan struct{}),
+		targets:          targets,
+		clients:          make(map[string]*fasthttp.HostClient),
+		balancer:         balancer,
+		fallbackBalancer: fallbackBalancer,
+		config:           cfg,
+		luaEngine:        luaEngine,
+		stopCh:           make(chan struct{}),
 	}
 
 	// 为每个后端目标初始化 HostClient
@@ -138,6 +163,28 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 	return p, nil
 }
 
+// createBalancerByName 根据算法名称创建负载均衡器
+func createBalancerByName(name string, cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
+	switch name {
+	case lbRoundRobin, "":
+		return loadbalance.NewRoundRobin(), nil
+	case lbWeightedRoundRobin:
+		return loadbalance.NewWeightedRoundRobin(), nil
+	case lbLeastConn:
+		return loadbalance.NewLeastConnections(), nil
+	case lbIPHash:
+		return loadbalance.NewIPHash(), nil
+	case lbConsistentHash:
+		virtualNodes := cfg.VirtualNodes
+		if virtualNodes <= 0 {
+			virtualNodes = 150
+		}
+		return loadbalance.NewConsistentHash(virtualNodes, cfg.HashKey), nil
+	default:
+		return nil, errors.New("unsupported load balance algorithm: " + name)
+	}
+}
+
 // SetHealthChecker 设置健康检查器用于被动健康检查。
 // 当代理请求失败时，将调用健康检查器的 MarkUnhealthy 方法。
 func (p *Proxy) SetHealthChecker(hc *HealthChecker) {
@@ -147,15 +194,15 @@ func (p *Proxy) SetHealthChecker(hc *HealthChecker) {
 // createBalancer 根据配置的算法创建负载均衡器。
 func createBalancer(cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
 	switch cfg.LoadBalance {
-	case "round_robin", "":
+	case lbRoundRobin, "":
 		return loadbalance.NewRoundRobin(), nil
-	case "weighted_round_robin":
+	case lbWeightedRoundRobin:
 		return loadbalance.NewWeightedRoundRobin(), nil
-	case "least_conn":
+	case lbLeastConn:
 		return loadbalance.NewLeastConnections(), nil
-	case "ip_hash":
+	case lbIPHash:
 		return loadbalance.NewIPHash(), nil
-	case "consistent_hash":
+	case lbConsistentHash:
 		virtualNodes := cfg.VirtualNodes
 		if virtualNodes <= 0 {
 			virtualNodes = 150
@@ -529,19 +576,106 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-// selectTarget 使用配置的负载均衡器选择后端目标。
-// 对于 IP 哈希负载均衡，从请求中提取客户端 IP。
-// 对于一致性哈希，根据配置的 hash_key 选择目标。
-// 如果没有可用的健康目标则返回 nil。
+// selectTarget 使用配置的负载均衡器选择后端目标
+// 如果启用 Lua balancer，先尝试 Lua 脚本选择
 func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 	p.mu.RLock()
-	balancer := p.balancer
 	targets := p.targets
 	p.mu.RUnlock()
 
 	if len(targets) == 0 {
 		return nil
 	}
+
+	// 检查是否启用 Lua balancer
+	if p.config.BalancerByLua.Enabled && p.config.BalancerByLua.Script != "" && p.luaEngine != nil {
+		target, err := p.selectByLua(ctx, targets)
+		if err != nil {
+			logging.Warn().Err(err).Msg("lua balancer failed, using fallback")
+			// Lua 失败，使用 fallback 算法
+			return p.selectByFallback(ctx, targets)
+		}
+		if target != nil {
+			return target
+		}
+		// Lua 未调用 set_current_peer，使用 fallback
+		logging.Debug().Msg("lua balancer did not select target, using fallback")
+		return p.selectByFallback(ctx, targets)
+	}
+
+	// 使用传统负载均衡算法
+	return p.selectByBalancer(ctx, targets)
+}
+
+// selectByLua 使用 Lua 脚本选择目标
+func (p *Proxy) selectByLua(ctx *fasthttp.RequestCtx, targets []*loadbalance.Target) (*loadbalance.Target, error) {
+	clientIP := netutil.ExtractClientIP(ctx)
+
+	bctx := &lua.BalancerContext{
+		Targets:  targets,
+		ClientIP: clientIP,
+		Retries:  p.config.NextUpstream.Tries,
+	}
+
+	// 创建 Lua 协程
+	coro, err := p.luaEngine.NewCoroutine(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create lua coroutine: %w", err)
+	}
+	defer coro.Close()
+
+	// 注册 balancer API
+	L := coro.Co
+	ngx, ok := L.GetGlobal("ngx").(*glua.LTable)
+	if !ok {
+		return nil, fmt.Errorf("global 'ngx' is not an LTable")
+	}
+	lua.RegisterBalancerAPI(L, bctx, ngx)
+
+	// 设置超时
+	timeout := p.config.BalancerByLua.Timeout
+	if timeout <= 0 {
+		timeout = 100 * time.Millisecond
+	}
+
+	// 执行脚本（带超时）
+	execCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	coro.ExecutionContext = execCtx
+
+	err = coro.ExecuteFile(p.config.BalancerByLua.Script)
+	if err != nil {
+		return nil, fmt.Errorf("execute lua script: %w", err)
+	}
+
+	// 检查是否调用了 set_current_peer
+	if !bctx.IsSelected() {
+		return nil, nil // 未选择，返回 nil 表示需使用 fallback
+	}
+
+	return bctx.Selected, nil
+}
+
+// selectByFallback 使用 fallback 算法选择目标
+func (p *Proxy) selectByFallback(ctx *fasthttp.RequestCtx, targets []*loadbalance.Target) *loadbalance.Target {
+	p.mu.RLock()
+	balancer := p.fallbackBalancer
+	p.mu.RUnlock()
+
+	if ipHash, ok := balancer.(*loadbalance.IPHash); ok {
+		clientIP := netutil.ExtractClientIP(ctx)
+		return ipHash.SelectByIP(targets, clientIP)
+	}
+
+	return balancer.Select(targets)
+}
+
+// selectByBalancer 使用主负载均衡器选择目标
+func (p *Proxy) selectByBalancer(ctx *fasthttp.RequestCtx, targets []*loadbalance.Target) *loadbalance.Target {
+	p.mu.RLock()
+	balancer := p.balancer
+	p.mu.RUnlock()
 
 	// 对于 IPHash 负载均衡器，提取客户端 IP
 	if ipHash, ok := balancer.(*loadbalance.IPHash); ok {

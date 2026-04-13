@@ -24,7 +24,19 @@ import (
 	"time"
 )
 
-// Target 表示负载均衡的后端服务器目标。
+// Target 表示 HTTP 代理（L7 层）的负载均衡后端服务器目标。
+//
+// HTTP Target 特性（区别于 Stream Target）：
+//   - URL 解析：支持完整 URL（如 http://backend:8080），包含协议、路径、查询参数
+//   - DNS 动态解析：resolvedIPs 和 lastResolved 字段支持 DNS TTL 缓存和动态重解析
+//   - Failover 支持：配合 Balancer.SelectExcluding 实现失败节点排除重试
+//   - 一致性哈希：VirtualHashes 支持一致性哈希算法的虚拟节点
+//
+// 语义差异说明：
+//   - HTTP 代理工作在应用层（L7），需要处理 URL 和 DNS 解析
+//   - Stream 代理工作在传输层（L4），只需简单 host:port，无需 DNS 缓存
+//   - 因此 HTTP Target 和 Stream Target 必须保持独立定义，不可合并
+//
 // 所有字段都设计为使用原子操作进行并发访问（如适用）。
 type Target struct {
 	resolvedIPs   atomic.Pointer[[]string]
@@ -37,7 +49,17 @@ type Target struct {
 	Healthy       atomic.Bool
 }
 
-// Balancer 是负载均衡算法的接口。
+// Balancer 是 HTTP 代理（L7 层）负载均衡算法的接口。
+//
+// HTTP Balancer 特性（区别于 Stream Balancer）：
+//   - Select(): 标准选择方法，按算法策略选择健康目标
+//   - SelectExcluding(): 故障转移支持，排除失败节点后选择替代目标
+//
+// 语义差异说明：
+//   - HTTP 代理需要 failover 重试能力（next_upstream 配置），因此需要 SelectExcluding
+//   - Stream 代理工作在传输层（L4），无重试机制，仅需要 Select 方法
+//   - 因此 HTTP Balancer 和 Stream Balancer 接口签名不同，不可合并
+//
 // 实现必须是并发安全的。
 type Balancer interface {
 	// Select 根据算法策略从提供的列表中选择一个目标。

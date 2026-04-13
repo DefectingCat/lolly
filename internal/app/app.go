@@ -116,7 +116,7 @@ func generateConfig(outputPath string) int {
 	if outputPath == "" {
 		fmt.Print(string(yamlData))
 	} else {
-		if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
+		if err := os.WriteFile(outputPath, yamlData, 0o644); err != nil {
 			fmt.Fprintf(os.Stderr, "写入文件失败: %v\n", err)
 			return 1
 		}
@@ -285,7 +285,7 @@ func (a *App) Run() int {
 	a.upgradeMgr = server.NewUpgradeManager(a.srv)
 	if a.pidFile != "" {
 		a.upgradeMgr.SetPidFile(a.pidFile)
-		_ = a.upgradeMgr.WritePid() //nolint:errcheck
+		_ = a.upgradeMgr.WritePid()
 	}
 
 	// 启动信号处理
@@ -365,7 +365,7 @@ func (a *App) handleSignal(sig os.Signal) bool {
 		a.logger.LogSignal("SIGQUIT", fmt.Sprintf("优雅停止（等待 %v）", timeout))
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
-		_ = a.srv.GracefulStop(timeout) //nolint:errcheck
+		_ = a.srv.GracefulStop(timeout)
 		return false
 
 	case syscall.SIGTERM, syscall.SIGINT:
@@ -374,11 +374,15 @@ func (a *App) handleSignal(sig os.Signal) bool {
 		if timeout <= 0 {
 			timeout = 5 * time.Second // 默认值
 		}
-		sigTyped := sig.(syscall.Signal) //nolint:errcheck // 类型断言
-		a.logger.LogSignal(sigName(sigTyped), "停止服务器")
+		sigTyped, ok := sig.(syscall.Signal)
+		if !ok {
+			a.logger.LogSignal("unknown", "停止服务器")
+		} else {
+			a.logger.LogSignal(sigName(sigTyped), "停止服务器")
+		}
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
-		_ = a.srv.StopWithTimeout(timeout) //nolint:errcheck // 使用新方法
+		_ = a.srv.StopWithTimeout(timeout)
 		return false
 
 	case syscall.SIGHUP:
@@ -488,7 +492,7 @@ func (a *App) gracefulUpgrade() {
 	}
 	a.shutdownHTTP2()
 	a.shutdownHTTP3()
-	_ = a.srv.GracefulStop(timeout) //nolint:errcheck
+	_ = a.srv.GracefulStop(timeout)
 }
 
 // sigName 返回信号名称（用于日志输出）。
