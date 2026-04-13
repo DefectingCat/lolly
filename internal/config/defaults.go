@@ -68,12 +68,13 @@ func DefaultConfig() *Config {
 					Preload:           false,
 				},
 				HTTP2: HTTP2Config{
-					Enabled:              true,
-					MaxConcurrentStreams: 128,
-					MaxHeaderListSize:    1048576, // 1MB
-					IdleTimeout:          120 * time.Second,
-					PushEnabled:          false,
-					H2CEnabled:           false,
+					Enabled:                 true,
+					MaxConcurrentStreams:    128,
+					MaxHeaderListSize:       1048576, // 1MB
+					IdleTimeout:             120 * time.Second,
+					PushEnabled:             false,
+					H2CEnabled:              false,
+					GracefulShutdownTimeout: 30 * time.Second,
 				},
 				SessionTickets: SessionTicketsConfig{
 					Enabled:        false,

@@ -59,6 +59,15 @@ type Server struct {
 
 	// running 服务器运行状态
 	running bool
+
+	// pool 连接池
+	pool *connectionPool
+
+	// connWg 连接等待组，用于优雅关闭
+	connWg sync.WaitGroup
+
+	// GracefulShutdownTimeout 优雅关闭超时时间
+	GracefulShutdownTimeout time.Duration
 }
 
 // NewServer 创建 HTTP/2 服务器。
@@ -96,6 +105,11 @@ func NewServer(cfg *config.HTTP2Config, handler fasthttp.RequestHandler, tlsConf
 		idleTimeout = 120 * time.Second
 	}
 
+	gracefulTimeout := cfg.GracefulShutdownTimeout
+	if gracefulTimeout <= 0 {
+		gracefulTimeout = 30 * time.Second
+	}
+
 	// 创建 HTTP/2 服务器
 	h2s := &http2.Server{
 		MaxConcurrentStreams: uint32(maxConcurrentStreams),
@@ -107,11 +121,13 @@ func NewServer(cfg *config.HTTP2Config, handler fasthttp.RequestHandler, tlsConf
 	}
 
 	return &Server{
-		stopChan:    make(chan struct{}),
-		http2Server: h2s,
-		config:      cfg,
-		tlsConfig:   tlsConfig,
-		handler:     handler,
+		stopChan:                make(chan struct{}),
+		http2Server:             h2s,
+		config:                  cfg,
+		tlsConfig:               tlsConfig,
+		handler:                 handler,
+		pool:                    newConnectionPool(),
+		GracefulShutdownTimeout: gracefulTimeout,
 	}, nil
 }
 
@@ -166,6 +182,7 @@ func (s *Server) Serve(ln net.Listener) error {
 			continue
 		}
 
+		s.connWg.Add(1)
 		go s.handleConnection(conn)
 	}
 }
@@ -174,7 +191,11 @@ func (s *Server) Serve(ln net.Listener) error {
 //
 // 根据连接类型（TLS 或明文）和 ALPN 协商结果，选择合适的协议处理。
 func (s *Server) handleConnection(conn net.Conn) {
+	key := conn.RemoteAddr().String()
+	s.pool.add(key, conn)
 	defer func() {
+		s.pool.remove(key, conn)
+		s.connWg.Done()
 		if err := conn.Close(); err != nil {
 			logging.Error().Err(err).Msg("HTTP/2 connection close error")
 		}
@@ -263,7 +284,23 @@ func (s *Server) Stop() error {
 		}
 	}
 
-	logging.Info().Msg("HTTP/2 server stopped")
+	// 关闭所有连接
+	s.pool.closeAll()
+
+	// 等待所有连接完成或超时
+	done := make(chan struct{})
+	go func() {
+		s.connWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		logging.Info().Msg("HTTP/2 server stopped gracefully")
+	case <-time.After(s.GracefulShutdownTimeout):
+		logging.Warn().Msg("HTTP/2 server graceful shutdown timed out")
+	}
+
 	return nil
 }
 

@@ -111,12 +111,13 @@ type VariablesConfig struct {
 //	      max_concurrent_streams: 128
 //	      max_header_list_size: "16KB"
 type HTTP2Config struct {
-	MaxConcurrentStreams int           `yaml:"max_concurrent_streams"`
-	MaxHeaderListSize    int           `yaml:"max_header_list_size"`
-	IdleTimeout          time.Duration `yaml:"idle_timeout"`
-	Enabled              bool          `yaml:"enabled"`
-	PushEnabled          bool          `yaml:"push_enabled"`
-	H2CEnabled           bool          `yaml:"h2c_enabled"`
+	MaxConcurrentStreams    int           `yaml:"max_concurrent_streams"`
+	MaxHeaderListSize       int           `yaml:"max_header_list_size"`
+	IdleTimeout             time.Duration `yaml:"idle_timeout"`
+	Enabled                 bool          `yaml:"enabled"`
+	PushEnabled             bool          `yaml:"push_enabled"`
+	H2CEnabled              bool          `yaml:"h2c_enabled"`
+	GracefulShutdownTimeout time.Duration `yaml:"graceful_shutdown_timeout"`
 }
 
 // HTTP3Config HTTP/3 (QUIC) 配置。
