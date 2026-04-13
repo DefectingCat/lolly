@@ -20,6 +20,7 @@ import (
 	"hash/fnv"
 	"net"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -42,6 +43,7 @@ type Target struct {
 	resolvedIPs   atomic.Pointer[[]string]
 	URL           string
 	hostname      string
+	hostnameOnce  sync.Once
 	VirtualHashes []uint64
 	Weight        int
 	Connections   int64
@@ -373,11 +375,9 @@ func (i *IPHash) SelectExcludingByIP(targets []*Target, excluded []*Target, clie
 }
 
 // Hostname 返回目标主机名（从 URL 提取）。
-// 如果 hostname 未初始化，会自动调用 initHostname。
+// 使用 sync.Once 确保线程安全，只初始化一次。
 func (t *Target) Hostname() string {
-	if t.hostname == "" {
-		t.initHostname()
-	}
+	t.hostnameOnce.Do(t.initHostname)
 	return t.hostname
 }
 
