@@ -40,14 +40,14 @@ import (
 //
 // 所有字段都设计为使用原子操作进行并发访问（如适用）。
 type Target struct {
-	resolvedIPs   atomic.Pointer[[]string]
 	URL           string
 	hostname      string
-	hostnameOnce  sync.Once
 	VirtualHashes []uint64
+	resolvedIPs   atomic.Pointer[[]string]
 	Weight        int
 	Connections   int64
 	lastResolved  atomic.Int64
+	hostnameOnce  sync.Once
 	Healthy       atomic.Bool
 }
 
