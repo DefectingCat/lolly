@@ -23,10 +23,10 @@ func TestValidateServer(t *testing.T) {
 	// TestValidateServer 测试服务器配置验证。
 	tests := []struct {
 		name      string
+		errMsg    string
 		config    ServerConfig
 		isDefault bool
 		wantErr   bool
-		errMsg    string
 	}{
 		{
 			name: "有效配置",
@@ -102,9 +102,9 @@ func TestValidateProxy(t *testing.T) {
 	// TestValidateProxy 测试代理配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  ProxyConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name: "有效代理配置",
@@ -194,9 +194,9 @@ func TestValidateSSL(t *testing.T) {
 	// TestValidateSSL 测试 SSL 配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  SSLConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name:    "未配置SSL",
@@ -306,9 +306,9 @@ func TestValidateAuth(t *testing.T) {
 	// TestValidateAuth 测试认证配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  AuthConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name:    "未配置认证",
@@ -455,9 +455,9 @@ func TestValidateRateLimit(t *testing.T) {
 	// TestValidateRateLimit 测试速率限制配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  RateLimitConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name:    "未配置速率限制",
@@ -540,9 +540,9 @@ func TestValidateCompression(t *testing.T) {
 	// TestValidateCompression 测试压缩配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  CompressionConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name:    "未配置压缩",
@@ -644,9 +644,9 @@ func TestValidateAccess(t *testing.T) {
 	// TestValidateAccess 测试访问控制配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  AccessConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name:    "空配置有效",
@@ -746,9 +746,9 @@ func TestValidateStatic(t *testing.T) {
 	// TestValidateStatic 测试静态文件配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  StaticConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name:    "空配置有效",
@@ -804,9 +804,9 @@ func TestValidateSecurity(t *testing.T) {
 	// TestValidateSecurity 测试安全配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  SecurityConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name:    "空配置有效",
@@ -886,9 +886,9 @@ func TestValidateStream(t *testing.T) {
 	// TestValidateStream 测试 Stream 代理配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  StreamConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name: "有效 TCP Stream",
@@ -1019,9 +1019,9 @@ func TestValidatePerformance(t *testing.T) {
 	// TestValidatePerformance 测试性能配置验证。
 	tests := []struct {
 		name    string
+		errMsg  string
 		config  PerformanceConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name: "空配置有效",
@@ -1120,10 +1120,10 @@ func TestValidatePerformance(t *testing.T) {
 func TestValidateVariables(t *testing.T) {
 	// TestValidateVariables 测试自定义变量配置验证。
 	tests := []struct {
-		name    string
 		config  VariablesConfig
-		wantErr bool
+		name    string
 		errMsg  string
+		wantErr bool
 	}{
 		{
 			name:    "空配置有效",
@@ -1227,8 +1227,8 @@ func TestValidateTryFilesPattern(t *testing.T) {
 	tests := []struct {
 		name    string
 		pattern string
-		wantErr bool
 		errMsg  string
+		wantErr bool
 	}{
 		// 基本占位符
 		{name: "有效 $uri", pattern: "$uri", wantErr: false},
@@ -1309,9 +1309,9 @@ func TestValidateTryFilesPattern(t *testing.T) {
 func TestValidateStaticsWithTryFiles(t *testing.T) {
 	tests := []struct {
 		name    string
+		errMsg  string
 		statics []StaticConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name: "有效 try_files 配置",

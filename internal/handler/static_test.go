@@ -42,12 +42,12 @@ func newTestContext(t *testing.T, path string) *fasthttp.RequestCtx {
 // TestStaticHandlerHandle 测试静态文件处理器
 func TestStaticHandlerHandle(t *testing.T) {
 	tests := []struct {
+		setup       func(t *testing.T, root string)
 		name        string
-		setup       func(t *testing.T, root string) // 在临时目录中设置测试文件
-		path        string                          // 请求路径
-		wantStatus  int                             // 期望的 HTTP 状态码
-		wantContent string                          // 期望的响应内容（可选）
-		skipContent bool                            // 是否跳过内容验证
+		path        string
+		wantContent string
+		wantStatus  int
+		skipContent bool
 	}{
 		{
 			name: "正常文件访问",
@@ -180,11 +180,11 @@ func TestStaticHandlerHandle(t *testing.T) {
 // 安全检查 strings.Contains(path, "..") 检测文件名中包含 ".." 的情况
 func TestStaticHandlerHandle_PathTraversalSecurity(t *testing.T) {
 	tests := []struct {
-		name        string
 		setup       func(t *testing.T, root string)
+		name        string
 		path        string
+		description string
 		wantStatus  int
-		description string // 说明测试预期行为
 	}{
 		{
 			name: "文件名包含双点 - 安全检查拦截",
@@ -587,8 +587,8 @@ func TestStaticHandler_SetTryFiles(t *testing.T) {
 	tests := []struct {
 		name         string
 		tryFiles     []string
-		tryFilesPass bool
 		wantTryFiles []string
+		tryFilesPass bool
 		wantPass     bool
 	}{
 		{
@@ -714,12 +714,12 @@ func TestStaticHandler_resolveTryFilePath(t *testing.T) {
 // TestStaticHandler_handleTryFiles 测试 handleTryFiles 功能
 func TestStaticHandler_handleTryFiles(t *testing.T) {
 	tests := []struct {
-		name        string
 		setup       func(t *testing.T, root string)
-		tryFiles    []string
+		name        string
 		path        string
-		wantStatus  int
 		wantContent string
+		tryFiles    []string
+		wantStatus  int
 		skipContent bool
 	}{
 		{
@@ -842,13 +842,13 @@ func TestStaticHandler_handleTryFiles(t *testing.T) {
 // TestStaticHandler_handleInternalRedirect 测试内部重定向功能
 func TestStaticHandler_handleInternalRedirect(t *testing.T) {
 	tests := []struct {
-		name         string
 		setup        func(t *testing.T, root string)
-		tryFiles     []string
-		tryFilesPass bool
+		name         string
 		path         string
-		wantStatus   int
 		wantContent  string
+		tryFiles     []string
+		wantStatus   int
+		tryFilesPass bool
 		skipContent  bool
 	}{
 		{
@@ -980,8 +980,8 @@ func TestStaticHandler_TryFilesSPA(t *testing.T) {
 	tests := []struct {
 		name        string
 		path        string
-		wantStatus  int
 		wantContent string
+		wantStatus  int
 	}{
 		{
 			name:        "访问存在的静态资源",
@@ -1056,8 +1056,8 @@ func TestStaticHandler_TryFilesWithPathPrefix(t *testing.T) {
 	tests := []struct {
 		name        string
 		path        string
-		wantStatus  int
 		wantContent string
+		wantStatus  int
 		skipContent bool
 	}{
 		{
@@ -1102,13 +1102,13 @@ func TestStaticHandler_TryFilesWithPathPrefix(t *testing.T) {
 // TestStaticHandler_Alias 测试 alias 路径替换功能
 func TestStaticHandler_Alias(t *testing.T) {
 	tests := []struct {
-		name        string
 		setup       func(t *testing.T, aliasDir string)
+		name        string
 		alias       string
 		pathPrefix  string
 		path        string
-		wantStatus  int
 		wantContent string
+		wantStatus  int
 		skipContent bool
 	}{
 		{
@@ -1313,8 +1313,8 @@ func TestStaticHandler_AliasWithTryFiles(t *testing.T) {
 	tests := []struct {
 		name        string
 		path        string
-		wantStatus  int
 		wantContent string
+		wantStatus  int
 	}{
 		{
 			name:        "找到文件",
@@ -1520,8 +1520,8 @@ func TestStaticHandler_TryFilesWithDynamicSuffix(t *testing.T) {
 	tests := []struct {
 		name        string
 		path        string
-		wantStatus  int
 		wantContent string
+		wantStatus  int
 	}{
 		{
 			name:        "找到 $uri.html",

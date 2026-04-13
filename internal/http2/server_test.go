@@ -21,10 +21,10 @@ import (
 // TestNewServer 测试 HTTP/2 服务器创建。
 func TestNewServer(t *testing.T) {
 	tests := []struct {
-		name      string
 		cfg       *config.HTTP2Config
 		handler   fasthttp.RequestHandler
 		tlsConfig *tls.Config
+		name      string
 		wantErr   bool
 	}{
 		{
@@ -195,7 +195,11 @@ func TestWrapTLSListener(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer func() { _ = ln.Close() }()
+	defer func() {
+		if err := ln.Close(); err != nil {
+			t.Logf("Failed to close listener: %v", err)
+		}
+	}()
 
 	// 创建 TLS 配置
 	tlsConfig := &tls.Config{
@@ -254,10 +258,10 @@ func TestIsH2CEnabled(t *testing.T) {
 // TestIsHTTP2Request 测试 HTTP/2 请求检测。
 func TestIsHTTP2Request(t *testing.T) {
 	tests := []struct {
+		header map[string]string
 		name   string
 		method string
 		major  int
-		header map[string]string
 		want   bool
 	}{
 		{
@@ -402,16 +406,37 @@ func TestConnectionPool(t *testing.T) {
 	pool := newConnectionPool()
 
 	// 创建测试连接
-	ln1, _ := net.Listen("tcp", "127.0.0.1:0")
-	defer func() { _ = ln1.Close() }()
+	ln1, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener 1: %v", err)
+	}
+	defer func() {
+		if cerr := ln1.Close(); cerr != nil {
+			t.Logf("Failed to close listener 1: %v", cerr)
+		}
+	}()
 
-	ln2, _ := net.Listen("tcp", "127.0.0.1:0")
-	defer func() { _ = ln2.Close() }()
+	ln2, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener 2: %v", err)
+	}
+	defer func() {
+		if cerr := ln2.Close(); cerr != nil {
+			t.Logf("Failed to close listener 2: %v", cerr)
+		}
+	}()
 
 	// 测试添加连接
-	conn1, _ := net.Dial("tcp", ln1.Addr().String())
+	conn1, err := net.Dial("tcp", ln1.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial listener 1: %v", err)
+	}
 	if conn1 != nil {
-		defer func() { _ = conn1.Close() }()
+		defer func() {
+			if err := conn1.Close(); err != nil {
+				t.Logf("Failed to close connection 1: %v", err)
+			}
+		}()
 		pool.add("key1", conn1)
 
 		// 测试获取连接

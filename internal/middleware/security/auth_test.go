@@ -22,8 +22,8 @@ func TestNewBasicAuth(t *testing.T) {
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)
 
 	tests := []struct {
-		name    string
 		cfg     *config.AuthConfig
+		name    string
 		wantErr bool
 	}{
 		{

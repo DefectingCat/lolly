@@ -27,9 +27,9 @@ import (
 // TestNewErrorPageManager_EmptyConfig 测试空配置情况
 func TestNewErrorPageManager_EmptyConfig(t *testing.T) {
 	tests := []struct {
+		want *ErrorPageManager
 		name string
 		cfg  config.ErrorPageConfig
-		want *ErrorPageManager
 	}{
 		{
 			name: "完全空配置",
@@ -85,10 +85,10 @@ func TestNewErrorPageManager_PartialLoadFailure(t *testing.T) {
 	nonExistent := filepath.Join(tmpDir, "nonexistent", "500.html")
 
 	tests := []struct {
+		wantPages      map[int]bool
 		name           string
 		cfg            config.ErrorPageConfig
 		wantConfigured bool
-		wantPages      map[int]bool
 		wantPartialErr bool
 	}{
 		{
@@ -296,11 +296,11 @@ func TestErrorPageManager_GetPage(t *testing.T) {
 
 	tests := []struct {
 		name             string
+		wantContent      string
 		cfg              config.ErrorPageConfig
 		requestCode      int
-		wantContent      string
-		wantFound        bool
 		wantResponseCode int
+		wantFound        bool
 	}{
 		{
 			name: "找到特定状态码页面",

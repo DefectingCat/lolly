@@ -33,27 +33,27 @@ import (
 //   - 状态端点可能暴露敏感信息，建议配置 IP 白名单
 //   - 所有方法均为并发安全
 type StatusHandler struct {
-	server  *Server     // 服务器实例，用于获取状态数据
-	allowed []net.IPNet // 允许访问的 IP 网络列表
-	path    string      // 状态端点路径
-	format  string      // 输出格式：json 或 prometheus
+	server  *Server
+	path    string
+	format  string
+	allowed []net.IPNet
 }
 
 // Status 状态响应结构。
 //
 // 包含服务器运行的各种统计信息，以 JSON 格式返回给客户端。
 type Status struct {
-	Version       string            `json:"version"`               // 服务器版本号
-	Uptime        time.Duration     `json:"uptime"`                // 服务器运行时间
-	Connections   int64             `json:"connections"`           // 当前活跃连接数
-	Requests      int64             `json:"requests"`              // 已处理的总请求数
-	BytesSent     int64             `json:"bytes_sent"`            // 已发送的总字节数
-	BytesReceived int64             `json:"bytes_received"`        // 已接收的总字节数
-	Cache         *CacheStats       `json:"cache,omitempty"`       // 缓存统计（可选）
-	Pool          *PoolStats        `json:"pool,omitempty"`        // Goroutine 池统计（可选）
-	Upstreams     []UpstreamStatus  `json:"upstreams,omitempty"`   // Upstream 统计（可选）
-	RateLimits    []RateLimitStatus `json:"rate_limits,omitempty"` // 限流统计（可选）
-	SSL           *SSLStatus        `json:"ssl,omitempty"`         // SSL 统计（可选）
+	Cache         *CacheStats       `json:"cache,omitempty"`
+	Pool          *PoolStats        `json:"pool,omitempty"`
+	SSL           *SSLStatus        `json:"ssl,omitempty"`
+	Version       string            `json:"version"`
+	Upstreams     []UpstreamStatus  `json:"upstreams,omitempty"`
+	RateLimits    []RateLimitStatus `json:"rate_limits,omitempty"`
+	Uptime        time.Duration     `json:"uptime"`
+	Connections   int64             `json:"connections"`
+	Requests      int64             `json:"requests"`
+	BytesSent     int64             `json:"bytes_sent"`
+	BytesReceived int64             `json:"bytes_received"`
 }
 
 // UpstreamStatus Upstream 统计信息。
@@ -144,8 +144,10 @@ func NewStatusHandler(server *Server, cfg *config.StatusConfig) (*StatusHandler,
 			}
 			// 转换为 CIDR 格式
 			if ip.To4() != nil {
+				//nolint:errcheck
 				_, network, _ = net.ParseCIDR(cidr + "/32")
 			} else {
+				//nolint:errcheck
 				_, network, _ = net.ParseCIDR(cidr + "/128")
 			}
 		}

@@ -35,11 +35,11 @@ import (
 // TestNewProxy 测试 NewProxy 函数
 func TestNewProxy(t *testing.T) {
 	tests := []struct {
-		name        string
 		cfg         *config.ProxyConfig
+		name        string
+		errContains string
 		targets     []*loadbalance.Target
 		wantErr     bool
-		errContains string
 	}{
 		{
 			name: "正常创建",
@@ -260,9 +260,9 @@ func TestSelectTarget(t *testing.T) {
 	tests := []struct {
 		name           string
 		loadBalance    string
-		targets        []*loadbalance.Target
 		clientIP       string
 		expectedTarget string
+		targets        []*loadbalance.Target
 	}{
 		{
 			name:        "轮询选择",
@@ -492,9 +492,9 @@ func TestModifyRequestHeaders(t *testing.T) {
 // TestModifyResponseHeaders 测试响应头修改
 func TestModifyResponseHeaders(t *testing.T) {
 	tests := []struct {
-		name         string
 		setResponse  map[string]string
 		checkHeaders map[string]string
+		name         string
 	}{
 		{
 			name: "设置自定义响应头",
@@ -780,10 +780,10 @@ func TestIsWebSocketRequest(t *testing.T) {
 // TestCreateBalancer 测试负载均衡器创建
 func TestCreateBalancer(t *testing.T) {
 	tests := []struct {
-		name        string
 		cfg         *config.ProxyConfig
-		wantErr     bool
+		name        string
 		errContains string
+		wantErr     bool
 	}{
 		{
 			name: "轮询",

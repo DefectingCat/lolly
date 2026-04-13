@@ -37,11 +37,11 @@ type VHostManager struct {
 //
 // 代表一个虚拟主机配置，包含名称和对应的请求处理器。
 type VirtualHost struct {
-	// name 虚拟主机名称（域名）
-	name string
-
 	// handler 请求处理器
 	handler fasthttp.RequestHandler
+
+	// name 虚拟主机名称（域名）
+	name string
 }
 
 // NewVHostManager 创建虚拟主机管理器。

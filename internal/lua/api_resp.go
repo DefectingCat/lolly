@@ -57,6 +57,7 @@ func RegisterNgxRespAPI(L *glua.LState, api *ngxRespAPI) {
 	ngxResp.RawSetString("clear_header", L.NewFunction(api.luaClearHeader))
 
 	// 将 ngx.resp 添加到 ngx
+	//nolint:errcheck // 类型断言检查
 	ngx.(*glua.LTable).RawSetString("resp", ngxResp)
 }
 
@@ -169,8 +170,8 @@ func (api *ngxRespAPI) luaClearHeader(L *glua.LState) int {
 func (api *ngxRespAPI) parseHeaders() map[string][]string {
 	result := make(map[string][]string)
 
-	// 遍历所有响应头
-	api.ctx.Response.Header.VisitAll(func(key, value []byte) {
+	// 遍历所有响应头（使用 All 替代已弃用的 VisitAll）
+	for key, value := range api.ctx.Response.Header.All() {
 		keyStr := string(key)
 		valueStr := string(value)
 
@@ -179,7 +180,7 @@ func (api *ngxRespAPI) parseHeaders() map[string][]string {
 		} else {
 			result[keyStr] = []string{valueStr}
 		}
-	})
+	}
 
 	return result
 }

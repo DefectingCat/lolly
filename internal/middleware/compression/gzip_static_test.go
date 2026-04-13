@@ -38,10 +38,10 @@ func TestGzipStaticServeFile_BrotliPriority(t *testing.T) {
 	g := NewGzipStatic(true, tmpDir, nil)
 
 	tests := []struct {
-		name           string
 		acceptEncoding string
-		wantServed     bool
+		name           string
 		wantEncoding   string
+		wantServed     bool
 	}{
 		{
 			name:           "同时支持 br 和 gzip，优先返回 br",
@@ -122,10 +122,10 @@ func TestGzipStaticServeFile_GzipFallback(t *testing.T) {
 	g := NewGzipStatic(true, tmpDir, nil)
 
 	tests := []struct {
-		name           string
 		acceptEncoding string
-		wantServed     bool
+		name           string
 		wantEncoding   string
+		wantServed     bool
 	}{
 		{
 			name:           "支持 br 但没有 .br 文件，回退到 gzip",

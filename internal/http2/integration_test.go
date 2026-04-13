@@ -34,7 +34,7 @@ func TestIntegrationHTTP2Request(t *testing.T) {
 	// 这里使用非 TLS 模式测试基本功能
 
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Hello HTTP/2") //nolint:errcheck
+		ctx.WriteString("Hello HTTP/2")
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
@@ -53,11 +53,17 @@ func TestIntegrationHTTP2Request(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer func() { _ = ln.Close() }()
+	defer func() {
+		if err := ln.Close(); err != nil {
+			t.Logf("Failed to close listener: %v", err)
+		}
+	}()
 
 	// 启动服务器（在后台）
 	go func() {
-		_ = server.Serve(ln)
+		if err := server.Serve(ln); err != nil {
+			t.Logf("Server serve error: %v", err)
+		}
 	}()
 
 	// 等待服务器启动
@@ -114,7 +120,7 @@ func TestIntegrationHTTP1Fallback(t *testing.T) {
 	}
 
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Fallback to HTTP/1.1") //nolint:errcheck
+		ctx.WriteString("Fallback to HTTP/1.1")
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
@@ -143,7 +149,7 @@ func TestIntegrationConcurrentStreams(t *testing.T) {
 	requestCount := 0
 	handler := func(ctx *fasthttp.RequestCtx) {
 		requestCount++
-		ctx.WriteString("OK") //nolint:errcheck
+		ctx.WriteString("OK")
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
@@ -195,7 +201,11 @@ func TestIntegrationServerLifecycle(t *testing.T) {
 	}
 
 	// 启动服务器
-	go func() { _ = server.Serve(ln) }()
+	go func() {
+		if err := server.Serve(ln); err != nil {
+			t.Logf("Server serve error: %v", err)
+		}
+	}()
 
 	// 等待服务器启动
 	time.Sleep(50 * time.Millisecond)
@@ -211,7 +221,7 @@ func TestIntegrationAdapterConversion(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
 		// 设置响应头和体
 		ctx.Response.Header.Set("X-Custom-Header", "test-value")
-		ctx.WriteString("Converted response") //nolint:errcheck
+		ctx.WriteString("Converted response")
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
@@ -242,11 +252,10 @@ func TestIntegrationAdapterConversion(t *testing.T) {
 	}
 }
 
-// testResponseRecorder 是测试用的响应记录器。
 type testResponseRecorder struct {
-	statusCode int
 	header     http.Header
 	body       testBuffer
+	statusCode int
 }
 
 func (r *testResponseRecorder) Header() http.Header {
@@ -309,7 +318,11 @@ func TestIntegrationTLSConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer func() { _ = ln.Close() }()
+	defer func() {
+		if err := ln.Close(); err != nil {
+			t.Logf("Failed to close listener: %v", err)
+		}
+	}()
 
 	wrappedLn := WrapTLSListener(ln, tlsConfig)
 	if wrappedLn == nil {
@@ -346,7 +359,7 @@ func TestIntegrationH2C(t *testing.T) {
 // BenchmarkAdapterConversion 基准测试适配器转换性能。
 func BenchmarkAdapterConversion(b *testing.B) {
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Hello") //nolint:errcheck
+		ctx.WriteString("Hello")
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
@@ -366,7 +379,7 @@ func BenchmarkAdapterConversion(b *testing.B) {
 // BenchmarkAdapterWithBody 基准测试带请求体的适配器。
 func BenchmarkAdapterWithBody(b *testing.B) {
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.Write(ctx.PostBody()) //nolint:errcheck
+		ctx.Write(ctx.PostBody())
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 

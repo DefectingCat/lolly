@@ -513,8 +513,8 @@ func TestConnectionsAtomic(t *testing.T) {
 func TestHealthStatus(t *testing.T) {
 	t.Run("IsHealthy", func(_ *testing.T) {
 		tests := []struct {
-			name   string
 			target *Target
+			name   string
 			want   bool
 		}{
 			{
@@ -622,8 +622,8 @@ func TestFilterHealthy(t *testing.T) {
 // TestBalancerInterface 测试各种负载均衡器都实现了Balancer接口。
 func TestBalancerInterface(t *testing.T) {
 	tests := []struct {
-		name     string
 		balancer Balancer
+		name     string
 	}{
 		{
 			name:     "RoundRobin",

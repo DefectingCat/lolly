@@ -124,8 +124,8 @@ func TestSetLogFile(t *testing.T) {
 func TestSigName(t *testing.T) {
 	tests := []struct {
 		name     string
-		sig      syscall.Signal
 		expected string
+		sig      syscall.Signal
 	}{
 		{
 			name:     "SIGTERM",
@@ -177,12 +177,12 @@ func TestRun(t *testing.T) {
 	tests := []struct {
 		name            string
 		cfgPath         string
-		genConfig       bool
 		outputPath      string
-		showVersion     bool
+		wantContains    string
+		wantErrContains string
 		wantExitCode    int
-		wantContains    string // stdout 应包含的内容
-		wantErrContains string // stderr 应包含的内容（可选）
+		genConfig       bool
+		showVersion     bool
 	}{
 		{
 			name:         "显示版本",

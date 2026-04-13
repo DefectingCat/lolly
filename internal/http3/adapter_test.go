@@ -361,9 +361,9 @@ func TestWrap_RoundTrip(t *testing.T) {
 
 // mockResponseWriter 用于测试的 mock ResponseWriter
 type mockResponseWriter struct {
-	status int
 	header http.Header
 	body   []byte
+	status int
 }
 
 func (m *mockResponseWriter) Header() http.Header {

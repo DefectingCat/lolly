@@ -277,16 +277,11 @@ type Server struct {
 
 // Upstream Stream 上游配置。
 type Upstream struct {
-	// name 上游名称
-	name string
-	// targets 目标服务器列表
-	targets []*Target
-	// balancer 负载均衡器
-	balancer Balancer
-	// healthChk 健康检查器
+	balancer  Balancer
 	healthChk *HealthChecker
-	// mu 读写锁，保护并发访问
-	mu sync.RWMutex
+	name      string
+	targets   []*Target
+	mu        sync.RWMutex
 }
 
 // Target Stream 目标服务器。
@@ -305,12 +300,12 @@ type Target struct {
 type HealthChecker struct {
 	// upstream 所属上游
 	upstream *Upstream
+	// stopCh 停止信号通道
+	stopCh chan struct{}
 	// interval 检查间隔
 	interval time.Duration
 	// timeout 检查超时
 	timeout time.Duration
-	// stopCh 停止信号通道
-	stopCh chan struct{}
 }
 
 // Config Stream 配置。
@@ -325,13 +320,9 @@ type Config struct {
 
 // UpstreamSpec 上游配置规格。
 type UpstreamSpec struct {
-	// Name 上游名称
-	Name string
-	// Targets 目标服务器列表
-	Targets []TargetSpec
-	// LoadBalance 负载均衡算法
+	Name        string
 	LoadBalance string
-	// HealthCheck 健康检查配置
+	Targets     []TargetSpec
 	HealthCheck HealthCheckSpec
 }
 
@@ -512,7 +503,7 @@ func (s *Server) acceptLoop(addr string, listener net.Listener) {
 //   - addr: 监听地址
 func (s *Server) handleConnection(clientConn net.Conn, _ string) {
 	defer func() {
-		_ = clientConn.Close()
+		_ = clientConn.Close() //nolint:errcheck
 		s.connCount--
 	}()
 
@@ -544,11 +535,11 @@ func (s *Server) handleConnection(clientConn net.Conn, _ string) {
 		target.healthy.Store(false)
 		return
 	}
-	defer func() { _ = targetConn.Close() }()
+	defer func() { _ = targetConn.Close() }() //nolint:errcheck
 
 	// 双向数据转发
-	go func() { _, _ = io.Copy(targetConn, clientConn) }()
-	_, _ = io.Copy(clientConn, targetConn)
+	go func() { _, _ = io.Copy(targetConn, clientConn) }() //nolint:errcheck
+	_, _ = io.Copy(clientConn, targetConn)                 //nolint:errcheck
 }
 
 // Select 选择健康的上游目标。
@@ -597,7 +588,7 @@ func (h *HealthChecker) check() {
 		if err != nil {
 			target.healthy.Store(false)
 		} else {
-			_ = conn.Close()
+			_ = conn.Close() //nolint:errcheck
 			target.healthy.Store(true)
 		}
 	}
@@ -617,7 +608,7 @@ func (s *Server) Stop() error {
 
 	// 关闭所有 TCP 监听器
 	for _, listener := range s.listeners {
-		_ = listener.Close()
+		_ = listener.Close() //nolint:errcheck
 	}
 
 	// 停止所有 UDP 服务器
@@ -665,18 +656,12 @@ type Stats struct {
 // 会话包含客户端地址、后端连接、最后活跃时间等信息。
 // 会话在空闲超时后自动清理。
 type udpSession struct {
-	// clientAddr 客户端 UDP 地址
-	clientAddr *net.UDPAddr
-	// targetConn 到后端目标的连接
-	targetConn net.Conn
-	// lastActive 最后活跃时间
 	lastActive time.Time
-	// mu 保护 lastActive 的读写锁
-	mu sync.RWMutex
-	// srv 所属的 UDP 服务器
-	srv *udpServer
-	// closeOnce 确保只关闭一次
-	closeOnce sync.Once
+	targetConn net.Conn
+	clientAddr *net.UDPAddr
+	srv        *udpServer
+	mu         sync.RWMutex
+	closeOnce  sync.Once
 }
 
 // udpServer UDP 服务器，管理多个客户端会话。
@@ -684,22 +669,14 @@ type udpSession struct {
 // 负责监听 UDP 端口，管理客户端会话的生命周期。
 // 支持会话自动过期清理和优雅停止。
 type udpServer struct {
-	// conn UDP 连接
-	conn *net.UDPConn
-	// sessions 客户端会话映射，键为 sessionKey
+	conn     *net.UDPConn
 	sessions map[string]*udpSession
-	// mu 保护 sessions 的读写锁
-	mu sync.RWMutex
-	// running 运行状态标志
-	running atomic.Bool
-	// upstream 上游配置
 	upstream *Upstream
-	// timeout 会话空闲超时时间
-	timeout time.Duration
-	// stopCh 停止信号通道
-	stopCh chan struct{}
-	// wg 等待 goroutine 结束
-	wg sync.WaitGroup
+	stopCh   chan struct{}
+	wg       sync.WaitGroup
+	timeout  time.Duration
+	mu       sync.RWMutex
+	running  atomic.Bool
 }
 
 // newUDPServer 创建新的 UDP 服务器。
@@ -794,11 +771,11 @@ func (s *udpServer) getOrCreateSession(clientAddr *net.UDPAddr) (*udpSession, er
 	defer s.mu.Unlock()
 
 	// 双重检查：可能另一个 goroutine 已经创建了会话
-	if session, exists := s.sessions[sessionKey(clientAddr)]; exists {
-		session.mu.Lock()
-		session.lastActive = time.Now()
-		session.mu.Unlock()
-		return session, nil
+	if existingSession, exists := s.sessions[sessionKey(clientAddr)]; exists {
+		existingSession.mu.Lock()
+		existingSession.lastActive = time.Now()
+		existingSession.mu.Unlock()
+		return existingSession, nil
 	}
 
 	// 选择后端目标
@@ -861,7 +838,7 @@ func (s *udpServer) removeSession(clientAddr *net.UDPAddr) {
 func (sess *udpSession) close() {
 	sess.closeOnce.Do(func() {
 		if sess.targetConn != nil {
-			_ = sess.targetConn.Close()
+			_ = sess.targetConn.Close() //nolint:errcheck
 		}
 	})
 }
@@ -880,7 +857,7 @@ func (sess *udpSession) handleBackendResponse() {
 	buf := make([]byte, 65535)
 	for {
 		// 设置读取超时
-		_ = sess.targetConn.SetReadDeadline(time.Now().Add(sess.srv.timeout))
+		_ = sess.targetConn.SetReadDeadline(time.Now().Add(sess.srv.timeout)) //nolint:errcheck
 
 		n, err := sess.targetConn.Read(buf)
 		if err != nil {
@@ -931,7 +908,7 @@ func (s *udpServer) serve() {
 	buf := make([]byte, 65535)
 	for s.running.Load() {
 		// 设置读取超时，以便定期检查 stopCh
-		_ = s.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		_ = s.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond)) //nolint:errcheck
 
 		n, clientAddr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
@@ -1020,5 +997,5 @@ func (s *udpServer) stop() {
 	s.wg.Wait()
 
 	// 关闭连接
-	_ = s.conn.Close()
+	_ = s.conn.Close() //nolint:errcheck
 }

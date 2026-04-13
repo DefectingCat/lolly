@@ -34,7 +34,6 @@ func TestResolverBasicLookup(t *testing.T) {
 	ips, err := r.LookupHost(ctx, "dns.google")
 	if err != nil {
 		t.Skipf("Skipping DNS test (network unavailable): %v", err)
-		_ = r.Stop()
 		return
 	}
 
@@ -42,7 +41,9 @@ func TestResolverBasicLookup(t *testing.T) {
 		t.Error("expected at least one IP for dns.google")
 	}
 
-	_ = r.Stop()
+	if stopErr := r.Stop(); stopErr != nil {
+		t.Errorf("stop failed: %v", stopErr)
+	}
 }
 
 // TestResolverCache 测试 DNS 缓存功能
@@ -65,7 +66,6 @@ func TestResolverCache(t *testing.T) {
 	ips1, err := r.LookupHostWithCache(ctx, "dns.google")
 	if err != nil {
 		t.Skipf("Skipping DNS test (network unavailable): %v", err)
-		_ = r.Stop()
 		return
 	}
 	duration1 := time.Since(start)
@@ -75,7 +75,6 @@ func TestResolverCache(t *testing.T) {
 	ips2, err := r.LookupHostWithCache(ctx, "dns.google")
 	if err != nil {
 		t.Errorf("second lookup failed: %v", err)
-		_ = r.Stop()
 		return
 	}
 	duration2 := time.Since(start)
@@ -99,7 +98,9 @@ func TestResolverCache(t *testing.T) {
 		t.Error("expected at least 1 cache miss")
 	}
 
-	_ = r.Stop()
+	if stopErr := r.Stop(); stopErr != nil {
+		t.Errorf("stop failed: %v", stopErr)
+	}
 }
 
 // TestResolverTimeout 测试 DNS 查询超时
@@ -133,7 +134,9 @@ func TestResolverTimeout(t *testing.T) {
 		t.Errorf("timeout took too long: %v", elapsed)
 	}
 
-	_ = r.Stop()
+	if stopErr := r.Stop(); stopErr != nil {
+		t.Errorf("stop failed: %v", stopErr)
+	}
 }
 
 // TestResolverNXDOMAIN 测试 NXDOMAIN 错误处理
@@ -159,7 +162,9 @@ func TestResolverNXDOMAIN(t *testing.T) {
 		t.Log("Warning: no error for non-existent domain (DNS server may have different behavior)")
 	}
 
-	_ = r.Stop()
+	if stopErr := r.Stop(); stopErr != nil {
+		t.Errorf("stop failed: %v", stopErr)
+	}
 }
 
 // TestResolverStats 测试解析器统计信息
@@ -184,8 +189,14 @@ func TestResolverStats(t *testing.T) {
 	ctx := context.Background()
 
 	// 执行几次查询
-	_, _ = r.LookupHostWithCache(ctx, "dns.google")
-	_, _ = r.LookupHostWithCache(ctx, "cloudflare.com")
+	_, err1 := r.LookupHostWithCache(ctx, "dns.google")
+	if err1 != nil {
+		t.Logf("first lookup result (may fail): %v", err1)
+	}
+	_, err2 := r.LookupHostWithCache(ctx, "cloudflare.com")
+	if err2 != nil {
+		t.Logf("second lookup result (may fail): %v", err2)
+	}
 
 	// 验证缓存条目
 	stats = r.Stats()
@@ -193,7 +204,9 @@ func TestResolverStats(t *testing.T) {
 		t.Errorf("expected at least 2 cache entries, got %d", stats.CacheEntries)
 	}
 
-	_ = r.Stop()
+	if stopErr := r.Stop(); stopErr != nil {
+		t.Errorf("stop failed: %v", stopErr)
+	}
 }
 
 // TestResolverRefresh 测试 DNS 缓存刷新
@@ -212,7 +225,10 @@ func TestResolverRefresh(t *testing.T) {
 	ctx := context.Background()
 
 	// 先查询一次
-	_, _ = r.LookupHostWithCache(ctx, "dns.google")
+	_, lookupErr := r.LookupHostWithCache(ctx, "dns.google")
+	if lookupErr != nil {
+		t.Logf("lookup result (may fail): %v", lookupErr)
+	}
 
 	// 刷新缓存
 	err := r.Refresh("dns.google")
@@ -220,5 +236,7 @@ func TestResolverRefresh(t *testing.T) {
 		t.Errorf("refresh failed: %v", err)
 	}
 
-	_ = r.Stop()
+	if stopErr := r.Stop(); stopErr != nil {
+		t.Errorf("stop failed: %v", stopErr)
+	}
 }

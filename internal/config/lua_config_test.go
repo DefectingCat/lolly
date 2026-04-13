@@ -110,7 +110,6 @@ func TestLuaMiddlewareConfigGlobalSettingsValidation(t *testing.T) {
 // TestServerConfigLuaField 测试 ServerConfig 包含 Lua 字段
 func TestServerConfigLuaField(t *testing.T) {
 	cfg := &ServerConfig{
-		Listen: ":8080",
 		Lua: &LuaMiddlewareConfig{
 			Enabled: true,
 			Scripts: []LuaScriptConfig{

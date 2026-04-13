@@ -89,6 +89,7 @@ func stopCPUProfile() {
 //   - w: 输出 writer，用于写入 profile 数据
 func writeHeapProfile(w io.Writer) {
 	runtime.GC() // 先执行 GC，获取更准确的数据
+	//nolint:errcheck
 	_ = pprof.WriteHeapProfile(w)
 }
 
@@ -101,6 +102,7 @@ func writeHeapProfile(w io.Writer) {
 func writeGoroutineProfile(w io.Writer) {
 	p := pprof.Lookup("goroutine")
 	if p != nil {
+		//nolint:errcheck
 		_ = p.WriteTo(w, 0)
 	}
 }
@@ -114,6 +116,7 @@ func writeGoroutineProfile(w io.Writer) {
 func writeBlockProfile(w io.Writer) {
 	p := pprof.Lookup("block")
 	if p != nil {
+		//nolint:errcheck
 		_ = p.WriteTo(w, 0)
 	}
 }
@@ -127,6 +130,7 @@ func writeBlockProfile(w io.Writer) {
 func writeMutexProfile(w io.Writer) {
 	p := pprof.Lookup("mutex")
 	if p != nil {
+		//nolint:errcheck
 		_ = p.WriteTo(w, 0)
 	}
 }
@@ -151,6 +155,7 @@ type bufioWriterAdapter struct {
 func (a *bufioWriterAdapter) Write(p []byte) (n int, err error) {
 	n, err = a.w.Write(p)
 	if err == nil {
+		//nolint:errcheck
 		_ = a.w.Flush()
 	}
 	return n, err

@@ -31,17 +31,10 @@ import (
 //   - 支持 IP 白名单和 Token 认证
 //   - 仅处理 POST 请求
 type PurgeAPI struct {
-	// cache 代理缓存实例
-	cache *ProxyCache
-
-	// allowed 允许访问的 IP 网络列表
+	cache   *ProxyCache
+	auth    config.CacheAPIAuthConfig
+	path    string
 	allowed []net.IPNet
-
-	// auth 认证配置
-	auth config.CacheAPIAuthConfig
-
-	// path API 端点路径
-	path string
 }
 
 // PurgeRequest 清理请求结构。
@@ -92,9 +85,9 @@ func NewPurgeAPI(cache *ProxyCache, cfg *config.CacheAPIConfig) (*PurgeAPI, erro
 			}
 			// 转换为 CIDR 格式
 			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
+				_, network, _ = net.ParseCIDR(cidr + "/32") //nolint:errcheck
 			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
+				_, network, _ = net.ParseCIDR(cidr + "/128") //nolint:errcheck
 			}
 		}
 		if network != nil {

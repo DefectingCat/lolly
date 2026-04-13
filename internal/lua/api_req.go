@@ -3,8 +3,6 @@
 package lua
 
 import (
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -29,16 +27,27 @@ const (
 	APILayerPseudoNonBlocking ngxReqAPILayer = 3
 )
 
+const (
+	// layerStringDirect 直接映射层字符串
+	layerStringDirect = "direct"
+	// layerStringCompatible 兼容层字符串
+	layerStringCompatible = "compatible"
+	// layerStringPseudoNonBlocking 伪非阻塞层字符串
+	layerStringPseudoNonBlocking = "pseudo_non_blocking"
+	// layerStringUnknown 未知层字符串
+	layerStringUnknown = "unknown"
+)
+
 func (l ngxReqAPILayer) String() string {
 	switch l {
 	case APILayerDirect:
-		return "direct"
+		return layerStringDirect
 	case APILayerCompatible:
-		return "compatible"
+		return layerStringCompatible
 	case APILayerPseudoNonBlocking:
-		return "pseudo_non_blocking"
+		return layerStringPseudoNonBlocking
 	default:
-		return "unknown"
+		return layerStringUnknown
 	}
 }
 
@@ -62,14 +71,9 @@ type ngxReqMetrics struct {
 
 // ngxReqAPI ngx.req API 实现
 type ngxReqAPI struct {
-	// 请求上下文
-	ctx *fasthttp.RequestCtx
-
-	// 指标收集
-	metrics ngxReqMetrics
-
-	// 缓存：URI args 解析结果（兼容层使用）
+	ctx              *fasthttp.RequestCtx
 	uriArgsCache     map[string][]string
+	metrics          ngxReqMetrics
 	uriArgsCacheOnce sync.Once
 }
 
@@ -289,32 +293,40 @@ func (api *ngxReqAPI) luaSetURIArgs(L *glua.LState) int {
 	// 获取参数类型
 	argType := L.Get(1)
 
+	//nolint:exhaustive // 只处理特定类型
 	switch argType.Type() {
 	case glua.LTString:
 		// 如果是字符串，直接解析并设置
+		//nolint:errcheck // 类型断言检查
 		queryStr := string(argType.(glua.LString))
 		api.ctx.Request.URI().SetQueryString(queryStr)
 
 	case glua.LTTable:
 		// 如果是 table，构建查询字符串
+		//nolint:errcheck // 类型断言
 		table := argType.(*glua.LTable)
 		args := make(map[string][]string)
 
 		table.ForEach(func(key, value glua.LValue) {
 			keyStr := glua.LVAsString(key)
+			//nolint:exhaustive // 只处理特定类型
 			switch value.Type() {
 			case glua.LTString:
+				//nolint:errcheck // 类型断言
 				args[keyStr] = []string{string(value.(glua.LString))}
 			case glua.LTNumber:
 				args[keyStr] = []string{glua.LVAsString(value)}
 			case glua.LTTable:
 				// 数组形式的多值
+				//nolint:errcheck // 类型断言
 				arr := value.(*glua.LTable)
 				values := []string{}
 				arr.ForEach(func(_, v glua.LValue) {
 					values = append(values, glua.LVAsString(v))
 				})
 				args[keyStr] = values
+			default:
+				// 其他类型不处理
 			}
 		})
 
@@ -368,10 +380,10 @@ func (api *ngxReqAPI) luaGetHeaders(L *glua.LState) int {
 	headers := &api.ctx.Request.Header
 
 	count := 0
-	// 使用 VisitAll 遍历所有请求头
-	headers.VisitAll(func(key, value []byte) {
+	// 使用 All 遍历所有请求头（已弃用的 VisitAll 的替代方法）
+	for key, value := range headers.All() {
 		if count >= maxHeaders {
-			return
+			break
 		}
 		keyStr := string(key)
 		valueStr := string(value)
@@ -392,7 +404,7 @@ func (api *ngxReqAPI) luaGetHeaders(L *glua.LState) int {
 			existingArr.Append(glua.LString(valueStr))
 		}
 		count++
-	})
+	}
 
 	// 记录指标
 	elapsed := uint64(time.Since(start).Nanoseconds())
@@ -493,7 +505,7 @@ func (api *ngxReqAPI) luaGetBodyData(L *glua.LState) int {
 // luaReadBody 实现 ngx.req.read_body() - 伪非阻塞层
 // Lua 调用: ngx.req.read_body() -- 完成后返回
 // 注意：fasthttp 已经预读取了请求体，这里主要是确保请求体已被读取
-func (api *ngxReqAPI) luaReadBody(L *glua.LState) int {
+func (api *ngxReqAPI) luaReadBody(_ *glua.LState) int {
 	start := time.Now()
 
 	// fasthttp 默认会预读取请求体到内存中
@@ -513,25 +525,6 @@ func (api *ngxReqAPI) luaReadBody(L *glua.LState) int {
 	}
 
 	return 0
-}
-
-// luaReadBodyAsync 实现 ngx.req.read_body() - 伪非阻塞层
-// Lua 调用: ngx.req.read_body() -- 会 yield，完成后 resume
-// 这是实验性 API，展示如何使用 yield/resume 实现非阻塞调用
-func (api *ngxReqAPI) luaReadBodyAsync(L *glua.LState) int {
-	// 伪非阻塞层：使用 yield 暂停协程，由引擎异步处理后 resume
-	// 这种模式允许在 Lua 中编写看似同步的代码，实际是异步执行
-
-	// 记录开始时间
-	start := time.Now()
-
-	// Yield 协程 - 控制权交回 Go 层
-	// TODO: 实现真正的非阻塞 yield，目前使用同步模拟
-	L.Push(glua.LString("read_body"))
-	L.Push(glua.LString(strconv.FormatInt(start.UnixNano(), 10)))
-	// Note: 在 gopher-lua v1.1.2 中，L.Yield 需要 LValue 参数，返回 int
-	// 这里返回 2 表示有 2 个返回值已在栈上
-	return 2 // 使用 return 代替 L.Yield
 }
 
 // ==================== 辅助函数 ====================
@@ -573,48 +566,6 @@ func (api *ngxReqAPI) GetPerformanceRatio() float64 {
 // ResetMetrics 重置指标（用于基准测试）
 func (api *ngxReqAPI) ResetMetrics() {
 	api.metrics = ngxReqMetrics{}
-}
-
-// ==================== 辅助方法 ====================
-
-// getRequestHeader 获取请求头（辅助函数，供 Lua 绑定使用）
-func (api *ngxReqAPI) getRequestHeader(name string) string {
-	return string(api.ctx.Request.Header.Peek(name))
-}
-
-// setResponseHeader 设置响应头（辅助函数，供 Lua 绑定使用）
-func (api *ngxReqAPI) setResponseHeader(name, value string) {
-	api.ctx.Response.Header.Set(name, value)
-}
-
-// parseQueryString 手动解析 query string（用于对比测试）
-// 这是纯 Go 实现，不依赖 fasthttp 的解析器
-func parseQueryString(query []byte) map[string][]string {
-	result := make(map[string][]string)
-	if len(query) == 0 {
-		return result
-	}
-
-	pairs := strings.Split(string(query), "&")
-	for _, pair := range pairs {
-		if len(pair) == 0 {
-			continue
-		}
-		parts := strings.SplitN(pair, "=", 2)
-		key := parts[0]
-		value := ""
-		if len(parts) > 1 {
-			value = parts[1]
-		}
-
-		if existing, ok := result[key]; ok {
-			result[key] = append(existing, value)
-		} else {
-			result[key] = []string{value}
-		}
-	}
-
-	return result
 }
 
 // RegisterSchedulerUnsafeReqAPI 为 Scheduler LState 注册不安全的 ngx.req API

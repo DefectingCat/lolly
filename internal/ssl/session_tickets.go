@@ -45,24 +45,12 @@ const (
 // 管理 Session Ticket 密钥的生命周期，包括生成、轮换、存储和加载。
 // 密钥按时间顺序排列，最新的密钥用于加密，所有密钥都可用于解密。
 type SessionTicketManager struct {
-	// keys 密钥列表，按生成时间排序（最新的在最后）
-	// [old1, old2, current] 或 [old1, old2, old3, current]
-	keys [][]byte
-
-	// config 配置
-	config config.SessionTicketsConfig
-
-	// rotateTimer 密钥轮换定时器
 	rotateTimer *time.Timer
-
-	// stopCh 停止信号通道
-	stopCh chan struct{}
-
-	// mu 保护并发访问的读写锁
-	mu sync.RWMutex
-
-	// started 是否已启动
-	started bool
+	stopCh      chan struct{}
+	keys        [][]byte
+	config      config.SessionTicketsConfig
+	mu          sync.RWMutex
+	started     bool
 }
 
 // NewSessionTicketManager 创建新的 Session Ticket 管理器。
@@ -250,7 +238,7 @@ func (m *SessionTicketManager) scheduleRotation() {
 		case <-m.stopCh:
 			return
 		default:
-			_ = m.RotateKey()
+			_ = m.RotateKey() //nolint:errcheck
 			m.scheduleRotation()
 		}
 	})

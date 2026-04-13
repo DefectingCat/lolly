@@ -24,8 +24,8 @@ import (
 // TestNew 测试创建错误拦截中间件。
 func TestNew(t *testing.T) {
 	tests := []struct {
-		name    string
 		manager *handler.ErrorPageManager
+		name    string
 	}{
 		{
 			name:    "创建带有 manager 的实例",
@@ -196,8 +196,8 @@ func TestErrorIntercept_Process_ErrorStatus_Intercepted(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		statusCode     int
 		expectedBody   string
+		statusCode     int
 		expectedStatus int
 	}{
 		{

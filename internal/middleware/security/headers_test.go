@@ -19,8 +19,8 @@ import (
 
 func TestNewHeaders(t *testing.T) {
 	tests := []struct {
-		name string
 		cfg  *config.SecurityHeaders
+		name string
 	}{
 		{
 			name: "nil config uses defaults",
@@ -217,10 +217,10 @@ func TestDevelopmentSecurityHeaders(t *testing.T) {
 func TestFormatHSTSValue(t *testing.T) {
 	tests := []struct {
 		name              string
+		expected          string
 		maxAge            int
 		includeSubDomains bool
 		preload           bool
-		expected          string
 	}{
 		{
 			name:              "basic HSTS",

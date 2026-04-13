@@ -15,8 +15,8 @@ func TestParseTargetURL(t *testing.T) {
 	tests := []struct {
 		name           string
 		targetURL      string
-		addDefaultPort bool
 		wantAddr       string
+		addDefaultPort bool
 		wantIsTLS      bool
 	}{
 		// HTTP without port

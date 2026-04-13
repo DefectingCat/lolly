@@ -23,34 +23,20 @@ import (
 //
 // 负责加载证书、配置 TLS 连接，支持服务端和客户端两种模式。
 type SSLManager struct {
-	// config SSL 配置
-	config config.StreamSSLConfig
-
-	// cert 服务器证书
-	cert tls.Certificate
-
-	// clientCAPool 客户端 CA 证书池（mTLS）
+	cert         tls.Certificate
 	clientCAPool *x509.CertPool
-
-	// mu 保护并发访问
-	mu sync.RWMutex
+	config       config.StreamSSLConfig
+	mu           sync.RWMutex
 }
 
 // ProxySSLManager 管理上游 SSL 连接。
 //
 // 负责创建到上游服务器的 TLS 连接，支持证书验证和客户端证书。
 type ProxySSLManager struct {
-	// config 代理 SSL 配置
-	config config.StreamProxySSLConfig
-
-	// cert 客户端证书
-	cert tls.Certificate
-
-	// rootCAPool 根 CA 证书池
+	cert       tls.Certificate
 	rootCAPool *x509.CertPool
-
-	// mu 保护并发访问
-	mu sync.RWMutex
+	config     config.StreamProxySSLConfig
+	mu         sync.RWMutex
 }
 
 // NewSSLManager 创建 Stream SSL 管理器。

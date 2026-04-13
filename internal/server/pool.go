@@ -44,16 +44,16 @@ import (
 //   - 使用前需调用 Start 启动池
 //   - 使用后需调用 Stop 释放资源
 type GoroutinePool struct {
+	taskQueue   chan Task          // 任务队列通道
+	cancel      context.CancelFunc // 取消函数
+	ctx         context.Context    // 上下文，用于取消信号
+	wg          sync.WaitGroup     // 等待所有 worker 退出
+	running     atomic.Bool        // 池运行状态标志
+	idleTimeout time.Duration      // 空闲超时时间
 	maxWorkers  int32              // 最大 worker 数量
 	minWorkers  int32              // 最小 worker 数量（预热）
-	idleTimeout time.Duration      // 空闲超时时间
-	taskQueue   chan Task          // 任务队列通道
 	workers     int32              // 当前活跃 worker 数量
 	idleWorkers int32              // 当前空闲 worker 数量
-	running     atomic.Bool        // 池运行状态标志
-	wg          sync.WaitGroup     // 等待所有 worker 退出
-	ctx         context.Context    // 上下文，用于取消信号
-	cancel      context.CancelFunc // 取消函数
 }
 
 // Task 任务函数类型。
@@ -288,6 +288,7 @@ type PoolStats struct {
 func (p *GoroutinePool) WrapHandler(handler fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		// 使用池执行处理器
+		//nolint:errcheck // Submit 不会返回错误，只是入队任务
 		_ = p.Submit(ctx, func(_ *fasthttp.RequestCtx) {
 			handler(ctx)
 		})

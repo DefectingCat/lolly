@@ -41,8 +41,12 @@ func TestIsChild(t *testing.T) {
 	}
 
 	// 设置环境变量
+
 	_ = os.Setenv("GRACEFUL_UPGRADE", "1")
-	defer func() { _ = os.Unsetenv("GRACEFUL_UPGRADE") }()
+	defer func() {
+
+		_ = os.Unsetenv("GRACEFUL_UPGRADE")
+	}()
 
 	if !mgr.IsChild() {
 		t.Error("Expected IsChild to be true when GRACEFUL_UPGRADE=1")
@@ -51,7 +55,10 @@ func TestIsChild(t *testing.T) {
 
 func TestPidFile(t *testing.T) {
 	tmpFile := "/tmp/lolly-test.pid"
-	defer func() { _ = os.Remove(tmpFile) }()
+	defer func() {
+
+		_ = os.Remove(tmpFile)
+	}()
 
 	mgr := NewUpgradeManager(nil)
 	mgr.SetPidFile(tmpFile)
@@ -124,13 +131,19 @@ func TestUpgradeSetListeners(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer func() { _ = listener1.Close() }()
+	defer func() {
+
+		_ = listener1.Close()
+	}()
 
 	listener2, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer func() { _ = listener2.Close() }()
+	defer func() {
+
+		_ = listener2.Close()
+	}()
 
 	listeners := []net.Listener{listener1, listener2}
 	mgr.SetListeners(listeners)
@@ -154,7 +167,10 @@ func TestWritePid_NoPidFile(t *testing.T) {
 // TestReadOldPid_InvalidContent 测试 PID 文件内容无效时的错误处理
 func TestReadOldPid_InvalidContent(t *testing.T) {
 	tmpFile := "/tmp/lolly-test-invalid.pid"
-	defer func() { _ = os.Remove(tmpFile) }()
+	defer func() {
+
+		_ = os.Remove(tmpFile)
+	}()
 
 	// 写入无效内容
 	if err := os.WriteFile(tmpFile, []byte("not-a-pid"), 0644); err != nil {
@@ -174,7 +190,10 @@ func TestReadOldPid_InvalidContent(t *testing.T) {
 func TestGetInheritedListeners_InvalidFds(t *testing.T) {
 	// 保存原始环境变量
 	origFds := os.Getenv("LISTEN_FDS")
-	defer func() { _ = os.Setenv("LISTEN_FDS", origFds) }()
+	defer func() {
+
+		_ = os.Setenv("LISTEN_FDS", origFds)
+	}()
 
 	tests := []struct {
 		name    string
@@ -200,6 +219,7 @@ func TestGetInheritedListeners_InvalidFds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
 			_ = os.Setenv("LISTEN_FDS", tt.fdsEnv)
 
 			mgr := NewUpgradeManager(nil)
@@ -237,13 +257,17 @@ func TestListenerFile_TCPListener(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer func() { _ = listener.Close() }()
+	defer func() {
+
+		_ = listener.Close()
+	}()
 
 	file, err := listenerFile(listener)
 	if err != nil {
 		t.Errorf("Failed to get listener file: %v", err)
 	}
 	if file != nil {
+
 		_ = file.Close()
 	}
 }
@@ -291,7 +315,10 @@ func TestNotifyOldProcess_WithCurrentPid(t *testing.T) {
 // TestReadOldPid_EmptyFile 测试空 PID 文件
 func TestReadOldPid_EmptyFile(t *testing.T) {
 	tmpFile := "/tmp/lolly-test-empty.pid"
-	defer func() { _ = os.Remove(tmpFile) }()
+	defer func() {
+
+		_ = os.Remove(tmpFile)
+	}()
 
 	// 写入空内容
 	if err := os.WriteFile(tmpFile, []byte(""), 0644); err != nil {

@@ -8,14 +8,9 @@ import (
 
 // MiddlewareConfig Lua 中间件配置（配置文件格式）
 type MiddlewareConfig struct {
-	// Enabled 是否启用 Lua 中间件
-	Enabled bool `yaml:"enabled"`
-
-	// Scripts 脚本配置列表
-	Scripts []ScriptConfig `yaml:"scripts"`
-
-	// GlobalSettings 全局设置
+	Scripts        []ScriptConfig    `yaml:"scripts"`
 	GlobalSettings GlobalLuaSettings `yaml:"global_settings"`
+	Enabled        bool              `yaml:"enabled"`
 }
 
 // ScriptConfig 单个脚本配置

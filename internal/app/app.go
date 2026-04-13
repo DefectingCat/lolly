@@ -64,41 +64,18 @@ var (
 // 管理服务器的完整生命周期，包括 HTTP 服务器、HTTP/3 服务器、Stream 服务器
 // 和热升级管理器。
 type App struct {
-	// cfgPath 配置文件路径
-	cfgPath string
-
-	// cfg 配置对象
-	cfg *config.Config
-
-	// srv HTTP 服务器实例
-	srv *server.Server
-
-	// http3Srv HTTP/3 服务器实例（可选）
-	http3Srv *http3.Server
-
-	// http2Srv HTTP/2 服务器实例（可选）
-	http2Srv *http2.Server
-
-	// streamSrv Stream 服务器实例（可选）
-	streamSrv *stream.Server
-
-	// upgradeMgr 热升级管理器
+	resv       resolver.Resolver
+	cfg        *config.Config
+	srv        *server.Server
+	http3Srv   *http3.Server
+	http2Srv   *http2.Server
+	streamSrv  *stream.Server
 	upgradeMgr *server.UpgradeManager
-
-	// pidFile PID 文件路径
-	pidFile string
-
-	// logFile 日志文件路径（用于重新打开）
-	logFile string
-
-	// listeners 继承的监听器（热升级时使用）
-	listeners []net.Listener
-
-	// logger 应用日志管理器
-	logger *logging.AppLogger
-
-	// resolver DNS 解析器（可选）
-	resv resolver.Resolver
+	logger     *logging.AppLogger
+	cfgPath    string
+	pidFile    string
+	logFile    string
+	listeners  []net.Listener
 }
 
 // NewApp 创建应用程序。
@@ -314,7 +291,7 @@ func (a *App) Run() int {
 	a.upgradeMgr = server.NewUpgradeManager(a.srv)
 	if a.pidFile != "" {
 		a.upgradeMgr.SetPidFile(a.pidFile)
-		_ = a.upgradeMgr.WritePid()
+		_ = a.upgradeMgr.WritePid() //nolint:errcheck
 	}
 
 	// 启动信号处理
@@ -378,15 +355,16 @@ func (a *App) handleSignal(sig os.Signal) bool {
 		a.logger.LogSignal("SIGQUIT", fmt.Sprintf("优雅停止（等待 %v）", shutdownTimeout))
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
-		_ = a.srv.GracefulStop(shutdownTimeout)
+		_ = a.srv.GracefulStop(shutdownTimeout) //nolint:errcheck
 		return false
 
 	case syscall.SIGTERM, syscall.SIGINT:
 		// 快速停止
-		a.logger.LogSignal(sigName(sig.(syscall.Signal)), "停止服务器")
+		sigTyped := sig.(syscall.Signal) //nolint:errcheck // 类型断言
+		a.logger.LogSignal(sigName(sigTyped), "停止服务器")
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
-		_ = a.srv.Stop()
+		_ = a.srv.Stop() //nolint:errcheck
 		return false
 
 	case syscall.SIGHUP:
@@ -486,7 +464,7 @@ func (a *App) gracefulUpgrade() {
 	// 当前进程优雅停止
 	a.shutdownHTTP2()
 	a.shutdownHTTP3()
-	_ = a.srv.GracefulStop(shutdownTimeout)
+	_ = a.srv.GracefulStop(shutdownTimeout) //nolint:errcheck
 }
 
 // sigName 返回信号名称（用于日志输出）。

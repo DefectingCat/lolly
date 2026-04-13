@@ -12,26 +12,13 @@ import (
 // 2) 明确区分 Lua 上下文与其他上下文类型（如 context.Context）
 // 3) 保持向后兼容性
 type LuaContext struct {
-	// 引擎引用
-	Engine *LuaEngine
-
-	// 协程
-	Coroutine *LuaCoroutine
-
-	// HTTP 请求上下文
-	RequestCtx *fasthttp.RequestCtx
-
-	// 当前阶段
-	Phase Phase
-
-	// 变量存储（ngx.var 实现）
-	Variables map[string]string
-
-	// 输出缓冲
+	Engine       *LuaEngine
+	Coroutine    *LuaCoroutine
+	RequestCtx   *fasthttp.RequestCtx
+	Variables    map[string]string
 	OutputBuffer []byte
-
-	// 是否已退出
-	Exited bool
+	Phase        Phase
+	Exited       bool
 }
 
 // NewContext 创建请求上下文
@@ -129,7 +116,7 @@ func (c *LuaContext) FlushOutput() {
 		// 在响应刷新场景中，我们选择忽略错误，因为：
 		// 1. fasthttp.RequestCtx.Write 内部已经处理了连接状态
 		// 2. 此阶段出错时请求处理已完成，无法向客户端报告
-		_, _ = c.RequestCtx.Write(c.OutputBuffer)
+		_, _ = c.RequestCtx.Write(c.OutputBuffer) //nolint:errcheck
 		c.OutputBuffer = c.OutputBuffer[:0]
 	}
 }

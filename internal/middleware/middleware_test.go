@@ -19,8 +19,8 @@ import (
 
 // testMiddleware 测试用中间件，记录执行顺序
 type testMiddleware struct {
-	name  string
 	order *[]string
+	name  string
 }
 
 func (m *testMiddleware) Name() string {

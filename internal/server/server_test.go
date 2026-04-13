@@ -406,13 +406,19 @@ func TestSetListeners(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer func() { _ = listener1.Close() }()
+	defer func() {
+
+		_ = listener1.Close()
+	}()
 
 	listener2, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	defer func() { _ = listener2.Close() }()
+	defer func() {
+
+		_ = listener2.Close()
+	}()
 
 	listeners := []net.Listener{listener1, listener2}
 	s.SetListeners(listeners)

@@ -101,8 +101,8 @@ func TestWebSocketBridge_Close_NilConnections(t *testing.T) {
 // TestIsConnectionClosedError 测试连接关闭错误检测
 func TestIsConnectionClosedError(t *testing.T) {
 	tests := []struct {
-		name     string
 		err      error
+		name     string
 		expected bool
 	}{
 		{
@@ -416,8 +416,8 @@ func TestBuildWebSocketUpgradeRequest_WithHeaders(t *testing.T) {
 func TestBuildWebSocketUpgradeRequest_TLSProto(t *testing.T) {
 	tests := []struct {
 		name      string
-		isTLS     bool
 		wantProto string
+		isTLS     bool
 	}{
 		{
 			name:      "non-TLS connection",

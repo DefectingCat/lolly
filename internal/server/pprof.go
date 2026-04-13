@@ -229,7 +229,9 @@ func (h *PprofHandler) handleCPU(ctx *fasthttp.RequestCtx) {
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
 		// 启动 CPU profile
 		if err := startCPUProfile(wrapBufioWriter(w)); err != nil {
+			//nolint:errcheck
 			_, _ = w.WriteString("Error starting CPU profile: " + err.Error())
+			//nolint:errcheck
 			_ = w.Flush()
 			return
 		}
@@ -239,6 +241,7 @@ func (h *PprofHandler) handleCPU(ctx *fasthttp.RequestCtx) {
 
 		// 停止 CPU profile
 		stopCPUProfile()
+		//nolint:errcheck
 		_ = w.Flush()
 	})
 }
@@ -253,6 +256,7 @@ func (h *PprofHandler) handleHeap(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/octet-stream")
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
 		writeHeapProfile(wrapBufioWriter(w))
+		//nolint:errcheck
 		_ = w.Flush()
 	})
 }
@@ -267,6 +271,7 @@ func (h *PprofHandler) handleGoroutine(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/octet-stream")
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
 		writeGoroutineProfile(wrapBufioWriter(w))
+		//nolint:errcheck
 		_ = w.Flush()
 	})
 }
@@ -281,6 +286,7 @@ func (h *PprofHandler) handleBlock(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/octet-stream")
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
 		writeBlockProfile(wrapBufioWriter(w))
+		//nolint:errcheck
 		_ = w.Flush()
 	})
 }
@@ -295,6 +301,7 @@ func (h *PprofHandler) handleMutex(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/octet-stream")
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
 		writeMutexProfile(wrapBufioWriter(w))
+		//nolint:errcheck
 		_ = w.Flush()
 	})
 }

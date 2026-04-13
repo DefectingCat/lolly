@@ -20,41 +20,20 @@ import (
 // 2) 明确区分 Lua 引擎与其他引擎类型
 // 3) 保持向后兼容性
 type LuaEngine struct {
-	// 主 LState
-	L *glua.LState
-
-	// 调度器 LState（专用于定时器回调，线程隔离）
-	schedulerLState *glua.LState
-
-	// 配置
-	config *Config
-
-	// 字节码缓存
-	codeCache *CodeCache
-
-	// 协程管理
-	activeCount   int32     // 活跃协程数
-	maxCoroutines int       // 最大并发协程数
-	coroutinePool sync.Pool // 协程对象池（注意：池中的协程已 dead，不可复用，仅复用内存）
-
-	// 生命周期
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	// 共享字典管理器
+	coroutinePool     sync.Pool
+	ctx               context.Context
+	codeCache         *CodeCache
+	L                 *glua.LState
+	config            *Config
+	schedulerLState   *glua.LState
+	cancel            context.CancelFunc
 	sharedDictManager *SharedDictManager
-
-	// 定时器管理器
-	timerManager *TimerManager
-
-	// location 管理器
-	locationManager *LocationManager
-
-	// 统计
-	stats EngineStats
-
-	// 定时器回调队列（调度器 goroutine 专用）
-	callbackQueue chan *CallbackEntry
+	timerManager      *TimerManager
+	locationManager   *LocationManager
+	callbackQueue     chan *CallbackEntry
+	stats             EngineStats
+	maxCoroutines     int
+	activeCount       int32
 }
 
 // EngineStats 引擎统计信息
@@ -153,6 +132,7 @@ func (e *LuaEngine) NewCoroutine(req *fasthttp.RequestCtx) (*LuaCoroutine, error
 	}
 
 	// 从池中获取协程对象结构（复用内存，不复用协程状态）
+	//nolint:errcheck // 类型断言检查
 	coro := e.coroutinePool.Get().(*LuaCoroutine)
 	coro.Engine = e
 	coro.Co = co
@@ -300,6 +280,7 @@ func (e *LuaEngine) executeCallback(entry *CallbackEntry) {
 	defer func() {
 		if r := recover(); r != nil {
 			// 捕获 panic，防止调度器崩溃
+			_ = r
 		}
 	}()
 
@@ -311,15 +292,12 @@ func (e *LuaEngine) executeCallback(entry *CallbackEntry) {
 	fn := e.schedulerLState.NewFunctionFromProto(entry.proto)
 
 	// 调用回调函数（不添加额外的 fn 参数）
-	err := e.schedulerLState.CallByParam(glua.P{
+	_ = e.schedulerLState.CallByParam(glua.P{ //nolint:errcheck
 		Fn:      fn,
 		NRet:    0,
 		Protect: true,
 	}, entry.args...)
-
-	if err != nil {
-		// 错误已在 Protect 模式下被捕获
-	}
+	// 错误已在 Protect 模式下被捕获
 }
 
 // EnqueueCallback 将回调加入调度队列

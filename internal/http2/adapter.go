@@ -78,7 +78,11 @@ func NewFastHTTPHandlerAdapter(handler fasthttp.RequestHandler) *FastHTTPHandler
 //   - r: 标准库 HTTP 请求
 func (a *FastHTTPHandlerAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 从池中获取 RequestCtx
-	ctx := a.ctxPool.Get().(*fasthttp.RequestCtx)
+	ctx, ok := a.ctxPool.Get().(*fasthttp.RequestCtx)
+	if !ok {
+		// 如果类型断言失败，创建新的上下文（不应该发生，但为了安全）
+		ctx = &fasthttp.RequestCtx{}
+	}
 	defer a.ctxPool.Put(ctx)
 
 	// 重置 ctx 状态以避免污染
@@ -212,7 +216,10 @@ func (a *FastHTTPHandlerAdapter) streamRequestBody(r *http.Request, ctx *fasthtt
 		return
 	}
 
-	defer func() { _ = r.Body.Close() }()
+	//nolint:errcheck // defer 中忽略关闭错误是常见做法
+	defer func() {
+		_ = r.Body.Close()
+	}()
 
 	// 小请求体：直接读取到内存
 	if r.ContentLength > 0 && r.ContentLength <= 64*1024 {
@@ -224,7 +231,12 @@ func (a *FastHTTPHandlerAdapter) streamRequestBody(r *http.Request, ctx *fasthtt
 	}
 
 	// 大请求体：使用流式缓冲区
-	bufPtr := a.bufferPool.Get().(*[]byte)
+	bufPtr, ok := a.bufferPool.Get().(*[]byte)
+	if !ok {
+		// 如果类型断言失败，创建新的缓冲区
+		buf := make([]byte, 4096)
+		bufPtr = &buf
+	}
 	defer a.bufferPool.Put(bufPtr)
 
 	buf := *bufPtr
@@ -281,7 +293,10 @@ func (a *FastHTTPHandlerAdapter) convertResponse(ctx *fasthttp.RequestCtx, w htt
 	// 写入响应体
 	body := ctx.Response.Body()
 	if len(body) > 0 {
-		_, _ = w.Write(body)
+		if _, err := w.Write(body); err != nil {
+			// 响应写入失败，无法向客户端返回错误，只能记录
+			return
+		}
 	}
 }
 

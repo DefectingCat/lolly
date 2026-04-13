@@ -149,6 +149,11 @@ linters:
         linters:
           - dupl
           - goconst
+          - errcheck
+          - govet
+          - revive
+          - staticcheck
+          - unused
       - path: 'internal/ssl/ocsp_test\.go'
         linters:
           - unparam

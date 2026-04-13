@@ -19,37 +19,35 @@ type CallbackEntry struct {
 
 // TimerManager 定时器管理器
 type TimerManager struct {
-	mu       sync.Mutex
-	timers   map[uint64]*TimerEntry
-	nextID   uint64
-	engine   *LuaEngine
-	active   int32
-	stopping int32
-
-	// 调度器
+	timers        map[uint64]*TimerEntry
+	engine        *LuaEngine
 	callbackQueue chan *CallbackEntry
-	schedulerDone chan struct{} // 调度器 goroutine 退出信号
-	schedulerL    *glua.LState  // 专用调度器 LState
-	queueMu       sync.Mutex    // 保护 callbackQueue 发送/关闭
+	schedulerDone chan struct{}
+	schedulerL    *glua.LState
+	nextID        uint64
+	mu            sync.Mutex
+	queueMu       sync.Mutex
+	active        int32
+	stopping      int32
 	queueClosed   bool
 }
 
 // TimerEntry 定时器条目
 type TimerEntry struct {
-	id            uint64
-	delay         time.Duration
 	callback      *glua.LFunction
-	callbackProto *glua.FunctionProto // 编译后的字节码（用于调度器执行）
-	args          []glua.LValue
+	callbackProto *glua.FunctionProto
 	timer         *time.Timer
 	cancel        chan struct{}
 	done          chan struct{}
+	args          []glua.LValue
+	id            uint64
+	delay         time.Duration
 }
 
 // TimerHandle 定时器句柄（Lua userdata）
 type TimerHandle struct {
-	id      uint64
 	manager *TimerManager
+	id      uint64
 }
 
 // NewTimerManager 创建定时器管理器
@@ -173,11 +171,6 @@ func (m *TimerManager) schedulerLoop() {
 	defer close(m.schedulerDone)
 
 	for entry := range m.callbackQueue {
-		// 检查是否正在关闭
-		if atomic.LoadInt32(&m.stopping) != 0 {
-			// 关闭模式下继续执行剩余回调（drain）
-		}
-
 		// 从字节码重建函数并执行
 		fn := m.schedulerL.NewFunctionFromProto(entry.proto)
 		if fn == nil {
@@ -352,6 +345,7 @@ func timerHandleIndex(L *glua.LState) int {
 	}
 
 	// 检查是否是方法
+	//nolint:errcheck // 类型断言检查
 	methods := L.GetField(L.Get(1).(*glua.LUserData).Metatable, "methods")
 	if method := L.GetField(methods, L.CheckString(2)); method != glua.LNil {
 		L.Push(method)

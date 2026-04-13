@@ -29,7 +29,7 @@ func (r *DNSResolver) GetCacheStats() CacheStats {
 	now := time.Now()
 	r.cache.Range(func(_ interface{}, value interface{}) bool {
 		entries++
-		entry := value.(*DNSCacheEntry)
+		entry := value.(*DNSCacheEntry) //nolint:errcheck
 		entry.mu.RLock()
 		if now.After(entry.ExpiresAt) {
 			expired++
@@ -49,7 +49,7 @@ func (r *DNSResolver) GetCacheStats() CacheStats {
 // GetCacheEntry 获取指定主机的缓存条目（用于测试）。
 func (r *DNSResolver) GetCacheEntry(host string) (*DNSCacheEntry, bool) {
 	if entry, ok := r.cache.Load(host); ok {
-		return entry.(*DNSCacheEntry), true
+		return entry.(*DNSCacheEntry), true //nolint:errcheck
 	}
 	return nil, false
 }
@@ -84,7 +84,7 @@ func (r *DNSResolver) GetHitRate() float64 {
 // IsCached 检查指定主机是否在缓存中且未过期。
 func (r *DNSResolver) IsCached(host string) bool {
 	if entry, ok := r.cache.Load(host); ok {
-		cacheEntry := entry.(*DNSCacheEntry)
+		cacheEntry := entry.(*DNSCacheEntry) //nolint:errcheck
 		cacheEntry.mu.RLock()
 		expiresAt := cacheEntry.ExpiresAt
 		cacheEntry.mu.RUnlock()

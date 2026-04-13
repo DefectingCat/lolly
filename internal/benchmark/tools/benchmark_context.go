@@ -22,6 +22,9 @@ import (
 //
 // 包含构造模拟请求所需的所有配置。
 type BenchmarkContext struct {
+	// randSrc 随机数生成器
+	randSrc *rand.Rand
+
 	// RequestSize 请求数据大小
 	RequestSize TestDataSize
 
@@ -30,9 +33,6 @@ type BenchmarkContext struct {
 
 	// Concurrency 并发级别（用于并行测试）
 	Concurrency int
-
-	// randSrc 随机数生成器
-	randSrc *rand.Rand
 }
 
 // NewBenchmarkContext 创建基准测试上下文。

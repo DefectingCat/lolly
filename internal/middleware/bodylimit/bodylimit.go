@@ -34,14 +34,8 @@ const DefaultMaxBodySize = 1 << 20 // 1MB
 // 限制请求体的最大字节数，超过限制的请求将被拒绝并返回 413 错误。
 // 支持全局配置和路径级别的覆盖配置。
 type BodyLimit struct {
-	// maxBodySize 全局请求体大小限制（字节）
-	maxBodySize int64
-
-	// pathLimits 路径级别的限制配置
-	// key 为路径前缀，value 为该路径的限制大小
-	pathLimits map[string]int64
-
-	// pathLimitsMu 保护 pathLimits 的互斥锁
+	pathLimits   map[string]int64
+	maxBodySize  int64
 	pathLimitsMu sync.RWMutex
 }
 
@@ -180,13 +174,13 @@ func (bl *BodyLimit) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 
 // limitedBodyReader 包装请求体读取器以限制最大读取字节数。
 type limitedBodyReader struct {
-	ctx      *fasthttp.RequestCtx
-	limit    int64
 	original interface {
 		Read(p []byte) (n int, err error)
 	}
-	read int64
-	done bool
+	ctx   *fasthttp.RequestCtx
+	limit int64
+	read  int64
+	done  bool
 }
 
 // Read 实现读取接口，在超过限制时返回错误。

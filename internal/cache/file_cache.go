@@ -25,23 +25,12 @@ import (
 
 // FileEntry 文件缓存条目，存储单个文件的缓存信息。
 type FileEntry struct {
-	// Path 文件路径，作为缓存键
-	Path string
-
-	// Size 文件大小，单位为字节
-	Size int64
-
-	// ModTime 文件最后修改时间，用于检测文件变更
-	ModTime time.Time
-
-	// LastAccess 最后访问时间，用于 LRU 淘汰策略
+	ModTime    time.Time
 	LastAccess time.Time
-
-	// Data 文件内容字节
-	Data []byte
-
-	// element LRU 链表元素，用于快速更新链表位置
-	element *list.Element
+	element    *list.Element
+	Path       string
+	Data       []byte
+	Size       int64
 }
 
 // FileCache 文件缓存，支持 LRU 淘汰策略。
@@ -53,26 +42,13 @@ type FileEntry struct {
 //   - 所有方法均为并发安全
 //   - 支持过期时间自动淘汰
 type FileCache struct {
-	// maxEntries 最大缓存条目数，超过时触发 LRU 淘汰
-	maxEntries int64
-
-	// maxSize 内存使用上限，单位为字节，超过时触发 LRU 淘汰
-	maxSize int64
-
-	// inactive 未访问淘汰时间，超过此时间未访问的条目将被淘汰
-	inactive time.Duration
-
-	// entries 缓存条目映射，以文件路径为键
-	entries map[string]*FileEntry
-
-	// lruList LRU 链表，头部为最近访问，尾部为最久未访问
-	lruList *list.List
-
-	// mu 读写锁，保护并发访问
-	mu sync.RWMutex
-
-	// currentSize 当前内存使用量，单位为字节
+	entries     map[string]*FileEntry
+	lruList     *list.List
+	maxEntries  int64
+	maxSize     int64
+	inactive    time.Duration
 	currentSize int64
+	mu          sync.RWMutex
 }
 
 // NewFileCache 创建文件缓存实例。
@@ -233,7 +209,7 @@ func (c *FileCache) evictLRU() {
 		return
 	}
 
-	entry := element.Value.(*FileEntry)
+	entry := element.Value.(*FileEntry) //nolint:errcheck // 类型断言
 	c.removeEntry(entry)
 }
 
@@ -285,23 +261,23 @@ type ProxyCacheRule struct {
 
 // ProxyCacheEntry 代理缓存条目。
 type ProxyCacheEntry struct {
-	Key     string            // 缓存 key (uint64 哈希值)
-	OrigKey string            // 原始 key 用于碰撞验证
-	Data    []byte            // 响应体
-	Headers map[string]string // 响应头
-	Status  int               // 状态码
-	Created time.Time         // 创建时间
-	MaxAge  time.Duration     // 有效期
+	Created time.Time
+	Headers map[string]string
+	Key     string
+	OrigKey string
+	Data    []byte
+	Status  int
+	MaxAge  time.Duration
 }
 
 // ProxyCache 代理响应缓存，支持缓存锁防击穿。
 type ProxyCache struct {
-	rules     []ProxyCacheRule
 	entries   map[uint64]*ProxyCacheEntry
+	pending   map[uint64]*pendingRequest
+	rules     []ProxyCacheRule
+	staleTime time.Duration
 	mu        sync.RWMutex
-	cacheLock bool                       // 缓存锁开关
-	pending   map[uint64]*pendingRequest // 正在生成的缓存项
-	staleTime time.Duration              // 过期缓存复用时间
+	cacheLock bool
 }
 
 // pendingRequest 等待中的缓存请求。

@@ -49,15 +49,9 @@ import (
 
 // AuthRequest 实现外部认证子请求中间件。
 type AuthRequest struct {
-	// config 认证子请求配置
-	config config.AuthRequestConfig
-
-	// client 用于发送认证子请求的 HTTP 客户端
-	// 使用独立连接池避免影响主服务
 	client *fasthttp.HostClient
-
-	// mu 保护 client 的并发访问
-	mu sync.RWMutex
+	config config.AuthRequestConfig
+	mu     sync.RWMutex
 }
 
 // NewAuthRequest 使用给定的配置创建一个新的 AuthRequest 中间件。

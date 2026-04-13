@@ -35,26 +35,25 @@ type Store interface {
 
 // BuiltinVariable 内置变量定义
 type BuiltinVariable struct {
+	Getter      func(ctx *fasthttp.RequestCtx) string
 	Name        string
 	Description string
-	Getter      func(ctx *fasthttp.RequestCtx) string
 }
 
 // Context 变量上下文，绑定到请求
 type Context struct {
-	ctx        *fasthttp.RequestCtx
-	store      map[string]string // 自定义变量存储
-	cache      map[string]string // 内置变量缓存
-	status     int               // HTTP 状态码（由外部设置）
-	bodySize   int64             // 响应体大小（由外部设置）
-	duration   int64             // 请求处理时间纳秒（由外部设置）
-	serverName string            // 服务器名称
-	// 上游变量
-	upstreamAddr         string  // 上游服务器地址
-	upstreamStatus       int     // 上游响应状态码
-	upstreamResponseTime float64 // 上游响应时间（秒）
-	upstreamConnectTime  float64 // 上游连接时间（秒）
-	upstreamHeaderTime   float64 // 上游首字节时间（秒）
+	ctx                  *fasthttp.RequestCtx
+	store                map[string]string
+	cache                map[string]string
+	serverName           string
+	upstreamAddr         string
+	status               int
+	bodySize             int64
+	duration             int64
+	upstreamStatus       int
+	upstreamResponseTime float64
+	upstreamConnectTime  float64
+	upstreamHeaderTime   float64
 }
 
 // pool 用于复用 Context
@@ -126,7 +125,7 @@ func GetBuiltin(name string) *BuiltinVariable {
 
 // NewContext 从池中获取 Context，并注入全局变量。
 func NewContext(ctx *fasthttp.RequestCtx) *Context {
-	vc := pool.Get().(*Context)
+	vc := pool.Get().(*Context) //nolint:errcheck // 类型断言
 	vc.ctx = ctx
 	vc.status = 0
 	vc.bodySize = 0

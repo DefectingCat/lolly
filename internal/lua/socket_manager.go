@@ -70,38 +70,17 @@ const (
 
 // SocketOperation 表示一个 socket 操作
 type SocketOperation struct {
-	// 操作 ID
-	ID uint64
-
-	// 关联的 socket
-	Socket *TCPSocket
-
-	// 操作类型
-	Type OperationType
-
-	// 当前状态
-	State SocketState
-
-	// 创建时间
-	CreatedAt time.Time
-
-	// 最后活动时间
+	CreatedAt    time.Time
 	LastActivity time.Time
-
-	// 超时时间
-	Timeout time.Duration
-
-	// 完成通道
-	Done chan struct{}
-
-	// 错误信息
-	Error error
-
-	// 结果数据
-	Result interface{}
-
-	// 是否完成
-	completed int32
+	Error        error
+	Result       interface{}
+	Socket       *TCPSocket
+	Done         chan struct{}
+	Type         OperationType
+	ID           uint64
+	State        SocketState
+	Timeout      time.Duration
+	completed    int32
 }
 
 // IsCompleted 检查操作是否已完成
@@ -159,30 +138,15 @@ type CosocketStats struct {
 
 // CosocketManager Cosocket 管理器
 type CosocketManager struct {
-	// 操作映射
-	operations map[uint64]*SocketOperation
-
-	// 互斥锁
-	mu sync.RWMutex
-
-	// 操作 ID 生成器
-	nextID uint64
-
-	// 超时检查器
-	timeoutChecker *time.Ticker
-
-	// 统计信息
-	stats CosocketStats
-
-	// 上下文
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	// 默认超时
-	defaultTimeout time.Duration
-
-	// 清理间隔
+	ctx             context.Context
+	operations      map[uint64]*SocketOperation
+	timeoutChecker  *time.Ticker
+	cancel          context.CancelFunc
+	stats           CosocketStats
+	nextID          uint64
+	defaultTimeout  time.Duration
 	cleanupInterval time.Duration
+	mu              sync.RWMutex
 }
 
 // DefaultCosocketManager 全局默认管理器

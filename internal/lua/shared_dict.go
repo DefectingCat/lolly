@@ -10,19 +10,19 @@ import (
 // SharedDict 共享内存字典
 // 支持并发安全的 key-value 存储，带 LRU 汰出策略
 type SharedDict struct {
+	data     map[string]*sharedDictEntry
+	lruList  *list.List
 	name     string
 	maxItems int
 	mu       sync.Mutex
-	data     map[string]*sharedDictEntry
-	lruList  *list.List // LRU 链表，前端为最近使用
 }
 
 // sharedDictEntry 字典条目
 type sharedDictEntry struct {
+	expiredAt time.Time
+	element   *list.Element
 	key       string
 	value     string
-	expiredAt time.Time     // 过期时间（0 表示永不过期）
-	element   *list.Element // LRU 链表元素指针
 }
 
 // NewSharedDict 创建共享字典
@@ -247,6 +247,7 @@ func (d *SharedDict) evictExpired() int {
 
 	// 从 LRU 链表尾部（最久未使用）开始检查
 	for elem := d.lruList.Back(); elem != nil; {
+		//nolint:errcheck // 类型断言检查
 		key := elem.Value.(string)
 		entry, ok := d.data[key]
 		if !ok {
@@ -281,6 +282,7 @@ func (d *SharedDict) evictLRU() bool {
 		return false
 	}
 
+	//nolint:errcheck // 类型断言检查
 	key := elem.Value.(string)
 	entry, ok := d.data[key]
 	if ok {

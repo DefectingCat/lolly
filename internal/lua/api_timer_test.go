@@ -22,7 +22,7 @@ func TestTimerManagerAt(t *testing.T) {
 	L := engine.L
 
 	// 注册一个简单的回调函数
-	callback := L.NewFunction(func(L *glua.LState) int {
+	callback := L.NewFunction(func(_ *glua.LState) int {
 		return 0
 	})
 

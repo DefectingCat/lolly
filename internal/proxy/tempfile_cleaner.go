@@ -34,26 +34,13 @@ import (
 //   - 可通过 Stop 方法停止
 //   - 只清理以 "lolly-proxy-" 前缀开头的文件
 type TempFileCleaner struct {
-	// tempPath 临时文件目录
+	stopCh   chan struct{}
 	tempPath string
-
-	// interval 清理间隔
+	prefix   string
 	interval time.Duration
-
-	// maxAge 文件最大存活时间
-	maxAge time.Duration
-
-	// prefix 临时文件前缀
-	prefix string
-
-	// stopCh 停止信号
-	stopCh chan struct{}
-
-	// stopped 是否已停止
-	stopped bool
-
-	// mu 保护 stopped
-	mu sync.RWMutex
+	maxAge   time.Duration
+	mu       sync.RWMutex
+	stopped  bool
 }
 
 // DefaultCleanupInterval 默认清理间隔（5 分钟）。
@@ -178,7 +165,7 @@ func (c *TempFileCleaner) cleanup() {
 
 		// 删除过期文件
 		fullPath := filepath.Join(c.tempPath, name)
-		_ = os.Remove(fullPath)
+		_ = os.Remove(fullPath) //nolint:errcheck
 	}
 }
 

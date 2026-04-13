@@ -20,8 +20,8 @@ import (
 
 func TestNewAccessControl(t *testing.T) {
 	tests := []struct {
-		name    string
 		cfg     *config.AccessConfig
+		name    string
 		wantErr bool
 	}{
 		{

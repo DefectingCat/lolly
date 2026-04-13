@@ -117,7 +117,9 @@ func TestLoggerWithFile(t *testing.T) {
 
 	logger.LogAccess(ctx, 200, 10, 100*time.Millisecond)
 	logger.Error().Str("test", "value").Msg("test error")
-	_ = logger.Close()
+	if err := logger.Close(); err != nil {
+		t.Errorf("Unexpected error on Close: %v", err)
+	}
 
 	if _, err := os.Stat(accessPath); os.IsNotExist(err) {
 		t.Error("Expected access log file to be created")

@@ -37,20 +37,11 @@ import (
 //   - 临时文件在响应后自动删除
 //   - 并发安全
 type TempFileManager struct {
-	// tempPath 临时文件存储目录
-	tempPath string
-
-	// threshold 触发临时文件的阈值（字节）
-	threshold int64
-
-	// maxSize 最大允许的响应大小（字节）
-	maxSize int64
-
-	// activeFiles 正在使用的临时文件映射
 	activeFiles map[string]*TempFile
-
-	// mu 保护 activeFiles 的互斥锁
-	mu sync.RWMutex
+	tempPath    string
+	threshold   int64
+	maxSize     int64
+	mu          sync.RWMutex
 }
 
 // TempFile 临时文件包装器。
@@ -227,7 +218,9 @@ func (tf *TempFile) WriteTo(ctx *fasthttp.RequestCtx, statusCode int) error {
 	if err != nil {
 		return fmt.Errorf("打开临时文件失败: %w", err)
 	}
-	defer func() { _ = file.Close() }()
+	defer func() {
+		_ = file.Close() //nolint:errcheck
+	}()
 
 	// 设置状态码
 	ctx.Response.SetStatusCode(statusCode)
@@ -253,10 +246,10 @@ func (tf *TempFile) WriteTo(ctx *fasthttp.RequestCtx, statusCode int) error {
 // Close 关闭并删除临时文件。
 func (tf *TempFile) Close() error {
 	if tf.file != nil {
-		_ = tf.file.Close()
+		_ = tf.file.Close() //nolint:errcheck
 	}
 	if tf.path != "" {
-		_ = os.Remove(tf.path)
+		_ = os.Remove(tf.path) //nolint:errcheck
 	}
 	return nil
 }
@@ -359,9 +352,9 @@ func (w *DynamicTempFileWriter) Write(data []byte) error {
 
 		// 将缓冲区数据写入临时文件
 		if len(w.buffer) > 0 {
-			_, err := w.tempFile.Write(w.buffer)
-			if err != nil {
-				return err
+			_, writeErr := w.tempFile.Write(w.buffer)
+			if writeErr != nil {
+				return writeErr
 			}
 			w.buffer = nil // 释放缓冲区
 		}
@@ -408,7 +401,9 @@ func (w *DynamicTempFileWriter) Finalize(ctx *fasthttp.RequestCtx, statusCode in
 		if err != nil {
 			return fmt.Errorf("打开临时文件失败: %w", err)
 		}
-		defer func() { _ = file.Close() }()
+		defer func() {
+			_ = file.Close() //nolint:errcheck
+		}()
 
 		// 流式传输文件内容
 		buf := make([]byte, 64*1024) // 64KB 缓冲区
@@ -421,14 +416,14 @@ func (w *DynamicTempFileWriter) Finalize(ctx *fasthttp.RequestCtx, statusCode in
 				break
 			}
 			if err != nil {
-				_ = file.Close()
+				_ = file.Close() //nolint:errcheck
 				return fmt.Errorf("读取临时文件失败: %w", err)
 			}
 		}
-		_ = file.Close()
+		_ = file.Close() //nolint:errcheck
 
 		// 删除临时文件
-		_ = os.Remove(w.tempFile.path)
+		_ = os.Remove(w.tempFile.path) //nolint:errcheck
 		w.manager.RemoveTempFile(w.tempFile.path)
 		return nil
 	}
@@ -451,7 +446,7 @@ func (w *DynamicTempFileWriter) GetTotalSize() int64 {
 // Cleanup 清理资源。
 func (w *DynamicTempFileWriter) Cleanup() {
 	if w.tempFile != nil {
-		_ = w.tempFile.Close()
+		_ = w.tempFile.Close() //nolint:errcheck
 		if w.tempFile.path != "" {
 			w.manager.RemoveTempFile(w.tempFile.path)
 		}

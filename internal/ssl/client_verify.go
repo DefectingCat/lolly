@@ -106,23 +106,12 @@ func (m ClientVerifyMode) TLSClientAuth() tls.ClientAuthType {
 //
 // 管理客户端证书验证所需的 CA 证书池和 CRL。
 type ClientVerifier struct {
-	// caPool CA 证书池
-	caPool *x509.CertPool
-
-	// crl 证书吊销列表
-	crl *x509.RevocationList
-
-	// mode 验证模式
-	mode ClientVerifyMode
-
-	// verifyDepth 验证深度限制
+	caPool      *x509.CertPool
+	crl         *x509.RevocationList
+	caFile      string
+	crlFile     string
+	mode        ClientVerifyMode
 	verifyDepth int
-
-	// caFile CA 文件路径
-	caFile string
-
-	// crlFile CRL 文件路径
-	crlFile string
 }
 
 // NewClientVerifier 创建新的客户端证书验证器。
@@ -363,29 +352,14 @@ func GetClientCertInfo(cs *tls.ConnectionState) *ClientCertInfo {
 
 // ClientCertInfo 客户端证书信息。
 type ClientCertInfo struct {
-	// Subject 证书主题
-	Subject string
-
-	// Issuer 颁发者
-	Issuer string
-
-	// Serial 序列号
-	Serial string
-
-	// NotBefore 生效时间
-	NotBefore time.Time
-
-	// NotAfter 过期时间
-	NotAfter time.Time
-
-	// DNSNames DNS 名称
-	DNSNames []string
-
-	// Email 邮箱地址
-	Email []string
-
-	// Fingerprint 证书指纹
+	NotBefore   time.Time
+	NotAfter    time.Time
+	Subject     string
+	Issuer      string
+	Serial      string
 	Fingerprint string
+	DNSNames    []string
+	Email       []string
 }
 
 // fingerprint 计算证书指纹。

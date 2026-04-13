@@ -34,17 +34,17 @@ import (
 type Logger struct {
 	accessLog    zerolog.Logger
 	errorLog     zerolog.Logger
-	accessFormat string    // 访问日志格式模板
-	accessWriter io.Writer // 访问日志输出目标
+	accessWriter io.Writer
 	accessFile   *os.File
 	errorFile    *os.File
+	accessFormat string
 }
 
 // AppLogger 应用日志管理器，统一管理启动/停止日志。
 type AppLogger struct {
-	format   string // "text" 或 "json"
 	errorLog zerolog.Logger
 	writer   io.Writer
+	format   string
 }
 
 var log zerolog.Logger
@@ -137,7 +137,7 @@ func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, dur
 
 	// 模板格式：直接输出纯文本
 	output := l.formatAccessLog(ctx, status, size, duration)
-	_, _ = fmt.Fprintln(l.accessWriter, output)
+	_, _ = fmt.Fprintln(l.accessWriter, output) //nolint:errcheck
 }
 
 // formatAccessLog 根据模板格式化访问日志。
@@ -213,13 +213,16 @@ func (l *Logger) Error() *zerolog.Event {
 
 // Close 关闭日志文件。
 func (l *Logger) Close() error {
+	var err error
 	if l.accessFile != nil {
-		_ = l.accessFile.Close()
+		err = l.accessFile.Close()
 	}
 	if l.errorFile != nil {
-		_ = l.errorFile.Close()
+		if closeErr := l.errorFile.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
 	}
-	return nil
+	return err
 }
 
 // Error 返回 Error 级别日志记录器（全局实例）。
@@ -303,7 +306,7 @@ func (l *AppLogger) LogStartup(msg string, fields map[string]string) {
 	// 纯文本格式
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	if len(fields) == 0 {
-		_, _ = fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
+		fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg) //nolint:errcheck
 		return
 	}
 
@@ -312,7 +315,7 @@ func (l *AppLogger) LogStartup(msg string, fields map[string]string) {
 	for k, v := range fields {
 		extra += fmt.Sprintf(" %s=%s", k, v)
 	}
-	_, _ = fmt.Fprintf(l.writer, "[%s] INFO %s%s\n", timestamp, msg, extra)
+	fmt.Fprintf(l.writer, "[%s] INFO %s%s\n", timestamp, msg, extra) //nolint:errcheck
 }
 
 // LogShutdown 记录停止消息。
@@ -323,7 +326,7 @@ func (l *AppLogger) LogShutdown(msg string) {
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	_, _ = fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
+	fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg) //nolint:errcheck
 }
 
 // LogSignal 记录信号处理消息。
@@ -334,7 +337,7 @@ func (l *AppLogger) LogSignal(sig string, action string) {
 	}
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	_, _ = fmt.Fprintf(l.writer, "[%s] INFO 收到 %s，%s\n", timestamp, sig, action)
+	fmt.Fprintf(l.writer, "[%s] INFO 收到 %s，%s\n", timestamp, sig, action) //nolint:errcheck
 }
 
 // Info 返回 Info 级别日志记录器。

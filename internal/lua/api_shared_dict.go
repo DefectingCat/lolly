@@ -11,8 +11,8 @@ import (
 // SharedDictManager 共享字典管理器
 // 管理多个命名的 SharedDict 实例
 type SharedDictManager struct {
-	mu    sync.RWMutex
 	dicts map[string]*SharedDict
+	mu    sync.RWMutex
 }
 
 // NewSharedDictManager 创建字典管理器
@@ -116,6 +116,7 @@ func dictIndex(L *glua.LState) int {
 	key := L.CheckString(2)
 
 	// 检查是否是方法
+	//nolint:errcheck // 类型断言检查
 	methods := L.GetField(L.Get(1).(*glua.LUserData).Metatable, "methods")
 	if method := L.GetField(methods, key); method != glua.LNil {
 		L.Push(method)
@@ -298,17 +299,22 @@ func dictReplace(L *glua.LState) int {
 	}
 
 	// 检查是否存在
-	_, expired, _ := dict.Get(key)
+	_, expired, _ := dict.Get(key) //nolint:errcheck
 	if expired {
 		L.Push(glua.LFalse)
 		L.Push(glua.LString("not found"))
 		return 2
 	}
 
-	ok, err := dict.Set(key, value, ttl)
+	setOK, err := dict.Set(key, value, ttl)
 	if err != nil {
 		L.Push(glua.LFalse)
 		L.Push(glua.LString(err.Error()))
+		return 2
+	}
+	if !setOK {
+		L.Push(glua.LFalse)
+		L.Push(glua.LString("no memory"))
 		return 2
 	}
 	L.Push(glua.LTrue)
@@ -349,7 +355,7 @@ func dictDelete(L *glua.LState) int {
 	}
 
 	key := L.CheckString(2)
-	dict.Delete(key)
+	dict.Delete(key) //nolint:errcheck
 	L.Push(glua.LTrue)
 	return 1
 }
@@ -364,7 +370,7 @@ func dictFlushAll(L *glua.LState) int {
 		return 0
 	}
 
-	dict.FlushAll()
+	dict.FlushAll() //nolint:errcheck
 	return 0
 }
 

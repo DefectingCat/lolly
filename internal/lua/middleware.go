@@ -11,44 +11,21 @@ import (
 
 // LuaMiddleware Lua 中间件配置
 type LuaMiddleware struct {
-	// Lua 引擎
-	engine *LuaEngine
-
-	// 脚本路径
+	engine     *LuaEngine
 	scriptPath string
-
-	// 执行阶段
-	phase Phase
-
-	// 超时时间
-	timeout time.Duration
-
-	// 中间件名称
-	name string
-
-	// 是否启用
-	enabled bool
+	name       string
+	phase      Phase
+	timeout    time.Duration
+	enabled    bool
 }
 
 // LuaMiddlewareConfig Lua 中间件配置
 type LuaMiddlewareConfig struct {
-	// 脚本路径
 	ScriptPath string
-
-	// 执行阶段 (默认 PhaseContent)
-	Phase Phase
-
-	// 超时时间 (默认 30s)
-	Timeout time.Duration
-
-	// 中间件名称 (默认 "lua-{phase}")
-	Name string
-
-	// 是否启用
-	Enabled bool
-
-	// EnabledSet 表示是否显式设置了 Enabled
-	// 当为 true 时使用 Enabled 的值，否则默认启用
+	Name       string
+	Phase      Phase
+	Timeout    time.Duration
+	Enabled    bool
 	EnabledSet bool
 }
 

@@ -12,35 +12,16 @@ import (
 // ResponseInterceptor 响应拦截器
 // 用于延迟 header 写入，允许在发送前修改响应
 type ResponseInterceptor struct {
-	// 原始请求上下文
-	ctx *fasthttp.RequestCtx
-
-	// Header 修改回调（Lua 执行）
+	ctx              *fasthttp.RequestCtx
 	headerFilterFunc func() error
-
-	// Body 修改回调（Lua 执行）
-	bodyFilterFunc func([]byte) ([]byte, error)
-
-	// 缓冲的 body 数据
-	bodyBuffer []byte
-
-	// 是否已写入 header
-	headersWritten bool
-
-	// 是否已拦截
-	intercepted bool
-
-	// 状态码（可修改）
-	statusCode int
-
-	// 自定义 header（可修改）
-	customHeaders map[string]string
-
-	// 需要删除的 header
-	headersToDelete []string
-
-	// 并发保护
-	mu sync.RWMutex
+	bodyFilterFunc   func([]byte) ([]byte, error)
+	customHeaders    map[string]string
+	bodyBuffer       []byte
+	headersToDelete  []string
+	statusCode       int
+	mu               sync.RWMutex
+	headersWritten   bool
+	intercepted      bool
 }
 
 // NewResponseInterceptor 创建响应拦截器
@@ -192,7 +173,6 @@ func (ri *ResponseInterceptor) ClearBody() {
 type DelayedResponseWriter struct {
 	ctx         *fasthttp.RequestCtx
 	interceptor *ResponseInterceptor
-	pool        *sync.Pool
 }
 
 // NewDelayedResponseWriter 创建延迟响应写入器
@@ -303,6 +283,7 @@ var ResponseInterceptorPool = sync.Pool{
 
 // AcquireResponseInterceptor 从池中获取拦截器
 func AcquireResponseInterceptor(ctx *fasthttp.RequestCtx) *ResponseInterceptor {
+	//nolint:errcheck // 类型断言检查
 	ri := ResponseInterceptorPool.Get().(*ResponseInterceptor)
 	ri.ctx = ctx
 	ri.statusCode = 200
@@ -329,24 +310,6 @@ func ReleaseResponseInterceptor(ri *ResponseInterceptor) {
 	ri.customHeaders = nil
 	ri.headersToDelete = nil
 	ResponseInterceptorPool.Put(ri)
-}
-
-// responseWriterWrapper 适配 fasthttp.ResponseWriter 接口
-type responseWriterWrapper struct {
-	interceptor *ResponseInterceptor
-}
-
-func (w *responseWriterWrapper) Write(p []byte) (n int, err error) {
-	return w.interceptor.Write(p)
-}
-
-func (w *responseWriterWrapper) Header() map[string][]string {
-	// fasthttp 不兼容 http.Header，返回 nil
-	return nil
-}
-
-func (w *responseWriterWrapper) WriteHeader(statusCode int) {
-	w.interceptor.SetStatusCode(statusCode)
 }
 
 // Hijack 支持连接劫持（用于 WebSocket）
@@ -436,6 +399,7 @@ func (drw *DelayedResponseWriter) SetBodyStream(bodyStream io.Reader, bodySize i
 	// 流式 body 无法缓冲，直接设置
 	// 但在设置前应用 header filter
 	if drw.interceptor.headerFilterFunc != nil {
+		//nolint:errcheck // 错误可忽略
 		_ = drw.interceptor.headerFilterFunc()
 	}
 	drw.ctx.SetBodyStream(bodyStream, bodySize)
@@ -475,6 +439,7 @@ func (drw *DelayedResponseWriter) Redirect(uri string, statusCode int) {
 	}
 	// 重定向前应用 header filter
 	if drw.interceptor.headerFilterFunc != nil {
+		//nolint:errcheck // 错误可忽略
 		_ = drw.interceptor.headerFilterFunc()
 	}
 	drw.ctx.Redirect(uri, statusCode)
@@ -484,27 +449,29 @@ func (drw *DelayedResponseWriter) Redirect(uri string, statusCode int) {
 // bufferPool body 缓冲区池
 var bufferPool = sync.Pool{
 	New: func() interface{} {
-		return make([]byte, 0, 4096) // 4KB 初始容量
+		buf := make([]byte, 0, 4096) // 4KB 初始容量
+		return &buf
 	},
 }
 
 // acquireBuffer 获取缓冲区
 func acquireBuffer() []byte {
-	return bufferPool.Get().([]byte)
+	//nolint:errcheck // 类型断言检查
+	return *(bufferPool.Get().(*[]byte))
 }
 
 // releaseBuffer 释放缓冲区
 func releaseBuffer(buf []byte) {
 	if buf != nil && cap(buf) <= 65536 { // 只回收小缓冲区
-		bufferPool.Put(buf[:0])
+		buf = buf[:0]
+		bufferPool.Put(&buf)
 	}
 }
 
 // BufferedWriter 带缓冲的写入器
 type BufferedWriter struct {
-	buf       []byte
-	size      int
 	flushFunc func([]byte) error
+	buf       []byte
 	maxSize   int
 	autoFlush bool
 }

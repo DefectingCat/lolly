@@ -148,7 +148,7 @@ func (s *Server) Start() error {
 	// 创建 QUIC 监听器
 	s.listener, err = quic.ListenEarly(udpConn, s.tlsConfig, quicConfig)
 	if err != nil {
-		_ = udpConn.Close()
+		_ = udpConn.Close() //nolint:errcheck // 忽略关闭错误
 		return fmt.Errorf("failed to listen QUIC: %w", err)
 	}
 
@@ -229,7 +229,7 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 
 		done := make(chan struct{})
 		go func() {
-			_ = s.http3Server.Close()
+			_ = s.http3Server.Close() //nolint:errcheck // 忽略关闭错误
 			close(done)
 		}()
 
@@ -278,10 +278,10 @@ func (s *Server) GetAltSvcHeader() string {
 
 // Stats 返回服务器统计信息。
 type Stats struct {
-	Running    bool   // 是否运行中
 	Listen     string // 监听地址
-	Enable0RTT bool   // 是否启用 0-RTT
 	MaxStreams int    // 最大并发流
+	Running    bool   // 是否运行中
+	Enable0RTT bool   // 是否启用 0-RTT
 }
 
 // GetStats 返回服务器统计信息。

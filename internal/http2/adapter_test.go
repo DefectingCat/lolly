@@ -24,7 +24,7 @@ import (
 // TestNewFastHTTPHandlerAdapter 测试适配器创建。
 func TestNewFastHTTPHandlerAdapter(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Hello") //nolint:errcheck
+		ctx.WriteString("Hello")
 	}
 
 	adapter := NewFastHTTPHandlerAdapter(handler)
@@ -40,7 +40,7 @@ func TestNewFastHTTPHandlerAdapter(t *testing.T) {
 // TestFastHTTPHandlerAdapterServeHTTP 测试适配器处理 HTTP 请求。
 func TestFastHTTPHandlerAdapterServeHTTP(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Hello from fasthttp") //nolint:errcheck
+		ctx.WriteString("Hello from fasthttp")
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
@@ -69,7 +69,7 @@ func TestFastHTTPHandlerAdapterServeHTTP(t *testing.T) {
 func TestFastHTTPHandlerAdapterWithRequestBody(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
 		body := ctx.PostBody()
-		ctx.Write(body) //nolint:errcheck
+		ctx.Write(body)
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
@@ -178,7 +178,7 @@ func TestFastHTTPHandlerAdapterErrorResponse(t *testing.T) {
 func TestFastHTTPHandlerAdapterEmptyBody(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
 		if len(ctx.Request.Body()) == 0 {
-			ctx.WriteString("Empty body received") //nolint:errcheck
+			ctx.WriteString("Empty body received")
 		}
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
@@ -202,7 +202,7 @@ func TestFastHTTPHandlerAdapterEmptyBody(t *testing.T) {
 // TestWrapHandler 测试 WrapHandler 便捷函数。
 func TestWrapHandler(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Wrapped") //nolint:errcheck
+		ctx.WriteString("Wrapped")
 	}
 
 	wrapped := WrapHandler(handler)
@@ -224,7 +224,7 @@ func TestWrapHandler(t *testing.T) {
 // TestWrapHandlerFunc 测试 WrapHandlerFunc 便捷函数。
 func TestWrapHandlerFunc(t *testing.T) {
 	fn := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Func wrapped") //nolint:errcheck
+		ctx.WriteString("Func wrapped")
 	}
 
 	wrapped := WrapHandlerFunc(fn)
@@ -266,7 +266,7 @@ func TestDefaultAdapterConfig(t *testing.T) {
 // TestNewConfigurableAdapter 测试可配置适配器。
 func TestNewConfigurableAdapter(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Configurable") //nolint:errcheck
+		ctx.WriteString("Configurable")
 	}
 
 	cfg := DefaultAdapterConfig()
@@ -429,7 +429,7 @@ func TestAdapterConcurrentRequests(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
 		// 模拟一些处理时间
 		time.Sleep(1 * time.Millisecond)
-		ctx.WriteString("OK") //nolint:errcheck
+		ctx.WriteString("OK")
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 
@@ -481,7 +481,10 @@ func TestStreamRequestBody(t *testing.T) {
 	adapter := NewFastHTTPHandlerAdapter(handler)
 
 	// 创建带有 mock body 的请求
-	req, _ := http.NewRequest(http.MethodPost, "/test", mock)
+	req, err := http.NewRequest(http.MethodPost, "/test", mock)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
 	req.ContentLength = int64(len(bodyContent))
 	rec := httptest.NewRecorder()
 
@@ -496,7 +499,7 @@ func TestStreamRequestBody(t *testing.T) {
 // TestAdapterPoolReuse 测试对象池复用。
 func TestAdapterPoolReuse(_ *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("Test") //nolint:errcheck
+		ctx.WriteString("Test")
 		ctx.SetStatusCode(fasthttp.StatusOK)
 	}
 

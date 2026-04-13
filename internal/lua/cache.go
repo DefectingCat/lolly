@@ -29,26 +29,24 @@ const (
 
 // CachedProto 缓存的字节码
 type CachedProto struct {
-	Proto      *glua.FunctionProto // 编译后的字节码
-	SourceType CacheKeyType        // 来源类型
-	SourcePath string              // 文件路径（仅 file 类型）
-	ModTime    time.Time           // 文件修改时间（仅 file 类型）
-	CachedAt   time.Time           // 缓存时间
-	AccessAt   atomic.Value        // 最后访问时间
+	ModTime    time.Time
+	CachedAt   time.Time
+	AccessAt   atomic.Value
+	Proto      *glua.FunctionProto
+	SourcePath string
+	SourceType CacheKeyType
 }
 
 // CodeCache 字节码缓存
 type CodeCache struct {
+	protos    map[string]*CachedProto
+	order     []string
+	maxSize   int
+	ttl       time.Duration
+	hits      uint64
+	misses    uint64
 	mu        sync.RWMutex
-	protos    map[string]*CachedProto // 缓存键 -> 字节码
-	order     []string                // LRU 顺序
-	maxSize   int                     // 最大缓存数
-	ttl       time.Duration           // 缓存 TTL
-	fileWatch bool                    // 是否监控文件变更
-
-	// 统计
-	hits   uint64
-	misses uint64
+	fileWatch bool
 }
 
 // NewCodeCache 创建字节码缓存

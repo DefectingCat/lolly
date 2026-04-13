@@ -21,8 +21,8 @@ import (
 
 func TestNewRateLimiter(t *testing.T) {
 	tests := []struct {
-		name    string
 		cfg     *config.RateLimitConfig
+		name    string
 		wantErr bool
 	}{
 		{
@@ -360,9 +360,9 @@ func TestRateLimiterStopCleanup(t *testing.T) {
 func TestNewConnLimiter(t *testing.T) {
 	tests := []struct {
 		name    string
+		keyType string
 		max     int
 		perKey  bool
-		keyType string
 		wantErr bool
 	}{
 		{

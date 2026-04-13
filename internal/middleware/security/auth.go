@@ -55,23 +55,12 @@ const (
 
 // BasicAuth 实现 HTTP Basic 认证中间件。
 type BasicAuth struct {
-	// users 用户名到哈希密码的映射
-	users map[string]string
-
-	// algorithm 使用的哈希算法
-	algorithm HashAlgorithm
-
-	// realm 认证域
-	realm string
-
-	// requireTLS 是否强制 HTTPS（默认 true）
-	requireTLS bool
-
-	// argon2Params Argon2id 配置参数
+	users        map[string]string
+	realm        string
+	algorithm    HashAlgorithm
+	mu           sync.RWMutex
 	argon2Params argon2Params
-
-	// mu 保护并发访问的读写锁
-	mu sync.RWMutex
+	requireTLS   bool
 }
 
 // argon2Params 保存 Argon2id 配置参数。

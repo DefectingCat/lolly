@@ -22,26 +22,17 @@ import (
 //
 // 使用滑动窗口算法限制请求速率，支持近似和精确两种模式。
 type SlidingWindowLimiter struct {
-	// window 窗口大小
-	window time.Duration
-
-	// limit 窗口内最大请求数
-	limit int
-
-	// precise 是否使用精确模式
-	precise bool
-
-	// counters 窗口计数器，key 为窗口起始时间
 	counters map[string]*windowCounter
-
-	// mu 读写锁
-	mu sync.RWMutex
+	window   time.Duration
+	limit    int
+	mu       sync.RWMutex
+	precise  bool
 }
 
 // windowCounter 窗口计数器。
 type windowCounter struct {
+	timestamps []time.Time
 	count      int64
-	timestamps []time.Time // precise 模式下记录每个请求时间
 	mu         sync.Mutex
 }
 

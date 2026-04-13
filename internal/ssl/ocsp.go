@@ -41,28 +41,26 @@ import (
 // 管理 TLS 证书的 OCSP 响应缓存，支持定期自动刷新和优雅降级。
 // 当 OCSP 查询失败时，TLS 握手仍可继续进行。
 type OCSPManager struct {
-	responses map[string]*ocspResponse // OCSP 响应，按证书序列号索引
-	mu        sync.RWMutex             // 保护并发访问的读写锁
-	client    *http.Client             // HTTP 客户端，用于 OCSP 查询
-	stopChan  chan struct{}            // 停止信号通道
-	running   bool                     // 运行状态标志
-
-	// 配置参数
-	refreshInterval time.Duration // OCSP 响应刷新间隔
-	timeout         time.Duration // HTTP 请求超时时间
-	maxRetries      int           // 失败时的最大重试次数
+	responses       map[string]*ocspResponse
+	client          *http.Client
+	stopChan        chan struct{}
+	refreshInterval time.Duration
+	timeout         time.Duration
+	maxRetries      int
+	mu              sync.RWMutex
+	running         bool
 }
 
 // ocspResponse OCSP 响应缓存条目。
 //
 // 保存 OCSP 响应数据及其元数据，用于证书状态验证。
 type ocspResponse struct {
-	response   []byte     // 原始 OCSP 响应数据
-	thisUpdate time.Time  // 响应生成时间
-	nextUpdate time.Time  // 响应过期时间
-	status     OCSPStatus // 响应状态
-	fetchedAt  time.Time  // 获取响应的时间
-	errors     int        // 连续获取失败的次数
+	thisUpdate time.Time
+	nextUpdate time.Time
+	fetchedAt  time.Time
+	response   []byte
+	status     OCSPStatus
+	errors     int
 }
 
 // OCSPStatus OCSP 响应状态类型。
@@ -327,7 +325,7 @@ func (m *OCSPManager) sendOCSPRequest(url string, req []byte) ([]byte, error) {
 			}
 			return nil, fmt.Errorf("HTTP request failed: %w", err)
 		}
-		defer func() { _ = resp.Body.Close() }()
+		defer func() { _ = resp.Body.Close() }() //nolint:errcheck
 
 		if resp.StatusCode != http.StatusOK {
 			if i < m.maxRetries-1 {

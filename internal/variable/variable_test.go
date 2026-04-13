@@ -918,10 +918,10 @@ func TestUpstreamVariablesErrorCases(t *testing.T) {
 
 	// 测试各种错误场景
 	tests := []struct {
+		expected map[string]string
 		name     string
 		addr     string
 		status   int
-		expected map[string]string
 	}{
 		{
 			name:   "no backend",

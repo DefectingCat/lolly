@@ -40,38 +40,16 @@ import (
 //   - 大文件（>= 8KB）自动启用零拷贝传输
 //   - alias 与 root 互斥，同时配置时 alias 优先
 type StaticHandler struct {
-	// root 静态文件根目录
-	root string
-
-	// alias 路径别名（与 root 互斥）
-	// 例如：path: "/images/", alias: "/var/www/img/"
-	// 请求 "/images/logo.png" -> 文件 "/var/www/img/logo.png"
-	alias string
-
-	// pathPrefix 路径前缀，会被剥离后拼接 root
-	pathPrefix string
-
-	// index 索引文件列表，当请求目录时依次查找
-	index []string
-
-	// useSendfile 是否启用零拷贝传输（大文件优化）
-	useSendfile bool
-
-	// fileCache 文件缓存实例（可选）
-	fileCache *cache.FileCache
-
-	// gzipStatic 预压缩文件支持（可选）
-	gzipStatic *compression.GzipStatic
-
-	// tryFiles 按顺序尝试查找的文件列表
-	// 支持 $uri 和 $uri/ 占位符
-	tryFiles []string
-
-	// tryFilesPass 内部重定向是否触发中间件
+	fileCache    *cache.FileCache
+	gzipStatic   *compression.GzipStatic
+	router       *Router
+	root         string
+	alias        string
+	pathPrefix   string
+	index        []string
+	tryFiles     []string
+	useSendfile  bool
 	tryFilesPass bool
-
-	// router 用于内部重定向时重新路由（当 tryFilesPass 为 true）
-	router *Router
 }
 
 // NewStaticHandler 创建静态文件处理器。
@@ -501,7 +479,9 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 
 		file, err := os.Open(filePath)
 		if err == nil {
-			defer func() { _ = file.Close() }()
+			defer func() {
+				_ = file.Close() //nolint:errcheck
+			}()
 			if err := SendFile(ctx, file, 0, info.Size()); err == nil {
 				return
 			}
@@ -518,7 +498,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 
 	// 存入缓存（仅对小文件缓存）
 	if h.fileCache != nil && info.Size() < 1024*1024 { // < 1MB
-		_ = h.fileCache.Set(filePath, data, info.Size(), info.ModTime())
+		_ = h.fileCache.Set(filePath, data, info.Size(), info.ModTime()) //nolint:errcheck
 	}
 
 	ctx.Response.SetBody(data)

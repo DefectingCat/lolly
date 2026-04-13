@@ -36,29 +36,29 @@ import (
 //
 // 包装 golang.org/x/net/http2 服务器，提供与 fasthttp handler 的集成。
 type Server struct {
-	// config HTTP/2 配置
-	config *config.HTTP2Config
-
-	// handler fasthttp 请求处理器
-	handler fasthttp.RequestHandler
-
-	// tlsConfig TLS 配置
-	tlsConfig *tls.Config
+	// stopChan 停止信号通道
+	stopChan chan struct{}
 
 	// http2Server HTTP/2 服务器实例
 	http2Server *http2.Server
 
-	// running 服务器运行状态
-	running bool
+	// config HTTP/2 配置
+	config *config.HTTP2Config
 
-	// mu 读写锁
-	mu sync.RWMutex
+	// tlsConfig TLS 配置
+	tlsConfig *tls.Config
 
 	// listener TCP 监听器
 	listener net.Listener
 
-	// stopChan 停止信号通道
-	stopChan chan struct{}
+	// handler fasthttp 请求处理器
+	handler fasthttp.RequestHandler
+
+	// mu 读写锁
+	mu sync.RWMutex
+
+	// running 服务器运行状态
+	running bool
 }
 
 // NewServer 创建 HTTP/2 服务器。
@@ -106,11 +106,11 @@ func NewServer(cfg *config.HTTP2Config, handler fasthttp.RequestHandler, tlsConf
 	}
 
 	return &Server{
-		config:      cfg,
-		handler:     handler,
-		tlsConfig:   tlsConfig,
-		http2Server: h2s,
 		stopChan:    make(chan struct{}),
+		http2Server: h2s,
+		config:      cfg,
+		tlsConfig:   tlsConfig,
+		handler:     handler,
 	}, nil
 }
 
@@ -173,7 +173,11 @@ func (s *Server) Serve(ln net.Listener) error {
 //
 // 根据连接类型（TLS 或明文）和 ALPN 协商结果，选择合适的协议处理。
 func (s *Server) handleConnection(conn net.Conn) {
-	defer func() { _ = conn.Close() }()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			logging.Error().Err(err).Msg("HTTP/2 connection close error")
+		}
+	}()
 
 	// 如果是 TLS 连接，检查 ALPN 协商结果
 	if tlsConn, ok := conn.(*tls.Conn); ok {
@@ -227,7 +231,9 @@ func (s *Server) serveHTTP1(conn net.Conn) {
 	}
 
 	// 使用 fasthttp 的连接处理
-	_ = server.ServeConn(conn)
+	if err := server.ServeConn(conn); err != nil {
+		logging.Error().Err(err).Msg("HTTP/1.1 fallback serve error")
+	}
 }
 
 // Stop 停止 HTTP/2 服务器。
@@ -516,8 +522,8 @@ func ParseSettings(cfg *config.HTTP2Config) Settings {
 
 // connectionPool HTTP/2 连接池。
 type connectionPool struct {
-	mu    sync.RWMutex
 	conns map[string][]net.Conn
+	mu    sync.RWMutex
 }
 
 // newConnectionPool 创建新的连接池。
@@ -569,7 +575,10 @@ func (p *connectionPool) closeAll() { //nolint:unused // reserved for future use
 
 	for _, conns := range p.conns {
 		for _, conn := range conns {
-			_ = conn.Close()
+			if err := conn.Close(); err != nil {
+				// 忽略关闭错误，继续关闭其他连接
+				continue
+			}
 		}
 	}
 	p.conns = make(map[string][]net.Conn)

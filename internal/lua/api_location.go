@@ -11,15 +11,15 @@ import (
 
 // LocationCaptureResult 子请求结果
 type LocationCaptureResult struct {
-	Status  int
-	Body    []byte
 	Headers map[string]string
+	Body    []byte
+	Status  int
 }
 
 // LocationManager location 管理（用于子请求）
 type LocationManager struct {
+	handlers map[string]fasthttp.RequestHandler
 	mu       sync.Mutex
-	handlers map[string]fasthttp.RequestHandler // location -> handler
 }
 
 // NewLocationManager 创建 location 管理器
@@ -94,10 +94,10 @@ func (m *LocationManager) Capture(parentCtx *fasthttp.RequestCtx, location strin
 		Headers: make(map[string]string),
 	}
 
-	// 收集响应头（使用 VisitAll）
-	subCtx.Response.Header.VisitAll(func(key, value []byte) {
+	// 收集响应头（使用 All 替代已弃用的 VisitAll）
+	for key, value := range subCtx.Response.Header.All() {
 		result.Headers[string(key)] = string(value)
-	})
+	}
 
 	return result, nil
 }
@@ -129,6 +129,7 @@ func RegisterLocationAPI(L *glua.LState, manager *LocationManager, ngx *glua.LTa
 			optionsTable := L.CheckTable(2)
 			optionsTable.ForEach(func(key, value glua.LValue) {
 				keyStr := glua.LVAsString(key)
+				//nolint:exhaustive // 只处理特定类型
 				switch value.Type() {
 				case glua.LTString:
 					opts[keyStr] = glua.LVAsString(value)
@@ -138,11 +139,14 @@ func RegisterLocationAPI(L *glua.LState, manager *LocationManager, ngx *glua.LTa
 					// 处理 headers 表
 					if keyStr == "headers" {
 						headers := make(map[string]string)
+						//nolint:errcheck // ForEach 错误在 glua 中不返回
 						value.(*glua.LTable).ForEach(func(hKey, hValue glua.LValue) {
 							headers[glua.LVAsString(hKey)] = glua.LVAsString(hValue)
 						})
 						opts[keyStr] = headers
 					}
+				default:
+					// 其他类型不处理
 				}
 			})
 		}

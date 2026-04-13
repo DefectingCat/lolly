@@ -28,17 +28,10 @@ import (
 // 检查是否存在预压缩的 .gz 或 .br 文件，如果存在且客户端支持对应编码，
 // 则直接发送，避免实时压缩的 CPU 开销。
 type GzipStatic struct {
-	// enabled 是否启用
-	enabled bool
-
-	// root 静态文件根目录
-	root string
-
-	// extensions 支持的扩展名
-	extensions []string
-
-	// precompressedExtensions 预压缩扩展名，按优先级排序（默认 [".br", ".gz"]）
+	root                    string
 	precompressedExtensions []string
+	extensions              []string
+	enabled                 bool
 }
 
 // NewGzipStatic 创建预压缩文件处理器。

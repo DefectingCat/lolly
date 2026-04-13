@@ -42,19 +42,19 @@ const (
 
 // Middleware 响应压缩中间件。
 type Middleware struct {
+	// gzipPool gzip.Writer 缓冲池
+	gzipPool sync.Pool
+	// brotliPool brotli.Writer 缓冲池
+	brotliPool sync.Pool
 	// types 可压缩的 MIME 类型列表
 	types []string
+
 	// level 压缩级别（1-9）
 	level int
 	// minSize 最小压缩大小（字节）
 	minSize int
 	// algorithm 压缩算法
 	algorithm Algorithm
-
-	// gzipPool gzip.Writer 缓冲池
-	gzipPool sync.Pool
-	// brotliPool brotli.Writer 缓冲池
-	brotliPool sync.Pool
 }
 
 // New 创建压缩中间件。
@@ -110,7 +110,11 @@ func New(cfg *config.CompressionConfig) (*Middleware, error) {
 	// 初始化缓冲池
 	m.gzipPool = sync.Pool{
 		New: func() interface{} {
-			w, _ := gzip.NewWriterLevel(nil, cfg.Level)
+			w, err := gzip.NewWriterLevel(nil, cfg.Level)
+			if err != nil {
+				// 使用默认压缩级别作为回退
+				w, _ = gzip.NewWriterLevel(nil, gzip.DefaultCompression) //nolint:errcheck // fallback
+			}
 			return w
 		},
 	}
@@ -255,13 +259,13 @@ func (m *Middleware) isCompressible(contentType string) bool {
 // 返回值：
 //   - []byte: 压缩后的数据
 func (m *Middleware) compressGzip(data []byte) []byte {
-	w := m.gzipPool.Get().(*gzip.Writer)
+	w := m.gzipPool.Get().(*gzip.Writer) //nolint:errcheck // sync.Pool.Get returns interface{}
 	defer m.gzipPool.Put(w)
 
 	var buf bytes.Buffer
 	w.Reset(&buf)
-	_, _ = w.Write(data)
-	_ = w.Close()
+	_, _ = w.Write(data) //nolint:errcheck // compression write error handled by caller
+	_ = w.Close()        //nolint:errcheck // pool object
 
 	return buf.Bytes()
 }
@@ -274,13 +278,13 @@ func (m *Middleware) compressGzip(data []byte) []byte {
 // 返回值：
 //   - []byte: 压缩后的数据
 func (m *Middleware) compressBrotli(data []byte) []byte {
-	w := m.brotliPool.Get().(*brotli.Writer)
+	w := m.brotliPool.Get().(*brotli.Writer) //nolint:errcheck // sync.Pool.Get returns interface{}
 	defer m.brotliPool.Put(w)
 
 	var buf bytes.Buffer
 	w.Reset(&buf)
-	_, _ = w.Write(data)
-	_ = w.Close()
+	_, _ = w.Write(data) //nolint:errcheck // compression write error handled by caller
+	_ = w.Close()        //nolint:errcheck // pool object
 
 	return buf.Bytes()
 }

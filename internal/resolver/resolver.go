@@ -58,30 +58,26 @@ type Stats struct {
 
 // DNSResolver 实现 Resolver 接口的 DNS 解析器。
 type DNSResolver struct {
-	config    *config.ResolverConfig
-	cache     sync.Map // key: hostname, value: *DNSCacheEntry
-	serverIdx atomic.Uint32
-
-	// 统计信息
-	hits      atomic.Int64
-	misses    atomic.Int64
-	errors    atomic.Int64
-	latencyNs atomic.Int64 // 总延迟纳秒数
-	count     atomic.Int64 // 解析次数
-
-	// 后台刷新
+	config       *config.ResolverConfig
 	stopCh       chan struct{}
-	started      atomic.Bool
+	refreshHosts map[string]struct{}
+	cache        sync.Map
+	hits         atomic.Int64
+	misses       atomic.Int64
+	errors       atomic.Int64
+	latencyNs    atomic.Int64
+	count        atomic.Int64
 	mu           sync.RWMutex
-	refreshHosts map[string]struct{} // 需要刷新的主机列表
+	serverIdx    atomic.Uint32
+	started      atomic.Bool
 }
 
 // DNSCacheEntry DNS 缓存条目。
 type DNSCacheEntry struct {
-	IPs        []string
 	ExpiresAt  time.Time
 	LastLookup time.Time
 	Error      error
+	IPs        []string
 	mu         sync.RWMutex
 }
 
@@ -136,7 +132,7 @@ func (r *DNSResolver) lookup(ctx context.Context, host string, useCache bool) ([
 	// 尝试从缓存获取
 	if useCache {
 		if entry, ok := r.cache.Load(host); ok {
-			cacheEntry := entry.(*DNSCacheEntry)
+			cacheEntry := entry.(*DNSCacheEntry) //nolint:errcheck // 类型断言
 			cacheEntry.mu.RLock()
 			ips := cacheEntry.IPs
 			expiresAt := cacheEntry.ExpiresAt
@@ -345,7 +341,7 @@ func (r *DNSResolver) doRefresh() {
 
 	for _, host := range hosts {
 		ctx, cancel := context.WithTimeout(context.Background(), r.config.Timeout)
-		_, _ = r.LookupHost(ctx, host) // 刷新缓存
+		_, _ = r.LookupHost(ctx, host) //nolint:errcheck // 刷新缓存
 		cancel()
 	}
 }

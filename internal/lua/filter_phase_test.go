@@ -3,7 +3,6 @@ package lua
 import (
 	"fmt"
 	"io"
-	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1319,48 +1318,6 @@ func TestFilterPhaseCompliance(t *testing.T) {
 
 		assert.Equal(t, "This is a *** message", string(ctx.Response.Body()))
 	})
-}
-
-// mockConn 用于测试的 mock net.Conn
-type mockConn struct {
-	net.Conn
-	written []byte
-	mu      sync.Mutex
-}
-
-func (c *mockConn) Write(p []byte) (n int, err error) {
-	c.mu.Lock()
-	c.written = append(c.written, p...)
-	c.mu.Unlock()
-	return len(p), nil
-}
-
-func (c *mockConn) Read(p []byte) (n int, err error) {
-	return 0, io.EOF
-}
-
-func (c *mockConn) Close() error {
-	return nil
-}
-
-func (c *mockConn) LocalAddr() net.Addr {
-	return nil
-}
-
-func (c *mockConn) RemoteAddr() net.Addr {
-	return nil
-}
-
-func (c *mockConn) SetDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *mockConn) SetReadDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *mockConn) SetWriteDeadline(t time.Time) error {
-	return nil
 }
 
 // TestRealFastHTTPIntegration 测试与真实 fasthttp 的集成

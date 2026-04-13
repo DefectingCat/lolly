@@ -59,62 +59,25 @@ import (
 //   - 创建后需调用 Start 方法启动服务器
 //   - 关闭时建议使用 GracefulStop 实现优雅关闭
 type Server struct {
-	// config 服务器配置，包含监听地址、代理、静态文件、安全等配置
-	config *config.Config
-
-	// fastServer fasthttp 服务器实例，处理底层 HTTP 请求
-	fastServer *fasthttp.Server
-
-	// handler 最终的请求处理器，经过中间件链包装
-	handler fasthttp.RequestHandler
-
-	// running 服务器运行状态标志
-	running bool
-
-	// healthCheckers 健康检查器列表，用于检查代理目标健康状态
-	healthCheckers []*proxy.HealthChecker
-
-	// proxies 代理实例列表，用于收集缓存统计
-	proxies []*proxy.Proxy
-
-	// accessLogMiddleware 访问日志中间件，记录请求详细信息
+	startTime           time.Time
+	resolver            resolver.Resolver
+	tlsManager          *ssl.TLSManager
+	handler             fasthttp.RequestHandler
 	accessLogMiddleware *accesslog.AccessLog
-
-	// errorPageManager 错误页面管理器（可选）
-	errorPageManager *handler.ErrorPageManager
-
-	// pool Goroutine 池，用于限制并发处理请求数（可选）
-	pool *GoroutinePool
-
-	// fileCache 文件缓存，用于缓存静态文件内容（可选）
-	fileCache *cache.FileCache
-
-	// startTime 服务器启动时间
-	startTime time.Time
-
-	// connections 当前活动连接数
-	connections atomic.Int64
-
-	// requests 总请求数
-	requests atomic.Int64
-
-	// bytesSent 发送的总字节数
-	bytesSent atomic.Int64
-
-	// bytesReceived 接收的总字节数
-	bytesReceived atomic.Int64
-
-	// tlsManager TLS 配置管理器（可选）
-	tlsManager *ssl.TLSManager
-
-	// listeners 保存的监听器列表，用于热升级
-	listeners []net.Listener
-
-	// resolver DNS 解析器（可选）
-	resolver resolver.Resolver
-
-	// luaEngine Lua 引擎（可选）
-	luaEngine *lua.LuaEngine
+	luaEngine           *lua.LuaEngine
+	errorPageManager    *handler.ErrorPageManager
+	fileCache           *cache.FileCache
+	pool                *GoroutinePool
+	config              *config.Config
+	fastServer          *fasthttp.Server
+	proxies             []*proxy.Proxy
+	listeners           []net.Listener
+	healthCheckers      []*proxy.HealthChecker
+	connections         atomic.Int64
+	requests            atomic.Int64
+	bytesSent           atomic.Int64
+	bytesReceived       atomic.Int64
+	running             bool
 }
 
 // New 创建 HTTP 服务器实例。
@@ -804,6 +767,7 @@ func (s *Server) Stop() error {
 
 	// 关闭访问日志
 	if s.accessLogMiddleware != nil {
+		//nolint:errcheck
 		_ = s.accessLogMiddleware.Close()
 	}
 
@@ -853,6 +817,7 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 
 	// 关闭访问日志
 	if s.accessLogMiddleware != nil {
+		//nolint:errcheck
 		_ = s.accessLogMiddleware.Close()
 	}
 
@@ -873,6 +838,7 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 
 		done := make(chan struct{})
 		go func() {
+			//nolint:errcheck
 			_ = s.fastServer.Shutdown()
 			close(done)
 		}()

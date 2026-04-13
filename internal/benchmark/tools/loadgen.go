@@ -21,6 +21,7 @@ type FasthttpLoadGenerator struct {
 
 // LoadGenStats contains load generator statistics.
 type LoadGenStats struct {
+	Latencies     []time.Duration // For percentile calculation
 	TotalRequests int
 	SuccessCount  int
 	ErrorCount    int
@@ -32,7 +33,6 @@ type LoadGenStats struct {
 	P90Latency    time.Duration
 	P99Latency    time.Duration
 	QPS           float64
-	Latencies     []time.Duration // For percentile calculation
 }
 
 // NewFasthttpLoadGenerator creates a new load generator for the given address.
@@ -159,6 +159,6 @@ func (lg *FasthttpLoadGenerator) RunParallel(pb *testing.PB) {
 	for pb.Next() {
 		req.SetRequestURI("http://" + lg.addr + "/")
 		req.Header.SetMethod("GET")
-		_ = lg.client.Do(req, resp)
+		_ = lg.client.Do(req, resp) //nolint:errcheck
 	}
 }

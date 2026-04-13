@@ -26,20 +26,11 @@ import (
 // 使用虚拟节点将请求均匀分布到各个目标，同时保证相同键的请求
 // 始终路由到同一目标。
 type ConsistentHash struct {
-	// virtualNodes 每个目标的虚拟节点数，默认 150
-	virtualNodes int
-
-	// circle 哈希环，key 为哈希值，value 为目标
-	circle map[uint64]*Target
-
-	// sortedHashes 排序后的哈希值列表，用于二分查找
+	circle       map[uint64]*Target
+	hashKey      string
 	sortedHashes []uint64
-
-	// hashKey 哈希键来源：ip, uri, header:xxx
-	hashKey string
-
-	// mu 读写锁
-	mu sync.RWMutex
+	virtualNodes int
+	mu           sync.RWMutex
 }
 
 // NewConsistentHash 创建一致性哈希负载均衡器。

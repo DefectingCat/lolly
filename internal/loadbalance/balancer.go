@@ -27,33 +27,14 @@ import (
 // Target 表示负载均衡的后端服务器目标。
 // 所有字段都设计为使用原子操作进行并发访问（如适用）。
 type Target struct {
-	// URL 是目标地址，例如 "http://backend1:8080"
-	URL string
-
-	// Weight 是此目标在权重算法中的权重值。
-	// 权重越高，表示有更多请求会被路由到此目标。
-	Weight int
-
-	// Healthy 表示此目标是否健康可用。
-	// 使用 atomic.Bool 保证并发安全。
-	Healthy atomic.Bool
-
-	// Connections 跟踪当前活跃连接数。
-	// 并发修改此字段时应使用原子操作。
-	Connections int64
-
-	// hostname 从 URL 提取的主机名（缓存，避免重复解析）
-	hostname string
-
-	// resolvedIPs 解析后的 IP 列表（使用 atomic.Pointer 保证并发安全）
-	resolvedIPs atomic.Pointer[[]string]
-
-	// lastResolved 最后解析时间（UnixNano，使用 atomic.Int64）
-	lastResolved atomic.Int64
-
-	// VirtualHashes 预计算的虚拟节点哈希值（用于一致性哈希）
-	// 由 PrecomputeHashes 方法填充，避免运行时重复计算
+	resolvedIPs   atomic.Pointer[[]string]
+	URL           string
+	hostname      string
 	VirtualHashes []uint64
+	Weight        int
+	Connections   int64
+	lastResolved  atomic.Int64
+	Healthy       atomic.Bool
 }
 
 // Balancer 是负载均衡算法的接口。

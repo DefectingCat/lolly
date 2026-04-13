@@ -14,41 +14,17 @@ import (
 
 // TCPSocket TCP socket 对象
 type TCPSocket struct {
-	// 连接
-	conn net.Conn
-
-	// 读取超时
-	readTimeout time.Duration
-
-	// 发送超时
-	sendTimeout time.Duration
-
-	// 连接超时
+	createdAt      time.Time
+	conn           net.Conn
+	currentOp      *SocketOperation
+	manager        *CosocketManager
+	addr           *net.TCPAddr
+	readTimeout    time.Duration
+	sendTimeout    time.Duration
 	connectTimeout time.Duration
-
-	// 当前操作
-	currentOp *SocketOperation
-
-	// 状态
-	state SocketState
-
-	// 互斥锁
-	mu sync.RWMutex
-
-	// 管理器引用
-	manager *CosocketManager
-
-	// 连接地址
-	addr *net.TCPAddr
-
-	// 创建时间
-	createdAt time.Time
-
-	// 是否关闭
-	closed int32
-
-	// Lua 引用计数（用于 GC）
-	luaRef int32
+	state          SocketState
+	mu             sync.RWMutex
+	closed         int32
 }
 
 // NewTCPSocket 创建新的 TCP socket
@@ -121,7 +97,7 @@ func (s *TCPSocket) Connect(host string, port int) error {
 }
 
 // ConnectAsync 异步连接（用于 Lua yield）
-func (s *TCPSocket) ConnectAsync(L *glua.LState, host string, port int) (*SocketOperation, error) {
+func (s *TCPSocket) ConnectAsync(_ *glua.LState, host string, port int) (*SocketOperation, error) {
 	err := s.Connect(host, port)
 	if err != nil {
 		return nil, err
@@ -202,6 +178,9 @@ func (s *TCPSocket) SendAsync(data []byte) (*SocketOperation, error) {
 	return op, nil
 }
 
+// socketEOFError EOF错误字符串常量
+const socketEOFError = "EOF"
+
 // Receive 接收数据
 func (s *TCPSocket) Receive(size int) ([]byte, error) {
 	s.mu.RLock()
@@ -229,7 +208,7 @@ func (s *TCPSocket) Receive(size int) ([]byte, error) {
 	buf := make([]byte, size)
 	n, err := conn.Read(buf)
 	if err != nil {
-		if err.Error() == "EOF" {
+		if err.Error() == socketEOFError {
 			return nil, nil // 连接关闭
 		}
 		s.setState(SocketStateError)
@@ -279,7 +258,7 @@ func (s *TCPSocket) ReceiveAsync(size int) (*SocketOperation, error) {
 		buf := make([]byte, size)
 		n, err := conn.Read(buf)
 		if err != nil {
-			if err.Error() == "EOF" {
+			if err.Error() == socketEOFError {
 				s.manager.CompleteOperation(op.ID, []byte{}, nil)
 				return
 			}
@@ -326,7 +305,7 @@ func (s *TCPSocket) ReceiveUntil(pattern string, inclusive bool) ([]byte, error)
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
-			if err.Error() == "EOF" {
+			if err.Error() == socketEOFError {
 				return result, nil
 			}
 			s.setState(SocketStateError)
@@ -382,7 +361,7 @@ func (s *TCPSocket) Close() error {
 
 	// 关闭连接
 	if s.conn != nil {
-		s.conn.Close()
+		s.conn.Close() //nolint:errcheck
 		s.conn = nil
 	}
 
@@ -507,13 +486,14 @@ func registerTCPSocketMetaTable(L *glua.LState) {
 }
 
 // newTCPSocketFunc 创建 TCP socket
-func newTCPSocketFunc(engine *LuaEngine) func(*glua.LState) int {
+func newTCPSocketFunc(_ *LuaEngine) func(*glua.LState) int {
 	return func(L *glua.LState) int {
 		socket := NewTCPSocket(DefaultCosocketManager)
 
 		// 创建 userdata
 		ud := L.NewUserData()
 		ud.Value = socket
+		//nolint:errcheck // 类型断言检查
 		L.SetMetatable(ud, L.GetGlobal(tcpSocketMT).(*glua.LTable))
 
 		L.Push(ud)
@@ -648,7 +628,7 @@ func tcpSocketReceive(L *glua.LState) int {
 }
 
 // tcpSocketReceivePattern 按模式接收
-func tcpSocketReceivePattern(L *glua.LState, socket *TCPSocket, pattern string, opts *glua.LTable) int {
+func tcpSocketReceivePattern(L *glua.LState, socket *TCPSocket, pattern string, _ *glua.LTable) int {
 	switch pattern {
 	case "*l":
 		// 读取一行
@@ -751,7 +731,7 @@ func tcpSocketSetTimeouts(L *glua.LState) int {
 // tcpSocketGC __gc 元方法
 func tcpSocketGC(L *glua.LState) int {
 	socket := checkTCPSocket(L, 1)
-	socket.Close()
+	socket.Close() //nolint:errcheck
 	return 0
 }
 

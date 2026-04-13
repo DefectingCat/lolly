@@ -401,8 +401,8 @@ func TestConfigMethods(t *testing.T) {
 
 	t.Run("配置模式判断", func(t *testing.T) {
 		tests := []struct {
-			name           string
 			cfg            *Config
+			name           string
 			wantHasServers bool
 			wantHasDefault bool
 		}{

@@ -20,8 +20,8 @@ import (
 
 func TestNew(t *testing.T) {
 	tests := []struct {
-		name string
 		cfg  *config.CompressionConfig
+		name string
 	}{
 		{
 			name: "nil config uses defaults",

@@ -29,10 +29,10 @@ import (
 
 func TestNewTLSManager(t *testing.T) {
 	tests := []struct {
-		name    string
 		cfg     *config.SSLConfig
-		wantErr bool
+		name    string
 		errMsg  string
+		wantErr bool
 	}{
 		{
 			name:    "nil config",
@@ -532,10 +532,10 @@ func TestClose(t *testing.T) {
 // TestNewTLSManager_Errors 测试错误场景
 func TestNewTLSManager_Errors(t *testing.T) {
 	tests := []struct {
-		name    string
 		cfg     *config.SSLConfig
-		wantErr bool
+		name    string
 		errMsg  string
+		wantErr bool
 	}{
 		{
 			name:    "nil config",

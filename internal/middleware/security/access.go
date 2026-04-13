@@ -53,20 +53,11 @@ const (
 // 根据配置的允许/拒绝 CIDR 列表检查入站请求。
 // 支持动态更新访问控制列表。
 type AccessControl struct {
-	// allowList 允许的 CIDR 网络列表
-	allowList []net.IPNet
-
-	// denyList 拒绝的 CIDR 网络列表
-	denyList []net.IPNet
-
-	// defaultAction 默认操作，当无规则匹配时执行
-	defaultAction Action
-
-	// trustedProxies 可信代理 CIDR 列表，用于安全解析 X-Forwarded-For
+	allowList      []net.IPNet
+	denyList       []net.IPNet
 	trustedProxies []net.IPNet
-
-	// mu 保护并发访问的读写锁
-	mu sync.RWMutex
+	defaultAction  Action
+	mu             sync.RWMutex
 }
 
 // NewAccessControl 创建访问控制中间件。
@@ -407,9 +398,9 @@ func getRemoteAddrIP(ctx *fasthttp.RequestCtx) net.IP {
 
 // AccessStats 访问控制统计信息结构。
 type AccessStats struct {
-	AllowCount int    // 允许列表中的规则数量
-	DenyCount  int    // 拒绝列表中的规则数量
-	Default    string // 默认操作（"allow" 或 "deny"）
+	Default    string
+	AllowCount int
+	DenyCount  int
 }
 
 // GetStats 返回当前访问控制的统计信息。

@@ -69,35 +69,16 @@ const (
 //   - 所有公开方法均为并发安全
 //   - 使用前需确保 targets 中至少有一个健康目标
 type Proxy struct {
-	// targets 后端目标列表，用于负载均衡选择
-	targets []*loadbalance.Target
-
-	// clients 每个目标对应的 HostClient 连接池映射（key: target URL）
-	clients map[string]*fasthttp.HostClient
-
-	// balancer 负载均衡器实例
-	balancer loadbalance.Balancer
-
-	// config 代理配置，包含超时、请求头等设置
-	config *config.ProxyConfig
-
-	// cache 代理缓存实例，用于缓存响应（可选）
-	cache *cache.ProxyCache
-
-	// healthChecker 健康检查器，用于被动健康检查
+	balancer      loadbalance.Balancer
+	resolver      resolver.Resolver
+	clients       map[string]*fasthttp.HostClient
+	config        *config.ProxyConfig
+	cache         *cache.ProxyCache
 	healthChecker *HealthChecker
-
-	// resolver DNS 解析器，用于动态解析域名
-	resolver resolver.Resolver
-
-	// stopCh 用于停止后台协程
-	stopCh chan struct{}
-
-	// started 标记代理是否已启动
-	started atomic.Bool
-
-	// mu 保护并发访问的读写锁
-	mu sync.RWMutex
+	stopCh        chan struct{}
+	targets       []*loadbalance.Target
+	mu            sync.RWMutex
+	started       atomic.Bool
 }
 
 // NewProxy 使用给定的配置和后台目标创建一个新的反向代理实例。

@@ -147,8 +147,9 @@ func BenchmarkUpvalueDetection(b *testing.B) {
 			local x = 42
 			local ok, err = ngx.timer.at(1, function() return x end)
 		`)
-		if err == nil {
+		if err != nil {
 			// 错误可能被 Lua 内部处理，检查返回值
+			_ = err
 		}
 	}
 }

@@ -27,8 +27,8 @@ func TestNewTempFileManager(t *testing.T) {
 		tempPath    string
 		threshold   string
 		maxSize     string
-		wantErr     bool
 		errContains string
+		wantErr     bool
 	}{
 		{
 			name:      "正常创建",

@@ -204,8 +204,8 @@ func TestStatusHandler_Path(t *testing.T) {
 func TestStatusHandler_checkAccess(t *testing.T) {
 	tests := []struct {
 		name       string
-		allow      []string
 		clientIP   string
+		allow      []string
 		wantAccess bool
 	}{
 		{

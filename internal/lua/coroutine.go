@@ -61,30 +61,15 @@ func (p Phase) String() string {
 // 2) 明确区分 Lua 运行时协程与 Go 协程概念
 // 3) 保持向后兼容性
 type LuaCoroutine struct {
-	// 所属引擎
-	Engine *LuaEngine
-
-	// 协程 LState（通过 NewThread 创建）
-	Co *glua.LState
-
-	// 取消函数
-	Cancel context.CancelFunc
-
-	// 请求上下文
-	RequestCtx *fasthttp.RequestCtx
-
-	// 执行上下文
+	CreatedAt        time.Time
 	ExecutionContext context.Context
+	Engine           *LuaEngine
+	Co               *glua.LState
+	Cancel           context.CancelFunc
+	RequestCtx       *fasthttp.RequestCtx
 	executionCancel  context.CancelFunc
-
-	// 创建时间
-	CreatedAt time.Time
-
-	// 状态
-	Exited bool // 是否已调用 exit
-
-	// 输出缓冲
-	OutputBuffer []byte
+	OutputBuffer     []byte
+	Exited           bool
 }
 
 // SetupSandbox 创建 per-request _ENV 沙箱
@@ -213,6 +198,8 @@ func (c *LuaCoroutine) setupNgxAPI() {
 // setupSchedulerNgxAPI 为 Scheduler LState 创建安全的 ngx API
 // 仅注册在 timer callback 中安全的 API：ngx.shared, ngx.log, ngx.timer
 // Unsafe APIs (ngx.req, ngx.resp, ngx.var, ngx.ctx, ngx.location) 会返回错误
+//
+//lint:ignore U1000 This function is kept for potential future use
 func setupSchedulerNgxAPI(L *glua.LState, engine *LuaEngine) {
 	// 创建 ngx 表
 	ngx := L.NewTable()
@@ -244,6 +231,8 @@ func setupSchedulerNgxAPI(L *glua.LState, engine *LuaEngine) {
 const schedulerModeKey = "__scheduler_mode__"
 
 // setSchedulerMode 设置 LState 的 scheduler 模式标志
+//
+//lint:ignore U1000 This function is kept for potential future use // kept for potential future use
 func setSchedulerMode(L *glua.LState, enabled bool) {
 	L.SetGlobal(schedulerModeKey, glua.LBool(enabled))
 }

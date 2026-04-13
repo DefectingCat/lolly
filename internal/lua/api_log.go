@@ -87,6 +87,7 @@ func RegisterNgxLogAPI(L *glua.LState, api *ngxLogAPI) {
 	var ngx *glua.LTable
 	existingNgx := L.GetGlobal("ngx")
 	if existingNgx != nil && existingNgx.Type() == glua.LTTable {
+		//nolint:errcheck // 类型断言检查
 		ngx = existingNgx.(*glua.LTable)
 	} else {
 		ngx = L.NewTable()
@@ -214,7 +215,7 @@ func (api *ngxLogAPI) luaSay(L *glua.LState) int {
 		api.luaCtx.Write([]byte(msg))
 	} else if api.ctx != nil {
 		// 直接写入响应
-		_, _ = api.ctx.Write([]byte(msg))
+		_, _ = api.ctx.Write([]byte(msg)) //nolint:errcheck
 	}
 
 	return 0
@@ -237,7 +238,7 @@ func (api *ngxLogAPI) luaPrint(L *glua.LState) int {
 		api.luaCtx.Write([]byte(msg))
 	} else if api.ctx != nil {
 		// 直接写入响应
-		_, _ = api.ctx.Write([]byte(msg))
+		_, _ = api.ctx.Write([]byte(msg)) //nolint:errcheck
 	}
 
 	return 0

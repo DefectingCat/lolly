@@ -142,6 +142,7 @@ func TestPoolConcurrentSubmit(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
 			_ = p.Submit(nil, func(_ *fasthttp.RequestCtx) {
 				counter.Add(1)
 			})

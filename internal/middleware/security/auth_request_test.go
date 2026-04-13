@@ -26,9 +26,9 @@ import (
 func TestNewAuthRequest(t *testing.T) {
 	tests := []struct {
 		name    string
+		errMsg  string
 		cfg     config.AuthRequestConfig
 		wantErr bool
-		errMsg  string
 	}{
 		{
 			name: "正常创建（禁用）",

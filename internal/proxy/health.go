@@ -55,26 +55,13 @@ const healthPath = "/health"
 //	checker.Start()
 //	defer checker.Stop()
 type HealthChecker struct {
-	// targets 需要检查的后端目标列表
-	targets []*loadbalance.Target
-
-	// interval 健康检查间隔时间
+	stopCh   chan struct{}
+	client   *fasthttp.Client
+	path     string
+	targets  []*loadbalance.Target
 	interval time.Duration
-
-	// timeout 单次检查超时时间
-	timeout time.Duration
-
-	// path 健康检查请求路径
-	path string
-
-	// stopCh 停止信号通道
-	stopCh chan struct{}
-
-	// running 运行状态标志
-	running atomic.Bool
-
-	// client HTTP 客户端，用于发送健康检查请求
-	client *fasthttp.Client
+	timeout  time.Duration
+	running  atomic.Bool
 }
 
 // NewHealthChecker 使用指定的目标和配置创建一个新的 HealthChecker。

@@ -53,23 +53,23 @@ const rateLimitHeader = "header"
 //   - 所有方法均为并发安全
 //   - 启动后会自动后台清理过期的桶
 type RateLimiter struct {
-	rate          float64                 // 每秒添加的令牌数
-	burst         float64                 // 桶的最大容量
-	keyFunc       KeyFunc                 // 提取限流键的函数
-	buckets       map[string]*tokenBucket // 各键的令牌桶映射
-	mu            sync.RWMutex            // 读写锁，保护并发访问
-	cleanupTicker *time.Ticker            // 清理定时器
-	stopCleanupCh chan struct{}           // 停止清理的信号通道
-	cleanupDone   chan struct{}           // 清理 goroutine 完成的信号
+	keyFunc       KeyFunc
+	buckets       map[string]*tokenBucket
+	cleanupTicker *time.Ticker
+	stopCleanupCh chan struct{}
+	cleanupDone   chan struct{}
+	rate          float64
+	burst         float64
+	mu            sync.RWMutex
 }
 
 // tokenBucket 表示单个限流键的令牌桶。
 //
 // 记录当前令牌数和最后更新时间，用于令牌计算。
 type tokenBucket struct {
-	tokens     float64    // 当前令牌数量
-	lastUpdate time.Time  // 最后更新时间
-	mu         sync.Mutex // 互斥锁，保护桶内状态
+	lastUpdate time.Time
+	tokens     float64
+	mu         sync.Mutex
 }
 
 // KeyFunc 从请求中提取限流键的函数类型。
@@ -484,12 +484,12 @@ func (rl *RateLimiter) GetStats() RateLimitStats {
 //   - 使用后必须调用 Release 释放连接槽
 //   - 所有方法均为并发安全
 type ConnLimiter struct {
-	max     int              // 最大并发连接数
-	current int64            // 当前连接数（原子操作）
-	perKey  bool             // 是否按键限制，false 为全局限制
-	keyFunc KeyFunc          // 键提取函数
-	counts  map[string]int64 // 各键的连接数计数
-	mu      sync.RWMutex     // 读写锁
+	keyFunc KeyFunc
+	counts  map[string]int64
+	max     int
+	current int64
+	mu      sync.RWMutex
+	perKey  bool
 }
 
 // NewConnLimiter 创建新的连接数限制器。

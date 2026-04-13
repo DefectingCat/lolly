@@ -273,9 +273,9 @@ func TestPprofHandler_Path(t *testing.T) {
 func TestPprofHandler_isAllowed(t *testing.T) {
 	tests := []struct {
 		name        string
+		clientIP    string
 		allowedIPs  []string
 		allowedNets []string
-		clientIP    string
 		wantAllowed bool
 	}{
 		{
@@ -332,7 +332,6 @@ func TestPprofHandler_isAllowed(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &PprofHandler{
-				path:        "/debug/pprof",
 				allowedIPs:  parseIPs(tt.allowedIPs),
 				allowedNets: parseNets(tt.allowedNets),
 			}
@@ -519,8 +518,8 @@ func TestPprofHandler_ServeHTTP_PathRouting(t *testing.T) {
 	tests := []struct {
 		name       string
 		path       string
-		wantStatus int
 		wantBody   string
+		wantStatus int
 	}{
 		{
 			name:       "index path",
@@ -567,9 +566,7 @@ func TestPprofHandler_ServeHTTP_Forbidden(t *testing.T) {
 	// 创建只允许特定 IP 的 handler
 	allowedIP := net.ParseIP("10.0.0.1")
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{allowedIP},
-		allowedNets: []*net.IPNet{},
+		allowedIPs: []net.IP{allowedIP},
 	}
 
 	// 由于无法轻松设置 RemoteIP，我们直接测试 isAllowed 返回 false 的情况
