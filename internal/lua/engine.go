@@ -141,8 +141,10 @@ func (e *LuaEngine) NewCoroutine(req *fasthttp.RequestCtx) (*LuaCoroutine, error
 	coro.CreatedAt = time.Now()
 	coro.ExecutionContext, coro.executionCancel = context.WithTimeout(e.ctx, e.config.MaxExecutionTime)
 
-	// 设置 LState 的上下文，使 getRequestCtx 能够获取到 RequestCtx
-	co.SetContext(req)
+	// 设置 LState 的上下文为执行上下文（用于超时控制）
+	// 注意：不直接使用 RequestCtx，因为 RequestCtx.Done() 依赖服务器连接
+	// RequestCtx 通过 coro.RequestCtx 字段访问，而不是 L.Context()
+	co.SetContext(coro.ExecutionContext)
 
 	atomic.AddUint64(&e.stats.CoroutinesCreated, 1)
 
