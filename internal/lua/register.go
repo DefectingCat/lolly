@@ -5,8 +5,8 @@ import glua "github.com/yuin/gopher-lua"
 
 // APIMethod 表示一个 Lua API 方法
 type APIMethod struct {
-	Name string
 	Func func(*glua.LState) int
+	Name string
 }
 
 // RegisterAPIMethods 批量注册 API 方法到 Lua 表

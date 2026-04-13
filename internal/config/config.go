@@ -58,7 +58,6 @@ const (
 type Config struct {
 	Variables   VariablesConfig   `yaml:"variables"`
 	Logging     LoggingConfig     `yaml:"logging"`
-	Shutdown    ShutdownConfig    `yaml:"shutdown"`
 	Servers     []ServerConfig    `yaml:"servers"`
 	Stream      []StreamConfig    `yaml:"stream"`
 	Monitoring  MonitoringConfig  `yaml:"monitoring"`
@@ -66,6 +65,7 @@ type Config struct {
 	Resolver    ResolverConfig    `yaml:"resolver"`
 	Server      ServerConfig      `yaml:"server"`
 	Performance PerformanceConfig `yaml:"performance"`
+	Shutdown    ShutdownConfig    `yaml:"shutdown"`
 }
 
 // VariablesConfig 自定义变量配置。

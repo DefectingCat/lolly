@@ -36,38 +36,17 @@ import (
 //
 // 包装 golang.org/x/net/http2 服务器，提供与 fasthttp handler 的集成。
 type Server struct {
-	// stopChan 停止信号通道
-	stopChan chan struct{}
-
-	// http2Server HTTP/2 服务器实例
-	http2Server *http2.Server
-
-	// config HTTP/2 配置
-	config *config.HTTP2Config
-
-	// tlsConfig TLS 配置
-	tlsConfig *tls.Config
-
-	// listener TCP 监听器
-	listener net.Listener
-
-	// handler fasthttp 请求处理器
-	handler fasthttp.RequestHandler
-
-	// mu 读写锁
-	mu sync.RWMutex
-
-	// running 服务器运行状态
-	running bool
-
-	// pool 连接池
-	pool *connectionPool
-
-	// connWg 连接等待组，用于优雅关闭
-	connWg sync.WaitGroup
-
-	// GracefulShutdownTimeout 优雅关闭超时时间
+	listener                net.Listener
+	http2Server             *http2.Server
+	config                  *config.HTTP2Config
+	tlsConfig               *tls.Config
+	pool                    *connectionPool
+	handler                 fasthttp.RequestHandler
+	stopChan                chan struct{}
+	connWg                  sync.WaitGroup
 	GracefulShutdownTimeout time.Duration
+	mu                      sync.RWMutex
+	running                 bool
 }
 
 // NewServer 创建 HTTP/2 服务器。
@@ -607,7 +586,7 @@ func (p *connectionPool) count(key string) int {
 }
 
 // closeAll 关闭所有连接。
-func (p *connectionPool) closeAll() { //nolint:unused // reserved for future use
+func (p *connectionPool) closeAll() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
