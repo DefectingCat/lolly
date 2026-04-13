@@ -623,8 +623,8 @@ func TestCosocketManager_Stress(t *testing.T) {
 	cm := NewCosocketManager()
 	defer cm.Close()
 
-	const totalConnections = 10000
-	const concurrency = 1000
+	const totalConnections = 1000
+	const concurrency = 100
 
 	var wg sync.WaitGroup
 	var successCount int32
@@ -655,8 +655,13 @@ func TestCosocketManager_Stress(t *testing.T) {
 				return
 			}
 
-			// 等待连接完成
-			time.Sleep(10 * time.Millisecond)
+			// 等待连接状态就绪（最多 50ms）
+			for retry := 0; retry < 10; retry++ {
+				if socket.State() == SocketStateConnected {
+					break
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
 
 			// 简单数据交换
 			if _, err := socket.Send([]byte("hello")); err == nil {

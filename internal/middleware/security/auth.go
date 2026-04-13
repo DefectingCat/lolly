@@ -29,6 +29,7 @@ package security
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -261,17 +262,7 @@ func authenticateArgon2id(password, hash string) bool {
 		params.time, params.memory, params.threads, params.keyLen)
 
 	// 常量时间比较
-	if len(actualHash) != len(expectedHash) {
-		return false
-	}
-
-	for i := range actualHash {
-		if actualHash[i] != expectedHash[i] {
-			return false
-		}
-	}
-
-	return true
+	return subtle.ConstantTimeCompare(actualHash, expectedHash) == 1
 }
 
 // parseArgon2idHash 解析 Argon2id 哈希字符串。
