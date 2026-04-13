@@ -36,8 +36,6 @@ var (
 	BuildPlatform = "unknown"
 )
 
-var shutdownTimeout = 30 * time.Second
-
 // App 应用程序结构（Windows 版本）。
 type App struct {
 	cfgPath    string
@@ -282,10 +280,15 @@ func (a *App) setupSignalHandlers(sigChan chan<- os.Signal) {
 func (a *App) handleSignal(sig os.Signal) bool {
 	switch sig {
 	case syscall.SIGTERM, syscall.SIGINT:
+		// 快速停止
+		timeout := a.cfg.Shutdown.FastTimeout
+		if timeout <= 0 {
+			timeout = 5 * time.Second // 默认值
+		}
 		a.logger.LogSignal(sigName(sig.(syscall.Signal)), "停止服务器")
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
-		_ = a.srv.Stop()
+		_ = a.srv.StopWithTimeout(timeout) //nolint:errcheck // 使用新方法
 		return false
 	default:
 		a.logger.Info().Str("signal", sig.String()).Msg("收到信号（Windows 忽略）")

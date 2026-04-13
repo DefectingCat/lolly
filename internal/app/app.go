@@ -53,12 +53,6 @@ var (
 	BuildPlatform = "unknown"
 )
 
-// 应用状态。
-var (
-	// shutdownTimeout 优雅停止超时时间
-	shutdownTimeout = 30 * time.Second
-)
-
 // App 应用程序结构。
 //
 // 管理服务器的完整生命周期，包括 HTTP 服务器、HTTP/3 服务器、Stream 服务器
@@ -349,22 +343,42 @@ func (a *App) setupSignalHandlers(sigChan chan<- os.Signal) {
 
 // handleSignal 处理信号，返回 false 表示退出。
 func (a *App) handleSignal(sig os.Signal) bool {
+	// 防御性 nil-check：确保 a.cfg 不为 nil
+	if a.cfg == nil {
+		a.logger.Error().Msg("信号处理失败: 配置为 nil，使用默认超时")
+		// 使用默认超时继续处理信号
+		a.cfg = &config.Config{
+			Shutdown: config.ShutdownConfig{
+				GracefulTimeout: 30 * time.Second,
+				FastTimeout:     5 * time.Second,
+			},
+		}
+	}
+
 	switch sig {
 	case syscall.SIGQUIT:
 		// 优雅停止：等待请求完成
-		a.logger.LogSignal("SIGQUIT", fmt.Sprintf("优雅停止（等待 %v）", shutdownTimeout))
+		timeout := a.cfg.Shutdown.GracefulTimeout
+		if timeout <= 0 {
+			timeout = 30 * time.Second // 默认值
+		}
+		a.logger.LogSignal("SIGQUIT", fmt.Sprintf("优雅停止（等待 %v）", timeout))
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
-		_ = a.srv.GracefulStop(shutdownTimeout) //nolint:errcheck
+		_ = a.srv.GracefulStop(timeout) //nolint:errcheck
 		return false
 
 	case syscall.SIGTERM, syscall.SIGINT:
 		// 快速停止
+		timeout := a.cfg.Shutdown.FastTimeout
+		if timeout <= 0 {
+			timeout = 5 * time.Second // 默认值
+		}
 		sigTyped := sig.(syscall.Signal) //nolint:errcheck // 类型断言
 		a.logger.LogSignal(sigName(sigTyped), "停止服务器")
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
-		_ = a.srv.Stop() //nolint:errcheck
+		_ = a.srv.StopWithTimeout(timeout) //nolint:errcheck // 使用新方法
 		return false
 
 	case syscall.SIGHUP:
@@ -442,6 +456,12 @@ func (a *App) gracefulUpgrade() {
 		return
 	}
 
+	// 防御性 nil-check：确保 srv 不为 nil
+	if a.srv == nil {
+		a.logger.Error().Msg("热升级失败: 服务器实例为 nil")
+		return
+	}
+
 	// 尝试从服务器获取监听器
 	listeners := a.srv.GetListeners()
 	if len(listeners) == 0 {
@@ -461,10 +481,14 @@ func (a *App) gracefulUpgrade() {
 
 	a.logger.LogStartup("热升级已启动，新进程正在接管", nil)
 
-	// 当前进程优雅停止
+	// 当前进程优雅停止 - 使用配置的超时
+	timeout := a.cfg.Shutdown.GracefulTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
 	a.shutdownHTTP2()
 	a.shutdownHTTP3()
-	_ = a.srv.GracefulStop(shutdownTimeout) //nolint:errcheck
+	_ = a.srv.GracefulStop(timeout) //nolint:errcheck
 }
 
 // sigName 返回信号名称（用于日志输出）。
