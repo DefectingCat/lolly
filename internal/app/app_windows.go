@@ -28,11 +28,11 @@ import (
 
 // 版本信息，通过 -ldflags 注入。
 var (
-	Version     = "dev"
-	GitCommit   = "unknown"
-	GitBranch   = "unknown"
-	BuildTime   = "unknown"
-	GoVersion   = "unknown"
+	Version       = "dev"
+	GitCommit     = "unknown"
+	GitBranch     = "unknown"
+	BuildTime     = "unknown"
+	GoVersion     = "unknown"
 	BuildPlatform = "unknown"
 )
 
@@ -40,18 +40,18 @@ var shutdownTimeout = 30 * time.Second
 
 // App 应用程序结构（Windows 版本）。
 type App struct {
-	cfgPath     string
-	cfg         *config.Config
-	srv         *server.Server
-	http3Srv    *http3.Server
-	http2Srv    *http2.Server
-	streamSrv   *stream.Server
-	upgradeMgr  *server.UpgradeManager
-	pidFile     string
-	logFile     string
-	listeners   []net.Listener
-	logger      *logging.AppLogger
-	resv        resolver.Resolver
+	cfgPath    string
+	cfg        *config.Config
+	srv        *server.Server
+	http3Srv   *http3.Server
+	http2Srv   *http2.Server
+	streamSrv  *stream.Server
+	upgradeMgr *server.UpgradeManager
+	pidFile    string
+	logFile    string
+	listeners  []net.Listener
+	logger     *logging.AppLogger
+	resv       resolver.Resolver
 }
 
 // NewApp 创建应用程序。
