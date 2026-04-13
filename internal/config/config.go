@@ -275,17 +275,50 @@ type StaticConfig struct {
 //	      interval: 10s
 //	      path: "/health"
 type ProxyConfig struct {
-	Path              string             `yaml:"path"`
-	LoadBalance       string             `yaml:"load_balance"`
-	HashKey           string             `yaml:"hash_key"`
-	ClientMaxBodySize string             `yaml:"client_max_body_size"`
-	Headers           ProxyHeaders       `yaml:"headers"`
-	Targets           []ProxyTarget      `yaml:"targets"`
-	HealthCheck       HealthCheckConfig  `yaml:"health_check"`
-	NextUpstream      NextUpstreamConfig `yaml:"next_upstream"`
-	Cache             ProxyCacheConfig   `yaml:"cache"`
-	Timeout           ProxyTimeout       `yaml:"timeout"`
-	VirtualNodes      int                `yaml:"virtual_nodes"`
+	Path              string              `yaml:"path"`
+	LoadBalance       string              `yaml:"load_balance"`
+	HashKey           string              `yaml:"hash_key"`
+	ClientMaxBodySize string              `yaml:"client_max_body_size"`
+	Headers           ProxyHeaders        `yaml:"headers"`
+	Targets           []ProxyTarget       `yaml:"targets"`
+	BalancerByLua     BalancerByLuaConfig `yaml:"balancer_by_lua"`
+	HealthCheck       HealthCheckConfig   `yaml:"health_check"`
+	NextUpstream      NextUpstreamConfig  `yaml:"next_upstream"`
+	Cache             ProxyCacheConfig    `yaml:"cache"`
+	Timeout           ProxyTimeout        `yaml:"timeout"`
+	VirtualNodes      int                 `yaml:"virtual_nodes"`
+}
+
+// BalancerByLuaConfig Lua 负载均衡配置
+//
+// 使用 Lua 脚本动态选择后端目标，支持自定义负载均衡逻辑。
+//
+// 注意事项：
+//   - Script 为 Lua 脚本文件路径
+//   - Timeout 控制脚本执行超时
+//   - Fallback 指定 Lua 失败时的备用算法
+//
+// 使用示例：
+//
+//	balancer_by_lua:
+//	  enabled: true
+//	  script: "/etc/lolly/scripts/balancer.lua"
+//	  timeout: 100ms
+//	  fallback: "round_robin"
+type BalancerByLuaConfig struct {
+	// Script Lua 脚本路径
+	Script string `yaml:"script"`
+
+	// Fallback 失败时使用的默认负载均衡算法
+	// 默认值: "round_robin"
+	Fallback string `yaml:"fallback"`
+
+	// Timeout 执行超时
+	// 默认值: 100ms
+	Timeout time.Duration `yaml:"timeout"`
+
+	// Enabled 是否启用
+	Enabled bool `yaml:"enabled"`
 }
 
 // ProxyTarget 后端目标配置。
@@ -597,12 +630,13 @@ type SecurityConfig struct {
 
 // AccessConfig IP 访问控制配置。
 //
-// 通过 IP 地址或 CIDR 范围控制访问权限。
+// 通过 IP 地址或 CIDR 范围控制访问权限，支持基于 GeoIP 的国家代码访问控制。
 //
 // 注意事项：
 //   - Allow 和 Deny 列表按配置顺序匹配
 //   - Default 指定未匹配时的默认动作
 //   - TrustedProxies 用于正确获取客户端真实 IP
+//   - GeoIP 配置启用后，会基于国家代码进行二次检查
 //   - 支持 IPv4 和 IPv6 地址格式
 //
 // 使用示例：
@@ -612,6 +646,15 @@ type SecurityConfig struct {
 //	  deny: ["192.168.1.100"]
 //	  default: "deny"
 //	  trusted_proxies: ["172.16.0.0/16"]
+//	  geoip:
+//	    enabled: true
+//	    database: "/var/lib/geoip/GeoIP2-Country.mmdb"
+//	    allow_countries: ["US", "JP", "GB"]
+//	    deny_countries: ["CN", "RU"]
+//	    default: "deny"
+//	    cache_size: 10000
+//	    cache_ttl: 1h
+//	    private_ip_behavior: "allow"
 type AccessConfig struct {
 	// Allow 允许的 IP/CIDR 列表
 	// 配置允许访问的 IP 地址或网段
@@ -621,13 +664,49 @@ type AccessConfig struct {
 	// 配置拒绝访问的 IP 地址或网段
 	Deny []string `yaml:"deny"`
 
+	// TrustedProxies 可信代理 CIDR 列表
+	// 用于正确解析 X-Forwarded-For 头部获取真实客户端 IP
+	TrustedProxies []string `yaml:"trusted_proxies"`
+
 	// Default 默认动作
 	// 未匹配任何规则时的处理方式：allow 或 deny
 	Default string `yaml:"default"`
 
-	// TrustedProxies 可信代理 CIDR 列表
-	// 用于正确解析 X-Forwarded-For 头部获取真实客户端 IP
-	TrustedProxies []string `yaml:"trusted_proxies"`
+	// GeoIP GeoIP 国家代码访问控制配置
+	GeoIP GeoIPConfig `yaml:"geoip"`
+}
+
+// GeoIPConfig GeoIP 访问控制配置。
+//
+// 通过 MaxMind GeoIP2 数据库查询 IP 所属国家，实现基于国家代码的访问控制。
+//
+// 注意事项：
+//   - Database 为 GeoIP2 数据库文件路径（.mmdb 格式）
+//   - AllowCountries 和 DenyCountries 使用 ISO 3166-1 alpha-2 国家代码
+//   - CacheSize 设置 LRU 缓存最大条目数，0 表示使用默认值 10000
+//   - CacheTTL 设置缓存有效期，0 表示使用默认值 1 小时
+//   - PrivateIPBehavior 控制私有 IP 的处理策略
+//
+// 使用示例：
+//
+//	geoip:
+//	  enabled: true
+//	  database: "/var/lib/geoip/GeoIP2-Country.mmdb"
+//	  allow_countries: ["US", "JP", "GB"]
+//	  deny_countries: ["CN", "RU"]
+//	  default: "deny"
+//	  cache_size: 10000
+//	  cache_ttl: 1h
+//	  private_ip_behavior: "allow"
+type GeoIPConfig struct {
+	Database          string        `yaml:"database"`
+	Default           string        `yaml:"default"`
+	PrivateIPBehavior string        `yaml:"private_ip_behavior"`
+	AllowCountries    []string      `yaml:"allow_countries"`
+	DenyCountries     []string      `yaml:"deny_countries"`
+	CacheSize         int           `yaml:"cache_size"`
+	CacheTTL          time.Duration `yaml:"cache_ttl"`
+	Enabled           bool          `yaml:"enabled"`
 }
 
 // RateLimitConfig 速率限制配置。
@@ -1536,7 +1615,7 @@ func Save(cfg *Config, path string) error {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("写入配置文件失败: %w", err)
 	}
 

@@ -543,7 +543,87 @@ func validateAccess(a *AccessConfig) error {
 		return fmt.Errorf("无效的 default 动作: %s（仅允许 allow 或 deny）", a.Default)
 	}
 
+	// 验证 GeoIP 配置
+	if err := validateGeoIP(&a.GeoIP); err != nil {
+		return fmt.Errorf("geoip: %w", err)
+	}
+
 	return nil
+}
+
+// validateGeoIP 验证 GeoIP 配置。
+//
+// 检查 GeoIP 数据库路径、国家代码格式、缓存设置等。
+//
+// 参数：
+//   - g: GeoIP 配置对象
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+func validateGeoIP(g *GeoIPConfig) error {
+	// 未启用时跳过验证
+	if !g.Enabled {
+		return nil
+	}
+
+	// 验证数据库路径
+	if g.Database == "" {
+		return errors.New("database 是必填项（启用 GeoIP 时）")
+	}
+
+	// 验证国家代码格式 (ISO 3166-1 alpha-2)
+	for _, c := range g.AllowCountries {
+		if !isValidCountryCode(c) {
+			return fmt.Errorf("无效的 allow_countries 国家代码: %s（应为 2 位大写字母）", c)
+		}
+	}
+	for _, c := range g.DenyCountries {
+		if !isValidCountryCode(c) {
+			return fmt.Errorf("无效的 deny_countries 国家代码: %s（应为 2 位大写字母）", c)
+		}
+	}
+
+	// 验证 PrivateIPBehavior
+	validBehaviors := []string{"", "allow", "deny", "bypass"}
+	if !slices.Contains(validBehaviors, g.PrivateIPBehavior) {
+		return fmt.Errorf("无效的 private_ip_behavior: %s（仅支持 allow, deny, bypass）", g.PrivateIPBehavior)
+	}
+
+	// 验证缓存大小
+	if g.CacheSize < 0 {
+		return errors.New("cache_size 不能为负数")
+	}
+
+	// 验证缓存 TTL
+	if g.CacheTTL < 0 {
+		return errors.New("cache_ttl 不能为负数")
+	}
+
+	// 验证默认动作
+	if g.Default != "" && g.Default != "allow" && g.Default != "deny" {
+		return fmt.Errorf("无效的 default 动作: %s（仅允许 allow 或 deny）", g.Default)
+	}
+
+	return nil
+}
+
+// isValidCountryCode 验证 ISO 3166-1 alpha-2 国家代码。
+//
+// 参数：
+//   - code: 国家代码字符串
+//
+// 返回值：
+//   - bool: true 表示有效的国家代码
+func isValidCountryCode(code string) bool {
+	if len(code) != 2 {
+		return false
+	}
+	for _, c := range code {
+		if c < 'A' || c > 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 // validateAuth 验证认证配置。

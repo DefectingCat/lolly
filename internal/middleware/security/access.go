@@ -29,6 +29,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
@@ -44,18 +45,22 @@ const (
 	// ActionDeny 拒绝请求（返回 403 Forbidden）
 	ActionDeny
 
-	accessAllow = "allow"
-	accessDeny  = "deny"
+	accessAllow     = "allow"
+	accessDeny      = "deny"
+	geoPrivateAllow = "PRIVATE_ALLOW"
+	geoPrivateDeny  = "PRIVATE_DENY"
 )
 
 // AccessControl 实现 IP 访问控制中间件。
 //
-// 根据配置的允许/拒绝 CIDR 列表检查入站请求。
-// 支持动态更新访问控制列表。
+// 根据配置的允许/拒绝 CIDR 列表和 GeoIP 国家代码检查入站请求。
+// 支持动态更新访问控制列表和 GeoIP 配置。
 type AccessControl struct {
+	geoip          *GeoIPLookup
 	allowList      []net.IPNet
 	denyList       []net.IPNet
 	trustedProxies []net.IPNet
+	geoipConfig    config.GeoIPConfig
 	defaultAction  Action
 	mu             sync.RWMutex
 }
@@ -114,6 +119,31 @@ func NewAccessControl(cfg *config.AccessConfig) (*AccessControl, error) {
 		return nil, fmt.Errorf("invalid default action: %s", cfg.Default)
 	}
 
+	// 初始化 GeoIP（如果启用）
+	if cfg.GeoIP.Enabled && cfg.GeoIP.Database != "" {
+		// 设置默认值
+		cacheSize := cfg.GeoIP.CacheSize
+		if cacheSize <= 0 {
+			cacheSize = 10000 // 默认 10000 条
+		}
+		ttl := cfg.GeoIP.CacheTTL
+		if ttl <= 0 {
+			ttl = time.Hour // 默认 1 小时
+		}
+
+		geoip, err := NewGeoIPLookup(
+			cfg.GeoIP.Database,
+			cacheSize,
+			ttl,
+			cfg.GeoIP.PrivateIPBehavior,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("init geoip: %w", err)
+		}
+		ac.geoip = geoip
+		ac.geoipConfig = cfg.GeoIP
+	}
+
 	return ac, nil
 }
 
@@ -150,7 +180,12 @@ func (ac *AccessControl) Process(next fasthttp.RequestHandler) fasthttp.RequestH
 
 // Check 检查 IP 地址是否允许访问。
 //
-// 评估顺序：先检查拒绝列表，再检查允许列表，最后使用默认操作。
+// 评估顺序：
+// 1. 检查 CIDR 拒绝列表（显式拒绝优先）
+// 2. 检查 GeoIP 国家拒绝（如果启用）
+// 3. 检查 CIDR 允许列表
+// 4. 检查 GeoIP 国家允许（如果启用）
+// 5. 返回默认操作
 //
 // 参数：
 //   - ip: 待检查的 IP 地址
@@ -161,21 +196,55 @@ func (ac *AccessControl) Check(ip net.IP) bool {
 	ac.mu.RLock()
 	defer ac.mu.RUnlock()
 
-	// 先检查拒绝列表（显式拒绝优先）
+	// 1. 先检查 CIDR 拒绝列表（显式拒绝优先）
 	for _, network := range ac.denyList {
 		if network.Contains(ip) {
 			return false
 		}
 	}
 
-	// 检查允许列表
+	// 2. 检查 GeoIP 国家拒绝（如果启用）
+	if ac.geoip != nil && ac.geoipConfig.Enabled {
+		country, err := ac.geoip.LookupCountry(ip)
+		if err == nil {
+			// 处理私有 IP 特殊标记
+			if country == geoPrivateAllow {
+				// 私有 IP 自动允许，跳过国家检查
+				goto checkAllow
+			}
+			if country == geoPrivateDeny {
+				return false
+			}
+
+			for _, c := range ac.geoipConfig.DenyCountries {
+				if country == c {
+					return false
+				}
+			}
+		}
+	}
+
+checkAllow:
+	// 3. 检查 CIDR 允许列表
 	for _, network := range ac.allowList {
 		if network.Contains(ip) {
 			return true
 		}
 	}
 
-	// 返回默认操作
+	// 4. 检查 GeoIP 国家允许（如果启用）
+	if ac.geoip != nil && ac.geoipConfig.Enabled {
+		country, err := ac.geoip.LookupCountry(ip)
+		if err == nil && country != geoPrivateDeny {
+			for _, c := range ac.geoipConfig.AllowCountries {
+				if country == c {
+					return true
+				}
+			}
+		}
+	}
+
+	// 5. 返回默认操作
 	return ac.defaultAction == ActionAllow
 }
 
@@ -428,12 +497,28 @@ func (ac *AccessControl) GetStats() AccessStats {
 func actionToString(action Action) string {
 	switch action {
 	case ActionAllow:
-		return "allow"
+		return accessAllow
 	case ActionDeny:
 		return accessDeny
 	default:
 		return "unknown"
 	}
+}
+
+// Close 释放资源。
+//
+// 必须在服务器停止时调用，释放 GeoIP 数据库连接。
+//
+// 返回值：
+//   - error: 关闭失败时返回错误
+func (ac *AccessControl) Close() error {
+	ac.mu.Lock()
+	defer ac.mu.Unlock()
+
+	if ac.geoip != nil {
+		return ac.geoip.Close()
+	}
+	return nil
 }
 
 // 验证接口实现
