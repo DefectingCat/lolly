@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/sslutil"
 )
 
@@ -190,6 +191,7 @@ func (m *ProxySSLManager) GetClientTLSConfig(serverName string) *tls.Config {
 		tlsConfig.RootCAs = m.rootCAPool
 	} else if !m.config.Verify {
 		// 跳过证书验证
+		logging.Warn().Msg("SSL证书验证已禁用，连接可能遭受中间人攻击")
 		tlsConfig.InsecureSkipVerify = true
 	}
 
