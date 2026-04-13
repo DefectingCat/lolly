@@ -13,12 +13,11 @@ import (
 //
 // Parameters:
 //   - certFile: Certificate file path
-//   - context: Context description for error messages
 //
 // Returns:
 //   - *x509.CertPool: Certificate pool
 //   - error: Returns error if loading fails
-func LoadCertPool(certFile string, context string) (*x509.CertPool, error) {
+func LoadCertPool(certFile string, _ string) (*x509.CertPool, error) {
 	data, err := os.ReadFile(certFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read certificate file: %w", err)

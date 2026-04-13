@@ -347,8 +347,7 @@ func dictFlushExpired(L *glua.LState) int {
 // dictGetKeys 获取所有键
 // dict:get_keys(max_count?) -> keys
 func dictGetKeys(L *glua.LState) int {
-	//nolint:ineffassign,unused
-	_ = checkSharedDict(L)
+	checkSharedDict(L) // 验证参数但不使用返回值
 
 	// 暂不实现完整版，返回空表
 	keys := L.NewTable()
