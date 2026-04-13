@@ -704,11 +704,7 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 		// 转换目标
 		targets := make([]*loadbalance.Target, len(proxyCfg.Targets))
 		for j, t := range proxyCfg.Targets {
-			targets[j] = &loadbalance.Target{
-				URL:    t.URL,
-				Weight: t.Weight,
-			}
-			targets[j].Healthy.Store(true)
+			targets[j] = loadbalance.NewTargetFromConfig(t.URL, t.Weight)
 		}
 
 		// 传递 Transport 配置和 Lua 引擎
