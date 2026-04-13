@@ -36,6 +36,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -465,13 +466,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		statusCode := ctx.Response.StatusCode()
 		upstreamStatus = statusCode
 
-		shouldRetry := false
-		for _, code := range httpCodes {
-			if statusCode == code {
-				shouldRetry = true
-				break
-			}
-		}
+		shouldRetry := slices.Contains(httpCodes, statusCode)
 
 		if shouldRetry {
 			// 释放缓存锁

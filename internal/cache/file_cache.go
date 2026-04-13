@@ -19,6 +19,7 @@ package cache
 
 import (
 	"container/list"
+	"slices"
 	"sync"
 	"time"
 )
@@ -405,52 +406,18 @@ func (c *ProxyCache) MatchRule(path, method string, status int) *ProxyCacheRule 
 		}
 
 		// 检查方法
-		if len(rule.Methods) > 0 && !contains(rule.Methods, method) {
+		if len(rule.Methods) > 0 && !slices.Contains(rule.Methods, method) {
 			continue
 		}
 
 		// 检查状态码
-		if len(rule.Statuses) > 0 && !containsInt(rule.Statuses, status) {
+		if len(rule.Statuses) > 0 && !slices.Contains(rule.Statuses, status) {
 			continue
 		}
 
 		return &rule
 	}
 	return nil
-}
-
-// contains 检查字符串切片是否包含某值。
-//
-// 参数：
-//   - slice: 字符串切片
-//   - val: 待查找的值
-//
-// 返回值：
-//   - bool: true 表示包含，false 表示不包含
-func contains(slice []string, val string) bool {
-	for _, s := range slice {
-		if s == val {
-			return true
-		}
-	}
-	return false
-}
-
-// containsInt 检查整数切片是否包含某值。
-//
-// 参数：
-//   - slice: 整数切片
-//   - val: 待查找的值
-//
-// 返回值：
-//   - bool: true 表示包含，false 表示不包含
-func containsInt(slice []int, val int) bool {
-	for _, i := range slice {
-		if i == val {
-			return true
-		}
-	}
-	return false
 }
 
 // Delete 删除缓存条目。

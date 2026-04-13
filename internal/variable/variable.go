@@ -18,6 +18,7 @@
 package variable
 
 import (
+	"maps"
 	"strconv"
 	"strings"
 	"sync"
@@ -78,9 +79,7 @@ func SetGlobalVariables(vars map[string]string) {
 	globalVariablesLock.Lock()
 	defer globalVariablesLock.Unlock()
 	globalVariables = make(map[string]string, len(vars))
-	for k, v := range vars {
-		globalVariables[k] = v
-	}
+	maps.Copy(globalVariables, vars)
 }
 
 // GetGlobalVariable 获取全局变量值。
@@ -104,9 +103,7 @@ func GetAllGlobalVariables() map[string]string {
 	}
 	// 返回副本，避免外部修改影响全局存储
 	result := make(map[string]string, len(globalVariables))
-	for k, v := range globalVariables {
-		result[k] = v
-	}
+	maps.Copy(result, globalVariables)
 	return result
 }
 
@@ -146,9 +143,7 @@ func NewContext(ctx *fasthttp.RequestCtx) *Context {
 	}
 	// 注入全局变量
 	globals := GetAllGlobalVariables()
-	for name, value := range globals {
-		vc.store[name] = value
-	}
+	maps.Copy(vc.store, globals)
 	return vc
 }
 

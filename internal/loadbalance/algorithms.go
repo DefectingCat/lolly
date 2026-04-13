@@ -14,6 +14,8 @@
 // 作者：xfy
 package loadbalance
 
+import "slices"
+
 // ValidAlgorithms 是支持的负载均衡算法列表。
 var ValidAlgorithms = []string{
 	"round_robin",
@@ -28,10 +30,5 @@ func IsValidAlgorithm(alg string) bool {
 	if alg == "" {
 		return true
 	}
-	for _, a := range ValidAlgorithms {
-		if a == alg {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ValidAlgorithms, alg)
 }

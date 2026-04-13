@@ -43,6 +43,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 
 	"rua.plus/lolly/internal/config"
@@ -692,12 +693,7 @@ func isInsecureCipher(id uint16) bool {
 		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
 	}
 
-	for _, insecure := range insecureCiphers {
-		if id == insecure {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(insecureCiphers, id)
 }
 
 // defaultCipherSuites 返回 TLS 1.2 推荐的加密套件。
