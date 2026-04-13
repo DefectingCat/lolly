@@ -38,3 +38,7 @@ ulw 深度分析下当前项目的性能
 ulw 完善性能基准测试
 
 ulw 深度分析下代码质量
+
+## 兼容性
+
+ulw @docs/config/ 下有些nginx的配置示例,深度分析下当前 lolly 项目,然后看看 lolly 是否支持实现这些 nginx 的效果
