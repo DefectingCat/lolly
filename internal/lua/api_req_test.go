@@ -8,20 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/valyala/fasthttp"
 	glua "github.com/yuin/gopher-lua"
+
+	"rua.plus/lolly/internal/testutil"
 )
 
 // 创建测试用的 fasthttp.RequestCtx
 func createTestRequestCtx(method, uri string, headers map[string]string, body []byte) *fasthttp.RequestCtx {
-	ctx := &fasthttp.RequestCtx{}
-
-	// 设置请求
-	ctx.Request.Header.SetMethod(method)
-	ctx.Request.SetRequestURI(uri)
-
-	// 设置请求头
-	for key, value := range headers {
-		ctx.Request.Header.Set(key, value)
-	}
+	ctx := testutil.NewRequestCtxWithHeader(method, uri, headers)
 
 	// 设置请求体
 	if len(body) > 0 {

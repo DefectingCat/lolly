@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	"github.com/valyala/fasthttp"
+
+	"rua.plus/lolly/internal/testutil"
 )
 
 // newTestHandler 创建测试用的静态文件处理器
@@ -34,9 +36,7 @@ func newTestHandler(t *testing.T, root string) *StaticHandler {
 // newTestContext 创建测试用的 fasthttp 请求上下文
 func newTestContext(t *testing.T, path string) *fasthttp.RequestCtx {
 	t.Helper()
-	var ctx fasthttp.RequestCtx
-	ctx.Request.SetRequestURI(path)
-	return &ctx
+	return testutil.NewRequestCtx("GET", path)
 }
 
 // TestStaticHandlerHandle 测试静态文件处理器

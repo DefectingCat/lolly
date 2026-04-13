@@ -29,6 +29,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/netutil"
+	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/variable"
 )
 
@@ -190,9 +191,7 @@ func TestServeHTTP_NoHealthyTargets(t *testing.T) {
 	}
 
 	// 创建测试请求
-	ctx := &fasthttp.RequestCtx{}
-	ctx.Request.Header.SetMethod(fasthttp.MethodGet)
-	ctx.Request.SetRequestURI("/api/test")
+	ctx := testutil.NewRequestCtx("GET", "/api/test")
 
 	// 执行请求
 	p.ServeHTTP(ctx)
@@ -240,9 +239,7 @@ func TestServeHTTP_RequestForwarding(t *testing.T) {
 	}
 
 	// 创建测试请求
-	ctx := &fasthttp.RequestCtx{}
-	ctx.Request.Header.SetMethod(fasthttp.MethodGet)
-	ctx.Request.SetRequestURI("/api/test")
+	ctx := testutil.NewRequestCtx("GET", "/api/test")
 	ctx.Request.Header.Set("X-Custom-Header", "client-value")
 
 	// 执行请求
@@ -331,12 +328,9 @@ func TestSelectTarget(t *testing.T) {
 				t.Fatalf("NewProxy() error: %v", err)
 			}
 
-			ctx := &fasthttp.RequestCtx{}
-			if tt.clientIP != "" {
-				// 设置远程地址模拟客户端IP
-				ctx.Request.Header.Set("X-Forwarded-For", tt.clientIP)
-			}
-			ctx.Request.SetRequestURI("/api/test")
+			ctx := testutil.NewRequestCtxWithHeader("GET", "/api/test", map[string]string{
+				"X-Forwarded-For": tt.clientIP,
+			})
 
 			target := p.selectTarget(ctx)
 
@@ -448,25 +442,21 @@ func TestModifyRequestHeaders(t *testing.T) {
 				t.Fatalf("NewProxy() error: %v", err)
 			}
 
-			ctx := &fasthttp.RequestCtx{}
-			ctx.Request.SetRequestURI("/api/test")
-
-			// 设置客户端IP
+			// 构建 headers map
+			headers := make(map[string]string)
 			if tt.clientIP != "" {
-				ctx.Request.Header.Set("X-Real-IP", tt.clientIP)
+				headers["X-Real-IP"] = tt.clientIP
 			}
-
-			// 设置已有的X-Forwarded-For
 			if tt.existingXFF != "" {
-				ctx.Request.Header.Set("X-Forwarded-For", tt.existingXFF)
+				headers["X-Forwarded-For"] = tt.existingXFF
 			}
-
-			// 设置需要被移除的头
 			if len(tt.removeHeaders) > 0 {
 				for _, h := range tt.removeHeaders {
-					ctx.Request.Header.Set(h, "should-be-removed")
+					headers[h] = "should-be-removed"
 				}
 			}
+
+			ctx := testutil.NewRequestCtxWithHeader("GET", "/api/test", headers)
 
 			target := &loadbalance.Target{URL: "http://localhost:8080"}
 			p.modifyRequestHeaders(ctx, target)
@@ -543,8 +533,7 @@ func TestModifyResponseHeaders(t *testing.T) {
 				t.Fatalf("NewProxy() error: %v", err)
 			}
 
-			ctx := &fasthttp.RequestCtx{}
-			ctx.Response.SetStatusCode(fasthttp.StatusOK)
+			ctx := testutil.NewRequestCtx("GET", "/")
 
 			p.modifyResponseHeaders(ctx)
 
@@ -597,13 +586,10 @@ func TestGetClientIP(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &fasthttp.RequestCtx{}
-			if tt.xff != "" {
-				ctx.Request.Header.Set("X-Forwarded-For", tt.xff)
-			}
-			if tt.xri != "" {
-				ctx.Request.Header.Set("X-Real-IP", tt.xri)
-			}
+			ctx := testutil.NewRequestCtxWithHeader("GET", "/", map[string]string{
+				"X-Forwarded-For": tt.xff,
+				"X-Real-IP":       tt.xri,
+			})
 
 			ip := netutil.ExtractClientIP(ctx)
 			if ip != tt.expected {
@@ -761,13 +747,10 @@ func TestIsWebSocketRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &fasthttp.RequestCtx{}
-			if tt.upgrade != "" {
-				ctx.Request.Header.Set("Upgrade", tt.upgrade)
-			}
-			if tt.connection != "" {
-				ctx.Request.Header.Set("Connection", tt.connection)
-			}
+			ctx := testutil.NewRequestCtxWithHeader("GET", "/", map[string]string{
+				"Upgrade":    tt.upgrade,
+				"Connection": tt.connection,
+			})
 
 			result := isWebSocketRequest(ctx)
 			if result != tt.expected {
@@ -1103,9 +1086,7 @@ func TestServeHTTP_WithPassiveHealthCheck(t *testing.T) {
 	p.SetHealthChecker(hc)
 
 	// 创建测试请求
-	ctx := &fasthttp.RequestCtx{}
-	ctx.Request.Header.SetMethod(fasthttp.MethodGet)
-	ctx.Request.SetRequestURI("/api/test")
+	ctx := testutil.NewRequestCtx("GET", "/api/test")
 
 	// 执行请求 - 应该会失败并触发被动健康检查
 	p.ServeHTTP(ctx)
@@ -1181,10 +1162,9 @@ func TestUpstreamVariablesCapture(t *testing.T) {
 	}
 
 	// 创建请求
-	ctx := &fasthttp.RequestCtx{}
-	ctx.Request.Header.SetMethod("GET")
-	ctx.Request.Header.SetRequestURI("/test")
-	ctx.Request.Header.SetHost("example.com")
+	ctx := testutil.NewRequestCtxWithHeader("GET", "/test", map[string]string{
+		"Host": "example.com",
+	})
 
 	// 执行代理请求
 	p.ServeHTTP(ctx)
@@ -1264,10 +1244,9 @@ func TestUpstreamVariablesErrorPaths(t *testing.T) {
 				t.Fatalf("failed to create proxy: %v", err)
 			}
 
-			ctx := &fasthttp.RequestCtx{}
-			ctx.Request.Header.SetMethod("GET")
-			ctx.Request.Header.SetRequestURI("/test")
-			ctx.Request.Header.SetHost("example.com")
+			ctx := testutil.NewRequestCtxWithHeader("GET", "/test", map[string]string{
+				"Host": "example.com",
+			})
 
 			p.ServeHTTP(ctx)
 
@@ -1283,9 +1262,7 @@ func TestUpstreamVariablesErrorPaths(t *testing.T) {
 
 // TestFinalizeUpstreamVars 测试 FinalizeUpstreamVars 函数
 func TestFinalizeUpstreamVars(t *testing.T) {
-	ctx := &fasthttp.RequestCtx{}
-	ctx.Request.Header.SetMethod("GET")
-	ctx.Request.Header.SetRequestURI("/test")
+	ctx := testutil.NewRequestCtx("GET", "/test")
 
 	vc := variable.NewContext(ctx)
 	defer variable.ReleaseContext(vc)

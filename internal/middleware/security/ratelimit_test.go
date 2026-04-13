@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
+
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/testutil"
 )
 
 func TestNewRateLimiter(t *testing.T) {
@@ -420,7 +422,7 @@ func TestConnLimiterGlobal(t *testing.T) {
 		t.Fatalf("NewConnLimiter() error: %v", err)
 	}
 
-	ctx := &fasthttp.RequestCtx{}
+	ctx := testutil.NewRequestCtx("GET", "/")
 
 	// First two should succeed
 	if !cl.Acquire(ctx) {
