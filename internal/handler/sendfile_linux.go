@@ -22,9 +22,6 @@ const (
 	MinSendfileSize = 8 * 1024
 )
 
-// platformLinux Linux 平台标识符。
-const platformLinux = "linux"
-
 // SendFile 零拷贝文件传输。
 //
 // 大文件使用系统调用直接从文件传输到 socket，避免用户空间拷贝，
@@ -120,14 +117,14 @@ func getSocketFd(conn net.Conn) (uintptr, error) {
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = file.Close() }()
+		defer func() { _ = file.Close() }() //nolint:errcheck
 		return file.Fd(), nil
 	case *net.UnixConn:
 		file, err := c.File()
 		if err != nil {
 			return 0, err
 		}
-		defer func() { _ = file.Close() }()
+		defer func() { _ = file.Close() }() //nolint:errcheck
 		return file.Fd(), nil
 	default:
 		return 0, syscall.ENOTSUP

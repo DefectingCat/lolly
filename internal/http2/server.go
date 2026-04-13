@@ -101,8 +101,9 @@ func NewServer(cfg *config.HTTP2Config, handler fasthttp.RequestHandler, tlsConf
 		MaxConcurrentStreams: uint32(maxConcurrentStreams),
 		IdleTimeout:          idleTimeout,
 		MaxReadFrameSize:     uint32(maxHeaderListSize),
-		NewWriteScheduler:    func() http2.WriteScheduler { return http2.NewPriorityWriteScheduler(nil) },
-		CountError:           func(_ string) {},
+		//nolint:staticcheck // SA1019: NewWriteScheduler deprecated
+		NewWriteScheduler: func() http2.WriteScheduler { return http2.NewPriorityWriteScheduler(nil) },
+		CountError:        func(_ string) {},
 	}
 
 	return &Server{
