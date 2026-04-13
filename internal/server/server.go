@@ -542,6 +542,7 @@ func (s *Server) startSingleMode() error {
 		IdleTimeout:        s.config.Server.IdleTimeout,
 		MaxConnsPerIP:      s.config.Server.MaxConnsPerIP,
 		MaxRequestsPerConn: s.config.Server.MaxRequestsPerConn,
+		CloseOnShutdown:    true,
 	}
 
 	s.running = true
@@ -656,6 +657,7 @@ func (s *Server) startVHostMode() error {
 		IdleTimeout:        s.config.Server.IdleTimeout,
 		MaxConnsPerIP:      s.config.Server.MaxConnsPerIP,
 		MaxRequestsPerConn: s.config.Server.MaxRequestsPerConn,
+		CloseOnShutdown:    true,
 	}
 
 	s.running = true
@@ -783,7 +785,24 @@ func (s *Server) Stop() error {
 	}
 
 	if s.fastServer != nil {
-		return s.fastServer.Shutdown()
+		// 快速停止也需要 timeout，防止无限等待空闲连接
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		done := make(chan struct{})
+		go func() {
+			//nolint:errcheck
+			_ = s.fastServer.Shutdown()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			return nil
+		case <-ctx.Done():
+			// timeout，直接返回
+			return ctx.Err()
+		}
 	}
 	return nil
 }
