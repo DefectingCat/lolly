@@ -64,6 +64,7 @@ linters:
     - bidichk
     - rowserrcheck
     - sqlclosecheck
+    - tenv  # 已弃用，被 usetesting 替代
 
     # 可配置而非禁用
     - forbidigo
