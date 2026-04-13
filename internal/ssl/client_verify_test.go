@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/sslutil"
 )
 
 // generateTestCA 生成测试 CA 证书。
@@ -165,7 +166,7 @@ func TestLoadCACertPool(t *testing.T) {
 	}
 
 	// 测试加载
-	pool, err := LoadCACertPool(caFile)
+	pool, err := sslutil.LoadCACertPool(caFile)
 	if err != nil {
 		t.Fatalf("LoadCACertPool() failed: %v", err)
 	}
@@ -174,7 +175,7 @@ func TestLoadCACertPool(t *testing.T) {
 	}
 
 	// 测试文件不存在
-	_, err = LoadCACertPool("/nonexistent/ca.crt")
+	_, err = sslutil.LoadCACertPool("/nonexistent/ca.crt")
 	if err == nil {
 		t.Error("LoadCACertPool() should fail for non-existent file")
 	}
@@ -184,7 +185,7 @@ func TestLoadCACertPool(t *testing.T) {
 	if err := os.WriteFile(invalidFile, []byte("invalid data"), 0644); err != nil {
 		t.Fatalf("写入无效证书文件失败: %v", err)
 	}
-	_, err = LoadCACertPool(invalidFile)
+	_, err = sslutil.LoadCACertPool(invalidFile)
 	if err == nil {
 		t.Error("LoadCACertPool() should fail for invalid certificate")
 	}
@@ -692,7 +693,7 @@ func BenchmarkLoadCACertPool(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := LoadCACertPool(caFile)
+		_, err := sslutil.LoadCACertPool(caFile)
 		if err != nil {
 			b.Fatal(err)
 		}

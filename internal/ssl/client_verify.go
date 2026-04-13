@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/sslutil"
 )
 
 // ClientVerifyMode 客户端证书验证模式
@@ -147,7 +148,7 @@ func NewClientVerifier(cfg config.ClientVerifyConfig) (*ClientVerifier, error) {
 			return nil, errors.New("client_ca is required when verify is enabled")
 		}
 
-		caPool, err := LoadCACertPool(cfg.ClientCA)
+		caPool, err := sslutil.LoadCACertPool(cfg.ClientCA)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load CA certificate pool: %w", err)
 		}
@@ -244,30 +245,6 @@ func (v *ClientVerifier) IsEnabled() bool {
 //   - ClientVerifyMode: 当前验证模式
 func (v *ClientVerifier) GetMode() ClientVerifyMode {
 	return v.mode
-}
-
-// LoadCACertPool 从文件加载 CA 证书池。
-//
-// 支持 PEM 格式的证书文件，可包含多个 CA 证书。
-//
-// 参数：
-//   - caFile: CA 证书文件路径
-//
-// 返回值：
-//   - *x509.CertPool: CA 证书池
-//   - error: 加载失败时返回错误
-func LoadCACertPool(caFile string) (*x509.CertPool, error) {
-	data, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read CA file: %w", err)
-	}
-
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(data) {
-		return nil, errors.New("failed to parse CA certificates")
-	}
-
-	return caPool, nil
 }
 
 // LoadCRL 从文件加载证书吊销列表。

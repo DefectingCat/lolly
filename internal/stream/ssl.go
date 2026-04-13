@@ -13,10 +13,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"os"
 	"sync"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/sslutil"
 )
 
 // SSLManager 管理 Stream SSL/TLS 配置。
@@ -65,7 +65,7 @@ func NewSSLManager(cfg config.StreamSSLConfig) (*SSLManager, error) {
 
 	// 加载客户端 CA 证书（mTLS）
 	if cfg.ClientCA != "" {
-		pool, err := loadCertPool(cfg.ClientCA)
+		pool, err := sslutil.LoadCertPool(cfg.ClientCA, "client CA")
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client CA: %w", err)
 		}
@@ -101,7 +101,7 @@ func NewProxySSLManager(cfg config.StreamProxySSLConfig) (*ProxySSLManager, erro
 
 	// 加载信任的 CA 证书
 	if cfg.TrustedCA != "" {
-		pool, err := loadCertPool(cfg.TrustedCA)
+		pool, err := sslutil.LoadCertPool(cfg.TrustedCA, "trusted CA")
 		if err != nil {
 			return nil, fmt.Errorf("failed to load trusted CA: %w", err)
 		}
@@ -209,28 +209,6 @@ func (m *SSLManager) IsEnabled() bool {
 // IsEnabled 检查是否启用代理 SSL。
 func (m *ProxySSLManager) IsEnabled() bool {
 	return m.config.Enabled
-}
-
-// loadCertPool 从文件加载证书池。
-//
-// 参数：
-//   - certFile: 证书文件路径
-//
-// 返回值：
-//   - *x509.CertPool: 证书池
-//   - error: 加载失败时返回错误
-func loadCertPool(certFile string) (*x509.CertPool, error) {
-	data, err := os.ReadFile(certFile)
-	if err != nil {
-		return nil, err
-	}
-
-	pool := x509.NewCertPool()
-	if !pool.AppendCertsFromPEM(data) {
-		return nil, fmt.Errorf("failed to parse certificates from %s", certFile)
-	}
-
-	return pool, nil
 }
 
 // parseMinTLSVersion 解析最小 TLS 版本。

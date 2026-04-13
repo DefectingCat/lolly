@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/sslutil"
 )
 
 // generateTestCertificate 生成测试用的自签名证书
@@ -351,7 +352,7 @@ func TestLoadCertPool(t *testing.T) {
 			t.Fatalf("Failed to encode certificate: %v", err)
 		}
 
-		pool, err := loadCertPool(certFile)
+		pool, err := sslutil.LoadCertPool(certFile, "test")
 		if err != nil {
 			t.Fatalf("loadCertPool failed: %v", err)
 		}
@@ -361,7 +362,7 @@ func TestLoadCertPool(t *testing.T) {
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		_, err := loadCertPool("/nonexistent/cert.pem")
+		_, err := sslutil.LoadCertPool("/nonexistent/cert.pem", "test")
 		if err == nil {
 			t.Error("Expected error for nonexistent file")
 		}
@@ -374,7 +375,7 @@ func TestLoadCertPool(t *testing.T) {
 			t.Fatalf("写入无效证书文件失败: %v", err)
 		}
 
-		_, err := loadCertPool(certFile)
+		_, err := sslutil.LoadCertPool(certFile, "test")
 		if err == nil {
 			t.Error("Expected error for invalid certificate content")
 		}
