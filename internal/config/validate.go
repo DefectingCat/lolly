@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	"rua.plus/lolly/internal/loadbalance"
@@ -29,10 +30,8 @@ import (
 
 // ValidateEnum 验证值是否在有效枚举列表中
 func ValidateEnum(value string, validValues []string, fieldName string) error {
-	for _, v := range validValues {
-		if value == v {
-			return nil
-		}
+	if slices.Contains(validValues, value) {
+		return nil
 	}
 	return fmt.Errorf("无效的 %s: %s（仅支持 %v）", fieldName, value, validValues)
 }
@@ -760,14 +759,7 @@ func validateRewrite(r *RewriteRule) error {
 
 	// 验证标志
 	validFlags := []string{"", "last", "redirect", "permanent", "break"}
-	valid := false
-	for _, f := range validFlags {
-		if r.Flag == f {
-			valid = true
-			break
-		}
-	}
-	if !valid {
+	if !slices.Contains(validFlags, r.Flag) {
 		return fmt.Errorf("无效的 flag: %s（仅支持 last, redirect, permanent, break）", r.Flag)
 	}
 
@@ -819,14 +811,7 @@ func validateLogging(l *LoggingConfig) error {
 func validateSecurityHeaders(h *SecurityHeaders) error {
 	// 验证 X-Frame-Options
 	validFrameOptions := []string{"", "DENY", "SAMEORIGIN"}
-	valid := false
-	for _, opt := range validFrameOptions {
-		if h.XFrameOptions == opt {
-			valid = true
-			break
-		}
-	}
-	if !valid {
+	if !slices.Contains(validFrameOptions, h.XFrameOptions) {
 		return fmt.Errorf("无效的 x_frame_options: %s（仅支持 DENY, SAMEORIGIN 或空）", h.XFrameOptions)
 	}
 
@@ -836,14 +821,7 @@ func validateSecurityHeaders(h *SecurityHeaders) error {
 		"origin-when-cross-origin", "same-origin", "strict-origin",
 		"strict-origin-when-cross-origin", "unsafe-url",
 	}
-	valid = false
-	for _, policy := range validReferrerPolicies {
-		if h.ReferrerPolicy == policy {
-			valid = true
-			break
-		}
-	}
-	if !valid {
+	if !slices.Contains(validReferrerPolicies, h.ReferrerPolicy) {
 		return fmt.Errorf("无效的 referrer_policy: %s", h.ReferrerPolicy)
 	}
 
@@ -1023,14 +1001,7 @@ func validateLua(l *LuaMiddlewareConfig) error {
 
 		// 验证阶段值
 		validPhases := []string{"rewrite", "access", "content", "log", "header_filter", "body_filter"}
-		valid := false
-		for _, phase := range validPhases {
-			if script.Phase == phase {
-				valid = true
-				break
-			}
-		}
-		if !valid {
+		if !slices.Contains(validPhases, script.Phase) {
 			return fmt.Errorf("scripts[%d].phase 无效: %s（仅支持 rewrite, access, content, log, header_filter, body_filter）", i, script.Phase)
 		}
 

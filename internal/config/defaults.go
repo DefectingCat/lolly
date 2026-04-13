@@ -54,6 +54,17 @@ func DefaultConfig() *Config {
 					Token: "",
 				},
 			},
+			Lua: &LuaMiddlewareConfig{
+				Enabled: false,
+				Scripts: []LuaScriptConfig{},
+				GlobalSettings: LuaGlobalSettings{
+					MaxConcurrentCoroutines: 1000,
+					CoroutineTimeout:        30 * time.Second,
+					CodeCacheSize:           1000,
+					EnableFileWatch:         true,
+					MaxExecutionTime:        30 * time.Second,
+				},
+			},
 			Static: []StaticConfig{{
 				Path:  "/",
 				Root:  "/var/www/html",
@@ -164,8 +175,9 @@ func DefaultConfig() *Config {
 		},
 		Monitoring: MonitoringConfig{
 			Status: StatusConfig{
-				Path:  "/_status",
-				Allow: []string{"127.0.0.1"},
+				Path:   "/_status",
+				Format: "text",
+				Allow:  []string{"127.0.0.1"},
 			},
 			Pprof: PprofConfig{
 				Enabled: false,
@@ -233,6 +245,37 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "  max_conns_per_ip: %d         # 每 IP 最大连接数（0 表示不限制）\n", cfg.Server.MaxConnsPerIP)
 	fmt.Fprintf(&buf, "  max_requests_per_conn: %d    # 每连接最大请求数（0 表示不限制）\n", cfg.Server.MaxRequestsPerConn)
 	fmt.Fprintf(&buf, "  client_max_body_size: \"1MB\"  # 请求体大小限制（支持单位: b, kb, mb, gb）\n")
+	buf.WriteString("\n")
+
+	// cache_api 配置
+	buf.WriteString("  # 缓存清理 API 配置（用于主动清理代理缓存）\n")
+	buf.WriteString("  # cache_api:\n")
+	fmt.Fprintf(&buf, "  #   enabled: %v              # 是否启用缓存清理 API\n", cfg.Server.CacheAPI.Enabled)
+	fmt.Fprintf(&buf, "  #   path: \"%s\"         # API 端点路径\n", cfg.Server.CacheAPI.Path)
+	buf.WriteString("  #   allow:                 # 允许访问的 IP\n")
+	for _, ip := range cfg.Server.CacheAPI.Allow {
+		fmt.Fprintf(&buf, "  #     - \"%s\"\n", ip)
+	}
+	buf.WriteString("  #   auth:                  # 认证配置\n")
+	fmt.Fprintf(&buf, "  #     type: \"%s\"          # 认证类型（有效值: none, token）\n", cfg.Server.CacheAPI.Auth.Type)
+	buf.WriteString("  #     token: \"\"            # 认证令牌（支持环境变量 ${CACHE_API_TOKEN}）\n")
+	buf.WriteString("\n")
+
+	// lua 配置
+	buf.WriteString("  # Lua 中间件配置（在请求处理流程中嵌入 Lua 脚本）\n")
+	buf.WriteString("  # lua:\n")
+	fmt.Fprintf(&buf, "  #   enabled: %v              # 是否启用 Lua 中间件\n", cfg.Server.Lua.Enabled)
+	buf.WriteString("  #   scripts:               # Lua 脚本列表\n")
+	buf.WriteString("  #     - path: \"/scripts/auth.lua\"  # 脚本路径\n")
+	buf.WriteString("  #       phase: \"access\"          # 执行阶段（有效值: rewrite, access, content, log, header_filter, body_filter）\n")
+	buf.WriteString("  #       timeout: 10s              # 执行超时\n")
+	buf.WriteString("  #       enabled: true             # 是否启用此脚本\n")
+	buf.WriteString("  #   global_settings:       # 全局设置\n")
+	buf.WriteString("  #     max_concurrent_coroutines: 1000  # 最大并发协程数\n")
+	buf.WriteString("  #     coroutine_timeout: 30s          # 协程执行超时\n")
+	buf.WriteString("  #     code_cache_size: 1000           # 字节码缓存条目数\n")
+	buf.WriteString("  #     enable_file_watch: true         # 启用文件变更检测\n")
+	buf.WriteString("  #     max_execution_time: 30s         # 最大执行时间\n")
 	buf.WriteString("\n")
 
 	// static 配置
@@ -328,6 +371,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "  #     idle_timeout: %ds            # 空闲超时\n", int(cfg.Server.SSL.HTTP2.IdleTimeout.Seconds()))
 	fmt.Fprintf(&buf, "  #     push_enabled: %v             # 是否启用 Server Push\n", cfg.Server.SSL.HTTP2.PushEnabled)
 	fmt.Fprintf(&buf, "  #     h2c_enabled: %v              # 是否启用 H2C（明文 HTTP/2）\n", cfg.Server.SSL.HTTP2.H2CEnabled)
+	fmt.Fprintf(&buf, "  #     graceful_shutdown_timeout: %ds  # HTTP/2 优雅关闭超时\n", int(cfg.Server.SSL.HTTP2.GracefulShutdownTimeout.Seconds()))
 	buf.WriteString("\n")
 
 	// security 配置
@@ -548,6 +592,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("monitoring:\n")
 	buf.WriteString("  status:\n")
 	fmt.Fprintf(&buf, "    path: \"%s\"        # 状态端点路径\n", cfg.Monitoring.Status.Path)
+	fmt.Fprintf(&buf, "    format: \"%s\"      # 输出格式（有效值: text, json, html）\n", cfg.Monitoring.Status.Format)
 	buf.WriteString("    allow:                 # 允许访问的 IP\n")
 	for _, ip := range cfg.Monitoring.Status.Allow {
 		fmt.Fprintf(&buf, "      - \"%s\"\n", ip)
