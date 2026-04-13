@@ -48,6 +48,7 @@ import (
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/netutil"
 	"rua.plus/lolly/internal/resolver"
+	"rua.plus/lolly/internal/utils"
 	"rua.plus/lolly/internal/variable"
 )
 
@@ -337,7 +338,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				// 没有可用后端
 				upstreamAddr = "FAILED"
 				upstreamStatus = 502
-				ctx.Error("Bad Gateway: no healthy upstream", fasthttp.StatusBadGateway)
+				utils.SendErrorWithDetail(ctx, utils.ErrBadGateway, "no healthy upstream")
 				return
 			}
 			// 没有更多可用目标，返回最后一次错误
@@ -522,18 +523,18 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		// 处理不同类型的错误
 		if errors.Is(lastErr, fasthttp.ErrTimeout) {
 			upstreamStatus = 504
-			ctx.Error("Gateway Timeout", fasthttp.StatusGatewayTimeout)
+			utils.SendError(ctx, utils.ErrGatewayTimeout)
 		} else if errors.Is(lastErr, fasthttp.ErrConnectionClosed) {
 			upstreamStatus = 502
-			ctx.Error("Bad Gateway: upstream connection closed", fasthttp.StatusBadGateway)
+			utils.SendErrorWithDetail(ctx, utils.ErrBadGateway, "upstream connection closed")
 		} else {
 			upstreamStatus = 502
-			ctx.Error("Bad Gateway", fasthttp.StatusBadGateway)
+			utils.SendError(ctx, utils.ErrBadGateway)
 		}
 	} else {
 		upstreamAddr = "FAILED"
 		upstreamStatus = 502
-		ctx.Error("Bad Gateway: all upstreams failed", fasthttp.StatusBadGateway)
+		utils.SendErrorWithDetail(ctx, utils.ErrBadGateway, "all upstreams failed")
 	}
 }
 

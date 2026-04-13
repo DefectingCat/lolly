@@ -28,6 +28,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/middleware/compression"
+	"rua.plus/lolly/internal/utils"
 )
 
 // StaticHandler 静态文件处理器。
@@ -212,7 +213,7 @@ func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 
 	// 安全检查：防止目录遍历
 	if strings.Contains(reqPath, "..") {
-		ctx.Error("Forbidden", fasthttp.StatusForbidden)
+		utils.SendError(ctx, utils.ErrForbidden)
 		return
 	}
 
@@ -290,7 +291,7 @@ func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string)
 	}
 
 	// 所有 try_files 都未找到
-	ctx.Error("Not Found", fasthttp.StatusNotFound)
+	utils.SendError(ctx, utils.ErrNotFound)
 }
 
 // resolveTryFilePath 解析 try_files 中的占位符。
@@ -369,11 +370,11 @@ func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetP
 	}
 	info, err := os.Stat(filePath)
 	if err != nil {
-		ctx.Error("Not Found", fasthttp.StatusNotFound)
+		utils.SendError(ctx, utils.ErrNotFound)
 		return
 	}
 	if info.IsDir() {
-		ctx.Error("Forbidden", fasthttp.StatusForbidden)
+		utils.SendError(ctx, utils.ErrForbidden)
 		return
 	}
 	h.serveFile(ctx, filePath, info)
@@ -419,7 +420,7 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 	// 检查文件/目录是否存在
 	info, err := os.Stat(filePath)
 	if err != nil {
-		ctx.Error("Not Found", fasthttp.StatusNotFound)
+		utils.SendError(ctx, utils.ErrNotFound)
 		return
 	}
 
@@ -432,7 +433,7 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 				return
 			}
 		}
-		ctx.Error("Forbidden", fasthttp.StatusForbidden)
+		utils.SendError(ctx, utils.ErrForbidden)
 		return
 	}
 
@@ -492,7 +493,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 	// 读取文件内容
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		ctx.Error("Internal Server Error", fasthttp.StatusInternalServerError)
+		utils.SendError(ctx, utils.ErrInternalError)
 		return
 	}
 

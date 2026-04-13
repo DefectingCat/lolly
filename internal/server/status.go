@@ -22,6 +22,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/netutil"
+	"rua.plus/lolly/internal/utils"
 )
 
 // StatusHandler 状态监控处理器。
@@ -182,7 +183,7 @@ func (h *StatusHandler) Path() string {
 func (h *StatusHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// 步骤1: 检查 IP 访问权限
 	if !h.checkAccess(ctx) {
-		ctx.Error("Forbidden: Access denied", fasthttp.StatusForbidden)
+		utils.SendErrorWithDetail(ctx, utils.ErrForbidden, "Access denied")
 		return
 	}
 
@@ -201,7 +202,7 @@ func (h *StatusHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 	data, err := json.MarshalIndent(status, "", "  ")
 	if err != nil {
-		ctx.Error("Internal Server Error", fasthttp.StatusInternalServerError)
+		utils.SendError(ctx, utils.ErrInternalError)
 		return
 	}
 

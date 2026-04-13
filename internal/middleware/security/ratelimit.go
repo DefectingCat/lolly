@@ -40,6 +40,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/middleware"
 	"rua.plus/lolly/internal/netutil"
+	"rua.plus/lolly/internal/utils"
 )
 
 const rateLimitHeader = "header"
@@ -174,7 +175,7 @@ func (s *SlidingWindowLimiterWrapper) Process(next fasthttp.RequestHandler) fast
 		key := s.keyFunc(ctx)
 
 		if !s.limiter.Allow(key) {
-			ctx.Error("Too Many Requests", fasthttp.StatusTooManyRequests)
+			utils.SendError(ctx, utils.ErrTooManyRequests)
 			return
 		}
 
@@ -208,7 +209,7 @@ func (rl *RateLimiter) Process(next fasthttp.RequestHandler) fasthttp.RequestHan
 			// 计算重试等待时间
 			retryAfter := rl.getRetryAfter(key)
 			ctx.Response.Header.Set("Retry-After", fmt.Sprintf("%d", retryAfter))
-			ctx.Error("Too Many Requests", fasthttp.StatusTooManyRequests)
+			utils.SendError(ctx, utils.ErrTooManyRequests)
 			return
 		}
 
@@ -615,7 +616,7 @@ func (m *connLimiterMiddleware) Name() string {
 func (m *connLimiterMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		if !m.limiter.Acquire(ctx) {
-			ctx.Error("Service Unavailable: Connection limit exceeded", fasthttp.StatusServiceUnavailable)
+			utils.SendErrorWithDetail(ctx, utils.ErrServiceUnavailable, "Connection limit exceeded")
 			return
 		}
 
