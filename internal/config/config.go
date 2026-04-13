@@ -58,6 +58,7 @@ const (
 type Config struct {
 	Variables   VariablesConfig   `yaml:"variables"`
 	Logging     LoggingConfig     `yaml:"logging"`
+	Shutdown    ShutdownConfig    `yaml:"shutdown"`
 	Servers     []ServerConfig    `yaml:"servers"`
 	Stream      []StreamConfig    `yaml:"stream"`
 	Monitoring  MonitoringConfig  `yaml:"monitoring"`
@@ -921,6 +922,34 @@ type LoggingConfig struct {
 	Error ErrorLogConfig `yaml:"error"`
 }
 
+// ShutdownConfig 服务器关闭配置。
+//
+// 用于配置服务器在接收到不同信号时的关闭超时行为。
+// 优雅停止会等待正在处理的请求完成，快速停止会立即中断连接。
+//
+// 注意事项：
+//   - graceful_timeout = 0 表示使用默认值（30s）
+//   - fast_timeout = 0 表示使用默认值（5s）
+//   - graceful_timeout 应显著大于 fast_timeout
+//   - 两个值都必须 >= 0，负数在验证时会报错
+//
+// 使用示例：
+//
+//	shutdown:
+//	  graceful_timeout: 30s   # SIGQUIT 优雅停止超时
+//	  fast_timeout: 5s        # SIGINT/SIGTERM 快速停止超时
+type ShutdownConfig struct {
+	// GracefulTimeout 优雅停止超时（SIGQUIT）
+	// 接收到 SIGQUIT 信号后，等待活跃请求完成的最大时间
+	// 默认: 30s（当值为 0 时使用默认值）
+	GracefulTimeout time.Duration `yaml:"graceful_timeout"`
+
+	// FastTimeout 快速停止超时（SIGINT/SIGTERM）
+	// 接收到 SIGINT 或 SIGTERM 信号后，等待服务器关闭的最大时间
+	// 默认: 5s（当值为 0 时使用默认值）
+	FastTimeout time.Duration `yaml:"fast_timeout"`
+}
+
 // AccessLogConfig 访问日志配置。
 //
 // 配置访问日志的输出位置和格式。
@@ -1603,6 +1632,23 @@ func Validate(cfg *Config) error {
 		return fmt.Errorf("variables: %w", err)
 	}
 
+	// 验证关闭配置
+	if err := validateShutdown(&cfg.Shutdown); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateShutdown 验证关闭配置。
+func validateShutdown(cfg *ShutdownConfig) error {
+	if cfg.GracefulTimeout < 0 {
+		return errors.New("shutdown.graceful_timeout 不能为负数")
+	}
+	if cfg.FastTimeout < 0 {
+		return errors.New("shutdown.fast_timeout 不能为负数")
+	}
+	// 0 值表示使用默认值，在应用层处理
 	return nil
 }
 

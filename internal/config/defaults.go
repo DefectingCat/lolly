@@ -191,6 +191,10 @@ func DefaultConfig() *Config {
 		Variables: VariablesConfig{
 			Set: map[string]string{},
 		},
+		Shutdown: ShutdownConfig{
+			GracefulTimeout: 30 * time.Second,
+			FastTimeout:     5 * time.Second,
+		},
 	}
 }
 
@@ -401,6 +405,13 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	for _, t := range cfg.Server.Compression.Types {
 		fmt.Fprintf(&buf, "      - \"%s\"\n", t)
 	}
+	buf.WriteString("\n")
+
+	// shutdown 配置
+	buf.WriteString("# 服务器关闭配置\n")
+	buf.WriteString("shutdown:\n")
+	fmt.Fprintf(&buf, "  graceful_timeout: %ds    # 优雅停止超时（SIGQUIT），等待活跃请求完成（0=使用默认30s）\n", int(cfg.Shutdown.GracefulTimeout.Seconds()))
+	fmt.Fprintf(&buf, "  fast_timeout: %ds         # 快速停止超时（SIGINT/SIGTERM，0=使用默认5s）\n", int(cfg.Shutdown.FastTimeout.Seconds()))
 	buf.WriteString("\n")
 
 	// servers 配置说明 - 完整示例
