@@ -45,7 +45,7 @@ func TestTimerManagerCancel(t *testing.T) {
 
 	manager := engine.TimerManager()
 
-	callback := engine.L.NewFunction(func(L *glua.LState) int {
+	callback := engine.L.NewFunction(func(_ *glua.LState) int {
 		return 0
 	})
 
@@ -72,7 +72,7 @@ func TestTimerManagerWaitAll(t *testing.T) {
 
 	// 创建多个定时器
 	for range 3 {
-		callback := engine.L.NewFunction(func(L *glua.LState) int {
+		callback := engine.L.NewFunction(func(_ *glua.LState) int {
 			return 0
 		})
 		manager.At(50*time.Millisecond, callback, nil)
@@ -128,7 +128,7 @@ func TestTimerRunningCount(t *testing.T) {
 	assert.Equal(t, int32(0), manager.ActiveCount())
 
 	// 创建定时器
-	callback := engine.L.NewFunction(func(L *glua.LState) int {
+	callback := engine.L.NewFunction(func(_ *glua.LState) int {
 		return 0
 	})
 

@@ -631,7 +631,7 @@ func TestFilterPhaseWithBodyError(t *testing.T) {
 	drw.EnableFilterPhase()
 
 	// 设置会返回错误的 body filter
-	drw.GetInterceptor().SetBodyFilter(func(body []byte) ([]byte, error) {
+	drw.GetInterceptor().SetBodyFilter(func(_ []byte) ([]byte, error) {
 		return nil, fmt.Errorf("body filter error")
 	})
 
