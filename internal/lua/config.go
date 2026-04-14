@@ -17,6 +17,9 @@ type Config struct {
 	EnableOSLib             bool
 	EnableIOLib             bool
 	EnableLoadLib           bool
+	CoroutineStackSize      int // 协程栈大小（默认64，最大256）
+	MinimizeStackMemory     bool // 启用栈内存自动收缩以减少内存占用
+	CoroutinePoolWarmup     int // 协程池预热数量，启动时预创建
 }
 
 // DefaultConfig 返回默认配置
@@ -31,5 +34,8 @@ func DefaultConfig() *Config {
 		EnableOSLib:             false,
 		EnableIOLib:             false,
 		EnableLoadLib:           false,
+		CoroutineStackSize:      64, // 优化：较小的栈减少内存分配
+		MinimizeStackMemory:     true,
+		CoroutinePoolWarmup:     4, // 预热4个协程结构
 	}
 }

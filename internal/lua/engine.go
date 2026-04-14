@@ -50,9 +50,12 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 		config = DefaultConfig()
 	}
 
-	// 创建主 LState
+	// 创建主 LState（使用优化后的栈配置）
+	// 协程通过 NewThread 继承这些配置
 	L := glua.NewState(glua.Options{
-		SkipOpenLibs: true, // 禁用默认库，手动加载安全库
+		SkipOpenLibs:        true, // 禁用默认库，手动加载安全库
+		CallStackSize:       config.CoroutineStackSize,
+		MinimizeStackMemory: config.MinimizeStackMemory,
 	})
 
 	// 加载安全的标准库
@@ -95,6 +98,13 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 
 	// 创建 location 管理器
 	engine.locationManager = NewLocationManager()
+
+	// 协程池预热：预创建 LuaCoroutine 结构体对象
+	if config.CoroutinePoolWarmup > 0 {
+		for i := 0; i < config.CoroutinePoolWarmup; i++ {
+			engine.coroutinePool.Put(&LuaCoroutine{})
+		}
+	}
 
 	return engine, nil
 }

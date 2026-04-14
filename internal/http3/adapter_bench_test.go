@@ -135,7 +135,8 @@ func benchmarkAdapterConvertRequestBody(b *testing.B, bodySize int) {
 			Header: http.Header{
 				"Content-Type": []string{"application/octet-stream"},
 			},
-			Body: io.NopCloser(bytes.NewReader(bodyData)),
+			Body:          io.NopCloser(bytes.NewReader(bodyData)),
+			ContentLength: int64(bodySize),
 		}
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Init(&fasthttp.Request{}, nil, nil)

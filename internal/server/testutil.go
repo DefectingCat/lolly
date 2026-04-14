@@ -15,18 +15,18 @@ import (
 // MockFastServer 是 fasthttp.Server 的 Mock 包装
 // 定义在此文件以便 TestServerOptions 可以引用
 type MockFastServer struct {
-	Name               string
 	Handler            fasthttp.RequestHandler
 	TLSConfig          *tls.Config
+	ServeFunc          func(ln net.Listener) error
+	ServeTLSFunc       func(ln net.Listener, certFile, keyFile string) error
+	ShutdownFunc       func() error
+	Name               string
 	ReadTimeout        time.Duration
 	WriteTimeout       time.Duration
 	IdleTimeout        time.Duration
 	MaxConnsPerIP      int
 	MaxRequestsPerConn int
 	CloseOnShutdown    bool
-	ServeFunc          func(ln net.Listener) error
-	ServeTLSFunc       func(ln net.Listener, certFile, keyFile string) error
-	ShutdownFunc       func() error
 }
 
 // Serve 启动服务
@@ -77,9 +77,9 @@ func NewServerForTesting(cfg *config.Config, deps *TestDependencies) *Server {
 
 // TestServerOptions 测试服务器的可选配置
 type TestServerOptions struct {
-	SkipListener      bool
 	MockFastServer    *MockFastServer
 	CustomHandler     fasthttp.RequestHandler
+	SkipListener      bool
 	DisableMiddleware bool
 }
 

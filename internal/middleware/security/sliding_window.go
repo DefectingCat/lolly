@@ -14,19 +14,41 @@
 package security
 
 import (
+	"hash/fnv"
 	"sync"
 	"time"
 )
 
+// limiterBucket 分段锁桶，每个桶持有部分键的计数器。
+// 使用分段锁减少全局锁竞争，提高并发性能。
+type limiterBucket struct {
+	mu       sync.RWMutex
+	counters map[string]*windowCounter
+}
+
 // SlidingWindowLimiter 滑动窗口限流器。
 //
 // 使用滑动窗口算法限制请求速率，支持近似和精确两种模式。
+// 采用16个分段锁桶结构，减少锁竞争，提高并发性能。
 type SlidingWindowLimiter struct {
-	counters map[string]*windowCounter
-	window   time.Duration
-	limit    int
-	mu       sync.RWMutex
-	precise  bool
+	buckets [16]*limiterBucket
+	window  time.Duration
+	limit   int
+	precise bool
+}
+
+// getBucket 根据键获取对应的分段锁桶。
+//
+// 使用FNV-1a哈希算法计算键的哈希值，然后取模分配到16个桶中的一个。
+// 参数：
+//   - key: 限流键
+//
+// 返回值：
+//   - *limiterBucket: 对应的桶
+func (s *SlidingWindowLimiter) getBucket(key string) *limiterBucket {
+	h := fnv.New64a()
+	h.Write([]byte(key))
+	return s.buckets[h.Sum64()%16]
 }
 
 // windowCounter 窗口计数器。
@@ -43,12 +65,18 @@ type windowCounter struct {
 //   - limit: 窗口内最大请求数
 //   - precise: 是否使用精确模式
 func NewSlidingWindowLimiter(window time.Duration, limit int, precise bool) *SlidingWindowLimiter {
-	return &SlidingWindowLimiter{
-		window:   window,
-		limit:    limit,
-		precise:  precise,
-		counters: make(map[string]*windowCounter),
+	s := &SlidingWindowLimiter{
+		window:  window,
+		limit:   limit,
+		precise: precise,
 	}
+	// 初始化16个分段锁桶
+	for i := 0; i < 16; i++ {
+		s.buckets[i] = &limiterBucket{
+			counters: make(map[string]*windowCounter),
+		}
+	}
+	return s
 }
 
 // Allow 检查是否允许请求。
@@ -69,18 +97,19 @@ func (s *SlidingWindowLimiter) Allow(key string) bool {
 //
 // 使用两个固定窗口估算滑动窗口内的请求数，性能优于精确模式。
 func (s *SlidingWindowLimiter) allowApproximate(key string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	bucket := s.getBucket(key)
+	bucket.mu.Lock()
+	defer bucket.mu.Unlock()
 
 	now := time.Now()
 	windowNanos := s.window.Nanoseconds()
 	_ = windowNanos // 用于近似计算
 
 	// 获取或创建当前窗口计数器
-	current, ok := s.counters[key]
+	current, ok := bucket.counters[key]
 	if !ok {
 		current = &windowCounter{}
-		s.counters[key] = current
+		bucket.counters[key] = current
 	}
 
 	current.mu.Lock()
@@ -123,19 +152,20 @@ func (s *SlidingWindowLimiter) allowApproximate(key string) bool {
 //
 // 记录每个请求的时间戳，精确计算滑动窗口内的请求数。
 func (s *SlidingWindowLimiter) allowPrecise(key string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	bucket := s.getBucket(key)
+	bucket.mu.Lock()
+	defer bucket.mu.Unlock()
 
 	now := time.Now()
 	windowStart := now.Add(-s.window)
 
 	// 获取或创建计数器
-	counter, ok := s.counters[key]
+	counter, ok := bucket.counters[key]
 	if !ok {
 		counter = &windowCounter{
 			timestamps: make([]time.Time, 0, s.limit),
 		}
-		s.counters[key] = counter
+		bucket.counters[key] = counter
 	}
 
 	counter.mu.Lock()
@@ -164,16 +194,20 @@ func (s *SlidingWindowLimiter) allowPrecise(key string) bool {
 // 参数：
 //   - key: 要重置的限流键
 func (s *SlidingWindowLimiter) Reset(key string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.counters, key)
+	bucket := s.getBucket(key)
+	bucket.mu.Lock()
+	defer bucket.mu.Unlock()
+	delete(bucket.counters, key)
 }
 
 // ResetAll 重置所有计数器。
 func (s *SlidingWindowLimiter) ResetAll() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.counters = make(map[string]*windowCounter)
+	for i := 0; i < 16; i++ {
+		bucket := s.buckets[i]
+		bucket.mu.Lock()
+		bucket.counters = make(map[string]*windowCounter)
+		bucket.mu.Unlock()
+	}
 }
 
 // Cleanup 清理长时间未使用的计数器。
@@ -181,19 +215,21 @@ func (s *SlidingWindowLimiter) ResetAll() {
 // 参数：
 //   - maxAge: 未使用计数器的最大保留时间
 func (s *SlidingWindowLimiter) Cleanup(maxAge time.Duration) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	now := time.Now()
-	for key, counter := range s.counters {
-		counter.mu.Lock()
-		if len(counter.timestamps) > 0 {
-			lastTime := counter.timestamps[len(counter.timestamps)-1]
-			if now.Sub(lastTime) > maxAge {
-				delete(s.counters, key)
+	for i := 0; i < 16; i++ {
+		bucket := s.buckets[i]
+		bucket.mu.Lock()
+		for key, counter := range bucket.counters {
+			counter.mu.Lock()
+			if len(counter.timestamps) > 0 {
+				lastTime := counter.timestamps[len(counter.timestamps)-1]
+				if now.Sub(lastTime) > maxAge {
+					delete(bucket.counters, key)
+				}
 			}
+			counter.mu.Unlock()
 		}
-		counter.mu.Unlock()
+		bucket.mu.Unlock()
 	}
 }
 
@@ -207,14 +243,19 @@ type SlidingWindowStats struct {
 
 // GetStats 返回统计信息。
 func (s *SlidingWindowLimiter) GetStats() SlidingWindowStats {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	totalKeys := 0
+	for i := 0; i < 16; i++ {
+		bucket := s.buckets[i]
+		bucket.mu.RLock()
+		totalKeys += len(bucket.counters)
+		bucket.mu.RUnlock()
+	}
 
 	return SlidingWindowStats{
 		Window:      s.window,
 		Limit:       s.limit,
 		Precise:     s.precise,
-		CounterKeys: len(s.counters),
+		CounterKeys: totalKeys,
 	}
 }
 
@@ -226,9 +267,10 @@ func (s *SlidingWindowLimiter) GetStats() SlidingWindowStats {
 // 返回值：
 //   - int: 当前窗口内的请求数
 func (s *SlidingWindowLimiter) GetCount(key string) int {
-	s.mu.RLock()
-	counter, ok := s.counters[key]
-	s.mu.RUnlock()
+	bucket := s.getBucket(key)
+	bucket.mu.RLock()
+	counter, ok := bucket.counters[key]
+	bucket.mu.RUnlock()
 
 	if !ok {
 		return 0

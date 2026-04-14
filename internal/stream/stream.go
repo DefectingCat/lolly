@@ -37,6 +37,11 @@ import (
 	"time"
 )
 
+// 负载均衡方法常量。
+const (
+	balanceMethodIPHash = "ip_hash"
+)
+
 // Balancer Stream 代理（L4 层）负载均衡器接口。
 //
 // Stream Balancer 特性（区别于 HTTP Balancer）：
@@ -399,7 +404,7 @@ func (s *Server) AddUpstream(name string, targets []TargetSpec, lbType string, h
 		balancer = newWeightedRoundRobin()
 	case "least_conn":
 		balancer = newLeastConn()
-	case "ip_hash":
+	case balanceMethodIPHash:
 		balancer = newIPHash()
 	default:
 		balancer = newRoundRobin()

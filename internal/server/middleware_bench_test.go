@@ -49,7 +49,7 @@ func BenchmarkMiddlewareNewChainApply(b *testing.B) {
 
 	// 最终处理器
 	finalHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("ok") // nolint:errcheck
+		ctx.WriteString("ok")
 	}
 
 	b.ResetTimer()
@@ -69,7 +69,7 @@ func BenchmarkMiddlewareProcessChain(b *testing.B) {
 
 	// 最终处理器
 	finalHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("ok") // nolint:errcheck
+		ctx.WriteString("ok")
 	}
 
 	b.ResetTimer()
@@ -123,7 +123,7 @@ func BenchmarkMiddlewareChainExecutionWithResponse(b *testing.B) {
 	chain := middleware.NewChain(mw1, mw2, mw3)
 
 	finalHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("response") // nolint:errcheck
+		ctx.WriteString("response")
 	}
 
 	handler := chain.Apply(finalHandler)
@@ -142,7 +142,7 @@ func BenchmarkMiddlewareEmptyChain(b *testing.B) {
 	chain := middleware.NewChain()
 
 	finalHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("ok") // nolint:errcheck
+		ctx.WriteString("ok")
 	}
 
 	handler := chain.Apply(finalHandler)
@@ -162,7 +162,7 @@ func BenchmarkMiddlewareSingleMiddleware(b *testing.B) {
 	chain := middleware.NewChain(mw)
 
 	finalHandler := func(ctx *fasthttp.RequestCtx) {
-		ctx.WriteString("ok") // nolint:errcheck
+		ctx.WriteString("ok")
 	}
 
 	handler := chain.Apply(finalHandler)
