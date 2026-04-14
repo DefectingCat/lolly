@@ -26,14 +26,6 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// Store 变量存储接口
-type Store interface {
-	// Get 获取变量值
-	Get(name string) (string, bool)
-	// Set 设置变量值（用于自定义变量）
-	Set(name string, value string)
-}
-
 // BuiltinVariable 内置变量定义
 type BuiltinVariable struct {
 	Getter      func(ctx *fasthttp.RequestCtx) string

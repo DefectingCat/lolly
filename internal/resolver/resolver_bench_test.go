@@ -14,46 +14,6 @@ import (
 	"rua.plus/lolly/internal/config"
 )
 
-// mockResolver 是一个模拟的 Resolver 实现，用于基准测试。
-// 它返回固定的 IP 地址，避免网络依赖，确保测试的稳定性和可重复性。
-type mockResolver struct {
-	ips   []string
-	delay time.Duration
-}
-
-// LookupHost 模拟解析主机名，返回固定的 IP 地址列表。
-func (m *mockResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
-	if m.delay > 0 {
-		time.Sleep(m.delay)
-	}
-	return m.ips, nil
-}
-
-// LookupHostWithCache 带缓存的解析实现。
-func (m *mockResolver) LookupHostWithCache(ctx context.Context, host string) ([]string, error) {
-	return m.LookupHost(ctx, host)
-}
-
-// Refresh 刷新指定主机的缓存（模拟实现）。
-func (m *mockResolver) Refresh(host string) error {
-	return nil
-}
-
-// Start 启动后台刷新协程（模拟实现）。
-func (m *mockResolver) Start() error {
-	return nil
-}
-
-// Stop 停止解析器（模拟实现）。
-func (m *mockResolver) Stop() error {
-	return nil
-}
-
-// Stats 返回统计信息（模拟实现）。
-func (m *mockResolver) Stats() Stats {
-	return Stats{}
-}
-
 // createTestResolver 创建一个用于基准测试的 DNSResolver 实例。
 // 预填充缓存以模拟真实场景。
 func createTestResolver() *DNSResolver {

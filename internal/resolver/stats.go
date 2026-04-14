@@ -22,35 +22,6 @@ import (
 	"time"
 )
 
-// StatsCollector 定义 DNS 解析器统计收集器的接口。
-//
-// 该接口用于抽象统计数据的收集和查询操作，支持：
-//   - 记录缓存命中和未命中事件
-//   - 记录解析错误
-//   - 记录解析延迟
-//   - 获取汇总统计数据
-//
-// 实现要求：
-//   - 所有方法必须是并发安全的
-//   - 统计数据的更新应使用原子操作
-//   - GetStats 返回的数据应反映当前时刻的快照
-//
-// 使用场景：
-//
-//	通常由 DNSResolver 实现此接口，供监控系统或管理接口调用。
-type StatsCollector interface {
-	// RecordHit 记录缓存命中
-	RecordHit()
-	// RecordMiss 记录缓存未命中
-	RecordMiss()
-	// RecordError 记录解析错误
-	RecordError()
-	// RecordLatency 记录解析延迟
-	RecordLatency(latency time.Duration)
-	// GetStats 获取当前统计
-	GetStats() Stats
-}
-
 // ResetStats 重置所有统计信息为初始值。
 //
 // 将缓存命中次数、缓存未命中次数、解析错误次数、
