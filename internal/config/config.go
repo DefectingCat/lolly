@@ -1378,6 +1378,9 @@ type LuaScriptConfig struct {
 //   - MaxConcurrentCoroutines 控制最大并发协程数
 //   - CoroutineTimeout 控制协程执行超时
 //   - CodeCacheSize 控制字节码缓存大小
+//   - CoroutineStackSize 控制协程栈大小（默认64）
+//   - MinimizeStackMemory 启用栈内存自动收缩
+//   - CoroutinePoolWarmup 协程池预热数量
 //
 // 使用示例：
 //
@@ -1387,6 +1390,9 @@ type LuaScriptConfig struct {
 //	  code_cache_size: 1000
 //	  enable_file_watch: true
 //	  max_execution_time: 30s
+//	  coroutine_stack_size: 64
+//	  minimize_stack_memory: true
+//	  coroutine_pool_warmup: 4
 type LuaGlobalSettings struct {
 	// MaxConcurrentCoroutines 最大并发协程数
 	MaxConcurrentCoroutines int `yaml:"max_concurrent_coroutines"`
@@ -1402,6 +1408,16 @@ type LuaGlobalSettings struct {
 
 	// MaxExecutionTime 单脚本最大执行时间
 	MaxExecutionTime time.Duration `yaml:"max_execution_time"`
+
+	// CoroutineStackSize 协程栈大小（默认64，最大256）
+	// 较小的栈减少内存分配，适用于简单脚本
+	CoroutineStackSize int `yaml:"coroutine_stack_size"`
+
+	// MinimizeStackMemory 启用栈内存自动收缩以减少内存占用
+	MinimizeStackMemory bool `yaml:"minimize_stack_memory"`
+
+	// CoroutinePoolWarmup 协程池预热数量，启动时预创建
+	CoroutinePoolWarmup int `yaml:"coroutine_pool_warmup"`
 }
 
 // StreamConfig TCP/UDP Stream 代理配置。

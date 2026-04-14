@@ -113,6 +113,19 @@ func initLuaEngine(luaCfg *config.LuaMiddlewareConfig) (*lua.LuaEngine, error) {
 		EnableLoadLib:           false,
 	}
 
+	// 设置协程栈优化选项
+	if luaCfg.GlobalSettings.CoroutineStackSize > 0 {
+		engineCfg.CoroutineStackSize = luaCfg.GlobalSettings.CoroutineStackSize
+	} else {
+		engineCfg.CoroutineStackSize = 64 // 默认优化值
+	}
+	engineCfg.MinimizeStackMemory = luaCfg.GlobalSettings.MinimizeStackMemory
+	if luaCfg.GlobalSettings.CoroutinePoolWarmup > 0 {
+		engineCfg.CoroutinePoolWarmup = luaCfg.GlobalSettings.CoroutinePoolWarmup
+	} else {
+		engineCfg.CoroutinePoolWarmup = 4 // 默认预热数量
+	}
+
 	// 设置默认值
 	if engineCfg.MaxConcurrentCoroutines == 0 {
 		engineCfg.MaxConcurrentCoroutines = 1000

@@ -45,6 +45,16 @@ type GlobalLuaSettings struct {
 
 	// MaxExecutionTime 单脚本最大执行时间
 	MaxExecutionTime time.Duration `yaml:"max_execution_time"`
+
+	// CoroutineStackSize 协程栈大小（默认64，最大256）
+	// 较小的栈减少内存分配，适用于简单脚本
+	CoroutineStackSize int `yaml:"coroutine_stack_size"`
+
+	// MinimizeStackMemory 启用栈内存自动收缩以减少内存占用
+	MinimizeStackMemory bool `yaml:"minimize_stack_memory"`
+
+	// CoroutinePoolWarmup 协程池预热数量，启动时预创建
+	CoroutinePoolWarmup int `yaml:"coroutine_pool_warmup"`
 }
 
 // DefaultMiddlewareConfig 默认 Lua 中间件配置
@@ -141,7 +151,7 @@ func ParsePhase(s string) (Phase, error) {
 
 // ToEngineConfig 将全局设置转换为引擎配置
 func (s *GlobalLuaSettings) ToEngineConfig() *Config {
-	return &Config{
+	cfg := &Config{
 		MaxConcurrentCoroutines: s.MaxConcurrentCoroutines,
 		CoroutineTimeout:        s.CoroutineTimeout,
 		CodeCacheSize:           s.CodeCacheSize,
@@ -152,4 +162,23 @@ func (s *GlobalLuaSettings) ToEngineConfig() *Config {
 		EnableIOLib:             false,
 		EnableLoadLib:           false,
 	}
+
+	// 设置协程栈优化选项
+	if s.CoroutineStackSize > 0 {
+		cfg.CoroutineStackSize = s.CoroutineStackSize
+	} else {
+		cfg.CoroutineStackSize = 64 // 默认优化值
+	}
+
+	// 设置栈内存优化选项
+	cfg.MinimizeStackMemory = s.MinimizeStackMemory
+
+	// 设置协程池预热
+	if s.CoroutinePoolWarmup > 0 {
+		cfg.CoroutinePoolWarmup = s.CoroutinePoolWarmup
+	} else {
+		cfg.CoroutinePoolWarmup = 4 // 默认预热数量
+	}
+
+	return cfg
 }
