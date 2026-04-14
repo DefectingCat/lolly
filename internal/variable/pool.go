@@ -7,6 +7,7 @@ package variable
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/valyala/fasthttp"
 )
@@ -26,20 +27,26 @@ type PoolStats struct {
 }
 
 var (
-	// stats 全局池统计信息
-	stats PoolStats
-	// statsMu 保护统计信息的读写锁
-	statsMu sync.RWMutex
+	// gets 从池中获取对象的次数
+	gets atomic.Int64
+	// puts 放回池中对象的次数
+	puts atomic.Int64
+	// newCount 调用 New 函数创建对象的次数
+	newCount atomic.Int64
+	// active 当前活跃对象数量（Gets - Puts）
+	active atomic.Int64
 )
 
 // GetStats 获取池统计信息的副本。
 //
 // 返回当前统计信息的快照，线程安全。
 func GetStats() PoolStats {
-	statsMu.RLock()
-	s := stats
-	statsMu.RUnlock()
-	return s
+	return PoolStats{
+		Gets:     gets.Load(),
+		Puts:     puts.Load(),
+		NewCount: newCount.Load(),
+		Active:   active.Load(),
+	}
 }
 
 // GetPool 获取底层的 sync.Pool（用于测试和调试）。
@@ -54,10 +61,8 @@ func PoolGet(ctx *fasthttp.RequestCtx) *Context {
 	vc := NewContext(ctx)
 
 	// 更新统计
-	statsMu.Lock()
-	stats.Gets++
-	stats.Active = stats.Gets - stats.Puts
-	statsMu.Unlock()
+	gets.Add(1)
+	active.Store(gets.Load() - puts.Load())
 
 	return vc
 }
@@ -73,17 +78,16 @@ func PoolPut(vc *Context) {
 	ReleaseContext(vc)
 
 	// 更新统计
-	statsMu.Lock()
-	stats.Puts++
-	stats.Active = stats.Gets - stats.Puts
-	statsMu.Unlock()
+	puts.Add(1)
+	active.Store(gets.Load() - puts.Load())
 }
 
 // ResetStats 重置统计信息。
 //
 // 将所有统计计数器清零，线程安全。
 func ResetStats() {
-	statsMu.Lock()
-	stats = PoolStats{}
-	statsMu.Unlock()
+	gets.Store(0)
+	puts.Store(0)
+	newCount.Store(0)
+	active.Store(0)
 }
