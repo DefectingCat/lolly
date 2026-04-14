@@ -193,24 +193,7 @@ func (p *Proxy) SetHealthChecker(hc *HealthChecker) {
 
 // createBalancer 根据配置的算法创建负载均衡器。
 func createBalancer(cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
-	switch cfg.LoadBalance {
-	case lbRoundRobin, "":
-		return loadbalance.NewRoundRobin(), nil
-	case lbWeightedRoundRobin:
-		return loadbalance.NewWeightedRoundRobin(), nil
-	case lbLeastConn:
-		return loadbalance.NewLeastConnections(), nil
-	case lbIPHash:
-		return loadbalance.NewIPHash(), nil
-	case lbConsistentHash:
-		virtualNodes := cfg.VirtualNodes
-		if virtualNodes <= 0 {
-			virtualNodes = 150
-		}
-		return loadbalance.NewConsistentHash(virtualNodes, cfg.HashKey), nil
-	default:
-		return nil, errors.New("unsupported load balance algorithm: " + cfg.LoadBalance)
-	}
+	return createBalancerByName(cfg.LoadBalance, cfg)
 }
 
 // createHostClient 为后台目标 URL 创建 fasthttp.HostClient。

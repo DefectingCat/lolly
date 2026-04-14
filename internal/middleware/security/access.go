@@ -34,6 +34,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/middleware"
+	"rua.plus/lolly/internal/netutil"
 )
 
 // Action 表示对 IP 的操作类型。
@@ -383,7 +384,7 @@ func parseCIDR(cidr string) (*net.IPNet, error) {
 // 返回值：
 //   - net.IP: 客户端 IP 地址，无法获取时返回 nil
 func (ac *AccessControl) getClientIP(ctx *fasthttp.RequestCtx) net.IP {
-	remoteIP := getRemoteAddrIP(ctx)
+	remoteIP := netutil.GetRemoteAddrIP(ctx)
 
 	// 仅当配置了可信代理且请求来自可信代理时，才解析 X-Forwarded-For
 	if len(ac.trustedProxies) > 0 && remoteIP != nil {
@@ -439,30 +440,6 @@ func (ac *AccessControl) getClientIP(ctx *fasthttp.RequestCtx) net.IP {
 	}
 
 	return remoteIP
-}
-
-// getRemoteAddrIP 从 RemoteAddr 提取 IP。
-//
-// 参数：
-//   - ctx: FastHTTP 请求上下文
-//
-// 返回值：
-//   - net.IP: 客户端 IP 地址，无法获取时返回 nil
-func getRemoteAddrIP(ctx *fasthttp.RequestCtx) net.IP {
-	if addr := ctx.RemoteAddr(); addr != nil {
-		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
-			return tcpAddr.IP
-		}
-		// 从字符串表示解析
-		ipStr := addr.String()
-		if idx := strings.LastIndex(ipStr, ":"); idx != -1 {
-			ipStr = ipStr[:idx]
-		}
-		// 移除 IPv6 的方括号
-		ipStr = strings.TrimPrefix(strings.TrimSuffix(ipStr, "]"), "[")
-		return net.ParseIP(ipStr)
-	}
-	return nil
 }
 
 // AccessStats 访问控制统计信息结构。
