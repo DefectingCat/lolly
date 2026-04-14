@@ -94,7 +94,6 @@ func GetGlobalVariable(name string) (string, bool) {
 }
 
 // GetAllGlobalVariables 获取所有全局变量的副本。
-// 用于在 NewVariableContext 中批量注入。
 func GetAllGlobalVariables() map[string]string {
 	globalVariablesLock.RLock()
 	defer globalVariablesLock.RUnlock()
@@ -120,7 +119,8 @@ func GetBuiltin(name string) *BuiltinVariable {
 	return builtinVars[name]
 }
 
-// NewContext 从池中获取 Context，并注入全局变量。
+// NewContext 从池中获取 Context。
+// 全局变量通过 Get() 惰性加载。
 func NewContext(ctx *fasthttp.RequestCtx) *Context {
 	vc, ok := pool.Get().(*Context)
 	if !ok {
@@ -137,17 +137,14 @@ func NewContext(ctx *fasthttp.RequestCtx) *Context {
 	vc.upstreamResponseTime = 0
 	vc.upstreamConnectTime = 0
 	vc.upstreamHeaderTime = 0
-	// 清空缓存
+	// 清空内置变量缓存
 	for k := range vc.cache {
 		delete(vc.cache, k)
 	}
-	// 清空自定义变量 store，然后注入全局变量
+	// 清空自定义变量 store
 	for k := range vc.store {
 		delete(vc.store, k)
 	}
-	// 注入全局变量
-	globals := GetAllGlobalVariables()
-	maps.Copy(vc.store, globals)
 	return vc
 }
 
@@ -200,14 +197,19 @@ func (vc *Context) SetUpstreamVars(addr string, status int, responseTime, connec
 	vc.upstreamHeaderTime = headerTime
 }
 
-// Get 获取变量值（优先自定义变量，再查内置变量）
+// Get 获取变量值（优先自定义变量，再查全局变量，最后查内置变量）
 func (vc *Context) Get(name string) (string, bool) {
 	// 1. 先查自定义变量
 	if v, ok := vc.store[name]; ok {
 		return v, true
 	}
 
-	// 2. 检查从 SetResponseInfo/SetServerName 设置的值
+	// 2. 惰性加载全局变量（首次访问时查找，避免每请求复制）
+	if v, ok := GetGlobalVariable(name); ok {
+		return v, true
+	}
+
+	// 3. 检查从 SetResponseInfo/SetServerName 设置的值
 	// 优先检查 struct 字段，再检查 ctx.UserValue（兼容 SetResponseInfoInContext）
 	switch name {
 	case VarStatus:
