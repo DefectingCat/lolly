@@ -13,13 +13,13 @@ type Config struct {
 	CodeCacheSize           int
 	CodeCacheTTL            time.Duration
 	MaxExecutionTime        time.Duration
-	EnableFileWatch         bool
-	EnableOSLib             bool
-	EnableIOLib             bool
-	EnableLoadLib           bool
-	CoroutineStackSize      int // 协程栈大小（默认64，最大256）
+	CoroutineStackSize      int  // 协程栈大小（默认64，最大256）
+	CoroutinePoolWarmup     int  // 协程池预热数量，启动时预创建
+	EnableFileWatch         bool // 1
+	EnableOSLib             bool // 1
+	EnableIOLib             bool // 1
+	EnableLoadLib           bool // 1
 	MinimizeStackMemory     bool // 启用栈内存自动收缩以减少内存占用
-	CoroutinePoolWarmup     int // 协程池预热数量，启动时预创建
 }
 
 // DefaultConfig 返回默认配置

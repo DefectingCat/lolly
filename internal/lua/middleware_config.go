@@ -40,9 +40,6 @@ type GlobalLuaSettings struct {
 	// CodeCacheSize 字节码缓存条目数
 	CodeCacheSize int `yaml:"code_cache_size"`
 
-	// EnableFileWatch 启用文件变更检测
-	EnableFileWatch bool `yaml:"enable_file_watch"`
-
 	// MaxExecutionTime 单脚本最大执行时间
 	MaxExecutionTime time.Duration `yaml:"max_execution_time"`
 
@@ -50,11 +47,14 @@ type GlobalLuaSettings struct {
 	// 较小的栈减少内存分配，适用于简单脚本
 	CoroutineStackSize int `yaml:"coroutine_stack_size"`
 
-	// MinimizeStackMemory 启用栈内存自动收缩以减少内存占用
-	MinimizeStackMemory bool `yaml:"minimize_stack_memory"`
-
 	// CoroutinePoolWarmup 协程池预热数量，启动时预创建
 	CoroutinePoolWarmup int `yaml:"coroutine_pool_warmup"`
+
+	// EnableFileWatch 启用文件变更检测
+	EnableFileWatch bool `yaml:"enable_file_watch"`
+
+	// MinimizeStackMemory 启用栈内存自动收缩以减少内存占用
+	MinimizeStackMemory bool `yaml:"minimize_stack_memory"`
 }
 
 // DefaultMiddlewareConfig 默认 Lua 中间件配置
