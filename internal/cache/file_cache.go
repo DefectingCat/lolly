@@ -86,23 +86,24 @@ func NewFileCache(maxEntries, maxSize int64, inactive time.Duration) *FileCache 
 //   - bool: 是否找到有效缓存
 func (c *FileCache) Get(path string) (*FileEntry, bool) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	entry, ok := c.entries[path]
 	if !ok {
+		c.mu.Unlock()
 		return nil, false
 	}
 
 	// 检查是否过期
 	if time.Since(entry.LastAccess) > c.inactive {
 		c.removeEntry(entry)
+		c.mu.Unlock()
 		return nil, false
 	}
 
 	// 更新访问时间并移到 LRU 链表头部
 	entry.LastAccess = time.Now()
 	c.lruList.MoveToFront(entry.element)
-
+	c.mu.Unlock()
 	return entry, true
 }
 
