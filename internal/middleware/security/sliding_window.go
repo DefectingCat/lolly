@@ -22,8 +22,8 @@ import (
 // limiterBucket 分段锁桶，每个桶持有部分键的计数器。
 // 使用分段锁减少全局锁竞争，提高并发性能。
 type limiterBucket struct {
-	mu       sync.RWMutex
 	counters map[string]*windowCounter
+	mu       sync.RWMutex
 }
 
 // SlidingWindowLimiter 滑动窗口限流器。
