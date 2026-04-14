@@ -26,13 +26,6 @@ func TestNewAdapter(t *testing.T) {
 	if adapter == nil {
 		t.Fatal("Expected non-nil adapter")
 	}
-
-	// 测试 ctxPool 是否初始化
-	ctx := adapter.ctxPool.Get().(*fasthttp.RequestCtx)
-	if ctx == nil {
-		t.Error("Expected non-nil RequestCtx from pool")
-	}
-	adapter.ctxPool.Put(ctx)
 }
 
 // TestWrap 测试 Wrap 函数基本功能

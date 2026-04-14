@@ -14,7 +14,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"sync"
 
 	"github.com/valyala/fasthttp"
 )
@@ -24,19 +23,11 @@ import (
 // 由于 quic-go 使用标准库的 http.Handler 接口，
 // 而 lolly 使用 fasthttp，需要通过适配层进行转换。
 type Adapter struct {
-	// ctxPool 用于复用 RequestCtx 对象
-	ctxPool sync.Pool
 }
 
 // NewAdapter 创建新的适配器。
 func NewAdapter() *Adapter {
-	return &Adapter{
-		ctxPool: sync.Pool{
-			New: func() interface{} {
-				return &fasthttp.RequestCtx{}
-			},
-		},
-	}
+	return &Adapter{}
 }
 
 // Wrap 包装 fasthttp handler 为 http.Handler。
@@ -51,12 +42,8 @@ func NewAdapter() *Adapter {
 //   - http.Handler: 标准库兼容的 HTTP 处理器
 func (a *Adapter) Wrap(handler fasthttp.RequestHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 从池中获取 RequestCtx
-		ctx, ok := a.ctxPool.Get().(*fasthttp.RequestCtx)
-		if !ok {
-			ctx = &fasthttp.RequestCtx{}
-		}
-		defer a.ctxPool.Put(ctx)
+		// 直接创建 RequestCtx
+		ctx := &fasthttp.RequestCtx{}
 
 		// 初始化 ctx（fasthttp 的 RequestCtx 需要 Init 方法）
 		ctx.Init(&fasthttp.Request{}, nil, nil)
