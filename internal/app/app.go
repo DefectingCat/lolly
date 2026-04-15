@@ -178,7 +178,7 @@ func (a *App) Run() int {
 			})
 		}
 	} else {
-		a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Server.Listen})
+		a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Servers[0].Listen})
 	}
 
 	// 创建 DNS 解析器（如果启用）
@@ -243,7 +243,7 @@ func (a *App) Run() int {
 	}
 
 	// 创建并启动 HTTP/3 服务器（如果启用）
-	if a.cfg.HTTP3.Enabled && a.cfg.Server.SSL.Cert != "" {
+	if a.cfg.HTTP3.Enabled && a.cfg.Servers[0].SSL.Cert != "" {
 		tlsConfig, err := a.srv.GetTLSConfig()
 		if err != nil {
 			a.logger.Error().Err(err).Msg("获取 TLS 配置失败，跳过 HTTP/3")
@@ -263,21 +263,21 @@ func (a *App) Run() int {
 	}
 
 	// 创建并启动 HTTP/2 服务器（如果启用且配置了 TLS）
-	if a.cfg.Server.SSL.HTTP2.Enabled && a.cfg.Server.SSL.Cert != "" {
+	if a.cfg.Servers[0].SSL.HTTP2.Enabled && a.cfg.Servers[0].SSL.Cert != "" {
 		tlsConfig, err := a.srv.GetTLSConfig()
 		if err != nil {
 			a.logger.Error().Err(err).Msg("获取 TLS 配置失败，跳过 HTTP/2")
 		} else {
 			// 创建 HTTP/2 服务器，共享同一个 handler
-			a.http2Srv, err = http2.NewServer(&a.cfg.Server.SSL.HTTP2, a.srv.GetHandler(), tlsConfig)
+			a.http2Srv, err = http2.NewServer(&a.cfg.Servers[0].SSL.HTTP2, a.srv.GetHandler(), tlsConfig)
 			if err != nil {
 				a.logger.Error().Err(err).Msg("创建 HTTP/2 服务器失败")
 			} else {
 				go func() {
 					a.logger.LogStartup("HTTP/2 服务器启动中", map[string]string{
-						"listen":                 a.cfg.Server.Listen,
-						"max_concurrent_streams": fmt.Sprintf("%d", a.cfg.Server.SSL.HTTP2.MaxConcurrentStreams),
-						"push_enabled":           fmt.Sprintf("%t", a.cfg.Server.SSL.HTTP2.PushEnabled),
+						"listen":                 a.cfg.Servers[0].Listen,
+						"max_concurrent_streams": fmt.Sprintf("%d", a.cfg.Servers[0].SSL.HTTP2.MaxConcurrentStreams),
+						"push_enabled":           fmt.Sprintf("%t", a.cfg.Servers[0].SSL.HTTP2.PushEnabled),
 					})
 					// HTTP/2 服务器使用与主服务器相同的监听器
 					// 通过 ALPN 协商自动处理协议选择

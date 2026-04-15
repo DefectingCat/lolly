@@ -127,7 +127,7 @@ func (a *App) Run() int {
 	}
 
 	a.logger.LogStartup("配置加载成功", map[string]string{"config_path": a.cfgPath})
-	a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Server.Listen})
+	a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Servers[0].Listen})
 
 	if a.cfg.Resolver.Enabled {
 		a.resv = resolver.New(&a.cfg.Resolver)
@@ -175,7 +175,7 @@ func (a *App) Run() int {
 	}
 
 	// HTTP/3 服务器
-	if a.cfg.HTTP3.Enabled && a.cfg.Server.SSL.Cert != "" {
+	if a.cfg.HTTP3.Enabled && a.cfg.Servers[0].SSL.Cert != "" {
 		tlsConfig, err := a.srv.GetTLSConfig()
 		if err != nil {
 			a.logger.Error().Err(err).Msg("获取 TLS 配置失败，跳过 HTTP/3")
@@ -195,20 +195,20 @@ func (a *App) Run() int {
 	}
 
 	// HTTP/2 服务器
-	if a.cfg.Server.SSL.HTTP2.Enabled && a.cfg.Server.SSL.Cert != "" {
+	if a.cfg.Servers[0].SSL.HTTP2.Enabled && a.cfg.Servers[0].SSL.Cert != "" {
 		tlsConfig, err := a.srv.GetTLSConfig()
 		if err != nil {
 			a.logger.Error().Err(err).Msg("获取 TLS 配置失败，跳过 HTTP/2")
 		} else {
-			a.http2Srv, err = http2.NewServer(&a.cfg.Server.SSL.HTTP2, a.srv.GetHandler(), tlsConfig)
+			a.http2Srv, err = http2.NewServer(&a.cfg.Servers[0].SSL.HTTP2, a.srv.GetHandler(), tlsConfig)
 			if err != nil {
 				a.logger.Error().Err(err).Msg("创建 HTTP/2 服务器失败")
 			} else {
 				go func() {
 					a.logger.LogStartup("HTTP/2 服务器启动中", map[string]string{
-						"listen":                 a.cfg.Server.Listen,
-						"max_concurrent_streams": fmt.Sprintf("%d", a.cfg.Server.SSL.HTTP2.MaxConcurrentStreams),
-						"push_enabled":           fmt.Sprintf("%t", a.cfg.Server.SSL.HTTP2.PushEnabled),
+						"listen":                 a.cfg.Servers[0].Listen,
+						"max_concurrent_streams": fmt.Sprintf("%d", a.cfg.Servers[0].SSL.HTTP2.MaxConcurrentStreams),
+						"push_enabled":           fmt.Sprintf("%t", a.cfg.Servers[0].SSL.HTTP2.PushEnabled),
 					})
 					listeners := a.srv.GetListeners()
 					if len(listeners) > 0 {

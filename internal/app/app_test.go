@@ -246,7 +246,7 @@ func TestRun(t *testing.T) {
 				if err != nil {
 					t.Errorf("读取生成的配置文件失败: %v", err)
 				} else if !strings.Contains(string(data), "servers:") {
-					t.Errorf("生成的配置文件应包含 'server:', 实际内容: %s", string(data)[:100])
+					t.Errorf("生成的配置文件应包含 'servers:', 实际内容: %s", string(data)[:100])
 				}
 			}
 		})
@@ -420,8 +420,8 @@ func TestHandleSignal_SIGHUP(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	cfgContent := `
-server:
-  listen: ":8080"
+servers:
+  - listen: ":8080"
 logging:
   error:
     level: "info"
@@ -525,8 +525,8 @@ func TestReloadConfig_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	cfgContent := `
-server:
-  listen: ":9090"
+servers:
+  - listen: ":9090"
 logging:
   error:
     level: "debug"
@@ -691,8 +691,8 @@ func TestReloadConfig_WithValidConfig(t *testing.T) {
 	// 创建第一个配置
 	cfgPath1 := filepath.Join(tmpDir, "config1.yaml")
 	cfgContent1 := `
-server:
-  listen: ":8080"
+servers:
+  - listen: ":8080"
 logging:
   error:
     level: "info"
@@ -704,8 +704,8 @@ logging:
 	// 创建第二个配置
 	cfgPath2 := filepath.Join(tmpDir, "config2.yaml")
 	cfgContent2 := `
-server:
-  listen: ":9090"
+servers:
+  - listen: ":9090"
 logging:
   error:
     level: "debug"
@@ -741,8 +741,8 @@ func TestHandleSignal_AllSignals(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	cfgContent := `
-server:
-  listen: ":8080"
+servers:
+  - listen: ":8080"
 logging:
   error:
     level: "info"
