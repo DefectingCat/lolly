@@ -157,16 +157,19 @@ func (bl *BodyLimit) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 		}
 
 		// 对于 chunked 传输或没有 Content-Length 的请求
-		// 设置最大读取限制
-		ctx.Request.SetBodyStream(ctx.Request.BodyStream(), int(limit))
+		// 只有当 BodyStream 存在时才设置限制
+		bodyStream := ctx.Request.BodyStream()
+		if bodyStream != nil {
+			ctx.Request.SetBodyStream(bodyStream, int(limit))
 
-		// 包装请求体读取以检测超限
-		limitedReader := &limitedBodyReader{
-			ctx:      ctx,
-			limit:    limit,
-			original: ctx.Request.BodyStream(),
+			// 包装请求体读取以检测超限
+			limitedReader := &limitedBodyReader{
+				ctx:      ctx,
+				limit:    limit,
+				original: bodyStream,
+			}
+			ctx.Request.SetBodyStream(limitedReader, -1)
 		}
-		ctx.Request.SetBodyStream(limitedReader, -1)
 
 		next(ctx)
 	}
