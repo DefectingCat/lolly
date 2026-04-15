@@ -357,45 +357,31 @@ func TestConfigMethods(t *testing.T) {
 		}
 	})
 
-	t.Run("HasDefaultServer_有默认服务器", func(t *testing.T) {
+	t.Run("GetDefaultServerFromList_有默认服务器", func(t *testing.T) {
 		cfg := &Config{
-			Server: ServerConfig{
-				Listen: ":8080",
+			Servers: []ServerConfig{
+				{Listen: ":8080", Name: "api"},
+				{Listen: ":8081", Name: "default", Default: true},
 			},
 		}
-		if !cfg.HasDefaultServer() {
-			t.Error("HasDefaultServer() = false, want true")
-		}
-	})
-
-	t.Run("HasDefaultServer_无默认服务器", func(t *testing.T) {
-		cfg := &Config{}
-		if cfg.HasDefaultServer() {
-			t.Error("HasDefaultServer() = true, want false")
-		}
-	})
-
-	t.Run("GetDefaultServer_有默认服务器", func(t *testing.T) {
-		cfg := &Config{
-			Server: ServerConfig{
-				Listen: ":8080",
-				Name:   "default",
-			},
-		}
-		server := cfg.GetDefaultServer()
+		server := cfg.GetDefaultServerFromList()
 		if server == nil {
-			t.Fatal("GetDefaultServer() = nil, want non-nil")
+			t.Fatal("GetDefaultServerFromList() = nil, want non-nil")
 		}
-		if server.Listen != ":8080" {
-			t.Errorf("server.Listen = %q, want %q", server.Listen, ":8080")
+		if server.Listen != ":8081" {
+			t.Errorf("server.Listen = %q, want %q", server.Listen, ":8081")
 		}
 	})
 
-	t.Run("GetDefaultServer_无默认服务器", func(t *testing.T) {
-		cfg := &Config{}
-		server := cfg.GetDefaultServer()
+	t.Run("GetDefaultServerFromList_无默认服务器", func(t *testing.T) {
+		cfg := &Config{
+			Servers: []ServerConfig{
+				{Listen: ":8080", Name: "api"},
+			},
+		}
+		server := cfg.GetDefaultServerFromList()
 		if server != nil {
-			t.Errorf("GetDefaultServer() = %v, want nil", server)
+			t.Errorf("GetDefaultServerFromList() = %v, want nil", server)
 		}
 	})
 
@@ -404,28 +390,18 @@ func TestConfigMethods(t *testing.T) {
 			cfg            *Config
 			name           string
 			wantHasServers bool
-			wantHasDefault bool
 		}{
-			{
-				name:           "仅默认服务器",
-				cfg:            &Config{Server: ServerConfig{Listen: ":8080"}},
-				wantHasServers: false,
-				wantHasDefault: true,
-			},
 			{
 				name:           "仅多虚拟主机",
 				cfg:            &Config{Servers: []ServerConfig{{Listen: ":8080"}}},
 				wantHasServers: true,
-				wantHasDefault: false,
 			},
 			{
 				name: "混合模式",
 				cfg: &Config{
-					Server:  ServerConfig{Listen: ":8080"},
 					Servers: []ServerConfig{{Listen: ":8081"}},
 				},
 				wantHasServers: true,
-				wantHasDefault: true,
 			},
 		}
 
@@ -433,9 +409,6 @@ func TestConfigMethods(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				if got := tt.cfg.HasServers(); got != tt.wantHasServers {
 					t.Errorf("HasServers() = %v, want %v", got, tt.wantHasServers)
-				}
-				if got := tt.cfg.HasDefaultServer(); got != tt.wantHasDefault {
-					t.Errorf("HasDefaultServer() = %v, want %v", got, tt.wantHasDefault)
 				}
 			})
 		}

@@ -56,7 +56,7 @@ const (
 // 是配置文件的顶级结构体，所有其他配置都作为其子结构。
 //
 // 注意事项：
-//   - 必须配置 server 或 servers 中的至少一个
+//   - 必须配置 servers 列表中的至少一个
 //   - 加载后会自动进行配置验证
 //   - Stream 配置为可选，用于 TCP/UDP 层代理
 //   - HTTP/3 配置为可选，需 SSL 配置配合才能生效
@@ -67,8 +67,7 @@ const (
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	server := cfg.Server
-//	// 或使用多虚拟主机
+//	// 使用多虚拟主机模式
 //	for _, s := range cfg.Servers {
 //	    // 处理每个服务器配置
 //	}
@@ -81,7 +80,6 @@ type Config struct {
 	Monitoring  MonitoringConfig  `yaml:"monitoring"`
 	HTTP3       HTTP3Config       `yaml:"http3"`
 	Resolver    ResolverConfig    `yaml:"resolver"`
-	Server      ServerConfig      `yaml:"server"`
 	Performance PerformanceConfig `yaml:"performance"`
 	Shutdown    ShutdownConfig    `yaml:"shutdown"`
 }
@@ -188,6 +186,7 @@ type ServerConfig struct {
 	Lua                *LuaMiddlewareConfig `yaml:"lua"`
 	ClientMaxBodySize  string               `yaml:"client_max_body_size"`
 	Name               string               `yaml:"name"`
+	Default            bool                 `yaml:"default,omitempty"` // VHost 默认主机标记
 	Listen             string               `yaml:"listen"`
 	Security           SecurityConfig       `yaml:"security"`
 	Static             []StaticConfig       `yaml:"static"`
@@ -1669,23 +1668,18 @@ func (c *Config) HasServers() bool {
 	return len(c.Servers) > 0
 }
 
-// HasDefaultServer 检查是否有默认服务器配置。
+// GetDefaultServerFromList 从 servers 列表中获取默认服务器配置。
 //
-// 返回值：
-//   - bool: 如果 server.listen 已配置，返回 true
-func (c *Config) HasDefaultServer() bool {
-	return c.Server.Listen != ""
-}
-
-// GetDefaultServer 获取默认服务器配置。
-//
+// 遍历 servers 列表，返回第一个 Default 标记为 true 的服务器。
 // 用于在虚拟主机模式下获取默认服务器的配置作为 fallback。
 //
 // 返回值：
-//   - *ServerConfig: 默认服务器配置，如未配置则返回 nil
-func (c *Config) GetDefaultServer() *ServerConfig {
-	if c.HasDefaultServer() {
-		return &c.Server
+//   - *ServerConfig: 默认服务器配置，如无则返回 nil
+func (c *Config) GetDefaultServerFromList() *ServerConfig {
+	for i := range c.Servers {
+		if c.Servers[i].Default {
+			return &c.Servers[i]
+		}
 	}
 	return nil
 }
@@ -1763,6 +1757,11 @@ func Validate(cfg *Config) error {
 
 	// 验证监听地址冲突（multi_server 模式）
 	if err := validateListenConflicts(cfg.Servers, cfg.GetMode()); err != nil {
+		return err
+	}
+
+	// 验证 default 服务器唯一性
+	if err := validateDefaultServer(cfg.Servers); err != nil {
 		return err
 	}
 

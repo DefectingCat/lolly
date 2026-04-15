@@ -573,7 +573,7 @@ func (s *Server) startVHostMode() error {
 	}
 
 	// 默认主机
-	if s.config.HasDefaultServer() {
+	if s.config.GetDefaultServerFromList() != nil {
 		router := handler.NewRouter()
 
 		// 注册状态监控端点（如果配置）
@@ -597,12 +597,14 @@ func (s *Server) startVHostMode() error {
 			}
 		}
 
-		s.registerProxyRoutes(router, &s.config.Server)
+		defaultSrv := s.config.GetDefaultServerFromList()
+
+		s.registerProxyRoutes(router, defaultSrv)
 
 		// 静态文件
-		s.registerStaticHandlers(router, &s.config.Server)
+		s.registerStaticHandlers(router, defaultSrv)
 
-		chain, err := s.buildMiddlewareChain(&s.config.Server)
+		chain, err := s.buildMiddlewareChain(defaultSrv)
 		if err != nil {
 			return err
 		}

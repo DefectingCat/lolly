@@ -28,6 +28,26 @@ import (
 	"rua.plus/lolly/internal/variable"
 )
 
+// validateDefaultServer 验证 servers 中最多只有一个 default: true 服务器。
+//
+// 参数：
+//   - servers: 服务器配置列表
+//
+// 返回值：
+//   - error: 超过一个 default 时返回错误信息，成功返回 nil
+func validateDefaultServer(servers []ServerConfig) error {
+	count := 0
+	for _, s := range servers {
+		if s.Default {
+			count++
+		}
+	}
+	if count > 1 {
+		return errors.New("只能有一个 default: true 服务器")
+	}
+	return nil
+}
+
 // validateMode 验证服务器运行模式有效值。
 //
 // 检查 Mode 是否为 ServerModeSingle, ServerModeVHost,

@@ -41,15 +41,17 @@ func TestStart_Integration(t *testing.T) {
 	serverAddr := "127.0.0.1:0"
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: serverAddr,
-			Proxy: []config.ProxyConfig{
-				{
-					Path: "/api",
-					Targets: []config.ProxyTarget{
-						{URL: "http://" + backendAddr, Weight: 1},
+		Servers: []config.ServerConfig{
+			{
+				Listen: serverAddr,
+				Proxy: []config.ProxyConfig{
+					{
+						Path: "/api",
+						Targets: []config.ProxyTarget{
+							{URL: "http://" + backendAddr, Weight: 1},
+						},
+						HealthCheck: config.HealthCheckConfig{},
 					},
-					HealthCheck: config.HealthCheckConfig{},
 				},
 			},
 		},
@@ -77,20 +79,22 @@ func TestStart_Integration(t *testing.T) {
 // TestStart_WithSecurity 测试安全配置
 func TestStart_WithSecurity(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Security: config.SecurityConfig{
-				Access: config.AccessConfig{
-					Allow: []string{"127.0.0.1"},
-					Deny:  []string{},
-				},
-				RateLimit: config.RateLimitConfig{
-					RequestRate: 100,
-					Burst:       200,
-				},
-				Headers: config.SecurityHeaders{
-					XFrameOptions:       "DENY",
-					XContentTypeOptions: "nosniff",
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Security: config.SecurityConfig{
+					Access: config.AccessConfig{
+						Allow: []string{"127.0.0.1"},
+						Deny:  []string{},
+					},
+					RateLimit: config.RateLimitConfig{
+						RequestRate: 100,
+						Burst:       200,
+					},
+					Headers: config.SecurityHeaders{
+						XFrameOptions:       "DENY",
+						XContentTypeOptions: "nosniff",
+					},
 				},
 			},
 		},
@@ -102,20 +106,22 @@ func TestStart_WithSecurity(t *testing.T) {
 	}
 
 	// 验证安全配置
-	if len(s.config.Server.Security.Access.Allow) != 1 {
-		t.Errorf("Expected 1 allowed IP, got %d", len(s.config.Server.Security.Access.Allow))
+	if len(s.config.Servers[0].Security.Access.Allow) != 1 {
+		t.Errorf("Expected 1 allowed IP, got %d", len(s.config.Servers[0].Security.Access.Allow))
 	}
 }
 
 // TestStart_WithRewrite 测试 URL 重写配置
 func TestStart_WithRewrite(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Rewrite: []config.RewriteRule{
-				{
-					Pattern:     "/old/(.*)",
-					Replacement: "/new/$1",
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Rewrite: []config.RewriteRule{
+					{
+						Pattern:     "/old/(.*)",
+						Replacement: "/new/$1",
+					},
 				},
 			},
 		},
@@ -127,16 +133,18 @@ func TestStart_WithRewrite(t *testing.T) {
 	}
 
 	// 验证重写配置
-	if len(s.config.Server.Rewrite) != 1 {
-		t.Errorf("Expected 1 rewrite rule, got %d", len(s.config.Server.Rewrite))
+	if len(s.config.Servers[0].Rewrite) != 1 {
+		t.Errorf("Expected 1 rewrite rule, got %d", len(s.config.Servers[0].Rewrite))
 	}
 }
 
 // TestStart_WithMonitoring 测试监控配置
 func TestStart_WithMonitoring(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+			},
 		},
 		Monitoring: config.MonitoringConfig{
 			Status: config.StatusConfig{
@@ -174,12 +182,14 @@ func TestStart_WithErrorPage(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Security: config.SecurityConfig{
-				ErrorPage: config.ErrorPageConfig{
-					Pages: map[int]string{
-						404: errorPagePath,
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Security: config.SecurityConfig{
+					ErrorPage: config.ErrorPageConfig{
+						Pages: map[int]string{
+							404: errorPagePath,
+						},
 					},
 				},
 			},
@@ -192,7 +202,7 @@ func TestStart_WithErrorPage(t *testing.T) {
 	}
 
 	// 验证错误页面配置
-	if s.config.Server.Security.ErrorPage.Pages == nil {
+	if s.config.Servers[0].Security.ErrorPage.Pages == nil {
 		t.Error("Error page pages should not be nil")
 	}
 }
@@ -200,15 +210,17 @@ func TestStart_WithErrorPage(t *testing.T) {
 // TestStart_WithLuaEnabled 测试 Lua 配置
 func TestStart_WithLuaEnabled(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Lua: &config.LuaMiddlewareConfig{
-				Enabled: true,
-				GlobalSettings: config.LuaGlobalSettings{
-					MaxConcurrentCoroutines: 100,
-					CoroutineTimeout:        30 * time.Second,
-					CodeCacheSize:           100,
-					MaxExecutionTime:        30 * time.Second,
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Lua: &config.LuaMiddlewareConfig{
+					Enabled: true,
+					GlobalSettings: config.LuaGlobalSettings{
+						MaxConcurrentCoroutines: 100,
+						CoroutineTimeout:        30 * time.Second,
+						CodeCacheSize:           100,
+						MaxExecutionTime:        30 * time.Second,
+					},
 				},
 			},
 		},
@@ -220,7 +232,7 @@ func TestStart_WithLuaEnabled(t *testing.T) {
 	}
 
 	// 验证 Lua 配置
-	if s.config.Server.Lua == nil || !s.config.Server.Lua.Enabled {
+	if s.config.Servers[0].Lua == nil || !s.config.Servers[0].Lua.Enabled {
 		t.Error("Lua should be enabled")
 	}
 }
@@ -241,19 +253,21 @@ func TestStart_WithMultipleProxies(t *testing.T) {
 	defer cleanup2()
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Proxy: []config.ProxyConfig{
-				{
-					Path: "/api1",
-					Targets: []config.ProxyTarget{
-						{URL: "http://" + backend1, Weight: 1},
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Proxy: []config.ProxyConfig{
+					{
+						Path: "/api1",
+						Targets: []config.ProxyTarget{
+							{URL: "http://" + backend1, Weight: 1},
+						},
 					},
-				},
-				{
-					Path: "/api2",
-					Targets: []config.ProxyTarget{
-						{URL: "http://" + backend2, Weight: 1},
+					{
+						Path: "/api2",
+						Targets: []config.ProxyTarget{
+							{URL: "http://" + backend2, Weight: 1},
+						},
 					},
 				},
 			},
@@ -266,16 +280,18 @@ func TestStart_WithMultipleProxies(t *testing.T) {
 	}
 
 	// 验证代理配置
-	if len(s.config.Server.Proxy) != 2 {
-		t.Errorf("Expected 2 proxies, got %d", len(s.config.Server.Proxy))
+	if len(s.config.Servers[0].Proxy) != 2 {
+		t.Errorf("Expected 2 proxies, got %d", len(s.config.Servers[0].Proxy))
 	}
 }
 
 // TestStart_EmptyConfig 测试空配置
 func TestStart_EmptyConfig(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+			},
 		},
 	}
 
@@ -298,38 +314,40 @@ func TestStart_WithAllFeatures(t *testing.T) {
 	writeFile(errorPagePath, []byte("<html><body>Not Found</body></html>"))
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Static: []config.StaticConfig{
-				{
-					Path:  "/static",
-					Root:  tempDir,
-					Index: []string{"index.html"},
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Static: []config.StaticConfig{
+					{
+						Path:  "/static",
+						Root:  tempDir,
+						Index: []string{"index.html"},
+					},
 				},
-			},
-			Compression: config.CompressionConfig{
-				Type:  "gzip",
-				Level: 6,
-			},
-			Security: config.SecurityConfig{
-				Access: config.AccessConfig{
-					Allow: []string{"127.0.0.1"},
+				Compression: config.CompressionConfig{
+					Type:  "gzip",
+					Level: 6,
 				},
-				RateLimit: config.RateLimitConfig{
-					RequestRate: 100,
-					Burst:       200,
+				Security: config.SecurityConfig{
+					Access: config.AccessConfig{
+						Allow: []string{"127.0.0.1"},
+					},
+					RateLimit: config.RateLimitConfig{
+						RequestRate: 100,
+						Burst:       200,
+					},
+					Headers: config.SecurityHeaders{
+						XFrameOptions: "DENY",
+					},
+					ErrorPage: config.ErrorPageConfig{
+						Default: errorPagePath,
+					},
 				},
-				Headers: config.SecurityHeaders{
-					XFrameOptions: "DENY",
-				},
-				ErrorPage: config.ErrorPageConfig{
-					Default: errorPagePath,
-				},
-			},
-			Rewrite: []config.RewriteRule{
-				{
-					Pattern:     "/old/(.*)",
-					Replacement: "/new/$1",
+				Rewrite: []config.RewriteRule{
+					{
+						Pattern:     "/old/(.*)",
+						Replacement: "/new/$1",
+					},
 				},
 			},
 		},
@@ -360,7 +378,7 @@ func TestStart_WithAllFeatures(t *testing.T) {
 	if !s.config.Performance.GoroutinePool.Enabled {
 		t.Error("GoroutinePool should be enabled")
 	}
-	if s.config.Server.Compression.Type != "gzip" {
+	if s.config.Servers[0].Compression.Type != "gzip" {
 		t.Error("Compression should be gzip")
 	}
 }
@@ -368,14 +386,16 @@ func TestStart_WithAllFeatures(t *testing.T) {
 // TestStart_ServerOptions 测试服务器配置选项
 func TestStart_ServerOptions(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen:             "127.0.0.1:0",
-			ReadTimeout:        30 * time.Second,
-			WriteTimeout:       30 * time.Second,
-			IdleTimeout:        60 * time.Second,
-			MaxConnsPerIP:      100,
-			MaxRequestsPerConn: 1000,
-			ClientMaxBodySize:  "10MB",
+		Servers: []config.ServerConfig{
+			{
+				Listen:             "127.0.0.1:0",
+				ReadTimeout:        30 * time.Second,
+				WriteTimeout:       30 * time.Second,
+				IdleTimeout:        60 * time.Second,
+				MaxConnsPerIP:      100,
+				MaxRequestsPerConn: 1000,
+				ClientMaxBodySize:  "10MB",
+			},
 		},
 	}
 
@@ -385,29 +405,31 @@ func TestStart_ServerOptions(t *testing.T) {
 	}
 
 	// 验证服务器选项
-	if s.config.Server.ReadTimeout != 30*time.Second {
-		t.Errorf("Expected ReadTimeout 30s, got %v", s.config.Server.ReadTimeout)
+	if s.config.Servers[0].ReadTimeout != 30*time.Second {
+		t.Errorf("Expected ReadTimeout 30s, got %v", s.config.Servers[0].ReadTimeout)
 	}
-	if s.config.Server.MaxConnsPerIP != 100 {
-		t.Errorf("Expected MaxConnsPerIP 100, got %d", s.config.Server.MaxConnsPerIP)
+	if s.config.Servers[0].MaxConnsPerIP != 100 {
+		t.Errorf("Expected MaxConnsPerIP 100, got %d", s.config.Servers[0].MaxConnsPerIP)
 	}
 }
 
 // TestStart_HealthCheckConfig 测试健康检查配置
 func TestStart_HealthCheckConfig(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Proxy: []config.ProxyConfig{
-				{
-					Path: "/api",
-					Targets: []config.ProxyTarget{
-						{URL: "http://127.0.0.1:8081", Weight: 1},
-					},
-					HealthCheck: config.HealthCheckConfig{
-						Interval: 10 * time.Second,
-						Timeout:  5 * time.Second,
-						Path:     "/health",
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Proxy: []config.ProxyConfig{
+					{
+						Path: "/api",
+						Targets: []config.ProxyTarget{
+							{URL: "http://127.0.0.1:8081", Weight: 1},
+						},
+						HealthCheck: config.HealthCheckConfig{
+							Interval: 10 * time.Second,
+							Timeout:  5 * time.Second,
+							Path:     "/health",
+						},
 					},
 				},
 			},
@@ -420,7 +442,7 @@ func TestStart_HealthCheckConfig(t *testing.T) {
 	}
 
 	// 验证健康检查配置
-	if s.config.Server.Proxy[0].HealthCheck.Path != "/health" {
+	if s.config.Servers[0].Proxy[0].HealthCheck.Path != "/health" {
 		t.Error("Health check path should be /health")
 	}
 }
@@ -437,9 +459,6 @@ func TestStart_VHostMode(t *testing.T) {
 				Name:   "www.example.com",
 				Listen: "127.0.0.1:0",
 			},
-		},
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
 		},
 	}
 
@@ -461,13 +480,15 @@ func TestStart_WithProxyBackendError(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Proxy: []config.ProxyConfig{
-				{
-					Path: "/api",
-					Targets: []config.ProxyTarget{
-						{URL: "http://" + backendAddr, Weight: 1},
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Proxy: []config.ProxyConfig{
+					{
+						Path: "/api",
+						Targets: []config.ProxyTarget{
+							{URL: "http://" + backendAddr, Weight: 1},
+						},
 					},
 				},
 			},
@@ -480,8 +501,8 @@ func TestStart_WithProxyBackendError(t *testing.T) {
 	}
 
 	// 验证代理配置
-	if len(s.config.Server.Proxy) != 1 {
-		t.Errorf("Expected 1 proxy, got %d", len(s.config.Server.Proxy))
+	if len(s.config.Servers[0].Proxy) != 1 {
+		t.Errorf("Expected 1 proxy, got %d", len(s.config.Servers[0].Proxy))
 	}
 }
 
@@ -495,13 +516,15 @@ func TestStart_WithDelayedBackend(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Proxy: []config.ProxyConfig{
-				{
-					Path: "/api",
-					Targets: []config.ProxyTarget{
-						{URL: "http://" + backendAddr, Weight: 1},
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Proxy: []config.ProxyConfig{
+					{
+						Path: "/api",
+						Targets: []config.ProxyTarget{
+							{URL: "http://" + backendAddr, Weight: 1},
+						},
 					},
 				},
 			},
@@ -525,13 +548,15 @@ func TestStart_WithRandomResponse(t *testing.T) {
 	defer cleanup()
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: "127.0.0.1:0",
-			Proxy: []config.ProxyConfig{
-				{
-					Path: "/api",
-					Targets: []config.ProxyTarget{
-						{URL: "http://" + backendAddr, Weight: 1},
+		Servers: []config.ServerConfig{
+			{
+				Listen: "127.0.0.1:0",
+				Proxy: []config.ProxyConfig{
+					{
+						Path: "/api",
+						Targets: []config.ProxyTarget{
+							{URL: "http://" + backendAddr, Weight: 1},
+						},
 					},
 				},
 			},

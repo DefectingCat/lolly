@@ -234,6 +234,15 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	// buf.WriteString("# 文档: https://github.com/xfy/lolly\n")
 	buf.WriteString("\n")
 
+	// mode 配置
+	buf.WriteString("# 运行模式配置\n")
+	buf.WriteString("# mode: auto              # 运行模式（有效值: single, vhost, multi_server, auto）\n")
+	buf.WriteString("# auto: 自动推断模式（根据 servers 配置自动选择，默认）\n")
+	buf.WriteString("# single: 单服务器模式（只有一个 server）\n")
+	buf.WriteString("# vhost: 虚拟主机模式（多个 server 共享相同监听地址）\n")
+	buf.WriteString("# multi_server: 多服务器模式（多个 server 监听不同地址）\n")
+	buf.WriteString("\n")
+
 	// servers 配置
 	buf.WriteString("# 服务器配置（多服务器模式）\n")
 	buf.WriteString("servers:\n")
@@ -277,6 +286,9 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #     code_cache_size: 1000           # 字节码缓存条目数\n")
 	buf.WriteString("    #     enable_file_watch: true         # 启用文件变更检测\n")
 	buf.WriteString("    #     max_execution_time: 30s         # 最大执行时间\n")
+	buf.WriteString("    #     coroutine_stack_size: 0         # 协程栈大小（0=使用默认值）\n")
+	buf.WriteString("    #     coroutine_pool_warmup: 0        # 协程池预热数量（0=不预热）\n")
+	buf.WriteString("    #     minimize_stack_memory: false    # 最小化栈内存使用\n")
 	buf.WriteString("\n")
 
 	// static 配置
@@ -291,6 +303,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 		}
 		buf.WriteString("        try_files: []             # SPA 部署示例: [\"$uri\", \"$uri/\", \"/index.html\"]\n")
 		buf.WriteString("        try_files_pass: false     # 内部重定向是否触发中间件\n")
+		buf.WriteString("        symlink_check: false      # 是否检查符号链接安全（防止路径遍历攻击）\n")
 	}
 	buf.WriteString("    # 示例：额外的静态目录\n")
 	buf.WriteString("    # - path: \"/assets/\"\n")
@@ -331,6 +344,11 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #     next_upstream:              # 故障转移配置\n")
 	buf.WriteString("    #       tries: 1                  # 最大尝试次数（1 表示禁用故障转移）\n")
 	buf.WriteString("    #       http_codes: [502, 503, 504]  # 触发重试的 HTTP 状态码\n")
+	buf.WriteString("    #     balancer_by_lua:         # Lua 动态负载均衡（在 load_balance 基础上自定义选择逻辑）\n")
+	buf.WriteString("    #       enabled: false         # 是否启用 Lua 负载均衡\n")
+	buf.WriteString("    #       script: \"\"            # Lua 脚本路径，返回目标索引\n")
+	buf.WriteString("    #       fallback: \"round_robin\"  # Lua 失败时的备用算法（有效值: round_robin, weighted_round_robin, least_conn）\n")
+	buf.WriteString("    #       timeout: 5s            # Lua 执行超时\n")
 	buf.WriteString("\n")
 
 	// SSL 配置
@@ -375,6 +393,12 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "    #     graceful_shutdown_timeout: %ds  # HTTP/2 优雅关闭超时\n", int(cfg.Servers[0].SSL.HTTP2.GracefulShutdownTimeout.Seconds()))
 	buf.WriteString("\n")
 
+	// SSL 默认值说明（即使不启用也展示默认配置）
+	buf.WriteString("    # SSL/TLS 默认配置说明（未配置证书时不启用）\n")
+	buf.WriteString("    # 默认 TLS 协议: TLSv1.2, TLSv1.3（不支持 TLSv1.0/1.1）\n")
+	buf.WriteString("    # 默认 HSTS 配置: max_age=31536000（1年）, include_sub_domains=true\n")
+	buf.WriteString("\n")
+
 	// security 配置
 	buf.WriteString("    # 安全配置\n")
 	buf.WriteString("    security:\n")
@@ -384,6 +408,17 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("        deny: []                    # 拒绝的 IP/CIDR 列表\n")
 	fmt.Fprintf(&buf, "        default: \"%s\"             # 默认动作（有效值: allow, deny）\n", cfg.Servers[0].Security.Access.Default)
 	buf.WriteString("        trusted_proxies: []         # 可信代理 CIDR 列表，用于 X-Forwarded-For 解析\n")
+	buf.WriteString("\n")
+	buf.WriteString("      # GeoIP 地理访问控制（基于 IP 所属国家/地区）\n")
+	buf.WriteString("      geoip:\n")
+	buf.WriteString("        enabled: false            # 是否启用 GeoIP 访问控制\n")
+	buf.WriteString("        database: \"\"             # GeoIP 数据库文件路径（如 /usr/share/GeoIP/GeoLite2-Country.mmdb）\n")
+	buf.WriteString("        default: \"allow\"         # 未匹配时的默认动作（有效值: allow, deny）\n")
+	buf.WriteString("        private_ip_behavior: \"bypass\"  # 私有 IP 处理方式（有效值: bypass, apply_default, deny）\n")
+	buf.WriteString("        allow_countries: []       # 允许的国家代码列表（如 [\"CN\", \"US\"]）\n")
+	buf.WriteString("        deny_countries: []        # 拒绝的国家代码列表\n")
+	buf.WriteString("        cache_size: 10000         # GeoIP 查询缓存大小\n")
+	buf.WriteString("        cache_ttl: 3600           # 缓存有效期（秒）\n")
 	buf.WriteString("\n")
 	buf.WriteString("      # 速率限制\n")
 	buf.WriteString("      rate_limit:\n")
@@ -458,12 +493,6 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("shutdown:\n")
 	fmt.Fprintf(&buf, "  graceful_timeout: %ds    # 优雅停止超时（SIGQUIT），等待活跃请求完成（0=使用默认30s）\n", int(cfg.Shutdown.GracefulTimeout.Seconds()))
 	fmt.Fprintf(&buf, "  fast_timeout: %ds         # 快速停止超时（SIGINT/SIGTERM，0=使用默认5s）\n", int(cfg.Shutdown.FastTimeout.Seconds()))
-	buf.WriteString("\n")
-
-	// SSL 默认值说明（即使不启用也展示默认配置）
-	buf.WriteString("# SSL/TLS 默认配置说明（未配置证书时不启用）\n")
-	buf.WriteString("# 默认 TLS 协议: TLSv1.2, TLSv1.3（不支持 TLSv1.0/1.1）\n")
-	buf.WriteString("# 默认 HSTS 配置: max_age=31536000（1年）, include_sub_domains=true\n")
 	buf.WriteString("\n")
 
 	// stream 配置

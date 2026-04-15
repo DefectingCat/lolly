@@ -105,14 +105,10 @@ func MustStartTestServer(cfg *config.Config) *Server {
 	listenAddr := ""
 	if len(cfg.Servers) > 0 {
 		listenAddr = cfg.Servers[0].Listen
-	} else {
-		listenAddr = cfg.Server.Listen
 	}
 	if listenAddr == "" || listenAddr == ":80" {
 		if len(cfg.Servers) > 0 {
 			cfg.Servers[0].Listen = "127.0.0.1:0"
-		} else {
-			cfg.Server.Listen = "127.0.0.1:0"
 		}
 	}
 

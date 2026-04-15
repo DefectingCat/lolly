@@ -15,8 +15,10 @@ import (
 // TestBuildLuaMiddlewares_NilEngine 测试 LuaEngine 为 nil 时
 func TestBuildLuaMiddlewares_NilEngine(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: ":8080",
+		Servers: []config.ServerConfig{
+			{
+				Listen: ":8080",
+			},
 		},
 	}
 	s := New(cfg)
@@ -44,8 +46,10 @@ func TestBuildLuaMiddlewares_NilEngine(t *testing.T) {
 // TestBuildLuaMiddlewares_InvalidPhase 测试无效阶段
 func TestBuildLuaMiddlewares_InvalidPhase(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: ":8080",
+		Servers: []config.ServerConfig{
+			{
+				Listen: ":8080",
+			},
 		},
 	}
 	s := New(cfg)
@@ -77,8 +81,10 @@ func TestBuildLuaMiddlewares_InvalidPhase(t *testing.T) {
 // TestBuildLuaMiddlewares_WithTimeout 测试超时配置
 func TestBuildLuaMiddlewares_WithTimeout(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: ":8080",
+		Servers: []config.ServerConfig{
+			{
+				Listen: ":8080",
+			},
 		},
 	}
 	s := New(cfg)
@@ -111,8 +117,10 @@ func TestBuildLuaMiddlewares_WithTimeout(t *testing.T) {
 // TestBuildLuaMiddlewares_EmptyScripts 测试空脚本列表
 func TestBuildLuaMiddlewares_EmptyScripts(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: ":8080",
+		Servers: []config.ServerConfig{
+			{
+				Listen: ":8080",
+			},
 		},
 	}
 	s := New(cfg)
@@ -143,8 +151,10 @@ func TestBuildLuaMiddlewares_DisabledLua(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: ":8080",
+		Servers: []config.ServerConfig{
+			{
+				Listen: ":8080",
+			},
 		},
 	}
 	s := New(cfg)
@@ -185,8 +195,10 @@ func TestBuildLuaMiddlewares_DisabledScript(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: ":8080",
+		Servers: []config.ServerConfig{
+			{
+				Listen: ":8080",
+			},
 		},
 	}
 	s := New(cfg)
@@ -234,8 +246,10 @@ ngx.var.uri = "/test"
 	require.NoError(t, err)
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: ":8080",
+		Servers: []config.ServerConfig{
+			{
+				Listen: ":8080",
+			},
 		},
 	}
 	s := New(cfg)
@@ -289,8 +303,10 @@ ngx.say("hello")
 	}
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: ":8080",
+		Servers: []config.ServerConfig{
+			{
+				Listen: ":8080",
+			},
 		},
 	}
 	s := New(cfg)
@@ -340,8 +356,10 @@ func TestBuildLuaMiddlewares_DefaultTimeout(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
-			Listen: ":8080",
+		Servers: []config.ServerConfig{
+			{
+				Listen: ":8080",
+			},
 		},
 	}
 	s := New(cfg)
