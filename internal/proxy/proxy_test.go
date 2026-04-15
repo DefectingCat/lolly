@@ -849,7 +849,7 @@ func TestCreateHostClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := createHostClient(tt.targetURL, tt.timeout, nil)
+			client := createHostClient(tt.targetURL, tt.timeout, nil, nil)
 			if client == nil {
 				t.Error("createHostClient() returned nil")
 				return

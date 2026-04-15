@@ -316,6 +316,8 @@ type ProxyConfig struct {
 	Timeout           ProxyTimeout          `yaml:"timeout"`
 	VirtualNodes      int                   `yaml:"virtual_nodes"`
 	RedirectRewrite   *RedirectRewriteConfig `yaml:"redirect_rewrite"`
+	ProxySSL          *ProxySSLConfig        `yaml:"proxy_ssl"`
+	CacheValid        *ProxyCacheValidConfig `yaml:"cache_valid"`
 }
 
 // BalancerByLuaConfig Lua 负载均衡配置
@@ -480,6 +482,97 @@ type ProxyCacheConfig struct {
 	StaleWhileRevalidate time.Duration `yaml:"stale_while_revalidate"`
 	Enabled              bool          `yaml:"enabled"`
 	CacheLock            bool          `yaml:"cache_lock"`
+}
+
+// ProxyCacheValidConfig 缓存有效期分段配置。
+//
+// 按 HTTP 状态码配置不同的缓存有效期，提供更精细的缓存控制。
+// 未配置 CacheValid 时，使用 ProxyCacheConfig.MaxAge 作为统一缓存时间。
+//
+// 注意事项：
+//   - OK=0 时继承 MaxAge（向后兼容）
+//   - 其他字段为 0 表示不缓存该类响应
+//   - NotFound 缓存需谨慎，避免缓存错误页面
+//
+// 使用示例：
+//
+//	cache_valid:
+//	  ok: 10m        # 200-299 缓存 10 分钟
+//	  redirect: 1h   # 301/302 缓存 1 小时
+//	  not_found: 1m  # 404 缓存 1 分钟
+//	  client_error: 0  # 其他客户端错误不缓存
+//	  server_error: 0  # 服务端错误不缓存
+type ProxyCacheValidConfig struct {
+	// OK 200-299 状态码缓存时间
+	// 0 表示继承 MaxAge
+	OK time.Duration `yaml:"ok"`
+
+	// Redirect 301/302 重定向缓存时间
+	// 0 表示不缓存
+	Redirect time.Duration `yaml:"redirect"`
+
+	// NotFound 404 缓存时间
+	// 0 表示不缓存
+	NotFound time.Duration `yaml:"not_found"`
+
+	// ClientError 400-499（除 404）缓存时间
+	// 0 表示不缓存
+	ClientError time.Duration `yaml:"client_error"`
+
+	// ServerError 500-599 缓存时间
+	// 0 表示不缓存
+	ServerError time.Duration `yaml:"server_error"`
+}
+
+// ProxySSLConfig 上游 SSL/TLS 配置。
+//
+// 配置代理连接上游服务器时的 TLS 行为，支持自定义 CA、客户端证书（mTLS）、
+// SNI 和 TLS 版本控制。
+//
+// 注意事项：
+//   - Enabled 为 true 时启用自定义 TLS 配置
+//   - TrustedCA 用于验证上游服务器证书
+//   - ClientCert + ClientKey 用于 mTLS 客户端认证
+//   - InsecureSkipVerify 仅用于测试，生产环境禁用
+//
+// 使用示例：
+//
+//	proxy_ssl:
+//	  enabled: true
+//	  server_name: "api.internal"
+//	  trusted_ca: "/etc/ssl/ca/upstream-ca.crt"
+//	  client_cert: "/etc/ssl/client.crt"
+//	  client_key: "/etc/ssl/client.key"
+//	  min_version: "TLSv1.2"
+type ProxySSLConfig struct {
+	// Enabled 是否启用自定义 TLS 配置
+	Enabled bool `yaml:"enabled"`
+
+	// ServerName SNI 名称
+	// 用于 TLS handshake 中的服务器名称指示
+	// 未配置时使用目标 URL 的 host
+	ServerName string `yaml:"server_name"`
+
+	// InsecureSkipVerify 跳过证书验证
+	// 仅用于测试环境，生产环境必须禁用
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify"`
+
+	// TrustedCA CA 证书文件路径
+	// 用于验证上游服务器证书
+	TrustedCA string `yaml:"trusted_ca"`
+
+	// ClientCert 客户端证书文件路径（mTLS）
+	ClientCert string `yaml:"client_cert"`
+
+	// ClientKey 客户端私钥文件路径（mTLS）
+	ClientKey string `yaml:"client_key"`
+
+	// MinVersion 最低 TLS 版本
+	// 可选值：TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3
+	MinVersion string `yaml:"min_version"`
+
+	// MaxVersion 最高 TLS 版本
+	MaxVersion string `yaml:"max_version"`
 }
 
 // RedirectRewriteConfig Location/Refresh 头改写配置

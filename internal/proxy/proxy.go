@@ -145,7 +145,7 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 			continue
 		}
 
-		client := createHostClient(target.URL, cfg.Timeout, transportCfg)
+		client := createHostClient(target.URL, cfg.Timeout, transportCfg, cfg.ProxySSL)
 		p.clients[target.URL] = client
 	}
 
@@ -205,7 +205,7 @@ func createBalancer(cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
 }
 
 // createHostClient 为后台目标 URL 创建 fasthttp.HostClient。
-func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCfg *config.TransportConfig) *fasthttp.HostClient {
+func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCfg *config.TransportConfig, sslCfg *config.ProxySSLConfig) *fasthttp.HostClient {
 	// 从目标 URL 解析主机和协议
 	// addDefaultPort=true 确保 HostClient.Addr 包含端口（host:port 格式）
 	addr, isTLS := netutil.ParseTargetURL(targetURL, true)
@@ -235,6 +235,14 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 		RetryIf:                nil, // 禁用自动重试
 		DisablePathNormalizing: false,
 		SecureErrorLogMessage:  false,
+	}
+
+	// 上游 SSL 配置（使用原生 TLSConfig）
+	if sslCfg != nil && sslCfg.Enabled && isTLS {
+		tlsCfg, err := CreateTLSConfig(sslCfg, extractHostFromURL(targetURL))
+		if err == nil {
+			client.TLSConfig = tlsCfg
+		}
 	}
 
 	return client
@@ -582,7 +590,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				for key, value := range ctx.Response.Header.All() {
 					headers[string(key)] = string(value)
 				}
-				p.cache.Set(hashKey, origKey, ctx.Response.Body(), headers, statusCode, p.config.Cache.MaxAge)
+				p.cache.Set(hashKey, origKey, ctx.Response.Body(), headers, statusCode, p.getCacheDuration(statusCode))
 			}
 			p.cache.ReleaseLock(hashKey, nil)
 		}
@@ -872,7 +880,7 @@ func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
 			continue
 		}
 
-		client := createHostClient(target.URL, p.config.Timeout, nil)
+		client := createHostClient(target.URL, p.config.Timeout, nil, p.config.ProxySSL)
 		p.clients[target.URL] = client
 	}
 
@@ -953,7 +961,7 @@ func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.
 	}
 
 	// 更新缓存
-	p.cache.Set(hashKey, origKey, resp.Body(), headers, resp.StatusCode(), p.config.Cache.MaxAge)
+	p.cache.Set(hashKey, origKey, resp.Body(), headers, resp.StatusCode(), p.getCacheDuration(resp.StatusCode()))
 }
 
 // GetCacheStats 返回代理缓存的统计信息。
@@ -983,4 +991,46 @@ func extractHostFromURL(urlStr string) string {
 	}
 
 	return host
+}
+
+// getCacheDuration 根据状态码获取缓存时间。
+// 优先级：CacheValid 配置 > MaxAge
+//
+// 映射规则：
+//   - 200-299: CacheValid.OK（0 时继承 MaxAge）
+//   - 301/302: CacheValid.Redirect
+//   - 404: CacheValid.NotFound
+//   - 400-499（除 404）: CacheValid.ClientError
+//   - 500-599: CacheValid.ServerError
+//   - 其他: 不缓存（返回 0）
+func (p *Proxy) getCacheDuration(statusCode int) time.Duration {
+	// 无 CacheValid 配置，使用 MaxAge
+	if p.config.CacheValid == nil {
+		return p.config.Cache.MaxAge
+	}
+
+	cv := p.config.CacheValid
+
+	switch {
+	case statusCode >= 200 && statusCode < 300:
+		if cv.OK > 0 {
+			return cv.OK
+		}
+		return p.config.Cache.MaxAge // 0 表示继承 MaxAge
+
+	case statusCode == 301 || statusCode == 302:
+		return cv.Redirect // 0 表示不缓存
+
+	case statusCode == 404:
+		return cv.NotFound
+
+	case statusCode >= 400 && statusCode < 500:
+		return cv.ClientError
+
+	case statusCode >= 500:
+		return cv.ServerError
+
+	default:
+		return 0 // 不缓存
+	}
 }
