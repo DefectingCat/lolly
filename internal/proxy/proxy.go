@@ -84,7 +84,8 @@ type Proxy struct {
 	config           *config.ProxyConfig
 	cache            *cache.ProxyCache
 	healthChecker    *HealthChecker
-	luaEngine        *lua.LuaEngine // Lua 引擎引用
+	luaEngine        *lua.LuaEngine        // Lua 引擎引用
+	redirectRewriter *RedirectRewriter     // 重定向改写器
 	stopCh           chan struct{}
 	targets          []*loadbalance.Target
 	mu               sync.RWMutex
@@ -159,6 +160,13 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 		}
 		p.cache = cache.NewProxyCache(rules, cfg.Cache.CacheLock, cfg.Cache.StaleWhileRevalidate)
 	}
+
+	// 初始化重定向改写器
+	rewriter, err := NewRedirectRewriter(cfg.RedirectRewrite, cfg.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create redirect rewriter: %w", err)
+	}
+	p.redirectRewriter = rewriter
 
 	return p, nil
 }
@@ -399,6 +407,10 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		// 增加连接计数（用于最少连接数负载均衡）
 		loadbalance.IncrementConnections(target)
 
+		// 保存客户端原始 host（在 modifyRequestHeaders 改写前）
+		// 用于 redirect_rewrite 获取客户端实际访问地址
+		originalClientHost := string(ctx.Host())
+
 		// 设置上游地址
 		upstreamAddr = target.URL
 
@@ -449,6 +461,9 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 					upstreamAddr = upstreamCache
 					upstreamStatus = entry.Status
 					p.writeCachedResponse(ctx, entry)
+					if p.redirectRewriter != nil {
+						p.redirectRewriter.RewriteRefreshOnly(&ctx.Response, ctx, upstreamCache, originalClientHost)
+					}
 					return
 				}
 				// 过期缓存，尝试后台刷新，同时返回旧数据
@@ -458,6 +473,9 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				upstreamStatus = entry.Status
 
 				p.writeCachedResponse(ctx, entry)
+				if p.redirectRewriter != nil {
+					p.redirectRewriter.RewriteRefreshOnly(&ctx.Response, ctx, upstreamCache, originalClientHost)
+				}
 				return
 			}
 
@@ -473,6 +491,9 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 					upstreamStatus = entry.Status
 
 					p.writeCachedResponse(ctx, entry)
+					if p.redirectRewriter != nil {
+						p.redirectRewriter.RewriteRefreshOnly(&ctx.Response, ctx, upstreamCache, originalClientHost)
+					}
 					return
 				}
 				// 缓存未命中，需要重新选择目标
@@ -564,6 +585,11 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				p.cache.Set(hashKey, origKey, ctx.Response.Body(), headers, statusCode, p.config.Cache.MaxAge)
 			}
 			p.cache.ReleaseLock(hashKey, nil)
+		}
+
+		// 改写重定向响应头（Location/Refresh）
+		if p.redirectRewriter != nil && p.redirectRewriter.Mode() != "off" {
+			p.redirectRewriter.RewriteResponse(&ctx.Response, ctx, upstreamAddr, originalClientHost)
 		}
 
 		// 修改响应头
