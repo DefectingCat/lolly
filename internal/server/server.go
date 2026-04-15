@@ -845,11 +845,20 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 		// 保存代理实例用于缓存统计
 		s.proxies = append(s.proxies, p)
 
-		router.GET(proxyCfg.Path, p.ServeHTTP)
-		router.POST(proxyCfg.Path, p.ServeHTTP)
-		router.PUT(proxyCfg.Path, p.ServeHTTP)
-		router.DELETE(proxyCfg.Path, p.ServeHTTP)
-		router.HEAD(proxyCfg.Path, p.ServeHTTP)
+		// 使用前缀匹配（通配符）注册代理路由
+		// path: / 匹配所有子路径如 /sorry/index
+		// path: /api/ 匹配 /api/* 所有子路径
+		routePath := proxyCfg.Path
+		// 确保通配符路由格式正确
+		if !strings.HasSuffix(routePath, "/") && routePath != "/" {
+		routePath += "/"
+		}
+		wildcardPath := routePath + "{path:*}"
+		router.GET(wildcardPath, p.ServeHTTP)
+		router.POST(wildcardPath, p.ServeHTTP)
+		router.PUT(wildcardPath, p.ServeHTTP)
+		router.DELETE(wildcardPath, p.ServeHTTP)
+		router.HEAD(wildcardPath, p.ServeHTTP)
 	}
 }
 
