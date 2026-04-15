@@ -19,44 +19,44 @@ func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
 
 	// 验证 Listen 默认值
-	if cfg.Server.Listen != ":8080" {
-		t.Errorf("Server.Listen 期望 :8080, 实际 %s", cfg.Server.Listen)
+	if cfg.Servers[0].Listen != ":8080" {
+		t.Errorf("Server.Listen 期望 :8080, 实际 %s", cfg.Servers[0].Listen)
 	}
 
 	// 验证 SSL 默认版本
-	if len(cfg.Server.SSL.Protocols) != 2 {
-		t.Errorf("SSL.Protocols 期望 2 个版本，实际 %d", len(cfg.Server.SSL.Protocols))
+	if len(cfg.Servers[0].SSL.Protocols) != 2 {
+		t.Errorf("SSL.Protocols 期望 2 个版本，实际 %d", len(cfg.Servers[0].SSL.Protocols))
 	}
 	expectedProtocols := []string{"TLSv1.2", "TLSv1.3"}
-	for i, proto := range cfg.Server.SSL.Protocols {
+	for i, proto := range cfg.Servers[0].SSL.Protocols {
 		if proto != expectedProtocols[i] {
 			t.Errorf("SSL.Protocols[%d] 期望 %s, 实际 %s", i, expectedProtocols[i], proto)
 		}
 	}
 
 	// 验证 HSTS 默认值
-	if cfg.Server.SSL.HSTS.MaxAge != 31536000 {
-		t.Errorf("HSTS.MaxAge 期望 31536000, 实际 %d", cfg.Server.SSL.HSTS.MaxAge)
+	if cfg.Servers[0].SSL.HSTS.MaxAge != 31536000 {
+		t.Errorf("HSTS.MaxAge 期望 31536000, 实际 %d", cfg.Servers[0].SSL.HSTS.MaxAge)
 	}
-	if !cfg.Server.SSL.HSTS.IncludeSubDomains {
-		t.Errorf("HSTS.IncludeSubDomains 期望 true, 实际 %v", cfg.Server.SSL.HSTS.IncludeSubDomains)
+	if !cfg.Servers[0].SSL.HSTS.IncludeSubDomains {
+		t.Errorf("HSTS.IncludeSubDomains 期望 true, 实际 %v", cfg.Servers[0].SSL.HSTS.IncludeSubDomains)
 	}
-	if cfg.Server.SSL.HSTS.Preload {
-		t.Errorf("HSTS.Preload 期望 false, 实际 %v", cfg.Server.SSL.HSTS.Preload)
+	if cfg.Servers[0].SSL.HSTS.Preload {
+		t.Errorf("HSTS.Preload 期望 false, 实际 %v", cfg.Servers[0].SSL.HSTS.Preload)
 	}
 
 	// 验证压缩默认值
-	if cfg.Server.Compression.Type != "gzip" {
-		t.Errorf("Compression.Type 期望 gzip, 实际 %s", cfg.Server.Compression.Type)
+	if cfg.Servers[0].Compression.Type != "gzip" {
+		t.Errorf("Compression.Type 期望 gzip, 实际 %s", cfg.Servers[0].Compression.Type)
 	}
-	if cfg.Server.Compression.Level != 6 {
-		t.Errorf("Compression.Level 期望 6, 实际 %d", cfg.Server.Compression.Level)
+	if cfg.Servers[0].Compression.Level != 6 {
+		t.Errorf("Compression.Level 期望 6, 实际 %d", cfg.Servers[0].Compression.Level)
 	}
-	if cfg.Server.Compression.MinSize != 1024 {
-		t.Errorf("Compression.MinSize 期望 1024, 实际 %d", cfg.Server.Compression.MinSize)
+	if cfg.Servers[0].Compression.MinSize != 1024 {
+		t.Errorf("Compression.MinSize 期望 1024, 实际 %d", cfg.Servers[0].Compression.MinSize)
 	}
 	expectedTypes := []string{"text/html", "text/css", "text/javascript", "application/json", "application/javascript"}
-	for i, ct := range cfg.Server.Compression.Types {
+	for i, ct := range cfg.Servers[0].Compression.Types {
 		if ct != expectedTypes[i] {
 			t.Errorf("Compression.Types[%d] 期望 %s, 实际 %s", i, expectedTypes[i], ct)
 		}
@@ -165,22 +165,22 @@ func TestDefaultConfigSSLDefaults(t *testing.T) {
 	cfg := DefaultConfig()
 
 	// 验证 SessionTickets 默认值
-	if cfg.Server.SSL.SessionTickets.Enabled {
+	if cfg.Servers[0].SSL.SessionTickets.Enabled {
 		t.Error("SessionTickets.Enabled 期望 false")
 	}
-	if cfg.Server.SSL.SessionTickets.RetainKeys != 3 {
-		t.Errorf("SessionTickets.RetainKeys 期望 3，实际 %d", cfg.Server.SSL.SessionTickets.RetainKeys)
+	if cfg.Servers[0].SSL.SessionTickets.RetainKeys != 3 {
+		t.Errorf("SessionTickets.RetainKeys 期望 3，实际 %d", cfg.Servers[0].SSL.SessionTickets.RetainKeys)
 	}
 
 	// 验证 ClientVerify 默认值
-	if cfg.Server.SSL.ClientVerify.Enabled {
+	if cfg.Servers[0].SSL.ClientVerify.Enabled {
 		t.Error("ClientVerify.Enabled 期望 false")
 	}
-	if cfg.Server.SSL.ClientVerify.Mode != "none" {
-		t.Errorf("ClientVerify.Mode 期望 none，实际 %s", cfg.Server.SSL.ClientVerify.Mode)
+	if cfg.Servers[0].SSL.ClientVerify.Mode != "none" {
+		t.Errorf("ClientVerify.Mode 期望 none，实际 %s", cfg.Servers[0].SSL.ClientVerify.Mode)
 	}
-	if cfg.Server.SSL.ClientVerify.VerifyDepth != 1 {
-		t.Errorf("ClientVerify.VerifyDepth 期望 1，实际 %d", cfg.Server.SSL.ClientVerify.VerifyDepth)
+	if cfg.Servers[0].SSL.ClientVerify.VerifyDepth != 1 {
+		t.Errorf("ClientVerify.VerifyDepth 期望 1，实际 %d", cfg.Servers[0].SSL.ClientVerify.VerifyDepth)
 	}
 }
 
@@ -225,8 +225,8 @@ func TestGenerateConfigYAMLLoadable(t *testing.T) {
 	}
 
 	// 验证关键字段匹配
-	if loadedCfg.Server.Listen != cfg.Server.Listen {
-		t.Errorf("Server.Listen 不匹配: 期望 %s, 实际 %s", cfg.Server.Listen, loadedCfg.Server.Listen)
+	if loadedCfg.Servers[0].Listen != cfg.Servers[0].Listen {
+		t.Errorf("Server.Listen 不匹配: 期望 %s, 实际 %s", cfg.Servers[0].Listen, loadedCfg.Servers[0].Listen)
 	}
 	if loadedCfg.Resolver.Enabled != cfg.Resolver.Enabled {
 		t.Errorf("Resolver.Enabled 不匹配")

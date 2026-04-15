@@ -47,14 +47,14 @@ monitoring:
 			t.Fatalf("Load() 失败: %v", err)
 		}
 
-		if cfg.Server.Listen != ":8080" {
-			t.Errorf("Server.Listen = %q, want %q", cfg.Server.Listen, ":8080")
+		if cfg.Servers[0].Listen != ":8080" {
+			t.Errorf("Servers[0].Listen = %q, want %q", cfg.Servers[0].Listen, ":8080")
 		}
-		if cfg.Server.Static[0].Root != "/var/www" {
-			t.Errorf("Server.Static.Root = %q, want %q", cfg.Server.Static[0].Root, "/var/www")
+		if cfg.Servers[0].Static[0].Root != "/var/www" {
+			t.Errorf("Servers[0].Static.Root = %q, want %q", cfg.Servers[0].Static[0].Root, "/var/www")
 		}
-		if len(cfg.Server.Static[0].Index) != 1 || cfg.Server.Static[0].Index[0] != "index.html" {
-			t.Errorf("Server.Static.Index = %v, want [index.html]", cfg.Server.Static[0].Index)
+		if len(cfg.Servers[0].Static[0].Index) != 1 || cfg.Servers[0].Static[0].Index[0] != "index.html" {
+			t.Errorf("Servers[0].Static.Index = %v, want [index.html]", cfg.Servers[0].Static[0].Index)
 		}
 	})
 
@@ -148,11 +148,11 @@ server:
 			t.Fatalf("LoadFromString() 失败: %v", err)
 		}
 
-		if cfg.Server.Listen != ":9090" {
-			t.Errorf("Server.Listen = %q, want %q", cfg.Server.Listen, ":9090")
+		if cfg.Servers[0].Listen != ":9090" {
+			t.Errorf("Servers[0].Listen = %q, want %q", cfg.Servers[0].Listen, ":9090")
 		}
-		if cfg.Server.Static[0].Root != "/app/public" {
-			t.Errorf("Server.Static.Root = %q, want %q", cfg.Server.Static[0].Root, "/app/public")
+		if cfg.Servers[0].Static[0].Root != "/app/public" {
+			t.Errorf("Servers[0].Static.Root = %q, want %q", cfg.Servers[0].Static[0].Root, "/app/public")
 		}
 	})
 
@@ -192,14 +192,14 @@ logging:
 func TestSave(t *testing.T) {
 	t.Run("正常保存", func(t *testing.T) {
 		cfg := &Config{
-			Server: ServerConfig{
+			Servers: []ServerConfig{{
 				Listen: ":8080",
 				Static: []StaticConfig{{
 					Path:  "/",
 					Root:  "/var/www",
 					Index: []string{"index.html"},
 				}},
-			},
+			}},
 		}
 
 		tmpDir := t.TempDir()
@@ -215,19 +215,19 @@ func TestSave(t *testing.T) {
 			t.Fatalf("重新加载配置失败: %v", err)
 		}
 
-		if loaded.Server.Listen != cfg.Server.Listen {
-			t.Errorf("loaded.Server.Listen = %q, want %q", loaded.Server.Listen, cfg.Server.Listen)
+		if loaded.Servers[0].Listen != cfg.Servers[0].Listen {
+			t.Errorf("loaded.Servers[0].Listen = %q, want %q", loaded.Servers[0].Listen, cfg.Servers[0].Listen)
 		}
-		if loaded.Server.Static[0].Root != cfg.Server.Static[0].Root {
-			t.Errorf("loaded.Server.Static[0].Root = %q, want %q", loaded.Server.Static[0].Root, cfg.Server.Static[0].Root)
+		if loaded.Servers[0].Static[0].Root != cfg.Servers[0].Static[0].Root {
+			t.Errorf("loaded.Servers[0].Static[0].Root = %q, want %q", loaded.Servers[0].Static[0].Root, cfg.Servers[0].Static[0].Root)
 		}
 	})
 
 	t.Run("无效路径", func(t *testing.T) {
 		cfg := &Config{
-			Server: ServerConfig{
+			Servers: []ServerConfig{{
 				Listen: ":8080",
-			},
+			}},
 		}
 
 		err := Save(cfg, "/nonexistent/directory/config.yaml")
@@ -263,7 +263,7 @@ func TestSave(t *testing.T) {
 
 	t.Run("保存并加载完整配置", func(t *testing.T) {
 		cfg := &Config{
-			Server: ServerConfig{
+			Servers: []ServerConfig{{
 				Listen: ":8443",
 				Name:   "default",
 				Static: []StaticConfig{{
@@ -292,7 +292,7 @@ func TestSave(t *testing.T) {
 						Burst:       200,
 					},
 				},
-			},
+			}},
 			Logging: LoggingConfig{
 				Access: AccessLogConfig{
 					Path:   "/var/log/access.log",
@@ -325,14 +325,14 @@ func TestSave(t *testing.T) {
 		}
 
 		// 验证关键字段
-		if loaded.Server.Listen != cfg.Server.Listen {
-			t.Errorf("loaded.Server.Listen = %q, want %q", loaded.Server.Listen, cfg.Server.Listen)
+		if loaded.Servers[0].Listen != cfg.Servers[0].Listen {
+			t.Errorf("loaded.Servers[0].Listen = %q, want %q", loaded.Servers[0].Listen, cfg.Servers[0].Listen)
 		}
-		if len(loaded.Server.Proxy) != 1 {
-			t.Errorf("len(loaded.Server.Proxy) = %d, want 1", len(loaded.Server.Proxy))
+		if len(loaded.Servers[0].Proxy) != 1 {
+			t.Errorf("len(loaded.Servers[0].Proxy) = %d, want 1", len(loaded.Servers[0].Proxy))
 		}
-		if loaded.Server.Proxy[0].LoadBalance != "round_robin" {
-			t.Errorf("loaded.Server.Proxy[0].LoadBalance = %q, want %q", loaded.Server.Proxy[0].LoadBalance, "round_robin")
+		if loaded.Servers[0].Proxy[0].LoadBalance != "round_robin" {
+			t.Errorf("loaded.Servers[0].Proxy[0].LoadBalance = %q, want %q", loaded.Servers[0].Proxy[0].LoadBalance, "round_robin")
 		}
 	})
 }

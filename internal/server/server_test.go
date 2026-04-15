@@ -25,14 +25,14 @@ import (
 // TestNew 测试服务器创建
 func TestNew(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
 			Static: []config.StaticConfig{{
 				Path:  "/",
 				Root:  "./static",
 				Index: []string{"index.html"},
 			}},
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -56,9 +56,9 @@ func TestNew(t *testing.T) {
 // TestStopWithoutServer 测试无服务器时调用 Stop
 func TestStopWithoutServer(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -73,9 +73,9 @@ func TestStopWithoutServer(t *testing.T) {
 // TestGracefulStop 测试 GracefulStop 调用
 func TestGracefulStop(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -90,9 +90,9 @@ func TestGracefulStop(t *testing.T) {
 // TestStopAfterStop 测试多次调用 Stop
 func TestStopAfterStop(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -109,9 +109,9 @@ func TestStopAfterStop(t *testing.T) {
 // TestGracefulStopWithZeroTimeout 测试零超时的 GracefulStop
 func TestGracefulStopWithZeroTimeout(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -126,13 +126,13 @@ func TestGracefulStopWithZeroTimeout(t *testing.T) {
 func TestBuildMiddlewareChain_AccessLog(t *testing.T) {
 	cfg := &config.Config{
 		Logging: config.LoggingConfig{},
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
-	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	chain, err := s.buildMiddlewareChain(&cfg.Servers[0])
 	if err != nil {
 		t.Errorf("buildMiddlewareChain failed: %v", err)
 	}
@@ -145,18 +145,18 @@ func TestBuildMiddlewareChain_AccessLog(t *testing.T) {
 func TestBuildMiddlewareChain_AccessControl(t *testing.T) {
 	cfg := &config.Config{
 		Logging: config.LoggingConfig{},
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
 			Security: config.SecurityConfig{
 				Access: config.AccessConfig{
 					Allow: []string{"127.0.0.1"},
 				},
 			},
-		},
+		}},
 	}
 
 	s := New(cfg)
-	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	chain, err := s.buildMiddlewareChain(&cfg.Servers[0])
 	if err != nil {
 		t.Errorf("buildMiddlewareChain failed: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestBuildMiddlewareChain_AccessControl(t *testing.T) {
 func TestBuildMiddlewareChain_RateLimiter(t *testing.T) {
 	cfg := &config.Config{
 		Logging: config.LoggingConfig{},
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
 			Security: config.SecurityConfig{
 				RateLimit: config.RateLimitConfig{
@@ -177,11 +177,11 @@ func TestBuildMiddlewareChain_RateLimiter(t *testing.T) {
 					Burst:       200,
 				},
 			},
-		},
+		}},
 	}
 
 	s := New(cfg)
-	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	chain, err := s.buildMiddlewareChain(&cfg.Servers[0])
 	if err != nil {
 		t.Errorf("buildMiddlewareChain failed: %v", err)
 	}
@@ -194,16 +194,16 @@ func TestBuildMiddlewareChain_RateLimiter(t *testing.T) {
 func TestBuildMiddlewareChain_Rewrite(t *testing.T) {
 	cfg := &config.Config{
 		Logging: config.LoggingConfig{},
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
 			Rewrite: []config.RewriteRule{
 				{Pattern: "/old/(.*)", Replacement: "/new/$1"},
 			},
-		},
+		}},
 	}
 
 	s := New(cfg)
-	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	chain, err := s.buildMiddlewareChain(&cfg.Servers[0])
 	if err != nil {
 		t.Errorf("buildMiddlewareChain failed: %v", err)
 	}
@@ -216,16 +216,16 @@ func TestBuildMiddlewareChain_Rewrite(t *testing.T) {
 func TestBuildMiddlewareChain_Compression(t *testing.T) {
 	cfg := &config.Config{
 		Logging: config.LoggingConfig{},
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
 			Compression: config.CompressionConfig{
 				Level: 6,
 			},
-		},
+		}},
 	}
 
 	s := New(cfg)
-	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	chain, err := s.buildMiddlewareChain(&cfg.Servers[0])
 	if err != nil {
 		t.Errorf("buildMiddlewareChain failed: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestBuildMiddlewareChain_Compression(t *testing.T) {
 func TestBuildMiddlewareChain_SecurityHeaders(t *testing.T) {
 	cfg := &config.Config{
 		Logging: config.LoggingConfig{},
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
 			Security: config.SecurityConfig{
 				Headers: config.SecurityHeaders{
@@ -246,11 +246,11 @@ func TestBuildMiddlewareChain_SecurityHeaders(t *testing.T) {
 					XContentTypeOptions: "nosniff",
 				},
 			},
-		},
+		}},
 	}
 
 	s := New(cfg)
-	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	chain, err := s.buildMiddlewareChain(&cfg.Servers[0])
 	if err != nil {
 		t.Errorf("buildMiddlewareChain failed: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestBuildMiddlewareChain_SecurityHeaders(t *testing.T) {
 func TestBuildMiddlewareChain_AllMiddlewares(t *testing.T) {
 	cfg := &config.Config{
 		Logging: config.LoggingConfig{},
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
 			Security: config.SecurityConfig{
 				Access: config.AccessConfig{
@@ -283,11 +283,11 @@ func TestBuildMiddlewareChain_AllMiddlewares(t *testing.T) {
 			Compression: config.CompressionConfig{
 				Level: 6,
 			},
-		},
+		}},
 	}
 
 	s := New(cfg)
-	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	chain, err := s.buildMiddlewareChain(&cfg.Servers[0])
 	if err != nil {
 		t.Errorf("buildMiddlewareChain failed: %v", err)
 	}
@@ -299,9 +299,9 @@ func TestBuildMiddlewareChain_AllMiddlewares(t *testing.T) {
 // TestTrackStats 测试请求统计追踪
 func TestTrackStats(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -350,9 +350,9 @@ func TestTrackStats(t *testing.T) {
 // TestTrackStats_MultipleRequests 测试多次请求统计
 func TestTrackStats_MultipleRequests(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -378,9 +378,9 @@ func TestTrackStats_MultipleRequests(t *testing.T) {
 // TestGetListeners_Empty 测试空监听器列表
 func TestGetListeners_Empty(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -394,9 +394,9 @@ func TestGetListeners_Empty(t *testing.T) {
 // TestSetListeners 测试设置监听器
 func TestSetListeners(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -431,9 +431,9 @@ func TestSetListeners(t *testing.T) {
 // TestGetTLSConfig_NotConfigured 测试未配置 TLS
 func TestGetTLSConfig_NotConfigured(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -453,9 +453,9 @@ func TestGetTLSConfig_NotConfigured(t *testing.T) {
 // TestGetHandler 测试获取 handler
 func TestGetHandler(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -482,9 +482,9 @@ func TestGetHandler(t *testing.T) {
 // TestServer_Connections 测试连接统计
 func TestServer_Connections(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -510,9 +510,9 @@ func TestServer_Connections(t *testing.T) {
 // TestServer_Proxies 测试代理管理
 func TestServer_Proxies(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -526,9 +526,9 @@ func TestServer_Proxies(t *testing.T) {
 // TestServer_Running 测试运行状态
 func TestServer_Running(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -542,9 +542,9 @@ func TestServer_Running(t *testing.T) {
 // TestServer_StopWithNilFastServer 测试无 fastServer 时停止
 func TestServer_StopWithNilFastServer(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -559,9 +559,9 @@ func TestServer_StopWithNilFastServer(t *testing.T) {
 // TestServer_GracefulStopWithNilFastServer 测试无 fastServer 时优雅停止
 func TestServer_GracefulStopWithNilFastServer(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -576,9 +576,9 @@ func TestServer_GracefulStopWithNilFastServer(t *testing.T) {
 // TestServer_GetProxyCacheStats 测试代理缓存统计
 func TestServer_GetProxyCacheStats(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -596,14 +596,14 @@ func TestServer_GetProxyCacheStats(t *testing.T) {
 // TestServer_BuildMiddlewareChain_EmptyConfig 测试空配置的中间件链
 func TestServer_BuildMiddlewareChain_EmptyConfig(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
 
-	chain, err := s.buildMiddlewareChain(&cfg.Server)
+	chain, err := s.buildMiddlewareChain(&cfg.Servers[0])
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -615,9 +615,9 @@ func TestServer_BuildMiddlewareChain_EmptyConfig(t *testing.T) {
 // TestServer_TrackStats_EmptyBody 测试空响应体的统计
 func TestServer_TrackStats_EmptyBody(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -646,9 +646,9 @@ func TestServer_TrackStats_EmptyBody(t *testing.T) {
 // TestStart_Success 测试服务器配置初始化
 func TestStart_Success(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -669,14 +669,14 @@ func TestStart_WithStaticFiles(t *testing.T) {
 	tempDir := t.TempDir()
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
 			Static: []config.StaticConfig{{
 				Path:  "/static",
 				Root:  tempDir,
 				Index: []string{"index.html"},
 			}},
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -689,9 +689,9 @@ func TestStart_WithStaticFiles(t *testing.T) {
 // TestStart_WithGoroutinePool 测试 GoroutinePool 配置
 func TestStart_WithGoroutinePool(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 		Performance: config.PerformanceConfig{
 			GoroutinePool: config.GoroutinePoolConfig{
 				Enabled:     true,
@@ -712,9 +712,9 @@ func TestStart_WithGoroutinePool(t *testing.T) {
 // TestStart_WithFileCache 测试文件缓存配置
 func TestStart_WithFileCache(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 		Performance: config.PerformanceConfig{
 			FileCache: config.FileCacheConfig{
 				MaxEntries: 1000,
@@ -737,9 +737,9 @@ func TestStop_Graceful(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -754,9 +754,9 @@ func TestStop_Graceful(t *testing.T) {
 // TestGetTLSConfig_Nil 测试无 TLS 配置
 func TestGetTLSConfig_Nil(t *testing.T) {
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0",
-		},
+		}},
 	}
 
 	s := New(cfg)
@@ -776,9 +776,9 @@ func TestGetTLSConfig_NilServer(t *testing.T) {
 	// 防御性：如果 s 为 nil，调用方法会 panic，这是预期的行为
 	// 这里我们只测试非 nil 但 tlsManager 为 nil 的情况
 	cfg := &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0",
-		},
+		}},
 	}
 	s = New(cfg)
 

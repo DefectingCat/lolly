@@ -196,7 +196,7 @@ func TestRun(t *testing.T) {
 			genConfig:    true,
 			outputPath:   "",
 			wantExitCode: 0,
-			wantContains: "server:",
+			wantContains: "servers:",
 		},
 		{
 			name:         "生成配置输出到文件",
@@ -245,7 +245,7 @@ func TestRun(t *testing.T) {
 				data, err := os.ReadFile(tt.outputPath)
 				if err != nil {
 					t.Errorf("读取生成的配置文件失败: %v", err)
-				} else if !strings.Contains(string(data), "server:") {
+				} else if !strings.Contains(string(data), "servers:") {
 					t.Errorf("生成的配置文件应包含 'server:', 实际内容: %s", string(data)[:100])
 				}
 			}
@@ -268,7 +268,7 @@ func TestGenerateConfig(t *testing.T) {
 		}
 
 		// 验证输出包含基本配置结构
-		expectedFields := []string{"server:", "listen:", "logging:", "performance:", "monitoring:"}
+		expectedFields := []string{"servers:", "listen:", "logging:", "performance:", "monitoring:"}
 		for _, field := range expectedFields {
 			if !strings.Contains(stdout, field) {
 				t.Errorf("输出应包含 %q", field)
@@ -302,7 +302,7 @@ func TestGenerateConfig(t *testing.T) {
 		}
 
 		content := string(data)
-		expectedFields := []string{"server:", "listen:", "logging:", "performance:", "monitoring:"}
+		expectedFields := []string{"servers:", "listen:", "logging:", "performance:", "monitoring:"}
 		for _, field := range expectedFields {
 			if !strings.Contains(content, field) {
 				t.Errorf("配置文件应包含 %q", field)
@@ -361,9 +361,9 @@ func TestHandleSignal_SIGQUIT(t *testing.T) {
 	// 创建一个简单的 App
 	app := NewApp("")
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0", // 使用随机端口
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 
@@ -382,9 +382,9 @@ func TestHandleSignal_SIGQUIT(t *testing.T) {
 func TestHandleSignal_SIGTERM(t *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0",
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 	app.srv = server.New(app.cfg)
@@ -400,9 +400,9 @@ func TestHandleSignal_SIGTERM(t *testing.T) {
 func TestHandleSignal_SIGINT(t *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0",
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 	app.srv = server.New(app.cfg)
@@ -432,9 +432,9 @@ logging:
 
 	app := NewApp(cfgPath)
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 
@@ -449,9 +449,9 @@ logging:
 func TestHandleSignal_SIGUSR1(t *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 		Logging: config.LoggingConfig{
 			Error: config.ErrorLogConfig{
 				Level: "info",
@@ -471,9 +471,9 @@ func TestHandleSignal_SIGUSR1(t *testing.T) {
 func TestHandleSignal_Unknown(t *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 
@@ -537,17 +537,17 @@ logging:
 
 	app := NewApp(cfgPath)
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":8080",
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 
 	app.reloadConfig()
 
 	// 验证配置已更新
-	if app.cfg.Server.Listen != ":9090" {
-		t.Errorf("Expected listen ':9090', got '%s'", app.cfg.Server.Listen)
+	if app.cfg.Servers[0].Listen != ":9090" {
+		t.Errorf("Expected listen ':9090', got '%s'", app.cfg.Servers[0].Listen)
 	}
 }
 
@@ -555,9 +555,9 @@ logging:
 func TestSetupSignalHandlers(_ *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0",
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 
@@ -571,9 +571,9 @@ func TestSetupSignalHandlers(_ *testing.T) {
 func TestHandleSignal_SIGUSR2(t *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0",
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 	app.srv = server.New(app.cfg)
@@ -591,9 +591,9 @@ func TestHandleSignal_SIGUSR2(t *testing.T) {
 func TestGracefulUpgrade_NoListener(_ *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0",
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 	app.srv = server.New(app.cfg)
@@ -658,9 +658,9 @@ func TestAppFields(t *testing.T) {
 func TestShutdownHTTP3_WithServer(_ *testing.T) {
 	app := NewApp("")
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":0",
-		},
+		}},
 		HTTP3: config.HTTP3Config{
 			Enabled: false, // 禁用，避免实际启动
 		},
@@ -716,23 +716,23 @@ logging:
 
 	app := NewApp(cfgPath1)
 	app.cfg = &config.Config{
-		Server: config.ServerConfig{
+		Servers: []config.ServerConfig{{
 			Listen: ":7070",
-		},
+		}},
 	}
 	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 
 	// 第一次重载
 	app.reloadConfig()
-	if app.cfg.Server.Listen != ":8080" {
-		t.Errorf("After first reload: listen = %q, want :8080", app.cfg.Server.Listen)
+	if app.cfg.Servers[0].Listen != ":8080" {
+		t.Errorf("After first reload: listen = %q, want :8080", app.cfg.Servers[0].Listen)
 	}
 
 	// 更改配置路径并重载
 	app.cfgPath = cfgPath2
 	app.reloadConfig()
-	if app.cfg.Server.Listen != ":9090" {
-		t.Errorf("After second reload: listen = %q, want :9090", app.cfg.Server.Listen)
+	if app.cfg.Servers[0].Listen != ":9090" {
+		t.Errorf("After second reload: listen = %q, want :9090", app.cfg.Servers[0].Listen)
 	}
 }
 
@@ -769,9 +769,9 @@ logging:
 		t.Run(tt.name, func(t *testing.T) {
 			app := NewApp(cfgPath)
 			app.cfg = &config.Config{
-				Server: config.ServerConfig{
+				Servers: []config.ServerConfig{{
 					Listen: ":0",
-				},
+				}},
 			}
 			app.logger = logging.NewAppLogger(&config.LoggingConfig{})
 			app.srv = server.New(app.cfg)
