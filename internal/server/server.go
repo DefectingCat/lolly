@@ -416,15 +416,17 @@ func (s *Server) Start() error {
 
 	// 初始化错误页面管理器
 	var err error
-	s.errorPageManager, err = initErrorPageManager(&s.config.Server.Security.ErrorPage)
-	if err != nil {
-		return err
-	}
+	if len(s.config.Servers) > 0 {
+		s.errorPageManager, err = initErrorPageManager(&s.config.Servers[0].Security.ErrorPage)
+		if err != nil {
+			return err
+		}
 
-	// 初始化 Lua 引擎
-	s.luaEngine, err = initLuaEngine(s.config.Server.Lua)
-	if err != nil {
-		return err
+		// 初始化 Lua 引擎
+		s.luaEngine, err = initLuaEngine(s.config.Servers[0].Lua)
+		if err != nil {
+			return err
+		}
 	}
 
 	// 根据模式选择启动方式
@@ -990,23 +992,6 @@ func (s *Server) StopWithTimeout(timeout time.Duration) error {
 		}
 	}
 	return nil
-}
-
-// Stop 快速停止服务器（向后兼容，使用默认 5s 超时）。
-//
-// 立即停止服务器，不等待正在处理的请求完成。
-// 停止所有健康检查器和访问日志中间件。
-//
-// 返回值：
-//   - error: 停止过程中遇到的错误
-//
-// 注意事项：
-//   - 对于生产环境，建议使用 GracefulStop 实现优雅关闭
-//   - 此方法使用默认 5s 超时，如需自定义超时请使用 StopWithTimeout
-//
-// Deprecated: 使用 StopWithTimeout 替代以支持自定义超时
-func (s *Server) Stop() error {
-	return s.StopWithTimeout(5 * time.Second)
 }
 
 // GracefulStop 优雅停止服务器。

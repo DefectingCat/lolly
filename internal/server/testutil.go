@@ -102,8 +102,18 @@ func NewTestServerWithOptions(cfg *config.Config, opts *TestServerOptions) *Serv
 func MustStartTestServer(cfg *config.Config) *Server {
 	s := New(cfg)
 	// 在测试环境中使用随机端口避免冲突
-	if cfg.Server.Listen == "" || cfg.Server.Listen == ":80" {
-		cfg.Server.Listen = "127.0.0.1:0"
+	listenAddr := ""
+	if len(cfg.Servers) > 0 {
+		listenAddr = cfg.Servers[0].Listen
+	} else {
+		listenAddr = cfg.Server.Listen
+	}
+	if listenAddr == "" || listenAddr == ":80" {
+		if len(cfg.Servers) > 0 {
+			cfg.Servers[0].Listen = "127.0.0.1:0"
+		} else {
+			cfg.Server.Listen = "127.0.0.1:0"
+		}
 	}
 
 	// 使用 goroutine 启动服务器以避免阻塞

@@ -64,9 +64,9 @@ func TestStopWithoutServer(t *testing.T) {
 	s := New(cfg)
 
 	// 在未启动时调用 Stop，应返回 nil
-	err := s.Stop()
+	err := s.StopWithTimeout(5 * time.Second)
 	if err != nil {
-		t.Errorf("Stop() on non-started server returned error: %v", err)
+		t.Errorf("StopWithTimeout() on non-started server returned error: %v", err)
 	}
 }
 
@@ -97,11 +97,11 @@ func TestStopAfterStop(t *testing.T) {
 
 	s := New(cfg)
 
-	// 多次调用 Stop 应该都是安全的
+	// 多次调用 StopWithTimeout 应该都是安全的
 	for i := 0; i < 3; i++ {
-		err := s.Stop()
+		err := s.StopWithTimeout(5 * time.Second)
 		if err != nil {
-			t.Errorf("Stop() call %d returned error: %v", i+1, err)
+			t.Errorf("StopWithTimeout() call %d returned error: %v", i+1, err)
 		}
 	}
 }
@@ -550,9 +550,9 @@ func TestServer_StopWithNilFastServer(t *testing.T) {
 	s := New(cfg)
 	s.fastServer = nil
 
-	err := s.Stop()
+	err := s.StopWithTimeout(5 * time.Second)
 	if err != nil {
-		t.Errorf("Stop with nil fastServer should succeed: %v", err)
+		t.Errorf("StopWithTimeout with nil fastServer should succeed: %v", err)
 	}
 }
 
