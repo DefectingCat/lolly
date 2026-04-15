@@ -33,6 +33,23 @@ const (
 	DefaultPprofPath = "/debug/pprof"
 )
 
+// ServerMode 服务器运行模式类型。
+//
+// 定义服务器的工作模式，支持显式配置或自动推断。
+type ServerMode string
+
+// ServerMode 枚举值。
+const (
+	// ServerModeSingle 单服务器模式 - 只运行一个服务器实例。
+	ServerModeSingle ServerMode = "single"
+	// ServerModeVHost 虚拟主机模式 - 多个服务器共享相同的监听地址。
+	ServerModeVHost ServerMode = "vhost"
+	// ServerModeMultiServer 多服务器模式 - 多个服务器监听不同的地址。
+	ServerModeMultiServer ServerMode = "multi_server"
+	// ServerModeAuto 自动模式 - 根据配置自动推断运行模式。
+	ServerModeAuto ServerMode = "auto"
+)
+
 // Config 根配置结构，支持单服务器和多虚拟主机两种模式。
 //
 // 包含服务器配置、日志配置、性能配置和监控配置等模块。
@@ -56,6 +73,7 @@ const (
 //	    // 处理每个服务器配置
 //	}
 type Config struct {
+	Mode        ServerMode        `yaml:"mode"`
 	Variables   VariablesConfig   `yaml:"variables"`
 	Logging     LoggingConfig     `yaml:"logging"`
 	Servers     []ServerConfig    `yaml:"servers"`
@@ -1573,6 +1591,7 @@ type StreamProxySSLConfig struct {
 // 注意事项：
 //   - 加载后会自动调用 Validate 进行配置验证
 //   - 文件不存在或格式错误都会返回错误
+//   - 自动迁移旧版配置（server 转换为 servers[0]）
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -1583,6 +1602,9 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
+
+	// 迁移旧版配置
+	cfg.migrateLegacyConfig()
 
 	if err := Validate(&cfg); err != nil {
 		return nil, fmt.Errorf("配置验证失败: %w", err)
@@ -1604,11 +1626,15 @@ func Load(path string) (*Config, error) {
 //
 // 注意事项：
 //   - 加载后会自动调用 Validate 进行配置验证
+//   - 自动迁移旧版配置（server 转换为 servers[0]）
 func LoadFromString(yamlStr string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal([]byte(yamlStr), &cfg); err != nil {
 		return nil, fmt.Errorf("解析配置失败: %w", err)
 	}
+
+	// 迁移旧版配置
+	cfg.migrateLegacyConfig()
 
 	if err := Validate(&cfg); err != nil {
 		return nil, fmt.Errorf("配置验证失败: %w", err)
@@ -1643,6 +1669,25 @@ func Save(cfg *Config, path string) error {
 	return nil
 }
 
+// migrateLegacyConfig 迁移旧版配置到新版。
+//
+// 将旧版 server 配置自动转换为 servers[0] 格式，实现向后兼容。
+// 如果 server 有配置但 servers 为空，则将 server 添加到 servers[0]。
+//
+// 注意事项：
+//   - 仅在检测到旧版配置时输出警告日志
+//   - 迁移后清空 server 字段，统一使用 servers 格式
+//   - 如果同时配置了 server 和 servers，忽略 server 配置
+func (c *Config) migrateLegacyConfig() {
+	// 如果配置了旧版 server 且 servers 为空，进行迁移
+	if c.Server.Listen != "" && len(c.Servers) == 0 {
+		fmt.Fprintf(os.Stderr, "[警告] 使用旧版配置格式 server，已自动迁移到 servers[0]。请将配置更新为 servers 格式。\n")
+		c.Servers = []ServerConfig{c.Server}
+		// 清空旧版配置，避免混淆
+		c.Server = ServerConfig{}
+	}
+}
+
 // HasServers 检查是否为多虚拟主机模式。
 //
 // 返回值：
@@ -1672,6 +1717,57 @@ func (c *Config) GetDefaultServer() *ServerConfig {
 	return nil
 }
 
+// GetMode 获取服务器运行模式。
+//
+// 如果 Mode 显式设置（非 auto），返回设置的值。
+// 如果 Mode 是 auto 或未设置，根据配置自动推断：
+//   - servers 数量 == 1 → single
+//   - servers 数量 > 1 且所有 listen 地址相同 → vhost
+//   - servers 数量 > 1 且 listen 地址不同 → multi_server
+//   - servers 为空但 server 有配置 → single（兼容旧配置）
+//
+// 返回值：
+//   - ServerMode: 推断后的服务器运行模式
+func (c *Config) GetMode() ServerMode {
+	// 如果显式设置了非 auto 模式，直接返回
+	if c.Mode != "" && c.Mode != ServerModeAuto {
+		return c.Mode
+	}
+
+	// 自动推断模式
+	serverCount := len(c.Servers)
+
+	// servers 为空但 server 有配置 → single（兼容旧配置）
+	if serverCount == 0 {
+		if c.HasDefaultServer() {
+			return ServerModeSingle
+		}
+		// 理论上不会到达这里（配置验证会确保至少有一个服务器）
+		return ServerModeAuto
+	}
+
+	// servers 数量 == 1 → single
+	if serverCount == 1 {
+		return ServerModeSingle
+	}
+
+	// servers 数量 > 1，检查 listen 地址
+	firstListen := c.Servers[0].Listen
+	allSameListen := true
+	for i := 1; i < serverCount; i++ {
+		if c.Servers[i].Listen != firstListen {
+			allSameListen = false
+			break
+		}
+	}
+
+	// 所有 listen 地址相同 → vhost，否则 → multi_server
+	if allSameListen {
+		return ServerModeVHost
+	}
+	return ServerModeMultiServer
+}
+
 // Validate 配置验证入口。
 //
 // 验证配置的完整性和有效性，检查是否至少配置了一个服务器，
@@ -1684,22 +1780,25 @@ func (c *Config) GetDefaultServer() *ServerConfig {
 //   - error: 验证失败时的错误信息，包含具体字段路径
 //
 // 验证规则：
-//   - 必须配置 server 或 servers 中的至少一个
+//   - 必须配置 servers 数组且至少包含一个服务器
 //   - 所有服务器配置必须通过 validateServer 验证
 func Validate(cfg *Config) error {
-	// 至少需要一种服务器配置
-	if !cfg.HasDefaultServer() && !cfg.HasServers() {
-		return errors.New("至少需要配置 server 或 servers")
+	// 必须配置 servers 且至少包含一个服务器
+	if !cfg.HasServers() {
+		return errors.New("必须配置 servers 且至少包含一个服务器")
 	}
 
-	// 验证默认服务器
-	if cfg.HasDefaultServer() {
-		if err := validateServer(&cfg.Server, true); err != nil {
-			return err
-		}
+	// 验证模式
+	if err := validateMode(cfg.Mode); err != nil {
+		return err
 	}
 
-	// 验证所有虚拟主机
+	// 验证监听地址冲突（multi_server 模式）
+	if err := validateListenConflicts(cfg.Servers, cfg.GetMode()); err != nil {
+		return err
+	}
+
+	// 验证所有服务器
 	for i := range cfg.Servers {
 		if err := validateServer(&cfg.Servers[i], false); err != nil {
 			return fmt.Errorf("servers[%d]: %w", i, err)

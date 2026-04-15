@@ -28,6 +28,59 @@ import (
 	"rua.plus/lolly/internal/variable"
 )
 
+// validateMode 验证服务器运行模式有效值。
+//
+// 检查 Mode 是否为 ServerModeSingle, ServerModeVHost,
+// ServerModeMultiServer, ServerModeAuto 之一。
+// 空值视为 auto（合法）。
+//
+// 参数：
+//   - mode: 服务器运行模式
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+func validateMode(mode ServerMode) error {
+	if mode == "" || mode == ServerModeAuto {
+		return nil
+	}
+	validModes := []string{
+		string(ServerModeSingle),
+		string(ServerModeVHost),
+		string(ServerModeMultiServer),
+		string(ServerModeAuto),
+	}
+	return ValidateEnum(string(mode), validModes, "mode")
+}
+
+// validateListenConflicts 检测 servers 中监听地址冲突。
+//
+// 在 multi_server 模式下，每个 server 必须有 listen 配置且不能重复。
+// 收集所有 servers[i].Listen，检查重复项并输出具体冲突信息。
+//
+// 参数：
+//   - servers: 服务器配置列表
+//   - mode: 服务器运行模式
+//
+// 返回值：
+//   - error: 发现冲突或缺失时返回错误信息，成功返回 nil
+func validateListenConflicts(servers []ServerConfig, mode ServerMode) error {
+	if mode != ServerModeMultiServer {
+		return nil
+	}
+
+	seen := make(map[string]int)
+	for i, s := range servers {
+		if s.Listen == "" {
+			return fmt.Errorf("servers[%d]: multi_server 模式下每个 server 必须配置 listen 地址", i)
+		}
+		if idx, exists := seen[s.Listen]; exists {
+			return fmt.Errorf("监听地址冲突: servers[%d] 和 servers[%d] 都使用 %s", idx, i, s.Listen)
+		}
+		seen[s.Listen] = i
+	}
+	return nil
+}
+
 // ValidateEnum 验证值是否在有效枚举列表中
 func ValidateEnum(value string, validValues []string, fieldName string) error {
 	if slices.Contains(validValues, value) {
