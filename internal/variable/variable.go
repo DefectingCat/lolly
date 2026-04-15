@@ -140,11 +140,6 @@ func NewContext(ctx *fasthttp.RequestCtx) *Context {
 	return vc
 }
 
-// NewVariableContext 是 NewContext 的别名（向后兼容）
-func NewVariableContext(ctx *fasthttp.RequestCtx) *Context {
-	return NewContext(ctx)
-}
-
 // ReleaseContext 释放 Context 回池中
 func ReleaseContext(vc *Context) {
 	if vc == nil {
@@ -161,11 +156,6 @@ func ReleaseContext(vc *Context) {
 	vc.upstreamConnectTime = 0
 	vc.upstreamHeaderTime = 0
 	pool.Put(vc)
-}
-
-// ReleaseVariableContext 是 ReleaseContext 的别名（向后兼容）
-func ReleaseVariableContext(vc *Context) {
-	ReleaseContext(vc)
 }
 
 // SetResponseInfo 设置响应信息（用于需要 status、body_bytes_sent、request_time 的场景）

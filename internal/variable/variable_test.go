@@ -677,30 +677,30 @@ func TestExpandOnlyDollar(t *testing.T) {
 func TestPoolFunctions(t *testing.T) {
 	ctx := mockRequestCtx(t)
 
-	// 测试 PoolGet 和 PoolPut
-	vc := PoolGet(ctx)
+	// 测试 NewContext 和 ReleaseContext
+	vc := NewContext(ctx)
 	if vc == nil {
-		t.Fatal("PoolGet returned nil")
+		t.Fatal("NewContext returned nil")
 	}
 
 	// 设置一些值
 	vc.Set("test", "value")
 
 	// 释放
-	PoolPut(vc)
+	ReleaseContext(vc)
 
 	// 再次获取应该被清空
-	vc2 := PoolGet(ctx)
+	vc2 := NewContext(ctx)
 	if _, ok := vc2.Get("test"); ok {
-		t.Error("expected context to be cleared after PoolPut")
+		t.Error("expected context to be cleared after ReleaseContext")
 	}
-	PoolPut(vc2)
+	ReleaseContext(vc2)
 }
 
-// TestPoolPutNil 测试 PoolPut nil
+// TestPoolPutNil 测试 ReleaseContext nil
 func TestPoolPutNil(_ *testing.T) {
 	// 不应该 panic
-	PoolPut(nil)
+	ReleaseContext(nil)
 }
 
 // TestStatsFunctions 测试统计相关函数

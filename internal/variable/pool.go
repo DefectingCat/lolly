@@ -8,8 +8,6 @@ package variable
 import (
 	"sync"
 	"sync/atomic"
-
-	"github.com/valyala/fasthttp"
 )
 
 // PoolStats 池统计信息。
@@ -52,34 +50,6 @@ func GetStats() PoolStats {
 // GetPool 获取底层的 sync.Pool（用于测试和调试）。
 func GetPool() *sync.Pool {
 	return &pool
-}
-
-// PoolGet 从池中获取 Context（包装方法，用于统计）
-//
-// Deprecated: 使用 NewContext 代替，该函数保持向后兼容。
-func PoolGet(ctx *fasthttp.RequestCtx) *Context {
-	vc := NewContext(ctx)
-
-	// 更新统计
-	gets.Add(1)
-	active.Store(gets.Load() - puts.Load())
-
-	return vc
-}
-
-// PoolPut 将 Context 放回池中（包装方法，用于统计）
-//
-// Deprecated: 使用 ReleaseContext 代替，该函数保持向后兼容。
-func PoolPut(vc *Context) {
-	if vc == nil {
-		return
-	}
-
-	ReleaseContext(vc)
-
-	// 更新统计
-	puts.Add(1)
-	active.Store(gets.Load() - puts.Load())
 }
 
 // ResetStats 重置统计信息。
