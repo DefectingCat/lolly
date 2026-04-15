@@ -199,7 +199,8 @@ func createBalancer(cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
 // createHostClient 为后台目标 URL 创建 fasthttp.HostClient。
 func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCfg *config.TransportConfig) *fasthttp.HostClient {
 	// 从目标 URL 解析主机和协议
-	addr, isTLS := netutil.ParseTargetURL(targetURL, false)
+	// addDefaultPort=true 确保 HostClient.Addr 包含端口（host:port 格式）
+	addr, isTLS := netutil.ParseTargetURL(targetURL, true)
 
 	// 默认值
 	maxIdleConnDuration := 90 * time.Second
@@ -317,6 +318,10 @@ func FinalizeUpstreamVars(vc *variable.Context, upstreamAddr string, upstreamSta
 // 如果没有可用的健康目标，返回 502 Bad Gateway。
 // 如果后端请求失败，根据 next_upstream 配置尝试下一个目标。
 func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
+	// DEBUG: 打印请求信息
+	logging.Debug().Msgf("[PROXY] 收到请求: path=%s, host=%s, method=%s",
+		string(ctx.Path()), string(ctx.Host()), string(ctx.Method()))
+
 	// 上游变量捕获
 	var upstreamAddr string
 	var upstreamStatus int
@@ -374,15 +379,22 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		attemptedTargets = append(attemptedTargets, target)
 
+		// DEBUG: 打印选中的目标
+		logging.Debug().Msgf("[PROXY] 选中目标: url=%s, healthy=%v", target.URL, target.Healthy.Load())
+
 		// 获取所选目标的客户端
 		client := p.getClient(target.URL)
 		if client == nil {
+			logging.Warn().Msgf("[PROXY] client 为 nil, url=%s", target.URL)
 			// 标记为不健康并继续尝试下一个
 			if p.healthChecker != nil {
 				p.healthChecker.MarkUnhealthy(target)
 			}
 			continue
 		}
+
+		// DEBUG: 打印客户端信息
+		logging.Debug().Msgf("[PROXY] client 信息: Addr=%s, IsTLS=%v", client.Addr, client.IsTLS)
 
 		// 增加连接计数（用于最少连接数负载均衡）
 		loadbalance.IncrementConnections(target)
@@ -412,6 +424,19 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		// 修改请求头
 		p.modifyRequestHeaders(ctx, target)
+
+		// 关键：修改请求 URI 为完整的目标 URL
+		// HostClient 要求 URI 格式必须与 Addr/IsTLS 一致
+		// 例如：IsTLS=true 时，URI 应为 https://host/path
+		targetURI := target.URL + string(ctx.URI().Path())
+		if len(ctx.URI().QueryString()) > 0 {
+			targetURI += "?" + string(ctx.URI().QueryString())
+		}
+		req.SetRequestURI(targetURI)
+
+		// DEBUG: 打印请求头
+		logging.Debug().Msgf("[PROXY] 请求准备完成: Host=%s, URI=%s, targetURI=%s",
+			string(req.Header.Host()), string(req.RequestURI()), targetURI)
 
 		// 尝试从缓存获取（如果启用）
 		if p.cache != nil && attempt == 0 {
@@ -459,6 +484,13 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		timing.MarkConnectStart()
 		err := client.Do(req, &ctx.Response)
 		timing.MarkConnectEnd()
+
+		// DEBUG: 打印执行结果
+		if err != nil {
+			logging.Error().Msgf("[PROXY] 请求失败: url=%s, err=%v, errType=%T", target.URL, err, err)
+		} else {
+			logging.Debug().Msgf("[PROXY] 请求成功: url=%s, status=%d", target.URL, ctx.Response.StatusCode())
+		}
 
 		if err != nil {
 			loadbalance.DecrementConnections(target)
@@ -734,8 +766,15 @@ func (p *Proxy) getClient(targetURL string) *fasthttp.HostClient {
 
 // modifyRequestHeaders 在转发到后端之前修改请求头。
 // 添加标准代理请求头并应用自定义请求头配置。
-func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, _ *loadbalance.Target) {
+func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalance.Target) {
 	headers := &ctx.Request.Header
+
+	// 设置 Host header 为目标主机
+	// 从 target.URL 提取 host:port（HostClient 连接需要此格式）
+	targetHost := extractHostFromURL(target.URL)
+	if targetHost != "" {
+		headers.Set("Host", targetHost)
+	}
 
 	// 提取并设置 X-Forwarded 系列头
 	fh := ExtractForwardedHeaders(ctx)
@@ -899,4 +938,23 @@ func (p *Proxy) GetCacheStats() *cache.ProxyCacheStats {
 	}
 	stats := p.cache.Stats()
 	return &stats
+}
+
+// extractHostFromURL 从 URL 中提取 host:port。
+// 用于设置代理请求的 Host header。
+func extractHostFromURL(urlStr string) string {
+	// 移除协议前缀
+	host := urlStr
+	if strings.HasPrefix(host, "http://") {
+		host = host[7:]
+	} else if strings.HasPrefix(host, "https://") {
+		host = host[8:]
+	}
+
+	// 移除路径部分
+	if idx := strings.Index(host, "/"); idx != -1 {
+		host = host[:idx]
+	}
+
+	return host
 }
