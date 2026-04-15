@@ -166,7 +166,20 @@ func (a *App) Run() int {
 	}
 
 	a.logger.LogStartup("配置加载成功", map[string]string{"config_path": a.cfgPath})
-	a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Server.Listen})
+
+	// 记录监听地址（支持多服务器模式）
+	mode := a.cfg.GetMode()
+	if mode == config.ServerModeMultiServer {
+		for i, srv := range a.cfg.Servers {
+			a.logger.LogStartup("监听地址", map[string]string{
+				"index":  fmt.Sprintf("[%d]", i),
+				"listen": srv.Listen,
+				"name":   srv.Name,
+			})
+		}
+	} else {
+		a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Server.Listen})
+	}
 
 	// 创建 DNS 解析器（如果启用）
 	if a.cfg.Resolver.Enabled {
