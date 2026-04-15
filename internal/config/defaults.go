@@ -349,6 +349,17 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #       script: \"\"            # Lua 脚本路径，返回目标索引\n")
 	buf.WriteString("    #       fallback: \"round_robin\"  # Lua 失败时的备用算法（有效值: round_robin, weighted_round_robin, least_conn）\n")
 	buf.WriteString("    #       timeout: 5s            # Lua 执行超时\n")
+	buf.WriteString("    #     redirect_rewrite:        # Location/Refresh 头改写配置（代理响应重定向时改写 Location 头）\n")
+	buf.WriteString("    #       mode: \"default\"       # 运行模式（有效值: default, off, custom）\n")
+	buf.WriteString("    #       # default: 自动从选中的 target URL 生成规则（运行时）\n")
+	buf.WriteString("    #       # off: 禁用改写\n")
+	buf.WriteString("    #       # custom: 使用 rules 列表（预编译）\n")
+	buf.WriteString("    #       rules: []               # 改写规则列表（仅 mode=\"custom\" 时使用）\n")
+	buf.WriteString("    #       # 示例规则（custom 模式）:\n")
+	buf.WriteString("    #       # - pattern: \"http://localhost:8000/\"  # 匹配模式（无 ~ 前缀为前缀匹配，~ 开头为正则）\n")
+	buf.WriteString("    #       #   replacement: \"$scheme://$host:$server_port/\"  # 替换目标（支持 $host, $scheme, $server_port 等变量）\n")
+	buf.WriteString("    #       # - pattern: \"~^http://[^/]+:8000/(.*)$\"  # 正则匹配示例\n")
+	buf.WriteString("    #       #   replacement: \"$scheme://$host/$1\"  # 使用捕获组 $1\n")
 	buf.WriteString("\n")
 
 	// SSL 配置

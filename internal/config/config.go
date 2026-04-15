@@ -306,9 +306,10 @@ type ProxyConfig struct {
 	BalancerByLua     BalancerByLuaConfig `yaml:"balancer_by_lua"`
 	HealthCheck       HealthCheckConfig   `yaml:"health_check"`
 	NextUpstream      NextUpstreamConfig  `yaml:"next_upstream"`
-	Cache             ProxyCacheConfig    `yaml:"cache"`
-	Timeout           ProxyTimeout        `yaml:"timeout"`
-	VirtualNodes      int                 `yaml:"virtual_nodes"`
+	Cache             ProxyCacheConfig      `yaml:"cache"`
+	Timeout           ProxyTimeout          `yaml:"timeout"`
+	VirtualNodes      int                   `yaml:"virtual_nodes"`
+	RedirectRewrite   *RedirectRewriteConfig `yaml:"redirect_rewrite"`
 }
 
 // BalancerByLuaConfig Lua 负载均衡配置
@@ -473,6 +474,60 @@ type ProxyCacheConfig struct {
 	StaleWhileRevalidate time.Duration `yaml:"stale_while_revalidate"`
 	Enabled              bool          `yaml:"enabled"`
 	CacheLock            bool          `yaml:"cache_lock"`
+}
+
+// RedirectRewriteConfig Location/Refresh 头改写配置
+//
+// 用于配置代理响应中 Location 和 Refresh 头的改写行为。
+//
+// 注意事项：
+//   - Mode 支持 "default"、"off"、"custom" 三种模式
+//   - 未配置或空字符串时默认为 "default" 模式
+//   - "custom" 模式必须配置至少一条规则
+//
+// 使用示例：
+//
+//	redirect_rewrite:
+//	  mode: "default"  # 或 "off" 或 "custom"
+//	  rules:
+//	    - pattern: "http://backend:8000/"
+//	      replacement: "$scheme://$host:$server_port/"
+type RedirectRewriteConfig struct {
+	// Mode 运行模式: "default" | "off" | "custom"
+	// default: 自动从选中的 target URL 生成规则（运行时）
+	// off: 禁用改写
+	// custom: 使用 Rules 列表（预编译）
+	// 未配置或空字符串时默认为 "default"
+	Mode string `yaml:"mode"`
+
+	// Rules 改写规则列表，仅在 Mode="custom" 时使用
+	Rules []RedirectRewriteRule `yaml:"rules"`
+}
+
+// RedirectRewriteRule 单条改写规则
+//
+// 定义 Location/Refresh 头改写的匹配模式和替换目标。
+//
+// 注意事项：
+//   - Pattern 以 ~ 开头表示正则，~* 表示大小写不敏感
+//   - 无 ~ 前缀时使用前缀匹配语义
+//   - Replacement 支持变量展开（$host, $scheme, $server_port 等）
+//
+// 使用示例：
+//
+//	rules:
+//	  - pattern: "http://backend:8000/"
+//	    replacement: "$scheme://$host:$server_port/"
+//	  - pattern: "~^http://[^/]+:8000/(.*)$"
+//	    replacement: "$scheme://$host/$1"
+type RedirectRewriteRule struct {
+	// Pattern 匹配模式，支持正则（以 ~ 开头）或精确匹配
+	// 示例: "http://localhost:8000/" 或 "~^http://[^/]+:8000/"
+	Pattern string `yaml:"pattern"`
+
+	// Replacement 替换目标，支持变量展开
+	// 示例: "$scheme://$host:$server_port/" 或 "/"
+	Replacement string `yaml:"replacement"`
 }
 
 // NextUpstreamConfig 故障转移配置，定义后端失败时的自动重试行为。

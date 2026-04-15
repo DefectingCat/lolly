@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -486,6 +487,11 @@ func validateProxy(p *ProxyConfig) error {
 				return fmt.Errorf("无效的 hash_key: %s（仅支持 ip, uri 或 header:X-Name 格式）", p.HashKey)
 			}
 		}
+	}
+
+	// 验证 redirect_rewrite 配置
+	if err := validateRedirectRewrite(p.RedirectRewrite); err != nil {
+		return fmt.Errorf("redirect_rewrite: %w", err)
 	}
 
 	return nil
@@ -1179,6 +1185,58 @@ func validateLua(l *LuaMiddlewareConfig) error {
 	}
 	if l.GlobalSettings.MaxExecutionTime < 0 {
 		return errors.New("global_settings.max_execution_time 不能为负数")
+	}
+
+	return nil
+}
+
+// validateRedirectRewrite 验证 redirect_rewrite 配置。
+//
+// 检查模式有效性、规则完整性和正则表达式编译。
+//
+// 参数：
+//   - cfg: redirect_rewrite 配置对象（nil 时跳过，启用 default 模式）
+//
+// 返回值：
+//   - error: 验证失败时返回错误信息，成功返回 nil
+//
+// 验证规则：
+//   - Mode 仅允许 ""、"default"、"off"、"custom"
+//   - custom 模式必须配置至少一条规则
+//   - 规则的 pattern 不能为空
+//   - 正则模式（~ 前缀）必须能成功编译
+func validateRedirectRewrite(cfg *RedirectRewriteConfig) error {
+	if cfg == nil {
+		return nil // 未配置时默认启用 default 模式
+	}
+
+	// Mode 验证
+	validModes := []string{"", "default", "off", "custom"}
+	if !slices.Contains(validModes, cfg.Mode) {
+		return errors.New("redirect_rewrite.mode must be one of: default, off, custom")
+	}
+
+	// custom 模式必须有规则
+	if cfg.Mode == "custom" && len(cfg.Rules) == 0 {
+		return errors.New("redirect_rewrite.rules required when mode is custom")
+	}
+
+	// 验证每条规则
+	for i, rule := range cfg.Rules {
+		if rule.Pattern == "" {
+			return fmt.Errorf("redirect_rewrite.rules[%d].pattern cannot be empty", i)
+		}
+
+		// 正则模式预编译检查
+		if strings.HasPrefix(rule.Pattern, "~") {
+			patternStr := rule.Pattern[1:] // 去掉 ~ 前缀
+			if strings.HasPrefix(rule.Pattern, "~*") {
+				patternStr = rule.Pattern[2:] // 去掉 ~* 前缀（大小写不敏感）
+			}
+			if _, err := regexp.Compile(patternStr); err != nil {
+				return fmt.Errorf("redirect_rewrite.rules[%d].pattern invalid regex: %v", i, err)
+			}
+		}
 	}
 
 	return nil
