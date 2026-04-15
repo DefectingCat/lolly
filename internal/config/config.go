@@ -199,6 +199,12 @@ type ServerConfig struct {
 	MaxConnsPerIP      int                  `yaml:"max_conns_per_ip"`
 	IdleTimeout        time.Duration        `yaml:"idle_timeout"`
 	WriteTimeout       time.Duration        `yaml:"write_timeout"`
+
+	// 高并发优化配置（可选，未配置时使用默认值）
+	Concurrency        int  `yaml:"concurrency"`         // 最大并发连接数（默认 256 * 1024）
+	ReadBufferSize     int  `yaml:"read_buffer_size"`    // 读缓冲区大小（字节，默认 16KB）
+	WriteBufferSize    int  `yaml:"write_buffer_size"`   // 写缓冲区大小（字节，默认 16KB）
+	ReduceMemoryUsage  bool `yaml:"reduce_memory_usage"` // 是否优先减少内存使用（默认 false，优先性能）
 }
 
 // StaticConfig 静态文件服务配置。

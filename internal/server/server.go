@@ -512,6 +512,11 @@ func (s *Server) startSingleMode() error {
 		MaxConnsPerIP:      serverCfg.MaxConnsPerIP,
 		MaxRequestsPerConn: serverCfg.MaxRequestsPerConn,
 		CloseOnShutdown:    true,
+		// 高并发优化配置
+		Concurrency:        serverCfg.Concurrency,
+		ReadBufferSize:     serverCfg.ReadBufferSize,
+		WriteBufferSize:    serverCfg.WriteBufferSize,
+		ReduceMemoryUsage:  serverCfg.ReduceMemoryUsage,
 	}
 
 	s.running = true
@@ -632,6 +637,11 @@ func (s *Server) startVHostMode() error {
 		MaxConnsPerIP:      serverCfg.MaxConnsPerIP,
 		MaxRequestsPerConn: serverCfg.MaxRequestsPerConn,
 		CloseOnShutdown:    true,
+		// 高并发优化配置
+		Concurrency:        serverCfg.Concurrency,
+		ReadBufferSize:     serverCfg.ReadBufferSize,
+		WriteBufferSize:    serverCfg.WriteBufferSize,
+		ReduceMemoryUsage:  serverCfg.ReduceMemoryUsage,
 	}
 
 	s.running = true
