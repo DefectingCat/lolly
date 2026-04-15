@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/cache"
@@ -41,6 +42,7 @@ import (
 //   - alias 与 root 互斥，同时配置时 alias 优先
 type StaticHandler struct {
 	fileCache    *cache.FileCache
+	cacheTTL     time.Duration // 缓存新鲜度 TTL（默认 5s，0 表示每次验证 ModTime）
 	gzipStatic   *compression.GzipStatic
 	router       *Router
 	root         string
@@ -200,6 +202,23 @@ func (h *StaticHandler) SetTryFiles(tryFiles []string, tryFilesPass bool, router
 //   - enabled: 是否启用符号链接安全检查
 func (h *StaticHandler) SetSymlinkCheck(enabled bool) {
 	h.symlinkCheck = enabled
+}
+
+// SetCacheTTL 设置缓存新鲜度 TTL。
+//
+// TTL 控制缓存条目的新鲜度验证间隔。
+// 在 TTL 窗口内，缓存命中时跳过 ModTime 验证以减少 os.Stat 调用。
+//
+// 参数：
+//   - ttl: TTL 时间间隔
+//
+// TTL 值说明：
+//   - ttl > 0: TTL 内跳过 ModTime 验证，过期后验证
+//   - ttl = 0: 每次请求验证 ModTime（向后兼容）
+//
+// 默认 TTL 为 5 秒。
+func (h *StaticHandler) SetCacheTTL(ttl time.Duration) {
+	h.cacheTTL = ttl
 }
 
 // Handle 处理静态文件请求。
@@ -456,7 +475,36 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 		return
 	}
 
-	// 直接返回文件
+	// Phase 2: 缓存查找 + TTL 验证
+	// 在 serveFile 调用前检查缓存，减少 os.ReadFile 调用
+	// 注意: CachedAt 迁移已在 FileCache.Get() 内部完成，确保并发安全
+	if h.fileCache != nil {
+		if entry, ok := h.fileCache.Get(filePath); ok {
+			// TTL 验证（cacheTTL > 0 时启用）
+			if h.cacheTTL > 0 && time.Since(entry.CachedAt) < h.cacheTTL {
+				// TTL 内直接返回（无需验证 ModTime）
+				ctx.Response.SetBody(entry.Data)
+				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+				return
+			}
+
+			// TTL 过期或未启用 TTL，验证文件新鲜度
+			if entry.ModTime.Equal(info.ModTime()) {
+				// 文件未修改，刷新 TTL 并返回
+				if h.cacheTTL > 0 {
+					h.fileCache.RefreshCachedAt(filePath)
+				}
+				ctx.Response.SetBody(entry.Data)
+				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+				return
+			}
+
+			// 文件已修改，删除缓存继续处理
+			h.fileCache.Delete(filePath)
+		}
+	}
+
+	// Phase 3: 缓存未命中，调用 serveFile 处理
 	h.serveFile(ctx, filePath, info)
 }
 

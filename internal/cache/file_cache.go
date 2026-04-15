@@ -27,6 +27,7 @@ import (
 // FileEntry 文件缓存条目，存储单个文件的缓存信息。
 type FileEntry struct {
 	ModTime    time.Time
+	CachedAt   time.Time // 缓存时间，用于 TTL 验证（新鲜度）
 	LastAccess time.Time
 	element    *list.Element
 	Path       string
@@ -100,6 +101,12 @@ func (c *FileCache) Get(path string) (*FileEntry, bool) {
 		return nil, false
 	}
 
+	// 迁移处理: CachedAt 为零值时视为刚刚缓存（旧条目）
+	// 在锁内执行，确保并发安全
+	if entry.CachedAt.IsZero() {
+		entry.CachedAt = time.Now()
+	}
+
 	// 更新访问时间并移到 LRU 链表头部
 	entry.LastAccess = time.Now()
 	c.lruList.MoveToFront(entry.element)
@@ -130,6 +137,7 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time)
 		entry.Data = data
 		entry.Size = size
 		entry.ModTime = modTime
+		entry.CachedAt = time.Now() // 更新缓存时间
 		entry.LastAccess = time.Now()
 		c.currentSize += size
 		c.lruList.MoveToFront(entry.element)
@@ -143,6 +151,7 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time)
 		Data:       data,
 		Size:       size,
 		ModTime:    modTime,
+		CachedAt:   time.Now(), // 设置缓存时间
 		LastAccess: time.Now(),
 	}
 	entry.element = c.lruList.PushFront(entry)
@@ -165,6 +174,23 @@ func (c *FileCache) Delete(path string) {
 
 	if entry, ok := c.entries[path]; ok {
 		c.removeEntry(entry)
+	}
+}
+
+// RefreshCachedAt 更新 CachedAt 并移动 LRU 位置。
+//
+// 用于 TTL 过期但文件未修改时刷新缓存时间。
+//
+// 参数：
+//   - path: 文件路径，作为缓存键
+func (c *FileCache) RefreshCachedAt(path string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if entry, ok := c.entries[path]; ok {
+		entry.CachedAt = time.Now()
+		entry.LastAccess = time.Now()
+		c.lruList.MoveToFront(entry.element)
 	}
 }
 

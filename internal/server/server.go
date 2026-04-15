@@ -1115,6 +1115,8 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 		)
 		if s.fileCache != nil {
 			staticHandler.SetFileCache(s.fileCache)
+			// 设置默认缓存 TTL (5s)
+			staticHandler.SetCacheTTL(5 * time.Second)
 		}
 		if cfg.Compression.GzipStatic {
 			staticHandler.SetGzipStatic(true, cfg.Compression.GzipStaticExtensions)
