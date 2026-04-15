@@ -1591,7 +1591,6 @@ type StreamProxySSLConfig struct {
 // 注意事项：
 //   - 加载后会自动调用 Validate 进行配置验证
 //   - 文件不存在或格式错误都会返回错误
-//   - 自动迁移旧版配置（server 转换为 servers[0]）
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -1602,9 +1601,6 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
-
-	// 迁移旧版配置
-	cfg.migrateLegacyConfig()
 
 	if err := Validate(&cfg); err != nil {
 		return nil, fmt.Errorf("配置验证失败: %w", err)
@@ -1626,15 +1622,11 @@ func Load(path string) (*Config, error) {
 //
 // 注意事项：
 //   - 加载后会自动调用 Validate 进行配置验证
-//   - 自动迁移旧版配置（server 转换为 servers[0]）
 func LoadFromString(yamlStr string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal([]byte(yamlStr), &cfg); err != nil {
 		return nil, fmt.Errorf("解析配置失败: %w", err)
 	}
-
-	// 迁移旧版配置
-	cfg.migrateLegacyConfig()
 
 	if err := Validate(&cfg); err != nil {
 		return nil, fmt.Errorf("配置验证失败: %w", err)
@@ -1667,25 +1659,6 @@ func Save(cfg *Config, path string) error {
 	}
 
 	return nil
-}
-
-// migrateLegacyConfig 迁移旧版配置到新版。
-//
-// 将旧版 server 配置自动转换为 servers[0] 格式，实现向后兼容。
-// 如果 server 有配置但 servers 为空，则将 server 添加到 servers[0]。
-//
-// 注意事项：
-//   - 仅在检测到旧版配置时输出警告日志
-//   - 迁移后清空 server 字段，统一使用 servers 格式
-//   - 如果同时配置了 server 和 servers，忽略 server 配置
-func (c *Config) migrateLegacyConfig() {
-	// 如果配置了旧版 server 且 servers 为空，进行迁移
-	if c.Server.Listen != "" && len(c.Servers) == 0 {
-		fmt.Fprintf(os.Stderr, "[警告] 使用旧版配置格式 server，已自动迁移到 servers[0]。请将配置更新为 servers 格式。\n")
-		c.Servers = []ServerConfig{c.Server}
-		// 清空旧版配置，避免混淆
-		c.Server = ServerConfig{}
-	}
 }
 
 // HasServers 检查是否为多虚拟主机模式。
@@ -1724,7 +1697,6 @@ func (c *Config) GetDefaultServer() *ServerConfig {
 //   - servers 数量 == 1 → single
 //   - servers 数量 > 1 且所有 listen 地址相同 → vhost
 //   - servers 数量 > 1 且 listen 地址不同 → multi_server
-//   - servers 为空但 server 有配置 → single（兼容旧配置）
 //
 // 返回值：
 //   - ServerMode: 推断后的服务器运行模式
@@ -1737,12 +1709,8 @@ func (c *Config) GetMode() ServerMode {
 	// 自动推断模式
 	serverCount := len(c.Servers)
 
-	// servers 为空但 server 有配置 → single（兼容旧配置）
+	// servers 为空 → auto（配置验证会确保至少有一个服务器）
 	if serverCount == 0 {
-		if c.HasDefaultServer() {
-			return ServerModeSingle
-		}
-		// 理论上不会到达这里（配置验证会确保至少有一个服务器）
 		return ServerModeAuto
 	}
 

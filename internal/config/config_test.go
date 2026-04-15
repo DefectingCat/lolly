@@ -12,13 +12,13 @@ func TestLoad(t *testing.T) {
 	t.Run("有效配置文件", func(t *testing.T) {
 		// 创建临时配置文件
 		content := `
-server:
-  listen: ":8080"
-  static:
-    - path: "/"
-      root: "/var/www"
-      index:
-        - "index.html"
+servers:
+  - listen: ":8080"
+    static:
+      - path: "/"
+        root: "/var/www"
+        index:
+          - "index.html"
 logging:
   access:
     path: "/var/log/access.log"
@@ -137,11 +137,11 @@ servers:
 func TestLoadFromString(t *testing.T) {
 	t.Run("有效字符串", func(t *testing.T) {
 		yamlStr := `
-server:
-  listen: ":9090"
-  static:
-    - path: "/"
-      root: "/app/public"
+servers:
+  - listen: ":9090"
+    static:
+      - path: "/"
+        root: "/app/public"
 `
 		cfg, err := LoadFromString(yamlStr)
 		if err != nil {
@@ -158,9 +158,9 @@ server:
 
 	t.Run("无效YAML", func(t *testing.T) {
 		yamlStr := `
-server:
-  listen: ":8080"
-  broken: [unclosed
+servers:
+  - listen: ":8080"
+    broken: [unclosed
 `
 		_, err := LoadFromString(yamlStr)
 		if err == nil {
