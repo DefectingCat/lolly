@@ -584,8 +584,8 @@ func (s *Server) startVHostMode() error {
 	if s.config.GetDefaultServerFromList() != nil {
 		router := handler.NewRouter()
 
-		// 注册状态监控端点（如果配置）
-		if s.config.Monitoring.Status.Path != "" || len(s.config.Monitoring.Status.Allow) > 0 {
+		// 注册状态监控端点（如果启用）
+		if s.config.Monitoring.Status.Enabled {
 			statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
 			if err != nil {
 				logging.Error().Msg("创建状态处理器失败: " + err.Error())

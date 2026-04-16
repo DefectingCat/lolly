@@ -149,7 +149,7 @@ func DefaultConfig() *Config {
 			},
 		}},
 		Logging: LoggingConfig{
-			Format: "text",
+			Format: "json",
 			Access: AccessLogConfig{
 				// 近似 nginx combined 格式
 				// nginx: $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"
@@ -180,9 +180,10 @@ func DefaultConfig() *Config {
 		},
 		Monitoring: MonitoringConfig{
 			Status: StatusConfig{
-				Path:   "/_status",
-				Format: "text",
-				Allow:  []string{"127.0.0.1"},
+				Enabled: false,
+				Path:    "/_status",
+				Format:  "json",
+				Allow:   []string{"127.0.0.1", "localhost"},
 			},
 			Pprof: PprofConfig{
 				Enabled: false,
@@ -593,6 +594,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("# 监控配置\n")
 	buf.WriteString("monitoring:\n")
 	buf.WriteString("  status:\n")
+	fmt.Fprintf(&buf, "    enabled: %v            # 是否启用状态端点\n", cfg.Monitoring.Status.Enabled)
 	fmt.Fprintf(&buf, "    path: \"%s\"        # 状态端点路径\n", cfg.Monitoring.Status.Path)
 	fmt.Fprintf(&buf, "    format: \"%s\"      # 输出格式（有效值: text, json, html）\n", cfg.Monitoring.Status.Format)
 	buf.WriteString("    allow:                 # 允许访问的 IP\n")

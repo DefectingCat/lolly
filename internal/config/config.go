@@ -1423,19 +1423,24 @@ type PprofConfig struct {
 // 配置服务状态检查端点的路径和访问控制。
 //
 // 注意事项：
+//   - Enabled 默认为 false，需显式启用
 //   - Path 为状态端点的 URL 路径
+//   - Format 支持 json、text、html、prometheus 格式
 //   - Allow 限制可访问的 IP 地址列表
 //   - 生产环境建议严格限制访问来源
 //
 // 使用示例：
 //
 //	status:
-//	  path: "/status"
+//	  enabled: true
+//	  path: "/_status"
+//	  format: "json"
 //	  allow: ["127.0.0.1", "192.168.0.0/16"]
 type StatusConfig struct {
-	Path   string   `yaml:"path"`
-	Format string   `yaml:"format"`
-	Allow  []string `yaml:"allow"`
+	Path    string   `yaml:"path"`
+	Format  string   `yaml:"format"`
+	Allow   []string `yaml:"allow"`
+	Enabled bool     `yaml:"enabled"`
 }
 
 // CacheAPIConfig 缓存 API 配置。

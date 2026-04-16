@@ -148,8 +148,10 @@ func TestStart_WithMonitoring(t *testing.T) {
 		},
 		Monitoring: config.MonitoringConfig{
 			Status: config.StatusConfig{
-				Path:  "/status",
-				Allow: []string{"127.0.0.1"},
+				Enabled: true,
+				Path:    "/status",
+				Format:  "json",
+				Allow:   []string{"127.0.0.1"},
 			},
 			Pprof: config.PprofConfig{
 				Enabled: false,
@@ -364,7 +366,8 @@ func TestStart_WithAllFeatures(t *testing.T) {
 		},
 		Monitoring: config.MonitoringConfig{
 			Status: config.StatusConfig{
-				Path: "/status",
+				Enabled: true,
+				Path:    "/status",
 			},
 		},
 	}
