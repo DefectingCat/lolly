@@ -531,7 +531,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 			// 释放缓存锁
 			if p.cache != nil && attempt == 0 {
-				hashKey, _ := p.buildCacheKeyHash(ctx)
+				hashKey := p.buildCacheKeyHashValue(ctx)
 				p.cache.ReleaseLock(hashKey, err)
 			}
 
@@ -562,7 +562,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		if shouldRetry {
 			// 释放缓存锁
 			if p.cache != nil && attempt == 0 {
-				hashKey, _ := p.buildCacheKeyHash(ctx)
+				hashKey := p.buildCacheKeyHashValue(ctx)
 				p.cache.ReleaseLock(hashKey, fmt.Errorf("HTTP %d", statusCode))
 			}
 
@@ -903,13 +903,16 @@ func (p *Proxy) GetConfig() *config.ProxyConfig {
 }
 
 // buildCacheKey 构建缓存键。
+// 保留此函数用于日志记录和调试。
 func (p *Proxy) buildCacheKey(ctx *fasthttp.RequestCtx) string {
 	// 使用请求方法和路径作为缓存键
 	return string(ctx.Request.Header.Method()) + ":" + string(ctx.Request.URI().RequestURI())
 }
 
 // buildCacheKeyHash 使用 FNV-64a 计算缓存键的 uint64 哈希值。
-// 这个函数分配 0 内存，比字符串键更高效。
+// 返回哈希值和原始字符串键。
+// 注意：此函数会先构建字符串键再哈希，存在双重分配。
+// 对于只需要哈希值的场景，使用 buildCacheKeyHashValue 代替。
 func (p *Proxy) buildCacheKeyHash(ctx *fasthttp.RequestCtx) (uint64, string) {
 	// 构建原始 key
 	origKey := p.buildCacheKey(ctx)
@@ -918,6 +921,16 @@ func (p *Proxy) buildCacheKeyHash(ctx *fasthttp.RequestCtx) (uint64, string) {
 	h := fnv.New64a()
 	h.Write([]byte(origKey))
 	return h.Sum64(), origKey
+}
+
+// buildCacheKeyHashValue 直接计算缓存键的哈希值，零字符串分配。
+// 用于只需要哈希值而不需要原始键的场景。
+func (p *Proxy) buildCacheKeyHashValue(ctx *fasthttp.RequestCtx) uint64 {
+	h := fnv.New64a()
+	h.Write(ctx.Request.Header.Method())
+	h.Write([]byte(":"))
+	h.Write(ctx.Request.URI().RequestURI())
+	return h.Sum64()
 }
 
 // writeCachedResponse 写入缓存的响应。

@@ -427,3 +427,39 @@ func BenchmarkProxyHeaderProcessing(b *testing.B) {
 		}
 	})
 }
+
+// BenchmarkBuildCacheKeyHash 基准测试缓存键哈希计算性能。
+func BenchmarkBuildCacheKeyHash(b *testing.B) {
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+	ctx.Request.SetRequestURI("/api/test?query=1")
+
+	p, err := NewProxy(&config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout: config.ProxyTimeout{
+			Connect: 5 * time.Second,
+			Read:    30 * time.Second,
+			Write:   30 * time.Second,
+		},
+	}, []*loadbalance.Target{{URL: "http://localhost:8080"}}, nil, nil)
+	if err != nil {
+		b.Fatalf("NewProxy() error: %v", err)
+	}
+
+	b.Run("buildCacheKeyHash_with_string", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			hashKey, _ := p.buildCacheKeyHash(ctx)
+			_ = hashKey
+		}
+	})
+
+	b.Run("buildCacheKeyHashValue_direct", func(b *testing.B) {
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			hashKey := p.buildCacheKeyHashValue(ctx)
+			_ = hashKey
+		}
+	})
+}
