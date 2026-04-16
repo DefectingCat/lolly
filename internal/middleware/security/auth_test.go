@@ -547,7 +547,7 @@ func TestHashPassword(t *testing.T) {
 		t.Errorf("Expected argon2id hash, got %s", hash)
 	}
 
-	hash, err = HashPassword(password, HashAlgorithm(99))
+	_, err = HashPassword(password, HashAlgorithm(99))
 	if err == nil {
 		t.Error("Expected error for unknown algorithm")
 	}

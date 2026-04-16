@@ -804,13 +804,12 @@ func TestCheckTCPSocket_ArgError(t *testing.T) {
 
 	// 传入非 userdata 应该 raise error
 	L.Push(glua.LString("not a socket"))
-	err := L.PCall(0, 0, nil)
+	_ = L.PCall(0, 0, nil)
 	// 这不会触发 checkTCPSocket，我们需要通过 Lua 脚本来测试
-	err = L.DoString(`
+	_ = L.DoString(`
 		local sock = ngx.socket.tcp()
 	`)
 	// 在没有注册 API 的情况下会失败
-	_ = err
 }
 
 // TestLuaAPI_tcpSocketConnect_WithTimeout 测试 connect 带超时选项
