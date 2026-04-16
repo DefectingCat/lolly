@@ -29,6 +29,7 @@ import (
 // BuiltinVariable 内置变量定义
 type BuiltinVariable struct {
 	Getter      func(ctx *fasthttp.RequestCtx) string
+	GetterBytes func(ctx *fasthttp.RequestCtx) []byte // 零拷贝 getter，用于 EphemeralGet
 	Name        string
 	Description string
 }
@@ -37,7 +38,8 @@ type BuiltinVariable struct {
 type Context struct {
 	ctx                  *fasthttp.RequestCtx
 	store                map[string]string
-	cache                map[string]string
+	cache                map[string]string // string 缓存（用于 PersistentGet）
+	bytesCache           map[string][]byte // []byte 缓存（用于 EphemeralGet）
 	serverName           string
 	upstreamAddr         string
 	status               int
@@ -53,8 +55,9 @@ type Context struct {
 var pool = sync.Pool{
 	New: func() interface{} {
 		return &Context{
-			store: make(map[string]string),
-			cache: make(map[string]string),
+			store:      make(map[string]string),
+			cache:      make(map[string]string),
+			bytesCache: make(map[string][]byte),
 		}
 	},
 }
@@ -132,6 +135,10 @@ func NewContext(ctx *fasthttp.RequestCtx) *Context {
 	// 清空内置变量缓存
 	for k := range vc.cache {
 		delete(vc.cache, k)
+	}
+	// 清空内置变量 bytes 缓存
+	for k := range vc.bytesCache {
+		delete(vc.bytesCache, k)
 	}
 	// 清空自定义变量 store
 	for k := range vc.store {
@@ -270,6 +277,155 @@ func (vc *Context) Get(name string) (string, bool) {
 	}
 
 	return "", false
+}
+
+// EphemeralGet returns []byte view valid only within request scope.
+//
+// WARNING: The returned []byte becomes INVALID after request completes.
+// SAFETY: Use only for immediate consumption (logging, header write).
+// For persistent storage, use PersistentGet().
+//
+// This method provides zero-copy access to variable values by using
+// GetterBytes functions registered in BuiltinVariable.
+func (vc *Context) EphemeralGet(name string) []byte {
+	// 1. 先查自定义变量（需要转换为 []byte）
+	if v, ok := vc.store[name]; ok {
+		return []byte(v) // 注意：这里分配了，因为 store 是 string
+	}
+
+	// 2. 查全局变量（需要转换为 []byte）
+	if v, ok := GetGlobalVariable(name); ok {
+		return []byte(v) // 注意：这里分配了，因为全局变量是 string
+	}
+
+	// 3. 检查 bytesCache 缓存
+	if v, ok := vc.bytesCache[name]; ok {
+		return v
+	}
+
+	// 4. 检查从 SetResponseInfo/SetServerName 设置的值
+	// SAFETY: 这些值来自 struct 字段，在请求期间有效
+	switch name {
+	case VarStatus:
+		if vc.status > 0 {
+			b := []byte(strconv.Itoa(vc.status))
+			vc.bytesCache[name] = b
+			return b
+		}
+		if v := vc.ctx.UserValue(VarStatus); v != nil {
+			if i, ok := v.(int); ok {
+				b := []byte(strconv.Itoa(i))
+				vc.bytesCache[name] = b
+				return b
+			}
+		}
+	case VarBodyBytesSent:
+		if vc.bodySize > 0 {
+			b := []byte(strconv.FormatInt(vc.bodySize, 10))
+			vc.bytesCache[name] = b
+			return b
+		}
+		if v := vc.ctx.UserValue(VarBodyBytesSent); v != nil {
+			if i, ok := v.(int64); ok {
+				b := []byte(strconv.FormatInt(i, 10))
+				vc.bytesCache[name] = b
+				return b
+			}
+		}
+		b := []byte("0")
+		vc.bytesCache[name] = b
+		return b
+	case VarRequestTime:
+		if vc.duration > 0 {
+			seconds := float64(vc.duration) / 1e9
+			b := []byte(strconv.FormatFloat(seconds, 'f', 3, 64))
+			vc.bytesCache[name] = b
+			return b
+		}
+		if v := vc.ctx.UserValue(VarRequestTime); v != nil {
+			if i, ok := v.(int64); ok {
+				seconds := float64(i) / 1e9
+				b := []byte(strconv.FormatFloat(seconds, 'f', 3, 64))
+				vc.bytesCache[name] = b
+				return b
+			}
+		}
+		b := []byte("0.000")
+		vc.bytesCache[name] = b
+		return b
+	case VarServerName:
+		if vc.serverName != "" {
+			return []byte(vc.serverName)
+		}
+	// 上游变量
+	case VarUpstreamAddr:
+		if vc.upstreamAddr != "" {
+			return []byte(vc.upstreamAddr)
+		}
+		return []byte("-")
+	case VarUpstreamStatus:
+		if vc.upstreamStatus > 0 {
+			b := []byte(strconv.Itoa(vc.upstreamStatus))
+			vc.bytesCache[name] = b
+			return b
+		}
+		return []byte("-")
+	case VarUpstreamResponseTime:
+		if vc.upstreamResponseTime > 0 {
+			b := []byte(strconv.FormatFloat(vc.upstreamResponseTime, 'f', 3, 64))
+			vc.bytesCache[name] = b
+			return b
+		}
+		return []byte("-")
+	case VarUpstreamConnectTime:
+		if vc.upstreamConnectTime > 0 {
+			b := []byte(strconv.FormatFloat(vc.upstreamConnectTime, 'f', 3, 64))
+			vc.bytesCache[name] = b
+			return b
+		}
+		return []byte("-")
+	case VarUpstreamHeaderTime:
+		if vc.upstreamHeaderTime > 0 {
+			b := []byte(strconv.FormatFloat(vc.upstreamHeaderTime, 'f', 3, 64))
+			vc.bytesCache[name] = b
+			return b
+		}
+		return []byte("-")
+	}
+
+	// 5. 使用 GetterBytes 求值内置变量（零拷贝）
+	if b, ok := vc.evalBuiltinBytes(name); ok {
+		vc.bytesCache[name] = b
+		return b
+	}
+
+	// 6. 如果只有 Getter，调用并转换为 []byte
+	if v, ok := vc.evalBuiltin(name); ok {
+		b := []byte(v)
+		vc.bytesCache[name] = b
+		return b
+	}
+
+	return nil
+}
+
+// PersistentGet returns string for cross-request storage.
+//
+// Use this method when you need to store the variable value beyond
+// the current request scope (e.g., in a database, cache, or long-lived struct).
+func (vc *Context) PersistentGet(name string) string {
+	// 直接调用 Get，它返回 string
+	v, _ := vc.Get(name)
+	return v
+}
+
+// evalBuiltinBytes 求值内置变量，返回 []byte（零拷贝）
+func (vc *Context) evalBuiltinBytes(name string) ([]byte, bool) {
+	builtin := builtinVars[name]
+	if builtin == nil || builtin.GetterBytes == nil {
+		return nil, false
+	}
+	return builtin.GetterBytes(vc.ctx), true
 }
 
 // Set 设置自定义变量

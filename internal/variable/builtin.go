@@ -49,6 +49,10 @@ func init() {
 		Getter: func(ctx *fasthttp.RequestCtx) string {
 			return string(ctx.Host())
 		},
+		GetterBytes: func(ctx *fasthttp.RequestCtx) []byte {
+			// SAFETY: ctx.Host() returns []byte valid within request scope
+			return ctx.Host()
+		},
 	})
 
 	// 2. $remote_addr - 客户端 IP
@@ -91,6 +95,10 @@ func init() {
 		Getter: func(ctx *fasthttp.RequestCtx) string {
 			return string(ctx.RequestURI())
 		},
+		GetterBytes: func(ctx *fasthttp.RequestCtx) []byte {
+			// SAFETY: ctx.RequestURI() returns []byte valid within request scope
+			return ctx.RequestURI()
+		},
 	})
 
 	// 5. $uri - 解码后的 URI 路径
@@ -99,6 +107,10 @@ func init() {
 		Description: "URI 路径（不包含查询参数）",
 		Getter: func(ctx *fasthttp.RequestCtx) string {
 			return string(ctx.Path())
+		},
+		GetterBytes: func(ctx *fasthttp.RequestCtx) []byte {
+			// SAFETY: ctx.Path() returns []byte valid within request scope
+			return ctx.Path()
 		},
 	})
 
@@ -109,6 +121,10 @@ func init() {
 		Getter: func(ctx *fasthttp.RequestCtx) string {
 			return string(ctx.QueryArgs().QueryString())
 		},
+		GetterBytes: func(ctx *fasthttp.RequestCtx) []byte {
+			// SAFETY: ctx.QueryArgs().QueryString() returns []byte valid within request scope
+			return ctx.QueryArgs().QueryString()
+		},
 	})
 
 	// 7. $request_method - 请求方法
@@ -117,6 +133,10 @@ func init() {
 		Description: "HTTP 请求方法",
 		Getter: func(ctx *fasthttp.RequestCtx) string {
 			return string(ctx.Method())
+		},
+		GetterBytes: func(ctx *fasthttp.RequestCtx) []byte {
+			// SAFETY: ctx.Method() returns []byte valid within request scope
+			return ctx.Method()
 		},
 	})
 

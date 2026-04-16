@@ -36,7 +36,7 @@ func BenchmarkVariableExpandSimple(b *testing.B) {
 	template := "$remote_addr - $request_method"
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc.Expand(template)
 	}
 }
@@ -54,7 +54,7 @@ func BenchmarkVariableExpandComplex(b *testing.B) {
 	template := "$remote_addr - [$time_local] \"$request_method $uri $args\" $status $body_bytes_sent"
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc.Expand(template)
 	}
 }
@@ -68,7 +68,7 @@ func BenchmarkVariableExpandMixed(b *testing.B) {
 	template := "${remote_addr} - $request_method ${uri}?${args}"
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc.Expand(template)
 	}
 }
@@ -82,7 +82,7 @@ func BenchmarkVariableExpandNoVar(b *testing.B) {
 	template := "This is a plain string with no variables"
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc.Expand(template)
 	}
 }
@@ -92,7 +92,7 @@ func BenchmarkVariableContextPool(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc := NewContext(ctx)
 		ReleaseContext(vc)
 	}
@@ -122,7 +122,7 @@ func BenchmarkVariableGetCache(b *testing.B) {
 	_, _ = vc.Get("remote_addr")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc.Get("remote_addr")
 	}
 }
@@ -134,7 +134,7 @@ func BenchmarkVariableGetNoCache(b *testing.B) {
 	ctx := setupBenchmarkRequestCtx()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc := NewContext(ctx)
 		vc.Get("remote_addr")
 		ReleaseContext(vc)
@@ -153,7 +153,7 @@ func BenchmarkVariableGetMultiple(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, name := range vars {
 			vc.Get(name)
 		}
@@ -167,7 +167,7 @@ func BenchmarkVariableSetAndGet(b *testing.B) {
 	defer ReleaseContext(vc)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc.Set("custom_var", "custom_value")
 		vc.Get("custom_var")
 	}
@@ -188,7 +188,7 @@ func BenchmarkExpandStringStaticWithLookup(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ExpandString(template, lookup)
 	}
 }
@@ -206,7 +206,7 @@ func BenchmarkVariableExpandLongTemplate(b *testing.B) {
 	template := "$remote_addr - [$time_local] \"$request_method $uri?$args\" $status $body_bytes_sent \"$http_referer\" \"$http_user_agent\" $request_time $server_name"
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc.Expand(template)
 	}
 }

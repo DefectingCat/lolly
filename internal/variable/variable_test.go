@@ -353,7 +353,7 @@ func BenchmarkExpandSimple(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = vc.Expand(template)
 	}
 }
@@ -374,7 +374,7 @@ func BenchmarkExpandComplex(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = vc.Expand(template)
 	}
 }
@@ -390,7 +390,7 @@ func BenchmarkExpandNoVariable(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = vc.Expand(template)
 	}
 }
@@ -409,7 +409,7 @@ func BenchmarkExpandBrace(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = vc.Expand(template)
 	}
 }
@@ -421,7 +421,7 @@ func BenchmarkPoolGetPut(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		vc := NewContext(ctx)
 		ReleaseContext(vc)
 	}
@@ -445,7 +445,7 @@ func BenchmarkExpandStringStatic(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = ExpandString(template, lookup)
 	}
 }
@@ -1029,7 +1029,7 @@ func BenchmarkUpstreamVariables(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = vc.Get(VarUpstreamAddr)
 		_, _ = vc.Get(VarUpstreamStatus)
 		_, _ = vc.Get(VarUpstreamResponseTime)
@@ -1131,5 +1131,276 @@ func TestGlobalVariablesConcurrent(_ *testing.T) {
 	// 等待所有 goroutine 完成
 	for i := 0; i < 15; i++ {
 		<-done
+	}
+}
+
+// TestEphemeralGet 测试 EphemeralGet 方法
+func TestEphemeralGet(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	tests := []struct {
+		name     string
+		varName  string
+		expected []byte
+	}{
+		{"host", VarHost, []byte("example.com")},
+		{"uri", VarURI, []byte("/test/path")},
+		{"request_uri", VarRequestURI, []byte("/test/path?foo=bar&baz=qux")},
+		{"args", VarArgs, []byte("foo=bar&baz=qux")},
+		{"request_method", VarRequestMethod, []byte("GET")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := vc.EphemeralGet(tt.varName)
+			if string(result) != string(tt.expected) {
+				t.Errorf("EphemeralGet(%q) = %q, want %q", tt.varName, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestEphemeralGetCustomVariable 测试自定义变量的 EphemeralGet
+func TestEphemeralGetCustomVariable(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	// 设置自定义变量
+	vc.Set("custom_var", "custom_value")
+
+	result := vc.EphemeralGet("custom_var")
+	if string(result) != "custom_value" {
+		t.Errorf("EphemeralGet('custom_var') = %q, want 'custom_value'", result)
+	}
+}
+
+// TestEphemeralGetUndefined 测试未定义变量的 EphemeralGet
+func TestEphemeralGetUndefined(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	result := vc.EphemeralGet("undefined_var")
+	if result != nil {
+		t.Errorf("EphemeralGet('undefined_var') = %q, want nil", result)
+	}
+}
+
+// TestEphemeralGetCache 测试 EphemeralGet 的缓存
+func TestEphemeralGetCache(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	// 第一次获取
+	result1 := vc.EphemeralGet(VarHost)
+	// 第二次获取应该命中缓存
+	result2 := vc.EphemeralGet(VarHost)
+
+	// 验证缓存返回相同的结果
+	if string(result1) != string(result2) {
+		t.Errorf("EphemeralGet cache: %q != %q", result1, result2)
+	}
+}
+
+// TestPersistentGet 测试 PersistentGet 方法
+func TestPersistentGet(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	tests := []struct {
+		name     string
+		varName  string
+		expected string
+	}{
+		{"host", VarHost, "example.com"},
+		{"uri", VarURI, "/test/path"},
+		{"request_method", VarRequestMethod, "GET"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := vc.PersistentGet(tt.varName)
+			if result != tt.expected {
+				t.Errorf("PersistentGet(%q) = %q, want %q", tt.varName, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestPersistentGetUndefined 测试未定义变量的 PersistentGet
+func TestPersistentGetUndefined(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	result := vc.PersistentGet("undefined_var")
+	if result != "" {
+		t.Errorf("PersistentGet('undefined_var') = %q, want empty string", result)
+	}
+}
+
+// TestGetBackwardCompatibility 测试 Get 方法的向后兼容性
+func TestGetBackwardCompatibility(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	// Get 应该返回与 PersistentGet 相同的结果
+	tests := []string{VarHost, VarURI, VarRequestMethod, VarRequestURI}
+
+	for _, varName := range tests {
+		getResult, ok := vc.Get(varName)
+		if !ok {
+			t.Errorf("Get(%q) returned not found", varName)
+			continue
+		}
+		persistentResult := vc.PersistentGet(varName)
+		if getResult != persistentResult {
+			t.Errorf("Get(%q) = %q, PersistentGet(%q) = %q, should be equal",
+				varName, getResult, varName, persistentResult)
+		}
+	}
+}
+
+// TestEphemeralGetUpstreamVariables 测试上游变量的 EphemeralGet
+func TestEphemeralGetUpstreamVariables(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	// 未设置时应该返回默认值 "-"
+	defaultTests := []struct {
+		varName  string
+		expected []byte
+	}{
+		{VarUpstreamAddr, []byte("-")},
+		{VarUpstreamStatus, []byte("-")},
+		{VarUpstreamResponseTime, []byte("-")},
+	}
+
+	for _, tt := range defaultTests {
+		t.Run(tt.varName+"_default", func(t *testing.T) {
+			result := vc.EphemeralGet(tt.varName)
+			if string(result) != string(tt.expected) {
+				t.Errorf("EphemeralGet(%q) = %q, want %q", tt.varName, result, tt.expected)
+			}
+		})
+	}
+
+	// 设置上游变量
+	vc.SetUpstreamVars("http://backend:8080", 200, 0.123, 0.001, 0.045)
+
+	setTests := []struct {
+		varName  string
+		expected []byte
+	}{
+		{VarUpstreamAddr, []byte("http://backend:8080")},
+		{VarUpstreamStatus, []byte("200")},
+		{VarUpstreamResponseTime, []byte("0.123")},
+	}
+
+	for _, tt := range setTests {
+		t.Run(tt.varName+"_set", func(t *testing.T) {
+			result := vc.EphemeralGet(tt.varName)
+			if string(result) != string(tt.expected) {
+				t.Errorf("EphemeralGet(%q) = %q, want %q", tt.varName, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestEphemeralGetResponseInfo 测试响应信息的 EphemeralGet
+func TestEphemeralGetResponseInfo(t *testing.T) {
+	ctx := mockRequestCtx(t)
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	// 设置响应信息
+	vc.SetResponseInfo(200, 1024, 15000000) // 15ms
+
+	tests := []struct {
+		varName  string
+		expected []byte
+	}{
+		{VarStatus, []byte("200")},
+		{VarBodyBytesSent, []byte("1024")},
+		{VarRequestTime, []byte("0.015")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.varName, func(t *testing.T) {
+			result := vc.EphemeralGet(tt.varName)
+			if string(result) != string(tt.expected) {
+				t.Errorf("EphemeralGet(%q) = %q, want %q", tt.varName, result, tt.expected)
+			}
+		})
+	}
+}
+
+// BenchmarkEphemeralGet 基准测试：EphemeralGet 零拷贝性能
+func BenchmarkEphemeralGet(b *testing.B) {
+	ctx := setupBenchmarkRequestCtx()
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for b.Loop() {
+		_ = vc.EphemeralGet(VarHost)
+	}
+}
+
+// BenchmarkEphemeralGetCached 基准测试：EphemeralGet 缓存命中性能
+func BenchmarkEphemeralGetCached(b *testing.B) {
+	ctx := setupBenchmarkRequestCtx()
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	// 预热缓存
+	_ = vc.EphemeralGet(VarHost)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for b.Loop() {
+		_ = vc.EphemeralGet(VarHost)
+	}
+}
+
+// BenchmarkPersistentGet 基准测试：PersistentGet 性能
+func BenchmarkPersistentGet(b *testing.B) {
+	ctx := setupBenchmarkRequestCtx()
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for b.Loop() {
+		_ = vc.PersistentGet(VarHost)
+	}
+}
+
+// BenchmarkEphemeralGetMultiple 基准测试：获取多个变量的 EphemeralGet
+func BenchmarkEphemeralGetMultiple(b *testing.B) {
+	ctx := setupBenchmarkRequestCtx()
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	vars := []string{VarHost, VarURI, VarRequestMethod, VarRequestURI, VarArgs}
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for b.Loop() {
+		for _, name := range vars {
+			_ = vc.EphemeralGet(name)
+		}
 	}
 }
