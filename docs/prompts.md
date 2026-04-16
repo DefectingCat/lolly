@@ -3,15 +3,13 @@
 ulw 深度分析配置文件，当前支持的配置和 --generate-config 是否有不一样的地方，--generate-config
 需要完整且详细，包括所有字段的枚举值都要有
 
-ulw 深度分析下 @docs/ 下的 nginx 文档，看看当前项目实现的怎么样了
-
-ulw 深度分析 https://nginx.org/en/docs/ nginx 的功能，@docs/ 目录下已经有一些分析过的文档了，看看有没有能完善的
-
-ulw 深度分析下当前的 --generate-config，是否有配置文件描述了，但代码未实现的功能。
-
 ulw 深度分析下有没有代码实现了，但是 --generate-config 缺失的地方
 
 ulw 逐行分析下当前的 --generate-config，看看代码中是否都实现了
+
+ulw 分析 lib/nginx 代码，然后更新 docs/nginx/ 里的文档
+
+ulw 深度分析下 @docs/ 下的 nginx 文档，看看当前项目实现的怎么样了
 
 ## 单元测试
 
@@ -27,8 +25,6 @@ ulw 参考 @docs/comments.md，深度分析项目注释是否完善
 
 ## 优化
 
-ulw 深度分析下有没有已经实现的功能，但是却未实际用到的
-
 ulw 深度分析下，有没有重复的逻辑/代码，或者冗余的东西，或者没用的东西
 
 ulw 运行 make lint，并修复
@@ -39,7 +35,7 @@ ulw 完善性能基准测试
 
 ulw 深度分析下代码质量
 
-ulw 分析下 fasthttp/ 的源码，然后看下 lolly 的用法合不合理，有没有性能可以提升的地方
+ulw 分析下 lib/fasthttp/ 的源码，然后看下 lolly 的用法合不合理，有没有性能可以提升的地方
 
 ## 兼容性
 
