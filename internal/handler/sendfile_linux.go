@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/valyala/fasthttp"
 )
@@ -20,6 +21,12 @@ const (
 	// MinSendfileSize 使用 sendfile 的最小文件大小（8KB）。
 	// 小于该值的文件使用普通 io.Copy，避免系统调用开销。
 	MinSendfileSize = 8 * 1024
+
+	// sendfile 最大重试次数
+	sendfileMaxRetries = 100
+
+	// sendfile 重试等待时间
+	sendfileRetryDelay = 1 * time.Millisecond
 )
 
 // SendFile 零拷贝文件传输。
@@ -50,7 +57,12 @@ func SendFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 	// Linux 平台使用 sendfile 系统调用
 	err := linuxSendfile(conn, file.Fd(), offset, length)
 	if err != nil {
-		// sendfile 失败，fallback 到 io.Copy
+		// EPIPE/ECONNRESET 表示客户端已断开，不应 fallback
+		// 因为 HTTP 头可能已发送，fallback 会造成响应混乱
+		if err == syscall.EPIPE || err == syscall.ECONNRESET {
+			return err // 直接返回错误，不 fallback
+		}
+		// 其他错误尝试 fallback 到 io.Copy
 		return copyFile(ctx, file, offset, length)
 	}
 
@@ -82,6 +94,7 @@ func copyFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 // linuxSendfile Linux sendfile 系统调用。
 //
 // 使用 Linux 特有的 sendfile 系统调用实现零拷贝传输。
+// 正确处理临时错误（EAGAIN、EINTR）和连接断开（EPIPE、ECONNRESET）。
 func linuxSendfile(conn net.Conn, fileFd uintptr, _, length int64) error {
 	socketFd, err := getSocketFd(conn)
 	if err != nil {
@@ -91,15 +104,48 @@ func linuxSendfile(conn net.Conn, fileFd uintptr, _, length int64) error {
 	// Linux sendfile: sendfile(out_fd, in_fd, offset, count)
 	var sent int64
 	remain := length
+	retries := 0
 
 	for remain > 0 {
 		n, err := syscall.Sendfile(int(socketFd), int(fileFd), nil, int(remain))
 		if err != nil {
+			// 处理临时错误：socket 缓冲区满，等待后重试
+			if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
+				retries++
+				if retries > sendfileMaxRetries {
+					// 超过最大重试次数，返回错误
+					return err
+				}
+				// socket 缓冲区满，短暂等待后重试
+				time.Sleep(sendfileRetryDelay)
+				continue
+			}
+
+			// 被信号中断，重试
+			if err == syscall.EINTR {
+				retries++
+				if retries > sendfileMaxRetries {
+					return err
+				}
+				continue
+			}
+
+			// 客户端断开连接，返回错误让 fasthttp 知道请求未完成
+			// 注意：不要返回 nil，否则 fasthttp 会发送 200 + 空 body
+			if err == syscall.EPIPE || err == syscall.ECONNRESET {
+				return err // 返回错误，让 fasthttp 处理连接断开
+			}
+
+			// 其他错误直接返回
 			return err
 		}
+
 		if n == 0 {
-			break // EOF
+			break // EOF 或连接关闭
 		}
+
+		// 成功发送数据，重置重试计数
+		retries = 0
 		sent += int64(n)
 		remain -= int64(n)
 	}

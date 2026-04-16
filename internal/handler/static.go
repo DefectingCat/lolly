@@ -41,15 +41,19 @@ import (
 //   - 大文件（>= 8KB）自动启用零拷贝传输
 //   - alias 与 root 互斥，同时配置时 alias 优先
 type StaticHandler struct {
-	fileCache    *cache.FileCache
+	// 指针类型字段（按大小排列）
+	fileCache  *cache.FileCache
+	gzipStatic *compression.GzipStatic
+	router     *Router
+	// 字符串字段
+	root       string
+	alias      string
+	pathPrefix string
+	// 切片字段
+	index    []string
+	tryFiles []string
+	// 基本类型字段
 	cacheTTL     time.Duration // 缓存新鲜度 TTL（默认 5s，0 表示每次验证 ModTime）
-	gzipStatic   *compression.GzipStatic
-	router       *Router
-	root         string
-	alias        string
-	pathPrefix   string
-	index        []string
-	tryFiles     []string
 	useSendfile  bool
 	tryFilesPass bool
 	symlinkCheck bool
@@ -541,19 +545,20 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 	}
 
 	// 大文件使用零拷贝传输
+	// 使用 fasthttp 的 SetBodyStream，它会：
+	// 1. 先写 HTTP 头到 bufio.Writer
+	// 2. Flush HTTP 头到 socket（关键步骤）
+	// 3. copyZeroAlloc → ReadFrom → sendfile
+	// 这样保证 HTTP 头先发送，避免顺序错乱导致的 "200 0" malformed response
 	if h.useSendfile && info.Size() >= MinSendfileSize {
-		// 设置 Content-Type (sendfile 不会自动设置)
 		ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
 
 		file, err := os.Open(filePath)
 		if err == nil {
-			defer func() {
-				_ = file.Close()
-			}()
-			if err := SendFile(ctx, file, 0, info.Size()); err == nil {
-				return
-			}
-			// sendfile 失败，fallback 到 ServeFile
+			// SetBodyStream 会在 handler 返回后由 fasthttp 统一处理
+			// HTTP 头写入、Flush 和 sendfile 的顺序
+			ctx.Response.SetBodyStream(file, int(info.Size()))
+			return
 		}
 	}
 
