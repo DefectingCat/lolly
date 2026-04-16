@@ -46,10 +46,10 @@ func DefaultConfig() *Config {
 			MaxConnsPerIP:      1000,
 			MaxRequestsPerConn: 10000,
 			// 高并发优化配置默认值
-			Concurrency:        256 * 1024, // 256K 最大并发连接
-			ReadBufferSize:     16 * 1024,  // 16KB 读缓冲
-			WriteBufferSize:    16 * 1024,  // 16KB 写缓冲
-			ReduceMemoryUsage:  false,      // 优先性能
+			Concurrency:       256 * 1024, // 256K 最大并发连接
+			ReadBufferSize:    16 * 1024,  // 16KB 读缓冲
+			WriteBufferSize:   16 * 1024,  // 16KB 写缓冲
+			ReduceMemoryUsage: false,      // 优先性能
 			CacheAPI: &CacheAPIConfig{
 				Enabled: false,
 				Path:    "/_cache/purge",

@@ -182,29 +182,34 @@ type HTTP3Config struct {
 //	  read_timeout: 30s
 //	  write_timeout: 30s
 type ServerConfig struct {
-	CacheAPI           *CacheAPIConfig      `yaml:"cache_api"`
-	Lua                *LuaMiddlewareConfig `yaml:"lua"`
-	ClientMaxBodySize  string               `yaml:"client_max_body_size"`
-	Name               string               `yaml:"name"`
-	Default            bool                 `yaml:"default,omitempty"` // VHost 默认主机标记
-	Listen             string               `yaml:"listen"`
-	Security           SecurityConfig       `yaml:"security"`
-	Static             []StaticConfig       `yaml:"static"`
-	Proxy              []ProxyConfig        `yaml:"proxy"`
-	Rewrite            []RewriteRule        `yaml:"rewrite"`
-	Compression        CompressionConfig    `yaml:"compression"`
-	SSL                SSLConfig            `yaml:"ssl"`
-	ReadTimeout        time.Duration        `yaml:"read_timeout"`
-	MaxRequestsPerConn int                  `yaml:"max_requests_per_conn"`
-	MaxConnsPerIP      int                  `yaml:"max_conns_per_ip"`
-	IdleTimeout        time.Duration        `yaml:"idle_timeout"`
-	WriteTimeout       time.Duration        `yaml:"write_timeout"`
-
-	// 高并发优化配置（可选，未配置时使用默认值）
-	Concurrency        int  `yaml:"concurrency"`         // 最大并发连接数（默认 256 * 1024）
-	ReadBufferSize     int  `yaml:"read_buffer_size"`    // 读缓冲区大小（字节，默认 16KB）
-	WriteBufferSize    int  `yaml:"write_buffer_size"`   // 写缓冲区大小（字节，默认 16KB）
-	ReduceMemoryUsage  bool `yaml:"reduce_memory_usage"` // 是否优先减少内存使用（默认 false，优先性能）
+	// 指针类型字段（按大小排列，减少 padding）
+	CacheAPI *CacheAPIConfig      `yaml:"cache_api"`
+	Lua      *LuaMiddlewareConfig `yaml:"lua"`
+	// 切片字段
+	Static  []StaticConfig `yaml:"static"`
+	Proxy   []ProxyConfig  `yaml:"proxy"`
+	Rewrite []RewriteRule  `yaml:"rewrite"`
+	// 字符串字段
+	ClientMaxBodySize string `yaml:"client_max_body_size"`
+	Name              string `yaml:"name"`
+	Listen            string `yaml:"listen"`
+	// 结构体字段（嵌入类型）
+	Security    SecurityConfig    `yaml:"security"`
+	Compression CompressionConfig `yaml:"compression"`
+	SSL         SSLConfig         `yaml:"ssl"`
+	// time.Duration 字段（int64）
+	ReadTimeout  time.Duration `yaml:"read_timeout"`
+	IdleTimeout  time.Duration `yaml:"idle_timeout"`
+	WriteTimeout time.Duration `yaml:"write_timeout"`
+	// 基本类型字段（int 按大小排列）
+	MaxRequestsPerConn int `yaml:"max_requests_per_conn"`
+	MaxConnsPerIP      int `yaml:"max_conns_per_ip"`
+	Concurrency        int `yaml:"concurrency"`       // 最大并发连接数（默认 256 * 1024）
+	ReadBufferSize     int `yaml:"read_buffer_size"`  // 读缓冲区大小（字节，默认 16KB）
+	WriteBufferSize    int `yaml:"write_buffer_size"` // 写缓冲区大小（字节，默认 16KB）
+	// 布尔字段（放在一起减少 padding）
+	Default           bool `yaml:"default,omitempty"`   // VHost 默认主机标记
+	ReduceMemoryUsage bool `yaml:"reduce_memory_usage"` // 是否优先减少内存使用（默认 false，优先性能）
 }
 
 // StaticConfig 静态文件服务配置。
@@ -303,21 +308,26 @@ type StaticConfig struct {
 //	      interval: 10s
 //	      path: "/health"
 type ProxyConfig struct {
-	Path              string              `yaml:"path"`
-	LoadBalance       string              `yaml:"load_balance"`
-	HashKey           string              `yaml:"hash_key"`
-	ClientMaxBodySize string              `yaml:"client_max_body_size"`
-	Headers           ProxyHeaders        `yaml:"headers"`
-	Targets           []ProxyTarget       `yaml:"targets"`
-	BalancerByLua     BalancerByLuaConfig `yaml:"balancer_by_lua"`
-	HealthCheck       HealthCheckConfig   `yaml:"health_check"`
-	NextUpstream      NextUpstreamConfig  `yaml:"next_upstream"`
-	Cache             ProxyCacheConfig      `yaml:"cache"`
-	Timeout           ProxyTimeout          `yaml:"timeout"`
-	VirtualNodes      int                   `yaml:"virtual_nodes"`
-	RedirectRewrite   *RedirectRewriteConfig `yaml:"redirect_rewrite"`
-	ProxySSL          *ProxySSLConfig        `yaml:"proxy_ssl"`
-	CacheValid        *ProxyCacheValidConfig `yaml:"cache_valid"`
+	// 指针类型字段（按大小排列）
+	RedirectRewrite *RedirectRewriteConfig `yaml:"redirect_rewrite"`
+	ProxySSL        *ProxySSLConfig        `yaml:"proxy_ssl"`
+	CacheValid      *ProxyCacheValidConfig `yaml:"cache_valid"`
+	// 切片字段
+	Targets []ProxyTarget `yaml:"targets"`
+	// 字符串字段
+	Path              string `yaml:"path"`
+	LoadBalance       string `yaml:"load_balance"`
+	HashKey           string `yaml:"hash_key"`
+	ClientMaxBodySize string `yaml:"client_max_body_size"`
+	// 结构体字段
+	Headers       ProxyHeaders        `yaml:"headers"`
+	BalancerByLua BalancerByLuaConfig `yaml:"balancer_by_lua"`
+	HealthCheck   HealthCheckConfig   `yaml:"health_check"`
+	NextUpstream  NextUpstreamConfig  `yaml:"next_upstream"`
+	Cache         ProxyCacheConfig    `yaml:"cache"`
+	Timeout       ProxyTimeout        `yaml:"timeout"`
+	// 基本类型字段
+	VirtualNodes int `yaml:"virtual_nodes"`
 }
 
 // BalancerByLuaConfig Lua 负载均衡配置
@@ -545,34 +555,16 @@ type ProxyCacheValidConfig struct {
 //	  client_key: "/etc/ssl/client.key"
 //	  min_version: "TLSv1.2"
 type ProxySSLConfig struct {
-	// Enabled 是否启用自定义 TLS 配置
-	Enabled bool `yaml:"enabled"`
-
-	// ServerName SNI 名称
-	// 用于 TLS handshake 中的服务器名称指示
-	// 未配置时使用目标 URL 的 host
+	// 字符串字段
 	ServerName string `yaml:"server_name"`
-
-	// InsecureSkipVerify 跳过证书验证
-	// 仅用于测试环境，生产环境必须禁用
-	InsecureSkipVerify bool `yaml:"insecure_skip_verify"`
-
-	// TrustedCA CA 证书文件路径
-	// 用于验证上游服务器证书
-	TrustedCA string `yaml:"trusted_ca"`
-
-	// ClientCert 客户端证书文件路径（mTLS）
+	TrustedCA  string `yaml:"trusted_ca"`
 	ClientCert string `yaml:"client_cert"`
-
-	// ClientKey 客户端私钥文件路径（mTLS）
-	ClientKey string `yaml:"client_key"`
-
-	// MinVersion 最低 TLS 版本
-	// 可选值：TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3
+	ClientKey  string `yaml:"client_key"`
 	MinVersion string `yaml:"min_version"`
-
-	// MaxVersion 最高 TLS 版本
 	MaxVersion string `yaml:"max_version"`
+	// 布尔字段
+	Enabled            bool `yaml:"enabled"`
+	InsecureSkipVerify bool `yaml:"insecure_skip_verify"`
 }
 
 // RedirectRewriteConfig Location/Refresh 头改写配置
