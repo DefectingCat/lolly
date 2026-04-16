@@ -70,6 +70,12 @@ type LuaCoroutine struct {
 	executionCancel  context.CancelFunc
 	OutputBuffer     []byte
 	Exited           bool
+
+	// ngx API 实例（用于测试和 Go 层访问）
+	ngxVarAPI  *ngxVarAPI
+	ngxReqAPI  *ngxReqAPI
+	ngxRespAPI *ngxRespAPI
+	ngxLogAPI  *ngxLogAPI
 }
 
 // SetupSandbox 创建 per-request _ENV 沙箱
@@ -163,20 +169,24 @@ func (c *LuaCoroutine) setupNgxAPI() {
 	// 注册 ngx.req API
 	if c.RequestCtx != nil {
 		reqAPI := newNgxReqAPI(c.RequestCtx)
+		c.ngxReqAPI = reqAPI
 		RegisterNgxReqAPI(c.Co, reqAPI, ngx)
 
 		// 注册 ngx.resp API
 		respAPI := newNgxRespAPI(c.RequestCtx)
+		c.ngxRespAPI = respAPI
 		RegisterNgxRespAPI(c.Co, respAPI)
 
 		// 注册 ngx.log API (logger 为 nil 时禁用日志输出)
 		// ngx.say/print/flush 直接写入 RequestCtx
 		logAPI := newNgxLogAPI(c.RequestCtx, nil, nil)
+		c.ngxLogAPI = logAPI
 		RegisterNgxLogAPI(c.Co, logAPI)
 	}
 
 	// 注册 ngx.var API
 	varAPI := newNgxVarAPI(c.RequestCtx)
+	c.ngxVarAPI = varAPI
 	RegisterNgxVarAPI(c.Co, varAPI, ngx)
 
 	// 注册 ngx.ctx API
@@ -332,4 +342,24 @@ func (c *LuaCoroutine) handleSleep(values []glua.LValue) ([]glua.LValue, error) 
 // Close 关闭协程
 func (c *LuaCoroutine) Close() {
 	c.Engine.releaseCoroutine(c)
+}
+
+// GetNgxVarAPI 获取 ngx.var API 实例（用于测试和 Go 层访问）
+func (c *LuaCoroutine) GetNgxVarAPI() *ngxVarAPI {
+	return c.ngxVarAPI
+}
+
+// GetNgxReqAPI 获取 ngx.req API 实例（用于测试和 Go 层访问）
+func (c *LuaCoroutine) GetNgxReqAPI() *ngxReqAPI {
+	return c.ngxReqAPI
+}
+
+// GetNgxRespAPI 获取 ngx.resp API 实例（用于测试和 Go 层访问）
+func (c *LuaCoroutine) GetNgxRespAPI() *ngxRespAPI {
+	return c.ngxRespAPI
+}
+
+// GetNgxLogAPI 获取 ngx.log API 实例（用于测试和 Go 层访问）
+func (c *LuaCoroutine) GetNgxLogAPI() *ngxLogAPI {
+	return c.ngxLogAPI
 }
