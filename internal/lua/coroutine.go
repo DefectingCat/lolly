@@ -63,19 +63,17 @@ func (p Phase) String() string {
 type LuaCoroutine struct {
 	CreatedAt        time.Time
 	ExecutionContext context.Context
-	Engine           *LuaEngine
-	Co               *glua.LState
-	Cancel           context.CancelFunc
+	ngxReqAPI        *ngxReqAPI
 	RequestCtx       *fasthttp.RequestCtx
+	Co               *glua.LState
+	ngxVarAPI        *ngxVarAPI
+	ngxRespAPI       *ngxRespAPI
+	ngxLogAPI        *ngxLogAPI
+	Cancel           context.CancelFunc
 	executionCancel  context.CancelFunc
+	Engine           *LuaEngine
 	OutputBuffer     []byte
 	Exited           bool
-
-	// ngx API 实例（用于测试和 Go 层访问）
-	ngxVarAPI  *ngxVarAPI
-	ngxReqAPI  *ngxReqAPI
-	ngxRespAPI *ngxRespAPI
-	ngxLogAPI  *ngxLogAPI
 }
 
 // SetupSandbox 创建 per-request _ENV 沙箱

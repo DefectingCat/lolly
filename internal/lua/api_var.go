@@ -8,6 +8,9 @@ import (
 	glua "github.com/yuin/gopher-lua"
 )
 
+// argPrefix 是 arg_ 变量的前缀，用于获取查询参数
+const argPrefix = "arg_"
+
 // ngxVarAPI ngx.var API 实现
 type ngxVarAPI struct {
 	// 请求上下文
@@ -166,12 +169,12 @@ func (api *ngxVarAPI) getVariableLua(name string) glua.LValue {
 		return glua.LString(string(api.ctx.Host()))
 
 	// URI 参数
-	case "arg_":
+	case argPrefix:
 		// 获取所有参数
 		return glua.LString(string(api.ctx.URI().QueryString()))
 	default:
 		// 检查是否是 arg_ 开头的参数
-		if len(name) > 4 && name[:4] == "arg_" {
+		if len(name) > len(argPrefix) && name[:len(argPrefix)] == argPrefix {
 			paramName := name[4:]
 			return glua.LString(string(api.ctx.QueryArgs().Peek(paramName)))
 		}
@@ -244,10 +247,10 @@ func (api *ngxVarAPI) getVariable(name string) string {
 		return ""
 	case "server_name":
 		return string(api.ctx.Host())
-	case "arg_":
+	case argPrefix:
 		return string(api.ctx.URI().QueryString())
 	default:
-		if len(name) > 4 && name[:4] == "arg_" {
+		if len(name) > len(argPrefix) && name[:len(argPrefix)] == argPrefix {
 			paramName := name[4:]
 			return string(api.ctx.QueryArgs().Peek(paramName))
 		}
