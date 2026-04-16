@@ -7,6 +7,8 @@ package security
 
 import (
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -57,148 +59,280 @@ func TestNewGeoIPLookup_NonExistentDB(t *testing.T) {
 	assert.Contains(t, err.Error(), "open geoip database")
 }
 
-// TestGeoIPLookup_PrivateIPBehavior 测试私有 IP 处理策略。
-func TestGeoIPLookup_PrivateIPBehavior(t *testing.T) {
-	// 注意：这个测试需要有效的 GeoIP2 数据库文件
-	// 如果没有数据库文件，测试会被跳过
-	dbPath := "/var/lib/geoip/GeoIP2-Country.mmdb"
+// setupTestGeoIP 创建测试用 GeoIPLookup 实例。
+// 它会复制测试数据库到临时目录，避免并发测试冲突。
+func setupTestGeoIP(t *testing.T, behavior string) *GeoIPLookup {
+	t.Helper()
 
-	// 尝试创建 GeoIPLookup
-	geoip, err := NewGeoIPLookup(dbPath, 1000, time.Hour, "allow")
-	if err != nil {
-		t.Skipf("Skipping test: GeoIP database not available: %v", err)
+	testDB := "/tmp/GeoIP2-Country-Test.mmdb"
+	if _, err := os.Stat(testDB); os.IsNotExist(err) {
+		t.Skipf("Skipping test: GeoIP test database not available: %v", err)
 	}
-	defer geoip.Close()
 
-	privateIP := net.ParseIP("192.168.1.1")
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "GeoIP2-Country-Test.mmdb")
 
-	// 测试 allow 策略
-	country, err := geoip.LookupCountry(privateIP)
-	require.NoError(t, err)
-	assert.Equal(t, "PRIVATE_ALLOW", country)
+	data, err := os.ReadFile(testDB)
+	require.NoError(t, err, "failed to read test database")
+	err = os.WriteFile(dbPath, data, 0o644)
+	require.NoError(t, err, "failed to write test database to temp dir")
+
+	geoip, err := NewGeoIPLookup(dbPath, 1000, time.Hour, behavior)
+	require.NoError(t, err, "failed to create GeoIPLookup")
+	t.Cleanup(func() { geoip.Close() })
+
+	return geoip
 }
 
-// TestGeoIPLookup_PrivateIPBehavior_Deny 测试私有 IP deny 策略。
-func TestGeoIPLookup_PrivateIPBehavior_Deny(t *testing.T) {
-	dbPath := "/var/lib/geoip/GeoIP2-Country.mmdb"
-
-	geoip, err := NewGeoIPLookup(dbPath, 1000, time.Hour, "deny")
-	if err != nil {
-		t.Skipf("Skipping test: GeoIP database not available: %v", err)
-	}
-	defer geoip.Close()
-
-	privateIP := net.ParseIP("10.0.0.1")
-
-	country, err := geoip.LookupCountry(privateIP)
-	require.NoError(t, err)
-	assert.Equal(t, "PRIVATE_DENY", country)
+// TestNewGeoIPLookup_ValidDB 测试使用有效数据库创建 GeoIPLookup。
+func TestNewGeoIPLookup_ValidDB(t *testing.T) {
+	geoip := setupTestGeoIP(t, "allow")
+	assert.NotNil(t, geoip.db)
+	assert.NotNil(t, geoip.cache)
+	assert.Equal(t, time.Hour, geoip.ttl)
+	assert.Equal(t, "allow", geoip.privateIPBehavior)
 }
 
-// TestGeoIPLookup_PrivateIPBehavior_Bypass 测试私有 IP bypass 策略。
-func TestGeoIPLookup_PrivateIPBehavior_Bypass(t *testing.T) {
-	dbPath := "/var/lib/geoip/GeoIP2-Country.mmdb"
+// TestNewGeoIPLookup_DefaultPrivateIPBehavior 测试默认私有 IP 行为（空字符串）。
+func TestNewGeoIPLookup_DefaultPrivateIPBehavior(t *testing.T) {
+	geoip := setupTestGeoIP(t, "")
+	assert.Equal(t, "allow", geoip.privateIPBehavior)
+}
 
-	geoip, err := NewGeoIPLookup(dbPath, 1000, time.Hour, "bypass")
-	if err != nil {
-		t.Skipf("Skipping test: GeoIP database not available: %v", err)
+// TestGeoIPLookup_LookupCountry 测试 IP 国家查询（已知国家代码）。
+func TestGeoIPLookup_LookupCountry(t *testing.T) {
+	geoip := setupTestGeoIP(t, "allow")
+
+	// 2.125.160.216 在测试数据库中映射到 GB
+	country, err := geoip.LookupCountry(net.ParseIP("2.125.160.216"))
+	require.NoError(t, err)
+	assert.Equal(t, "GB", country)
+
+	// 67.43.156.1 在测试数据库中映射到 BT
+	country2, err := geoip.LookupCountry(net.ParseIP("67.43.156.1"))
+	require.NoError(t, err)
+	assert.Equal(t, "BT", country2)
+}
+
+// TestGeoIPLookup_LookupCountry_Unknown 测试未找到国家代码时返回 UNKNOWN。
+func TestGeoIPLookup_LookupCountry_Unknown(t *testing.T) {
+	geoip := setupTestGeoIP(t, "allow")
+
+	// 8.8.8.8 在测试数据库中没有记录
+	country, err := geoip.LookupCountry(net.ParseIP("8.8.8.8"))
+	require.NoError(t, err)
+	assert.Equal(t, "UNKNOWN", country)
+}
+
+// TestGeoIPLookup_PrivateIPAllow 测试私有 IP allow 策略。
+func TestGeoIPLookup_PrivateIPAllow(t *testing.T) {
+	geoip := setupTestGeoIP(t, "allow")
+
+	tests := []struct {
+		name string
+		ip   string
+	}{
+		{"10.0.0.1", "10.0.0.1"},
+		{"192.168.1.1", "192.168.1.1"},
+		{"127.0.0.1", "127.0.0.1"},
 	}
-	defer geoip.Close()
 
-	privateIP := net.ParseIP("172.16.0.1")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			country, err := geoip.LookupCountry(net.ParseIP(tt.ip))
+			require.NoError(t, err)
+			assert.Equal(t, "PRIVATE_ALLOW", country)
+		})
+	}
+}
 
-	_, err = geoip.LookupCountry(privateIP)
+// TestGeoIPLookup_PrivateIPDeny 测试私有 IP deny 策略。
+func TestGeoIPLookup_PrivateIPDeny(t *testing.T) {
+	geoip := setupTestGeoIP(t, "deny")
+
+	tests := []struct {
+		name string
+		ip   string
+	}{
+		{"10.0.0.1", "10.0.0.1"},
+		{"172.16.0.1", "172.16.0.1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			country, err := geoip.LookupCountry(net.ParseIP(tt.ip))
+			require.NoError(t, err)
+			assert.Equal(t, "PRIVATE_DENY", country)
+		})
+	}
+}
+
+// TestGeoIPLookup_PrivateIPBypass 测试私有 IP bypass 策略。
+func TestGeoIPLookup_PrivateIPBypass(t *testing.T) {
+	geoip := setupTestGeoIP(t, "bypass")
+
+	country, err := geoip.LookupCountry(net.ParseIP("172.16.0.1"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "private IP bypassed")
-}
-
-// TestGeoIPLookup_DefaultPrivateIPBehavior 测试默认私有 IP 行为。
-func TestGeoIPLookup_DefaultPrivateIPBehavior(t *testing.T) {
-	dbPath := "/var/lib/geoip/GeoIP2-Country.mmdb"
-
-	// 空字符串应该使用默认的 "allow"
-	geoip, err := NewGeoIPLookup(dbPath, 1000, time.Hour, "")
-	if err != nil {
-		t.Skipf("Skipping test: GeoIP database not available: %v", err)
-	}
-	defer geoip.Close()
-
-	privateIP := net.ParseIP("127.0.0.1")
-
-	country, err := geoip.LookupCountry(privateIP)
-	require.NoError(t, err)
-	assert.Equal(t, "PRIVATE_ALLOW", country)
-}
-
-// TestGeoIPLookup_GetStats 测试统计信息获取。
-func TestGeoIPLookup_GetStats(t *testing.T) {
-	dbPath := "/var/lib/geoip/GeoIP2-Country.mmdb"
-
-	geoip, err := NewGeoIPLookup(dbPath, 1000, time.Hour, "allow")
-	if err != nil {
-		t.Skipf("Skipping test: GeoIP database not available: %v", err)
-	}
-	defer geoip.Close()
-
-	stats := geoip.GetStats()
-	assert.GreaterOrEqual(t, stats.CacheSize, 0)
-	assert.GreaterOrEqual(t, stats.CacheMaxSize, 0)
+	assert.Empty(t, country)
 }
 
 // TestGeoIPLookup_CacheBehavior 测试缓存行为。
 func TestGeoIPLookup_CacheBehavior(t *testing.T) {
-	dbPath := "/var/lib/geoip/GeoIP2-Country.mmdb"
+	geoip := setupTestGeoIP(t, "allow")
 
-	geoip, err := NewGeoIPLookup(dbPath, 1000, time.Hour, "allow")
-	if err != nil {
-		t.Skipf("Skipping test: GeoIP database not available: %v", err)
-	}
-	defer geoip.Close()
+	// 第一次查询（数据库）
+	country1, err := geoip.LookupCountry(net.ParseIP("2.125.160.216"))
+	require.NoError(t, err)
 
-	// 使用公网 IP 进行测试（假设 8.8.8.8 是美国）
-	publicIP := net.ParseIP("8.8.8.8")
-
-	// 第一次查询
-	country1, err := geoip.LookupCountry(publicIP)
-	if err != nil {
-		// 数据库中可能没有该 IP 的信息
-		t.Skipf("Skipping test: IP not found in database: %v", err)
-	}
-
-	// 第二次查询（应该从缓存返回）
-	country2, err := geoip.LookupCountry(publicIP)
+	// 第二次查询（缓存）
+	country2, err := geoip.LookupCountry(net.ParseIP("2.125.160.216"))
 	require.NoError(t, err)
 	assert.Equal(t, country1, country2)
 
-	// 验证缓存大小
+	// 验证缓存大小 > 0
 	stats := geoip.GetStats()
 	assert.GreaterOrEqual(t, stats.CacheSize, 1)
 }
 
+// TestGeoIPLookup_MultipleIPsCaching 测试多个不同 IP 的缓存。
+func TestGeoIPLookup_MultipleIPsCaching(t *testing.T) {
+	geoip := setupTestGeoIP(t, "allow")
+
+	// 查询多个不同的 IP
+	ip1 := net.ParseIP("2.125.160.216")
+	ip2 := net.ParseIP("67.43.156.0")
+
+	_, err := geoip.LookupCountry(ip1)
+	require.NoError(t, err)
+
+	_, err = geoip.LookupCountry(ip2)
+	require.NoError(t, err)
+
+	// 缓存中应该有 2 个条目
+	stats := geoip.GetStats()
+	assert.GreaterOrEqual(t, stats.CacheSize, 2)
+}
+
+// TestGeoIPLookup_GetStats 测试统计信息获取。
+func TestGeoIPLookup_GetStats(t *testing.T) {
+	geoip := setupTestGeoIP(t, "allow")
+
+	stats := geoip.GetStats()
+	assert.GreaterOrEqual(t, stats.CacheSize, 0)
+	assert.GreaterOrEqual(t, stats.CacheMaxSize, 0)
+
+	// 查询后缓存大小应该增加
+	_, err := geoip.LookupCountry(net.ParseIP("2.125.160.216"))
+	require.NoError(t, err)
+
+	stats = geoip.GetStats()
+	assert.GreaterOrEqual(t, stats.CacheSize, 1)
+}
+
+// TestGeoIPLookup_Close 测试关闭数据库连接。
+func TestGeoIPLookup_Close(t *testing.T) {
+	testDB := "/tmp/GeoIP2-Country-Test.mmdb"
+	if _, err := os.Stat(testDB); os.IsNotExist(err) {
+		t.Skipf("Skipping test: GeoIP test database not available: %v", err)
+	}
+
+	geoip, err := NewGeoIPLookup(testDB, 100, time.Minute, "allow")
+	require.NoError(t, err)
+
+	err = geoip.Close()
+	assert.NoError(t, err)
+
+	// 关闭后再次查询应该报错
+	_, err = geoip.LookupCountry(net.ParseIP("2.125.160.216"))
+	assert.Error(t, err)
+}
+
 // TestGeoIPLookup_TTLExpiration 测试缓存 TTL 过期。
 func TestGeoIPLookup_TTLExpiration(t *testing.T) {
-	dbPath := "/var/lib/geoip/GeoIP2-Country.mmdb"
-
-	// 使用很短的 TTL
-	geoip, err := NewGeoIPLookup(dbPath, 1000, 1*time.Millisecond, "allow")
-	if err != nil {
-		t.Skipf("Skipping test: GeoIP database not available: %v", err)
-	}
+	geoip, err := NewGeoIPLookup("/tmp/GeoIP2-Country-Test.mmdb", 1000, 1*time.Millisecond, "allow")
+	require.NoError(t, err)
 	defer geoip.Close()
 
-	publicIP := net.ParseIP("8.8.8.8")
+	publicIP := net.ParseIP("2.125.160.216")
 
 	// 第一次查询
 	_, err = geoip.LookupCountry(publicIP)
-	if err != nil {
-		t.Skipf("Skipping test: IP not found in database: %v", err)
-	}
+	require.NoError(t, err)
 
 	// 等待 TTL 过期
 	time.Sleep(10 * time.Millisecond)
 
-	// 再次查询（缓存应该已过期）
-	_, err = geoip.LookupCountry(publicIP)
-	// 不应该报错，只是重新查询数据库
+	// 再次查询（缓存应该已过期，重新查询数据库）
+	country, err := geoip.LookupCountry(publicIP)
 	assert.NoError(t, err)
+	assert.Equal(t, "GB", country)
+}
+
+// TestGeoIPLookup_InvalidIP 测试无效 IP 地址查询。
+func TestGeoIPLookup_InvalidIP(t *testing.T) {
+	geoip := setupTestGeoIP(t, "allow")
+
+	// 传递 nil IP
+	_, err := geoip.LookupCountry(nil)
+	assert.Error(t, err)
+}
+
+// TestGeoIPLookup_SmallCacheSize 测试小缓存容量 LRU 淘汰。
+func TestGeoIPLookup_SmallCacheSize(t *testing.T) {
+	// 使用很小的缓存容量（2），测试 LRU 淘汰
+	testDB := "/tmp/GeoIP2-Country-Test.mmdb"
+	if _, err := os.Stat(testDB); os.IsNotExist(err) {
+		t.Skipf("Skipping test: GeoIP test database not available: %v", err)
+	}
+
+	geoip, err := NewGeoIPLookup(testDB, 2, time.Hour, "allow")
+	require.NoError(t, err)
+	defer geoip.Close()
+
+	// 查询 3 个不同的 IP，超过缓存容量
+	ips := []string{"2.125.160.216", "67.43.156.0", "67.43.156.1"}
+	for _, ipStr := range ips {
+		_, err := geoip.LookupCountry(net.ParseIP(ipStr))
+		assert.NoError(t, err)
+	}
+
+	// 缓存大小不会超过设定的限制
+	stats := geoip.GetStats()
+	assert.LessOrEqual(t, stats.CacheSize, 2)
+}
+
+// TestGeoIPLookup_PrivateIPNotCached 测试私有 IP 不会被缓存。
+func TestGeoIPLookup_PrivateIPNotCached(t *testing.T) {
+	geoip := setupTestGeoIP(t, "allow")
+
+	// 查询私有 IP（不会进入数据库查询缓存）
+	_, err := geoip.LookupCountry(net.ParseIP("10.0.0.1"))
+	require.NoError(t, err)
+
+	// 查询一个公网 IP
+	_, err = geoip.LookupCountry(net.ParseIP("2.125.160.216"))
+	require.NoError(t, err)
+
+	// 缓存中只有 1 个条目（公网 IP）
+	stats := geoip.GetStats()
+	assert.Equal(t, 1, stats.CacheSize)
+}
+
+// TestGeoIPLookup_ConcurrentAccess 测试并发访问安全性。
+func TestGeoIPLookup_ConcurrentAccess(t *testing.T) {
+	geoip := setupTestGeoIP(t, "allow")
+
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			_, err := geoip.LookupCountry(net.ParseIP("2.125.160.216"))
+			assert.NoError(t, err)
+			done <- true
+		}()
+	}
+
+	for i := 0; i < 10; i++ {
+		<-done
+	}
 }
