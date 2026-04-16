@@ -14,11 +14,14 @@
 package server
 
 import (
+	"encoding/json"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/netutil"
 )
@@ -491,5 +494,720 @@ func TestCollectStatus_WithFileCache(t *testing.T) {
 	// 无缓存时 Cache 应为 nil
 	if status.Cache != nil {
 		t.Error("expected Cache to be nil when no fileCache configured")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Format output tests
+// ---------------------------------------------------------------------------
+
+func TestStatusHandler_ServeHTTP_JSONFormat(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "json",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+	srv.connections.Store(10)
+	srv.requests.Store(500)
+	srv.bytesSent.Store(2048)
+	srv.bytesReceived.Store(1024)
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+
+	h.ServeHTTP(ctx)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200, got %d", ctx.Response.StatusCode())
+	}
+
+	ct := string(ctx.Response.Header.ContentType())
+	if !strings.Contains(ct, "application/json") {
+		t.Errorf("expected content-type application/json, got %s", ct)
+	}
+
+	// 验证 JSON 可解析
+	var status Status
+	if err := json.Unmarshal(ctx.Response.Body(), &status); err != nil {
+		t.Fatalf("failed to parse JSON response: %v", err)
+	}
+
+	if status.Connections != 10 {
+		t.Errorf("expected Connections 10, got %d", status.Connections)
+	}
+	if status.Requests != 500 {
+		t.Errorf("expected Requests 500, got %d", status.Requests)
+	}
+	if status.BytesSent != 2048 {
+		t.Errorf("expected BytesSent 2048, got %d", status.BytesSent)
+	}
+	if status.BytesReceived != 1024 {
+		t.Errorf("expected BytesReceived 1024, got %d", status.BytesReceived)
+	}
+}
+
+func TestStatusHandler_ServeHTTP_HTMLFormat(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "html",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+
+	h.ServeHTTP(ctx)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200, got %d", ctx.Response.StatusCode())
+	}
+
+	ct := string(ctx.Response.Header.ContentType())
+	if !strings.Contains(ct, "text/html") {
+		t.Errorf("expected content-type text/html, got %s", ct)
+	}
+
+	body := string(ctx.Response.Body())
+	if !strings.Contains(body, "<!DOCTYPE html>") {
+		t.Error("expected HTML output to start with DOCTYPE")
+	}
+	if !strings.Contains(body, "<title>Lolly Status</title>") {
+		t.Error("expected HTML output to contain title")
+	}
+	if !strings.Contains(body, "<h1>Lolly Status</h1>") {
+		t.Error("expected HTML output to contain h1 heading")
+	}
+	if !strings.Contains(body, "<table>") {
+		t.Error("expected HTML output to contain table")
+	}
+	if !strings.Contains(body, "<th>Version</th>") {
+		t.Error("expected HTML output to contain Version row")
+	}
+}
+
+func TestStatusHandler_ServeHTTP_TextFormat(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "text",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+
+	h.ServeHTTP(ctx)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200, got %d", ctx.Response.StatusCode())
+	}
+
+	ct := string(ctx.Response.Header.ContentType())
+	if !strings.Contains(ct, "text/plain") {
+		t.Errorf("expected content-type text/plain, got %s", ct)
+	}
+
+	body := string(ctx.Response.Body())
+	if !strings.Contains(body, "Lolly Status") {
+		t.Error("expected text output to contain 'Lolly Status'")
+	}
+	if !strings.Contains(body, "Version:") {
+		t.Error("expected text output to contain Version")
+	}
+	if !strings.Contains(body, "Uptime:") {
+		t.Error("expected text output to contain Uptime")
+	}
+	if !strings.Contains(body, "Connections:") {
+		t.Error("expected text output to contain Connections")
+	}
+	if !strings.Contains(body, "Requests:") {
+		t.Error("expected text output to contain Requests")
+	}
+	if !strings.Contains(body, "Bytes Sent:") {
+		t.Error("expected text output to contain Bytes Sent")
+	}
+	if !strings.Contains(body, "Bytes Received:") {
+		t.Error("expected text output to contain Bytes Received")
+	}
+}
+
+func TestStatusHandler_ServeHTTP_PrometheusFormat(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "prometheus",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+	srv.connections.Store(10)
+	srv.requests.Store(500)
+	srv.bytesSent.Store(2048)
+	srv.bytesReceived.Store(1024)
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+
+	h.ServeHTTP(ctx)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200, got %d", ctx.Response.StatusCode())
+	}
+
+	ct := string(ctx.Response.Header.ContentType())
+	if !strings.Contains(ct, "text/plain") {
+		t.Errorf("expected content-type text/plain, got %s", ct)
+	}
+
+	body := string(ctx.Response.Body())
+	if !strings.Contains(body, "# HELP lolly_version") {
+		t.Error("expected prometheus output to contain lolly_version HELP")
+	}
+	if !strings.Contains(body, "# TYPE lolly_version gauge") {
+		t.Error("expected prometheus output to contain lolly_version TYPE")
+	}
+	if !strings.Contains(body, "lolly_uptime_seconds") {
+		t.Error("expected prometheus output to contain lolly_uptime_seconds")
+	}
+	if !strings.Contains(body, "lolly_connections 10") {
+		t.Error("expected prometheus output to contain lolly_connections 10")
+	}
+	if !strings.Contains(body, "lolly_requests_total 500") {
+		t.Error("expected prometheus output to contain lolly_requests_total 500")
+	}
+	if !strings.Contains(body, "lolly_bytes_sent_total 2048") {
+		t.Error("expected prometheus output to contain lolly_bytes_sent_total 2048")
+	}
+	if !strings.Contains(body, "lolly_bytes_received_total 1024") {
+		t.Error("expected prometheus output to contain lolly_bytes_received_total 1024")
+	}
+}
+
+func TestStatusHandler_ServeHTTP_DefaultFormat(t *testing.T) {
+	// Format 为空时应回退到 JSON
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 验证 format 默认为 json
+	if h.format != "json" {
+		t.Errorf("expected default format 'json', got '%s'", h.format)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+
+	h.ServeHTTP(ctx)
+
+	ct := string(ctx.Response.Header.ContentType())
+	if !strings.Contains(ct, "application/json") {
+		t.Errorf("expected content-type application/json for default format, got %s", ct)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Access control tests via ServeHTTP
+// ---------------------------------------------------------------------------
+
+func TestStatusHandler_ServeHTTP_AccessDenied(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "json",
+		Allow:  []string{"10.0.0.0/8"},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+	// RemoteAddr 默认为 127.0.0.1，不在 10.0.0.0/8 范围内
+	ctx.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("192.168.1.1"), Port: 12345})
+
+	h.ServeHTTP(ctx)
+
+	if ctx.Response.StatusCode() != 403 {
+		t.Errorf("expected status 403 for denied access, got %d", ctx.Response.StatusCode())
+	}
+}
+
+func TestStatusHandler_ServeHTTP_AccessAllowed_ByCIDR(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "json",
+		Allow:  []string{"192.168.0.0/16"},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+	ctx.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("192.168.1.100"), Port: 12345})
+
+	h.ServeHTTP(ctx)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200 for allowed access, got %d", ctx.Response.StatusCode())
+	}
+}
+
+func TestStatusHandler_New_localhost(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:  "/_status",
+		Allow: []string{"localhost"},
+	}
+
+	h, err := NewStatusHandler(nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// localhost 应解析为两个网络：127.0.0.1/32 和 ::1/128
+	if len(h.allowed) != 2 {
+		t.Errorf("expected 2 allowed networks for localhost, got %d", len(h.allowed))
+	}
+
+	// 验证包含 127.0.0.1
+	ip := net.ParseIP("127.0.0.1")
+	found := false
+	for _, n := range h.allowed {
+		if n.Contains(ip) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected localhost to include 127.0.0.1")
+	}
+
+	// 验证包含 ::1
+	ipv6 := net.ParseIP("::1")
+	found = false
+	for _, n := range h.allowed {
+		if n.Contains(ipv6) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected localhost to include ::1")
+	}
+}
+
+func TestStatusHandler_checkAccess_AllowList(t *testing.T) {
+	tests := []struct {
+		name       string
+		allow      []string
+		remoteIP   net.IP
+		wantAccess bool
+	}{
+		{
+			name:       "no allow list allows all",
+			allow:      []string{},
+			remoteIP:   net.ParseIP("1.2.3.4"),
+			wantAccess: true,
+		},
+		{
+			name:       "CIDR match",
+			allow:      []string{"192.168.0.0/16"},
+			remoteIP:   net.ParseIP("192.168.5.10"),
+			wantAccess: true,
+		},
+		{
+			name:       "CIDR no match",
+			allow:      []string{"10.0.0.0/8"},
+			remoteIP:   net.ParseIP("192.168.1.1"),
+			wantAccess: false,
+		},
+		{
+			name:       "single IP match",
+			allow:      []string{"127.0.0.1"},
+			remoteIP:   net.ParseIP("127.0.0.1"),
+			wantAccess: true,
+		},
+		{
+			name:       "IPv6 match",
+			allow:      []string{"::1/128"},
+			remoteIP:   net.ParseIP("::1"),
+			wantAccess: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.StatusConfig{
+				Path:  "/_status",
+				Allow: tt.allow,
+			}
+			h, err := NewStatusHandler(nil, cfg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			ctx := &fasthttp.RequestCtx{}
+			ctx.SetRemoteAddr(&net.TCPAddr{IP: tt.remoteIP, Port: 12345})
+
+			got := h.checkAccess(ctx)
+			if got != tt.wantAccess {
+				t.Errorf("expected access %v, got %v", tt.wantAccess, got)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// collectStatus with full data
+// ---------------------------------------------------------------------------
+
+func TestCollectStatus_WithFullData(t *testing.T) {
+	srv := New(nil)
+	srv.startTime = time.Now()
+	srv.connections.Store(42)
+	srv.requests.Store(999)
+	srv.bytesSent.Store(50000)
+	srv.bytesReceived.Store(25000)
+
+	// 设置文件缓存
+	fc := cache.NewFileCache(100, 1024*1024, 5*time.Minute)
+	srv.fileCache = fc
+
+	// 设置 pool
+	srv.pool = NewGoroutinePool(PoolConfig{
+		MinWorkers:  2,
+		MaxWorkers:  10,
+		QueueSize:   50,
+		IdleTimeout: 30 * time.Second,
+	})
+	srv.pool.Start()
+	defer srv.pool.Stop()
+
+	h := &StatusHandler{
+		server: srv,
+		path:   "/_status",
+	}
+
+	status := h.collectStatus()
+
+	if status == nil {
+		t.Fatal("expected non-nil status")
+	}
+
+	// 基本字段
+	if status.Connections != 42 {
+		t.Errorf("expected Connections 42, got %d", status.Connections)
+	}
+	if status.Requests != 999 {
+		t.Errorf("expected Requests 999, got %d", status.Requests)
+	}
+	if status.BytesSent != 50000 {
+		t.Errorf("expected BytesSent 50000, got %d", status.BytesSent)
+	}
+	if status.BytesReceived != 25000 {
+		t.Errorf("expected BytesReceived 25000, got %d", status.BytesReceived)
+	}
+
+	// Cache 应有数据
+	if status.Cache == nil {
+		t.Fatal("expected non-nil Cache")
+	}
+	if status.Cache.FileCache.MaxEntries != 100 {
+		t.Errorf("expected FileCache MaxEntries 100, got %d", status.Cache.FileCache.MaxEntries)
+	}
+	if status.Cache.FileCache.MaxSize != 1024*1024 {
+		t.Errorf("expected FileCache MaxSize %d, got %d", 1024*1024, status.Cache.FileCache.MaxSize)
+	}
+
+	// Pool 应有数据
+	if status.Pool == nil {
+		t.Error("expected non-nil Pool")
+	} else {
+		if status.Pool.MinWorkers != 2 {
+			t.Errorf("expected MinWorkers 2, got %d", status.Pool.MinWorkers)
+		}
+		if status.Pool.MaxWorkers != 10 {
+			t.Errorf("expected MaxWorkers 10, got %d", status.Pool.MaxWorkers)
+		}
+	}
+}
+
+func TestCollectStatus_NilServerFields(t *testing.T) {
+	srv := New(nil)
+	srv.startTime = time.Now()
+	// fileCache 和 pool 都为 nil
+
+	h := &StatusHandler{
+		server: srv,
+		path:   "/_status",
+	}
+
+	status := h.collectStatus()
+
+	if status.Cache != nil {
+		t.Error("expected Cache to be nil when fileCache is nil")
+	}
+	if status.Pool != nil {
+		t.Error("expected Pool to be nil when pool is nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// HTML format with all sections
+// ---------------------------------------------------------------------------
+
+func TestStatusHandler_ServeHTTP_HTMLWithAllSections(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "html",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+	srv.connections.Store(5)
+	srv.requests.Store(100)
+	srv.bytesSent.Store(1024)
+	srv.bytesReceived.Store(512)
+
+	// 设置文件缓存
+	fc := cache.NewFileCache(100, 1024*1024, 5*time.Minute)
+	srv.fileCache = fc
+
+	// 设置 pool
+	srv.pool = NewGoroutinePool(PoolConfig{
+		MinWorkers:  2,
+		MaxWorkers:  10,
+		QueueSize:   50,
+		IdleTimeout: 30 * time.Second,
+	})
+	srv.pool.Start()
+	defer srv.pool.Stop()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+	h.ServeHTTP(ctx)
+
+	body := string(ctx.Response.Body())
+
+	// 验证所有 section 标题
+	if !strings.Contains(body, "<h2>Cache</h2>") {
+		t.Error("expected HTML to contain Cache section")
+	}
+	if !strings.Contains(body, "<h2>Goroutine Pool</h2>") {
+		t.Error("expected HTML to contain Goroutine Pool section")
+	}
+
+	// 验证 pool 数据
+	if !strings.Contains(body, "Queue</th>") {
+		t.Error("expected HTML to contain Pool Queue column")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Text format with all sections
+// ---------------------------------------------------------------------------
+
+func TestStatusHandler_ServeHTTP_TextWithPool(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "text",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+	srv.pool = NewGoroutinePool(PoolConfig{
+		MinWorkers:  2,
+		MaxWorkers:  10,
+		QueueSize:   50,
+		IdleTimeout: 30 * time.Second,
+	})
+	srv.pool.Start()
+	defer srv.pool.Stop()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+	h.ServeHTTP(ctx)
+
+	body := string(ctx.Response.Body())
+	if !strings.Contains(body, "Goroutine Pool:") {
+		t.Error("expected text output to contain Goroutine Pool section")
+	}
+	if !strings.Contains(body, "Workers:") {
+		t.Error("expected text output to contain Workers")
+	}
+	if !strings.Contains(body, "Queue:") {
+		t.Error("expected text output to contain Queue")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Prometheus format with cache metrics
+// ---------------------------------------------------------------------------
+
+func TestStatusHandler_ServeHTTP_PrometheusWithCache(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "prometheus",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+	srv.connections.Store(5)
+	srv.requests.Store(100)
+	srv.bytesSent.Store(1024)
+	srv.bytesReceived.Store(512)
+
+	fc := cache.NewFileCache(100, 1024*1024, 5*time.Minute)
+	srv.fileCache = fc
+
+	srv.pool = NewGoroutinePool(PoolConfig{
+		MinWorkers:  2,
+		MaxWorkers:  10,
+		QueueSize:   50,
+		IdleTimeout: 30 * time.Second,
+	})
+	srv.pool.Start()
+	defer srv.pool.Stop()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+	h.ServeHTTP(ctx)
+
+	body := string(ctx.Response.Body())
+
+	// 验证缓存指标
+	if !strings.Contains(body, "lolly_cache_entries") {
+		t.Error("expected prometheus output to contain lolly_cache_entries")
+	}
+	if !strings.Contains(body, "lolly_cache_size_bytes") {
+		t.Error("expected prometheus output to contain lolly_cache_size_bytes")
+	}
+	if !strings.Contains(body, "lolly_pool_workers") {
+		t.Error("expected prometheus output to contain lolly_pool_workers")
+	}
+	if !strings.Contains(body, "lolly_pool_queue_length") {
+		t.Error("expected prometheus output to contain lolly_pool_queue_length")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Access via X-Forwarded-For header
+// ---------------------------------------------------------------------------
+
+func TestStatusHandler_ServeHTTP_AccessDenied_XForwardedFor(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "json",
+		Allow:  []string{"10.0.0.0/8"},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+	// 设置 X-Forwarded-For 为不在白名单中的 IP
+	ctx.Request.Header.Set("X-Forwarded-For", "192.168.1.1")
+
+	h.ServeHTTP(ctx)
+
+	if ctx.Response.StatusCode() != 403 {
+		t.Errorf("expected status 403 for denied access via X-Forwarded-For, got %d", ctx.Response.StatusCode())
+	}
+}
+
+func TestStatusHandler_ServeHTTP_AccessAllowed_XForwardedFor(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "json",
+		Allow:  []string{"10.0.0.0/8"},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/_status")
+	ctx.Request.Header.Set("X-Forwarded-For", "10.5.5.5")
+
+	h.ServeHTTP(ctx)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200 for allowed access via X-Forwarded-For, got %d", ctx.Response.StatusCode())
 	}
 }
