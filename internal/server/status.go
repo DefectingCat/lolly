@@ -136,6 +136,20 @@ func NewStatusHandler(server *Server, cfg *config.StatusConfig) (*StatusHandler,
 
 	// 解析允许的 IP 列表
 	for _, cidr := range cfg.Allow {
+		// 处理 localhost 特殊情况
+		if cidr == "localhost" {
+			// localhost 解析为 127.0.0.1 和 ::1
+			_, v4Network, _ := net.ParseCIDR("127.0.0.1/32")
+			_, v6Network, _ := net.ParseCIDR("::1/128")
+			if v4Network != nil {
+				h.allowed = append(h.allowed, *v4Network)
+			}
+			if v6Network != nil {
+				h.allowed = append(h.allowed, *v6Network)
+			}
+			continue
+		}
+
 		_, network, err := net.ParseCIDR(cidr)
 		if err != nil {
 			// 尝试作为单个 IP 解析
@@ -174,7 +188,7 @@ func (h *StatusHandler) Path() string {
 // ServeHTTP 处理状态请求。
 //
 // 验证客户端 IP 权限，收集并返回服务器状态信息。
-// 未授权访问返回 403 Forbidden，授权访问返回 JSON 格式状态。
+// 未授权访问返回 403 Forbidden，授权访问根据配置格式返回状态。
 //
 // 参数：
 //   - ctx: FastHTTP 请求上下文
@@ -189,23 +203,19 @@ func (h *StatusHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	status := h.collectStatus()
 
 	// 步骤3: 根据格式返回响应
-	if h.format == "prometheus" {
+	switch h.format {
+	case "prometheus":
 		h.servePrometheus(ctx, status)
 		return
-	}
-
-	// 默认 JSON 格式
-	ctx.SetContentType("application/json; charset=utf-8")
-	ctx.SetStatusCode(fasthttp.StatusOK)
-
-	data, err := json.MarshalIndent(status, "", "  ")
-	if err != nil {
-		utils.SendError(ctx, utils.ErrInternalError)
+	case "html":
+		h.serveHTML(ctx, status)
 		return
-	}
-
-	if _, err := ctx.Write(data); err != nil {
-		log.Printf("failed to write status response: %v", err)
+	case "text":
+		h.serveText(ctx, status)
+		return
+	default:
+		h.serveJSON(ctx, status)
+		return
 	}
 }
 
@@ -318,6 +328,184 @@ func (h *StatusHandler) servePrometheus(ctx *fasthttp.RequestCtx, status *Status
 
 	if _, err := ctx.WriteString(buf.String()); err != nil {
 		log.Printf("failed to write metrics response: %v", err)
+	}
+}
+
+// serveJSON 以 JSON 格式输出状态。
+func (h *StatusHandler) serveJSON(ctx *fasthttp.RequestCtx, status *Status) {
+	ctx.SetContentType("application/json; charset=utf-8")
+	ctx.SetStatusCode(fasthttp.StatusOK)
+
+	data, err := json.MarshalIndent(status, "", "  ")
+	if err != nil {
+		utils.SendError(ctx, utils.ErrInternalError)
+		return
+	}
+
+	if _, err := ctx.Write(data); err != nil {
+		log.Printf("failed to write status response: %v", err)
+	}
+}
+
+// serveText 以纯文本格式输出状态。
+func (h *StatusHandler) serveText(ctx *fasthttp.RequestCtx, status *Status) {
+	ctx.SetContentType("text/plain; charset=utf-8")
+	ctx.SetStatusCode(fasthttp.StatusOK)
+
+	var buf strings.Builder
+
+	buf.WriteString("Lolly Status\n")
+	buf.WriteString("============\n\n")
+	fmt.Fprintf(&buf, "Version:       %s\n", status.Version)
+	fmt.Fprintf(&buf, "Uptime:        %s\n", status.Uptime.Round(time.Second))
+	fmt.Fprintf(&buf, "Connections:   %d\n", status.Connections)
+	fmt.Fprintf(&buf, "Requests:      %d\n", status.Requests)
+	fmt.Fprintf(&buf, "Bytes Sent:    %d\n", status.BytesSent)
+	fmt.Fprintf(&buf, "Bytes Received: %d\n", status.BytesReceived)
+
+	if status.Cache != nil {
+		buf.WriteString("\nCache:\n")
+		fmt.Fprintf(&buf, "  File Entries: %d / %d\n", status.Cache.FileCache.Entries, status.Cache.FileCache.MaxEntries)
+		fmt.Fprintf(&buf, "  File Size:    %d / %d bytes\n", status.Cache.FileCache.Size, status.Cache.FileCache.MaxSize)
+		fmt.Fprintf(&buf, "  Proxy Entries: %d\n", status.Cache.ProxyCache.Entries)
+		fmt.Fprintf(&buf, "  Proxy Pending: %d\n", status.Cache.ProxyCache.Pending)
+	}
+
+	if status.Pool != nil {
+		buf.WriteString("\nGoroutine Pool:\n")
+		fmt.Fprintf(&buf, "  Workers:      %d (idle: %d)\n", status.Pool.Workers, status.Pool.IdleWorkers)
+		fmt.Fprintf(&buf, "  Queue:        %d / %d\n", status.Pool.QueueLen, status.Pool.QueueCap)
+	}
+
+	if len(status.Upstreams) > 0 {
+		buf.WriteString("\nUpstreams:\n")
+		for _, upstream := range status.Upstreams {
+			fmt.Fprintf(&buf, "  %s: %d healthy, %d unhealthy\n", upstream.Name, upstream.HealthyCount, upstream.UnhealthyCount)
+			fmt.Fprintf(&buf, "    Latency: P50=%.2fms, P95=%.2fms, P99=%.2fms\n", upstream.LatencyP50, upstream.LatencyP95, upstream.LatencyP99)
+		}
+	}
+
+	if status.SSL != nil {
+		buf.WriteString("\nSSL:\n")
+		fmt.Fprintf(&buf, "  Handshakes:    %d\n", status.SSL.Handshakes)
+		fmt.Fprintf(&buf, "  Session Reused: %d\n", status.SSL.SessionReused)
+		fmt.Fprintf(&buf, "  Reuse Rate:    %.2f%%\n", status.SSL.ReuseRate)
+	}
+
+	if len(status.RateLimits) > 0 {
+		buf.WriteString("\nRate Limits:\n")
+		for _, rl := range status.RateLimits {
+			fmt.Fprintf(&buf, "  %s: %d requests, limit=%d, rejected=%d\n", rl.ZoneName, rl.Requests, rl.Limit, rl.Rejected)
+		}
+	}
+
+	if _, err := ctx.WriteString(buf.String()); err != nil {
+		log.Printf("failed to write text response: %v", err)
+	}
+}
+
+// serveHTML 以 HTML 格式输出状态。
+func (h *StatusHandler) serveHTML(ctx *fasthttp.RequestCtx, status *Status) {
+	ctx.SetContentType("text/html; charset=utf-8")
+	ctx.SetStatusCode(fasthttp.StatusOK)
+
+	var buf strings.Builder
+
+	buf.WriteString("<!DOCTYPE html>\n")
+	buf.WriteString("<html lang=\"en\">\n")
+	buf.WriteString("<head>\n")
+	buf.WriteString("<meta charset=\"UTF-8\">\n")
+	buf.WriteString("<title>Lolly Status</title>\n")
+	buf.WriteString("<style>\n")
+	buf.WriteString("body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 2em; }\n")
+	buf.WriteString("h1 { color: #333; }\n")
+	buf.WriteString("table { border-collapse: collapse; width: 100%; max-width: 600px; }\n")
+	buf.WriteString("th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }\n")
+	buf.WriteString("th { background-color: #f5f5f5; }\n")
+	buf.WriteString(".section { margin-top: 1.5em; }\n")
+	buf.WriteString(".healthy { color: green; }\n")
+	buf.WriteString(".unhealthy { color: red; }\n")
+	buf.WriteString("</style>\n")
+	buf.WriteString("</head>\n")
+	buf.WriteString("<body>\n")
+
+	buf.WriteString("<h1>Lolly Status</h1>\n")
+
+	buf.WriteString("<table>\n")
+	fmt.Fprintf(&buf, "<tr><th>Version</th><td>%s</td></tr>\n", status.Version)
+	fmt.Fprintf(&buf, "<tr><th>Uptime</th><td>%s</td></tr>\n", status.Uptime.Round(time.Second))
+	fmt.Fprintf(&buf, "<tr><th>Connections</th><td>%d</td></tr>\n", status.Connections)
+	fmt.Fprintf(&buf, "<tr><th>Requests</th><td>%d</td></tr>\n", status.Requests)
+	fmt.Fprintf(&buf, "<tr><th>Bytes Sent</th><td>%d</td></tr>\n", status.BytesSent)
+	fmt.Fprintf(&buf, "<tr><th>Bytes Received</th><td>%d</td></tr>\n", status.BytesReceived)
+	buf.WriteString("</table>\n")
+
+	if status.Cache != nil {
+		buf.WriteString("<div class=\"section\">\n")
+		buf.WriteString("<h2>Cache</h2>\n")
+		buf.WriteString("<table>\n")
+		buf.WriteString("<tr><th>Type</th><th>Entries</th><th>Max</th><th>Size</th></tr>\n")
+		fmt.Fprintf(&buf, "<tr><td>File</td><td>%d</td><td>%d</td><td>%d bytes</td></tr>\n",
+			status.Cache.FileCache.Entries, status.Cache.FileCache.MaxEntries, status.Cache.FileCache.Size)
+		fmt.Fprintf(&buf, "<tr><td>Proxy</td><td>%d</td><td>-</td><td>-</td></tr>\n", status.Cache.ProxyCache.Entries)
+		buf.WriteString("</table>\n")
+		buf.WriteString("</div>\n")
+	}
+
+	if status.Pool != nil {
+		buf.WriteString("<div class=\"section\">\n")
+		buf.WriteString("<h2>Goroutine Pool</h2>\n")
+		buf.WriteString("<table>\n")
+		buf.WriteString("<tr><th>Workers</th><th>Idle</th><th>Queue</th></tr>\n")
+		fmt.Fprintf(&buf, "<tr><td>%d</td><td>%d</td><td>%d / %d</td></tr>\n",
+			status.Pool.Workers, status.Pool.IdleWorkers, status.Pool.QueueLen, status.Pool.QueueCap)
+		buf.WriteString("</table>\n")
+		buf.WriteString("</div>\n")
+	}
+
+	if len(status.Upstreams) > 0 {
+		buf.WriteString("<div class=\"section\">\n")
+		buf.WriteString("<h2>Upstreams</h2>\n")
+		buf.WriteString("<table>\n")
+		buf.WriteString("<tr><th>Name</th><th>Healthy</th><th>Unhealthy</th><th>P50</th><th>P95</th><th>P99</th></tr>\n")
+		for _, upstream := range status.Upstreams {
+			fmt.Fprintf(&buf, "<tr><td>%s</td><td class=\"healthy\">%d</td><td class=\"unhealthy\">%d</td><td>%.2fms</td><td>%.2fms</td><td>%.2fms</td></tr>\n",
+				upstream.Name, upstream.HealthyCount, upstream.UnhealthyCount,
+				upstream.LatencyP50, upstream.LatencyP95, upstream.LatencyP99)
+		}
+		buf.WriteString("</table>\n")
+		buf.WriteString("</div>\n")
+	}
+
+	if status.SSL != nil {
+		buf.WriteString("<div class=\"section\">\n")
+		buf.WriteString("<h2>SSL</h2>\n")
+		buf.WriteString("<table>\n")
+		buf.WriteString("<tr><th>Handshakes</th><th>Session Reused</th><th>Reuse Rate</th></tr>\n")
+		fmt.Fprintf(&buf, "<tr><td>%d</td><td>%d</td><td>%.2f%%</td></tr>\n",
+			status.SSL.Handshakes, status.SSL.SessionReused, status.SSL.ReuseRate)
+		buf.WriteString("</table>\n")
+		buf.WriteString("</div>\n")
+	}
+
+	if len(status.RateLimits) > 0 {
+		buf.WriteString("<div class=\"section\">\n")
+		buf.WriteString("<h2>Rate Limits</h2>\n")
+		buf.WriteString("<table>\n")
+		buf.WriteString("<tr><th>Zone</th><th>Requests</th><th>Limit</th><th>Rejected</th></tr>\n")
+		for _, rl := range status.RateLimits {
+			fmt.Fprintf(&buf, "<tr><td>%s</td><td>%d</td><td>%d</td><td>%d</td></tr>\n",
+				rl.ZoneName, rl.Requests, rl.Limit, rl.Rejected)
+		}
+		buf.WriteString("</table>\n")
+		buf.WriteString("</div>\n")
+	}
+
+	buf.WriteString("</body>\n")
+	buf.WriteString("</html>\n")
+
+	if _, err := ctx.WriteString(buf.String()); err != nil {
+		log.Printf("failed to write html response: %v", err)
 	}
 }
 
