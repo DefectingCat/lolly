@@ -11,8 +11,10 @@
 package loadbalance
 
 import (
+	"net"
 	"sync"
 	"testing"
+	"time"
 )
 
 // createHealthyTarget 创建一个带有健康状态的目标（辅助函数）
@@ -932,5 +934,805 @@ func TestIsValidAlgorithm(t *testing.T) {
 				t.Errorf("IsValidAlgorithm(%q) = %v, want %v", tt.algorithm, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestRoundRobin_SelectExcluding 测试轮询排除选择功能。
+func TestRoundRobin_SelectExcluding(t *testing.T) {
+	t.Run("空排除列表", func(_ *testing.T) {
+		rr := NewRoundRobin()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+
+		got := rr.SelectExcluding(targets, nil)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+	})
+
+	t.Run("排除部分目标", func(_ *testing.T) {
+		rr := NewRoundRobin()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+		excluded := []*Target{targets[0], targets[1]}
+
+		got := rr.SelectExcluding(targets, excluded)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+		if got.URL != "http://backend3:8080" {
+			t.Errorf("SelectExcluding() = %q, want %q", got.URL, "http://backend3:8080")
+		}
+	})
+
+	t.Run("排除所有目标", func(_ *testing.T) {
+		rr := NewRoundRobin()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		excluded := []*Target{targets[0], targets[1]}
+
+		got := rr.SelectExcluding(targets, excluded)
+		if got != nil {
+			t.Errorf("SelectExcluding() = %v, want nil", got)
+		}
+	})
+
+	t.Run("排除列表含nil", func(_ *testing.T) {
+		rr := NewRoundRobin()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		excluded := []*Target{nil, targets[0]}
+
+		got := rr.SelectExcluding(targets, excluded)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+		if got.URL == targets[0].URL {
+			t.Errorf("选中了被排除的目标: %q", got.URL)
+		}
+	})
+
+	t.Run("并发安全", func(_ *testing.T) {
+		rr := NewRoundRobin()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+		excluded := []*Target{targets[0]}
+
+		var wg sync.WaitGroup
+		for i := 0; i < 100; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				got := rr.SelectExcluding(targets, excluded)
+				if got != nil && got.URL == targets[0].URL {
+					t.Errorf("选中了被排除的目标: %q", got.URL)
+				}
+			}()
+		}
+		wg.Wait()
+	})
+
+	t.Run("排除不健康目标外再排除一个", func(_ *testing.T) {
+		rr := NewRoundRobin()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", false),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+		excluded := []*Target{targets[1]}
+
+		got := rr.SelectExcluding(targets, excluded)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+		if got.URL != "http://backend3:8080" {
+			t.Errorf("SelectExcluding() = %q, want %q", got.URL, "http://backend3:8080")
+		}
+	})
+}
+
+// TestWeightedRoundRobin_SelectExcluding 测试加权轮询排除选择功能。
+func TestWeightedRoundRobin_SelectExcluding(t *testing.T) {
+	t.Run("排除高权重目标", func(_ *testing.T) {
+		wrr := NewWeightedRoundRobin()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		targets[0].Weight = 1
+		targets[1].Weight = 5
+		excluded := []*Target{targets[1]}
+
+		// 排除高权重目标后，只应选低权重目标
+		for i := 0; i < 20; i++ {
+			got := wrr.SelectExcluding(targets, excluded)
+			if got == nil {
+				t.Fatal("SelectExcluding() = nil, want non-nil")
+			}
+			if got.URL != "http://backend1:8080" {
+				t.Errorf("SelectExcluding() = %q, want %q", got.URL, "http://backend1:8080")
+			}
+		}
+	})
+
+	t.Run("排除所有健康目标", func(_ *testing.T) {
+		wrr := NewWeightedRoundRobin()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		excluded := []*Target{targets[0], targets[1]}
+
+		got := wrr.SelectExcluding(targets, excluded)
+		if got != nil {
+			t.Errorf("SelectExcluding() = %v, want nil", got)
+		}
+	})
+
+	t.Run("排除列表含nil", func(_ *testing.T) {
+		wrr := NewWeightedRoundRobin()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		targets[0].Weight = 1
+		targets[1].Weight = 1
+		excluded := []*Target{nil, targets[0]}
+
+		got := wrr.SelectExcluding(targets, excluded)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+		if got.URL == targets[0].URL {
+			t.Errorf("选中了被排除的目标: %q", got.URL)
+		}
+	})
+}
+
+// TestLeastConnections_SelectExcluding 测试最少连接排除选择功能。
+func TestLeastConnections_SelectExcluding(t *testing.T) {
+	t.Run("排除连接最少的目标", func(_ *testing.T) {
+		lc := NewLeastConnections()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+		targets[0].Connections = 1
+		targets[1].Connections = 10
+		targets[2].Connections = 5
+		excluded := []*Target{targets[0]}
+
+		got := lc.SelectExcluding(targets, excluded)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+		// 排除最少连接的后，应选连接数次少的
+		if got.URL != "http://backend3:8080" {
+			t.Errorf("SelectExcluding() = %q, want %q", got.URL, "http://backend3:8080")
+		}
+	})
+
+	t.Run("排除列表含nil", func(_ *testing.T) {
+		lc := NewLeastConnections()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		targets[0].Connections = 5
+		targets[1].Connections = 3
+		excluded := []*Target{nil, targets[0]}
+
+		got := lc.SelectExcluding(targets, excluded)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+		if got.URL == targets[0].URL {
+			t.Errorf("选中了被排除的目标: %q", got.URL)
+		}
+	})
+
+	t.Run("全部排除", func(_ *testing.T) {
+		lc := NewLeastConnections()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		excluded := []*Target{targets[0], targets[1]}
+
+		got := lc.SelectExcluding(targets, excluded)
+		if got != nil {
+			t.Errorf("SelectExcluding() = %v, want nil", got)
+		}
+	})
+}
+
+// TestIPHash_SelectExcluding 测试IP哈希排除选择功能。
+func TestIPHash_SelectExcluding(t *testing.T) {
+	t.Run("排除命中目标", func(_ *testing.T) {
+		ih := NewIPHash()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+
+		// 找到该IP会命中的目标
+		clientIP := "192.168.1.100"
+		first := ih.SelectByIP(targets, clientIP)
+		if first == nil {
+			t.Fatal("SelectByIP() = nil, want non-nil")
+		}
+
+		// 排除该目标
+		excluded := []*Target{first}
+		got := ih.SelectExcludingByIP(targets, excluded, clientIP)
+		if got == nil {
+			t.Fatal("SelectExcludingByIP() = nil, want non-nil")
+		}
+		if got.URL == first.URL {
+			t.Errorf("SelectExcludingByIP() 选中了被排除的目标: %q", got.URL)
+		}
+	})
+
+	t.Run("排除所有目标", func(_ *testing.T) {
+		ih := NewIPHash()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		excluded := []*Target{targets[0], targets[1]}
+
+		got := ih.SelectExcludingByIP(targets, excluded, "10.0.0.1")
+		if got != nil {
+			t.Errorf("SelectExcludingByIP() = %v, want nil", got)
+		}
+	})
+
+	t.Run("SelectExcluding使用空IP", func(_ *testing.T) {
+		ih := NewIPHash()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		excluded := []*Target{targets[0]}
+
+		got := ih.SelectExcluding(targets, excluded)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+	})
+
+	t.Run("排除列表含nil", func(_ *testing.T) {
+		ih := NewIPHash()
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		excluded := []*Target{nil, targets[0]}
+
+		got := ih.SelectExcludingByIP(targets, excluded, "192.168.1.1")
+		if got == nil {
+			t.Fatal("SelectExcludingByIP() = nil, want non-nil")
+		}
+		if got.URL == targets[0].URL {
+			t.Errorf("选中了被排除的目标: %q", got.URL)
+		}
+	})
+}
+
+// TestFilterHealthyAndExclude 测试filterHealthyAndExclude辅助函数。
+func TestFilterHealthyAndExclude(t *testing.T) {
+	t.Run("基本过滤和排除", func(_ *testing.T) {
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", false),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+		excluded := []*Target{targets[0]}
+
+		got := filterHealthyAndExclude(targets, excluded)
+		if len(got) != 1 {
+			t.Fatalf("len = %d, want 1", len(got))
+		}
+		if got[0].URL != "http://backend3:8080" {
+			t.Errorf("got = %q, want %q", got[0].URL, "http://backend3:8080")
+		}
+	})
+
+	t.Run("空排除列表", func(_ *testing.T) {
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+
+		got := filterHealthyAndExclude(targets, nil)
+		if len(got) != 2 {
+			t.Fatalf("len = %d, want 2", len(got))
+		}
+	})
+
+	t.Run("空目标列表", func(_ *testing.T) {
+		got := filterHealthyAndExclude(nil, []*Target{})
+		if len(got) != 0 {
+			t.Errorf("len = %d, want 0", len(got))
+		}
+	})
+
+	t.Run("排除列表含nil", func(_ *testing.T) {
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+		}
+		excluded := []*Target{nil}
+
+		got := filterHealthyAndExclude(targets, excluded)
+		if len(got) != 1 {
+			t.Fatalf("len = %d, want 1", len(got))
+		}
+	})
+}
+
+// TestTarget_Hostname 测试Target.Hostname方法。
+func TestTarget_Hostname(t *testing.T) {
+	t.Run("从URL提取主机名", func(_ *testing.T) {
+		target := NewTargetFromConfig("http://example.com:8080/api", 1)
+		got := target.Hostname()
+		if got != "example.com" {
+			t.Errorf("Hostname() = %q, want %q", got, "example.com")
+		}
+	})
+
+	t.Run("无端口URL", func(_ *testing.T) {
+		target := NewTargetFromConfig("http://example.com/api", 1)
+		got := target.Hostname()
+		if got != "example.com" {
+			t.Errorf("Hostname() = %q, want %q", got, "example.com")
+		}
+	})
+
+	t.Run("无效URL主机名为空", func(_ *testing.T) {
+		target := &Target{URL: "not-a-valid-url"}
+		target.initHostname()
+		got := target.Hostname()
+		// url.Parse("not-a-valid-url") 解析为纯路径URL，Host为空
+		if got != "" {
+			t.Errorf("Hostname() = %q, want empty string", got)
+		}
+	})
+
+	t.Run("缓存行为", func(_ *testing.T) {
+		target := NewTargetFromConfig("http://example.com:8080", 1)
+		_ = target.Hostname()
+		_ = target.Hostname() // 第二次应使用缓存
+		got := target.Hostname()
+		if got != "example.com" {
+			t.Errorf("Hostname() = %q, want %q", got, "example.com")
+		}
+	})
+}
+
+// TestTarget_ResolvedIPs 测试Target.ResolvedIPs和SetResolvedIPs方法。
+func TestTarget_ResolvedIPs(t *testing.T) {
+	t.Run("未设置时返回nil", func(_ *testing.T) {
+		target := &Target{URL: "http://example.com"}
+		got := target.ResolvedIPs()
+		if got != nil {
+			t.Errorf("ResolvedIPs() = %v, want nil", got)
+		}
+	})
+
+	t.Run("设置后返回副本", func(_ *testing.T) {
+		target := &Target{URL: "http://example.com"}
+		ips := []string{"192.168.1.1", "192.168.1.2"}
+		target.SetResolvedIPs(ips)
+
+		got := target.ResolvedIPs()
+		if len(got) != 2 {
+			t.Fatalf("len = %d, want 2", len(got))
+		}
+		if got[0] != "192.168.1.1" || got[1] != "192.168.1.2" {
+			t.Errorf("ResolvedIPs() = %v, want %v", got, ips)
+		}
+
+		// 修改原切片不影响内部存储
+		ips[0] = "10.0.0.1"
+		got2 := target.ResolvedIPs()
+		if got2[0] != "192.168.1.1" {
+			t.Errorf("ResolvedIPs() 受外部修改影响 = %q, want %q", got2[0], "192.168.1.1")
+		}
+	})
+
+	t.Run("设置空列表", func(_ *testing.T) {
+		target := &Target{URL: "http://example.com"}
+		target.SetResolvedIPs([]string{})
+		got := target.ResolvedIPs()
+		if len(got) != 0 {
+			t.Errorf("ResolvedIPs() = %v, want empty", got)
+		}
+	})
+}
+
+// TestTarget_NeedsResolve 测试Target.NeedsResolve方法。
+func TestTarget_NeedsResolve(t *testing.T) {
+	t.Run("IP地址不需要解析", func(_ *testing.T) {
+		target := NewTargetFromConfig("http://192.168.1.1:8080", 1)
+		if target.NeedsResolve(time.Minute) {
+			t.Error("IP地址URL不需要解析")
+		}
+	})
+
+	t.Run("首次解析需要", func(_ *testing.T) {
+		target := NewTargetFromConfig("http://example.com:8080", 1)
+		if !target.NeedsResolve(time.Minute) {
+			t.Error("首次解析应该需要")
+		}
+	})
+
+	t.Run("TTL未过期不需要", func(_ *testing.T) {
+		target := NewTargetFromConfig("http://example.com:8080", 1)
+		target.SetResolvedIPs([]string{"192.168.1.1"})
+		// TTL为1小时，刚设置过，不应过期
+		if target.NeedsResolve(time.Hour) {
+			t.Error("TTL未过期不应该需要解析")
+		}
+	})
+
+	t.Run("TTL过期需要", func(_ *testing.T) {
+		target := NewTargetFromConfig("http://example.com:8080", 1)
+		target.SetResolvedIPs([]string{"192.168.1.1"})
+		// 使用极短的TTL模拟过期
+		if !target.NeedsResolve(time.Nanosecond) {
+			t.Error("TTL过期应该需要解析")
+		}
+	})
+}
+
+// TestTarget_LastResolved 测试Target.LastResolved方法。
+func TestTarget_LastResolved(t *testing.T) {
+	t.Run("未设置时返回零值", func(_ *testing.T) {
+		target := &Target{URL: "http://example.com"}
+		got := target.LastResolved()
+		if !got.IsZero() {
+			t.Errorf("LastResolved() = %v, want zero", got)
+		}
+	})
+
+	t.Run("设置后返回时间", func(_ *testing.T) {
+		target := &Target{URL: "http://example.com"}
+		before := time.Now()
+		target.SetResolvedIPs([]string{"192.168.1.1"})
+		after := time.Now()
+
+		got := target.LastResolved()
+		if got.Before(before) || got.After(after) {
+			t.Errorf("LastResolved() = %v, 应该在 %v 和 %v 之间", got, before, after)
+		}
+	})
+}
+
+// TestNewTargetFromConfig 测试NewTargetFromConfig函数。
+func TestNewTargetFromConfig(t *testing.T) {
+	t.Run("创建健康目标", func(_ *testing.T) {
+		target := NewTargetFromConfig("http://backend:8080", 5)
+		if target.URL != "http://backend:8080" {
+			t.Errorf("URL = %q, want %q", target.URL, "http://backend:8080")
+		}
+		if target.Weight != 5 {
+			t.Errorf("Weight = %d, want 5", target.Weight)
+		}
+		if !target.Healthy.Load() {
+			t.Error("Healthy 应为 true")
+		}
+	})
+
+	t.Run("主机名自动初始化", func(_ *testing.T) {
+		target := NewTargetFromConfig("http://example.com:9090", 1)
+		got := target.Hostname()
+		if got != "example.com" {
+			t.Errorf("Hostname() = %q, want %q", got, "example.com")
+		}
+	})
+}
+
+// TestConsistentHash_PrecomputeHashes 测试预计算哈希功能。
+func TestConsistentHash_PrecomputeHashes(t *testing.T) {
+	t.Run("预计算哈希值", func(_ *testing.T) {
+		ch := NewConsistentHash(50, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+
+		ch.PrecomputeHashes(targets, 50)
+
+		for _, target := range targets {
+			if len(target.VirtualHashes) != 50 {
+				t.Errorf("VirtualHashes len = %d, want 50", len(target.VirtualHashes))
+			}
+		}
+	})
+
+	t.Run("跳过已预计算的目标", func(_ *testing.T) {
+		ch := NewConsistentHash(10, "ip")
+		target := createHealthyTarget("http://backend1:8080", true)
+		// 预计算一次
+		ch.PrecomputeHashes([]*Target{target}, 10)
+		firstHashes := make([]uint64, len(target.VirtualHashes))
+		copy(firstHashes, target.VirtualHashes)
+
+		// 再次预计算相同数量
+		ch.PrecomputeHashes([]*Target{target}, 10)
+
+		// 哈希值应保持不变
+		for i, h := range target.VirtualHashes {
+			if h != firstHashes[i] {
+				t.Errorf("预计算改变了已有哈希值")
+				break
+			}
+		}
+	})
+
+	t.Run("默认虚拟节点数", func(_ *testing.T) {
+		ch := NewConsistentHash(0, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+		}
+
+		ch.PrecomputeHashes(targets, 0)
+
+		if len(targets[0].VirtualHashes) != 150 {
+			t.Errorf("VirtualHashes len = %d, want 150 (default)", len(targets[0].VirtualHashes))
+		}
+	})
+}
+
+// TestConsistentHash_SelectExcluding 测试一致性哈希SelectExcluding方法。
+func TestConsistentHash_SelectExcluding(t *testing.T) {
+	t.Run("委托给SelectExcludingByKey", func(_ *testing.T) {
+		ch := NewConsistentHash(100, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		ch.Rebuild(targets)
+
+		excluded := []*Target{targets[0]}
+		got := ch.SelectExcluding(targets, excluded)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+		if got.URL == targets[0].URL {
+			t.Errorf("选中了被排除的目标: %q", got.URL)
+		}
+	})
+}
+
+// TestLeastConnections_ConcurrentSelection 测试最少连接并发选择。
+func TestLeastConnections_ConcurrentSelection(t *testing.T) {
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", true),
+		createHealthyTarget("http://backend2:8080", true),
+		createHealthyTarget("http://backend3:8080", true),
+	}
+	lc := NewLeastConnections()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got := lc.Select(targets)
+			if got == nil {
+				t.Error("并发Select() = nil, want non-nil")
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// TestWeightedRoundRobin_ConcurrentSelection 测试加权轮询并发选择。
+func TestWeightedRoundRobin_ConcurrentSelection(t *testing.T) {
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", true),
+		createHealthyTarget("http://backend2:8080", true),
+	}
+	targets[0].Weight = 3
+	targets[1].Weight = 1
+	wrr := NewWeightedRoundRobin()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got := wrr.Select(targets)
+			if got == nil {
+				t.Error("并发Select() = nil, want non-nil")
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// TestIPHash_ConcurrentSelection 测试IP哈希并发选择。
+func TestIPHash_ConcurrentSelection(t *testing.T) {
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", true),
+		createHealthyTarget("http://backend2:8080", true),
+	}
+	ih := NewIPHash()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(ip string) {
+			defer wg.Done()
+			got := ih.SelectByIP(targets, ip)
+			if got == nil {
+				t.Error("并发SelectByIP() = nil, want non-nil")
+			}
+		}(net.IP{192, 168, 1, byte(i)}.String())
+	}
+	wg.Wait()
+}
+
+// TestTarget_Hostname_IPURL 测试纯IP地址URL的主机名提取。
+func TestTarget_Hostname_IPURL(t *testing.T) {
+	target := NewTargetFromConfig("http://10.0.0.1:8080", 1)
+	got := target.Hostname()
+	if got != "10.0.0.1" {
+		t.Errorf("Hostname() = %q, want %q", got, "10.0.0.1")
+	}
+}
+
+// TestConsistentHash_SelectByKey_EmptyKey 测试空键选择行为。
+func TestConsistentHash_SelectByKey_EmptyKey(t *testing.T) {
+	ch := NewConsistentHash(100, "ip")
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", true),
+	}
+
+	// 空键也应该能选择（不会panic）
+	got := ch.SelectByKey(targets, "")
+	if got == nil {
+		t.Fatal("SelectByKey(\"\") = nil, want non-nil")
+	}
+}
+
+// TestConsistentHash_RebuildWithAllUnhealthy 测试所有目标不健康时重建。
+func TestConsistentHash_RebuildWithAllUnhealthy(t *testing.T) {
+	ch := NewConsistentHash(10, "ip")
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", false),
+		createHealthyTarget("http://backend2:8080", false),
+	}
+
+	ch.Rebuild(targets)
+	stats := ch.GetStats()
+
+	if stats.CircleSize != 0 {
+		t.Errorf("CircleSize = %d, want 0", stats.CircleSize)
+	}
+	if stats.SortedHashes != 0 {
+		t.Errorf("SortedHashes = %d, want 0", stats.SortedHashes)
+	}
+}
+
+// TestConsistentHash_GetStats 测试统计信息完整性。
+func TestConsistentHash_GetStats(t *testing.T) {
+	ch := NewConsistentHash(50, "uri")
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", true),
+		createHealthyTarget("http://backend2:8080", true),
+		createHealthyTarget("http://backend3:8080", true),
+	}
+
+	ch.Rebuild(targets)
+	stats := ch.GetStats()
+
+	if stats.VirtualNodes != 50 {
+		t.Errorf("VirtualNodes = %d, want 50", stats.VirtualNodes)
+	}
+	if stats.CircleSize != 150 { // 3 targets * 50 nodes
+		t.Errorf("CircleSize = %d, want 150", stats.CircleSize)
+	}
+	if stats.SortedHashes != 150 {
+		t.Errorf("SortedHashes = %d, want 150", stats.SortedHashes)
+	}
+}
+
+// TestConsistentHash_GetHashKey 测试哈希键配置获取。
+func TestConsistentHash_GetHashKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		hashKey string
+		want    string
+	}{
+		{"ip", "ip", "ip"},
+		{"uri", "uri", "uri"},
+		{"header", "header:X-Forwarded-For", "header:X-Forwarded-For"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(_ *testing.T) {
+			ch := NewConsistentHash(100, tt.hashKey)
+			if ch.GetHashKey() != tt.want {
+				t.Errorf("GetHashKey() = %q, want %q", ch.GetHashKey(), tt.want)
+			}
+		})
+	}
+}
+
+// TestSelectExcluding_DynamicRebuild 测试SelectByKey触发的动态重建。
+func TestSelectExcluding_DynamicRebuild(t *testing.T) {
+	ch := NewConsistentHash(10, "ip")
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", true),
+		createHealthyTarget("http://backend2:8080", true),
+	}
+
+	// 不手动Rebuild，SelectByKey应自动触发
+	got := ch.SelectByKey(targets, "10.0.0.1")
+	if got == nil {
+		t.Fatal("SelectByKey() = nil after auto-rebuild, want non-nil")
+	}
+}
+
+// TestWeightedRoundRobin_NegativeWeight 测试负权重行为。
+func TestWeightedRoundRobin_NegativeWeight(t *testing.T) {
+	wrr := NewWeightedRoundRobin()
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", true),
+		createHealthyTarget("http://backend2:8080", true),
+	}
+	targets[0].Weight = -5
+	targets[1].Weight = 3
+
+	// 负权重要被当作1处理
+	counts := make(map[string]int)
+	for i := 0; i < 100; i++ {
+		got := wrr.Select(targets)
+		if got == nil {
+			t.Fatal("Select() = nil, want non-nil")
+		}
+		counts[got.URL]++
+	}
+
+	// 两个目标都应该被选中
+	if counts["http://backend1:8080"] == 0 {
+		t.Error("负权重目标从未被选中")
+	}
+	if counts["http://backend2:8080"] == 0 {
+		t.Error("正权重目标从未被选中")
+	}
+}
+
+// TestRoundRobin_NilTargets 测试nil切片输入。
+func TestRoundRobin_NilTargets(t *testing.T) {
+	rr := NewRoundRobin()
+	got := rr.Select(nil)
+	if got != nil {
+		t.Errorf("Select(nil) = %v, want nil", got)
+	}
+}
+
+// TestLeastConnections_NilTargets 测试nil切片输入。
+func TestLeastConnections_NilTargets(t *testing.T) {
+	lc := NewLeastConnections()
+	got := lc.Select(nil)
+	if got != nil {
+		t.Errorf("Select(nil) = %v, want nil", got)
 	}
 }
