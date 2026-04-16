@@ -25,7 +25,7 @@ type LuaContext struct {
 
 // luaContextPool LuaContext 对象池
 var luaContextPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &LuaContext{
 			Variables: make(map[string]string),
 		}
@@ -34,7 +34,13 @@ var luaContextPool = sync.Pool{
 
 // AcquireContext 从池中获取 LuaContext
 func AcquireContext(engine *LuaEngine, req *fasthttp.RequestCtx) *LuaContext {
-	lc := luaContextPool.Get().(*LuaContext)
+	v := luaContextPool.Get()
+	lc, ok := v.(*LuaContext)
+	if !ok {
+		// Pool 的 New 函数返回 *LuaContext，类型断言不应失败
+		// 如果失败说明 Pool 被错误使用，panic 是合理的
+		panic("luaContextPool returned unexpected type")
+	}
 	lc.Engine = engine
 	lc.RequestCtx = req
 	lc.Phase = PhaseInit
