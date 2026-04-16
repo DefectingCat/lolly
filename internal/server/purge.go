@@ -195,6 +195,10 @@ func (h *PurgeHandler) checkAuth(ctx *fasthttp.RequestCtx) bool {
 
 // purgeByPath 按精确路径清理缓存。
 func (h *PurgeHandler) purgeByPath(path string, method string) int {
+	if h.server == nil {
+		return 0
+	}
+
 	hashKey := cache.HashPathWithMethod(path, method)
 	deleted := 0
 
@@ -210,6 +214,10 @@ func (h *PurgeHandler) purgeByPath(path string, method string) int {
 
 // purgeByPattern 按通配符模式清理缓存。
 func (h *PurgeHandler) purgeByPattern(pattern string, method string) int {
+	if h.server == nil {
+		return 0
+	}
+
 	deleted := 0
 
 	for _, p := range h.server.proxies {
@@ -226,4 +234,14 @@ func (h *PurgeHandler) sendError(ctx *fasthttp.RequestCtx, status int, errMsg st
 	ctx.SetContentType("application/json; charset=utf-8")
 	ctx.SetStatusCode(status)
 	_ = json.NewEncoder(ctx).Encode(cache.PurgeErrorResponse{Error: errMsg})
+}
+
+// PurgeByPathForTest 测试用的导出方法。
+func (h *PurgeHandler) PurgeByPathForTest(path string, method string) int {
+	return h.purgeByPath(path, method)
+}
+
+// PurgeByPatternForTest 测试用的导出方法。
+func (h *PurgeHandler) PurgeByPatternForTest(pattern string, method string) int {
+	return h.purgeByPattern(pattern, method)
 }

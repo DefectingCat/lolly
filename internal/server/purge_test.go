@@ -5,15 +5,21 @@
 //   - localhost 特殊处理和 CIDR 解析
 //   - IP 白名单访问控制
 //   - Token 认证
+//   - 请求处理流程（POST/方法检查）
+//   - 请求体解析
+//   - sendError 方法
+//   - purgeByPath/purgeByPattern 方法（nil server）
 //
 // 作者：xfy
 package server
 
 import (
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 )
 
@@ -405,4 +411,264 @@ func TestPurgeHandler_checkAuth(t *testing.T) {
 			t.Error("expected auth to fail for unknown auth type")
 		}
 	})
+}
+
+// TestPurgeHandler_ServeHTTP_MethodCheck 测试 ServeHTTP 的方法检查。
+func TestPurgeHandler_ServeHTTP_MethodCheck(t *testing.T) {
+	methods := []string{"GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+
+	for _, method := range methods {
+		t.Run(method, func(t *testing.T) {
+			cfg := &config.CacheAPIConfig{
+				Path:  "/_cache/purge",
+				Allow: []string{},
+			}
+
+			h, err := NewPurgeHandler(nil, cfg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Init(&fasthttp.Request{}, nil, nil)
+			ctx.Request.Header.SetMethod(method)
+
+			h.ServeHTTP(ctx)
+
+			if ctx.Response.StatusCode() != fasthttp.StatusMethodNotAllowed {
+				t.Errorf("expected status %d for method %s, got %d", fasthttp.StatusMethodNotAllowed, method, ctx.Response.StatusCode())
+			}
+
+			// 验证响应体包含错误信息
+			if !strings.Contains(string(ctx.Response.Body()), "method not allowed") {
+				t.Errorf("expected 'method not allowed' in response body, got: %s", string(ctx.Response.Body()))
+			}
+		})
+	}
+}
+
+// TestPurgeHandler_ServeHTTP_RequestBodyParsing 测试请求体解析。
+func TestPurgeHandler_ServeHTTP_RequestBodyParsing(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "invalid JSON",
+			body:       "{invalid json}",
+			wantStatus: fasthttp.StatusBadRequest,
+		},
+		{
+			name:       "empty JSON",
+			body:       "{}",
+			wantStatus: fasthttp.StatusBadRequest,
+		},
+		{
+			name:       "missing path and pattern",
+			body:       `{"method": "GET"}`,
+			wantStatus: fasthttp.StatusBadRequest,
+		},
+		{
+			name:       "only path",
+			body:       `{"path": "/test"}`,
+			wantStatus: fasthttp.StatusOK,
+		},
+		{
+			name:       "only pattern",
+			body:       `{"pattern": "/api/*"}`,
+			wantStatus: fasthttp.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.CacheAPIConfig{
+				Path:  "/_cache/purge",
+				Allow: []string{},
+			}
+
+			h, err := NewPurgeHandler(nil, cfg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Init(&fasthttp.Request{}, nil, nil)
+			ctx.Request.Header.SetMethod("POST")
+			ctx.Request.SetBodyString(tt.body)
+
+			h.ServeHTTP(ctx)
+
+			if ctx.Response.StatusCode() != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, ctx.Response.StatusCode())
+			}
+		})
+	}
+}
+
+// TestPurgeHandler_PurgeResponse 测试 purge 响应格式。
+func TestPurgeHandler_PurgeResponse(t *testing.T) {
+	cfg := &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	}
+
+	h, err := NewPurgeHandler(nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+	ctx.Request.Header.SetMethod("POST")
+	ctx.Request.SetBodyString(`{"path": "/test"}`)
+
+	h.ServeHTTP(ctx)
+
+	// 验证响应
+	if ctx.Response.StatusCode() != fasthttp.StatusOK {
+		t.Errorf("expected status %d, got %d", fasthttp.StatusOK, ctx.Response.StatusCode())
+	}
+
+	// 验证响应体格式
+	body := string(ctx.Response.Body())
+	if !strings.Contains(body, `"deleted"`) {
+		t.Errorf("expected 'deleted' field in response body, got: %s", body)
+	}
+}
+
+// TestPurgeHandler_SendError 测试 sendError 方法的错误响应格式。
+func TestPurgeHandler_SendError(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		errMsg   string
+		wantBody string
+	}{
+		{
+			name:     "bad request",
+			status:   fasthttp.StatusBadRequest,
+			errMsg:   "invalid request",
+			wantBody: `{"error":"invalid request"}`,
+		},
+		{
+			name:     "forbidden",
+			status:   fasthttp.StatusForbidden,
+			errMsg:   "access denied",
+			wantBody: `{"error":"access denied"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.CacheAPIConfig{
+				Path:  "/_cache/purge",
+				Allow: []string{},
+			}
+
+			h, err := NewPurgeHandler(nil, cfg)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Init(&fasthttp.Request{}, nil, nil)
+
+			h.sendError(ctx, tt.status, tt.errMsg)
+
+			if ctx.Response.StatusCode() != tt.status {
+				t.Errorf("expected status %d, got %d", tt.status, ctx.Response.StatusCode())
+			}
+
+			body := string(ctx.Response.Body())
+			if !strings.Contains(body, tt.errMsg) {
+				t.Errorf("expected '%s' in response body, got: %s", tt.errMsg, body)
+			}
+
+			// 验证内容类型
+			contentType := string(ctx.Response.Header.ContentType())
+			if contentType != "application/json; charset=utf-8" {
+				t.Errorf("expected content-type 'application/json; charset=utf-8', got: %s", contentType)
+			}
+		})
+	}
+}
+
+// TestPurgeHandler_PurgeByPath 测试 purgeByPath 方法（nil server）。
+func TestPurgeHandler_PurgeByPath(t *testing.T) {
+	h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 验证 nil server 时返回 0
+	deleted := h.PurgeByPathForTest("/test", "GET")
+	if deleted != 0 {
+		t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+	}
+}
+
+// TestPurgeHandler_PurgeByPattern 测试 purgeByPattern 方法（nil server）。
+func TestPurgeHandler_PurgeByPattern(t *testing.T) {
+	h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 验证 nil server 时返回 0
+	deleted := h.PurgeByPatternForTest("/api/*", "GET")
+	if deleted != 0 {
+		t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+	}
+}
+
+// TestPurgeHandler_CacheKeyWithMethod 测试带方法的缓存键。
+func TestPurgeHandler_CacheKeyWithMethod(t *testing.T) {
+	tests := []struct {
+		path   string
+		method string
+	}{
+		{"/test", "GET"},
+		{"/test", "POST"},
+		{"/api/users", "GET"},
+		{"/api/users", "DELETE"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path+"_"+tt.method, func(t *testing.T) {
+			key := cache.HashPathWithMethod(tt.path, tt.method)
+			if key == 0 {
+				t.Error("expected non-zero hash key")
+			}
+
+			// 同一路径和方法应该产生相同的键
+			key2 := cache.HashPathWithMethod(tt.path, tt.method)
+			if key != key2 {
+				t.Errorf("expected same key for same inputs, got %d and %d", key, key2)
+			}
+
+			// 同一路径不同方法应该产生不同的键
+			key3 := cache.HashPathWithMethod(tt.path, "OTHER")
+			if key == key3 {
+				t.Errorf("expected different key for different method, got %d and %d", key, key3)
+			}
+		})
+	}
+}
+
+// TestPurgeHandler_EmptyMethodDefaultsToGET 测试空方法默认为 GET。
+func TestPurgeHandler_EmptyMethodDefaultsToGET(t *testing.T) {
+	key1 := cache.HashPathWithMethod("/test", "")
+	key2 := cache.HashPathWithMethod("/test", "GET")
+
+	if key1 != key2 {
+		t.Errorf("expected same key for empty and 'GET' method, got %d and %d", key1, key2)
+	}
 }
