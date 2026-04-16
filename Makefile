@@ -272,6 +272,37 @@ clean:
 	@echo "Clean complete."
 
 # ============================================
+# Docker 命令
+# ============================================
+
+# 构建 Docker 镜像
+docker:
+	@echo "Building Docker image..."
+	docker build --build-arg VERSION=$(VERSION) --build-arg GIT_COMMIT=$(shell git rev-parse HEAD 2>/dev/null || echo "unknown") --build-arg GIT_BRANCH=$(GIT_BRANCH) --build-arg BUILD_TIME='$(BUILD_TIME)' --build-arg GO_VERSION='$(GO_VERSION)' --build-arg BUILD_PLATFORM=linux/$(shell go env GOARCH 2>/dev/null || echo "amd64") --build-arg GOPROXY='$(shell go env GOPROXY)' --build-arg GOSUMDB='$(shell go env GOSUMDB)' -t $(APP_NAME):$(VERSION) -t $(APP_NAME):latest .
+	@echo "Docker image built: $(APP_NAME):$(VERSION), $(APP_NAME):latest"
+
+# 推送 Docker 镜像（需要先 docker login）
+docker-push:
+	@echo "Pushing Docker image..."
+	@echo "Usage: make docker-push REGISTRY=<registry>"
+	@if [ -z "$(REGISTRY)" ]; then \
+		echo "Error: REGISTRY not specified"; \
+		echo "Example: make docker-push REGISTRY=docker.io/myuser"; \
+		exit 1; \
+	fi
+	docker tag $(APP_NAME):$(VERSION) $(REGISTRY)/$(APP_NAME):$(VERSION)
+	docker tag $(APP_NAME):latest $(REGISTRY)/$(APP_NAME):latest
+	docker push $(REGISTRY)/$(APP_NAME):$(VERSION)
+	docker push $(REGISTRY)/$(APP_NAME):latest
+	@echo "Pushed to: $(REGISTRY)/$(APP_NAME):$(VERSION)"
+
+# 清理 Docker 镜像
+docker-clean:
+	@echo "Cleaning Docker images..."
+	docker rmi $(APP_NAME):$(VERSION) $(APP_NAME):latest 2>/dev/null || true
+	@echo "Docker images cleaned."
+
+# ============================================
 # 帮助
 # ============================================
 
@@ -311,6 +342,11 @@ help:
 	@echo "Dependencies:"
 	@echo "  make deps           - Download dependencies"
 	@echo "  make update-deps    - Update dependencies"
+	@echo ""
+	@echo "Docker:"
+	@echo "  make docker         - Build Docker image"
+	@echo "  make docker-push    - Push to registry (REGISTRY=<url>)"
+	@echo "  make docker-clean   - Remove local images"
 	@echo ""
 	@echo "Other:"
 	@echo "  make install        - Install to GOPATH/bin"

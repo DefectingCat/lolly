@@ -6,19 +6,25 @@ WORKDIR /build
 # 安装构建依赖
 RUN apk add --no-cache git make
 
+# Go 代理设置（从宿主机传递）
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
+ENV GOPROXY=${GOPROXY}
+ENV GOSUMDB=${GOSUMDB}
+
 # 依赖缓存层
 COPY go.mod go.sum ./
 RUN go mod download
 
 # 构建参数（版本信息）
-ARG VERSION=0.2.0
+ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG GIT_BRANCH=unknown
 ARG BUILD_TIME=unknown
 ARG GO_VERSION=unknown
-ARG BUILD_PLATFORM=linux/amd64
+ARG BUILD_PLATFORM=unknown
 
-# 构建
+# 构建（参数与 make build 保持一致）
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w \
@@ -28,6 +34,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
         -X 'rua.plus/lolly/internal/app.BuildTime=${BUILD_TIME}' \
         -X 'rua.plus/lolly/internal/app.GoVersion=${GO_VERSION}' \
         -X 'rua.plus/lolly/internal/app.BuildPlatform=${BUILD_PLATFORM}'" \
+    -gcflags="-l=4" \
+    -asmflags="-l=4" \
     -trimpath \
     -o /build/lolly \
     main.go
