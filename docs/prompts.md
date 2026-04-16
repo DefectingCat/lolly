@@ -39,7 +39,8 @@ ulw 完善性能基准测试
 
 ulw 深度分析下代码质量
 
+ulw 分析下 fasthttp/ 的源码，然后看下 lolly 的用法合不合理，有没有性能可以提升的地方
+
 ## 兼容性
 
 ulw @docs/config/ 下有些nginx的配置示例,深度分析下当前 lolly 项目,然后看看 lolly 是否支持实现这些 nginx 的效果
-
