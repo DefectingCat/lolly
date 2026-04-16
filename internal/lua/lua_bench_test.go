@@ -194,3 +194,83 @@ func BenchmarkTimerGracefulShutdown(b *testing.B) {
 		engine.Close()
 	}
 }
+
+// BenchmarkLuaContextPoolReuse 测试 LuaContext 池复用率。
+// 验证多次获取/释放后池能否有效复用对象，减少分配。
+func BenchmarkLuaContextPoolReuse(b *testing.B) {
+	engine, err := NewEngine(DefaultConfig())
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer engine.Close()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// 模拟一次完整的请求生命周期
+		ctx := NewContext(engine, nil)
+		ctx.SetVariable("uri", "/test")
+		ctx.SetVariable("method", "GET")
+		ctx.SetPhase(PhaseContent)
+		ctx.Write([]byte("response body"))
+		ctx.FlushOutput()
+		ctx.Release()
+	}
+}
+
+// BenchmarkLuaCoroutinePoolThroughput 测试协程池吞吐量。
+// 验证协程池在高频率创建/销毁场景下的复用效果。
+func BenchmarkLuaCoroutinePoolThroughput(b *testing.B) {
+	engine, err := NewEngine(DefaultConfig())
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer engine.Close()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			coro, err := engine.NewCoroutine(nil)
+			if err != nil {
+				continue
+			}
+			coro.Close()
+		}
+	})
+}
+
+// BenchmarkLuaTablePool 测试 Lua table 对象池性能。
+// 验证 table 创建和池复用在频繁 table 操作场景下的表现。
+func BenchmarkLuaTablePool(b *testing.B) {
+	engine, err := NewEngine(DefaultConfig())
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer engine.Close()
+
+	L := engine.L
+
+	b.Run("NewTable_NoPool", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			t := L.NewTable()
+			t.RawSetString("key1", glua.LString("value1"))
+			t.RawSetString("key2", glua.LString("value2"))
+			t.RawSetString("key3", glua.LNumber(42))
+		}
+	})
+
+	b.Run("SharedDict_AsPool", func(b *testing.B) {
+		// 共享字典底层使用对象池存储条目
+		dict := engine.CreateSharedDict("bench_pool", 1000)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			dict.Set("key", "value_with_pool", 0)
+			dict.Get("key")
+			dict.Delete("key")
+		}
+	})
+}
