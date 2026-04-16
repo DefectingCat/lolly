@@ -12,6 +12,7 @@ import (
 	"rua.plus/lolly/internal/benchmark/tools"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
+	"rua.plus/lolly/internal/variable"
 )
 
 // setupMockBackend 设置一个模拟后端服务器用于基准测试。
@@ -460,6 +461,160 @@ func BenchmarkBuildCacheKeyHash(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			hashKey := p.buildCacheKeyHashValue(ctx)
 			_ = hashKey
+		}
+	})
+}
+
+// BenchmarkProxyObjectPoolGetRelease 基准测试 proxy 中对象池的获取/释放效果。
+// 验证 UpstreamTiming 和变量上下文的池复用性能，对比有无池化的差异。
+func BenchmarkProxyObjectPoolGetRelease(b *testing.B) {
+	addr, cleanup := setupMockBackend([]byte("OK"))
+	defer cleanup()
+
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout: config.ProxyTimeout{
+			Connect: 5 * time.Second,
+			Read:    30 * time.Second,
+			Write:   30 * time.Second,
+		},
+	}
+
+	targets := []*loadbalance.Target{{URL: "http://" + addr}}
+	targets[0].Healthy.Store(true)
+
+	_, err := NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		b.Fatalf("NewProxy() error: %v", err)
+	}
+
+	// 本测试聚焦上游计时器和变量上下文池化效果，Proxy 仅用于初始化验证
+
+	b.Run("UpstreamTiming_Pooled", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			timing := NewUpstreamTiming()
+			timing.MarkConnectStart()
+			time.Sleep(time.Microsecond)
+			timing.MarkConnectEnd()
+			timing.MarkHeaderReceived()
+			timing.MarkResponseEnd()
+			_ = timing.GetConnectTime()
+			_ = timing.GetHeaderTime()
+			_ = timing.GetResponseTime()
+		}
+	})
+
+	b.Run("VariableContext_Pooled", func(b *testing.B) {
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+		ctx.Request.SetRequestURI("/api/test")
+		ctx.Request.Header.Set("X-Forwarded-For", "192.168.1.1")
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			vc := variable.NewContext(ctx)
+			vc.Set("key", "value")
+			_ = vc.Expand("$key")
+			variable.ReleaseContext(vc)
+		}
+	})
+}
+
+// BenchmarkProxyResponsePoolParallel 基准测试并行场景下的响应池获取/释放性能。
+// 验证 fasthttp.Request/Response 对象池在并发代理请求中的表现。
+func BenchmarkProxyResponsePoolParallel(b *testing.B) {
+	addr, cleanup := setupMockBackend([]byte("parallel response"))
+	defer cleanup()
+
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout: config.ProxyTimeout{
+			Connect: 5 * time.Second,
+			Read:    30 * time.Second,
+			Write:   30 * time.Second,
+		},
+	}
+
+	targets := []*loadbalance.Target{{URL: "http://" + addr}}
+	targets[0].Healthy.Store(true)
+
+	p, err := NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		b.Fatalf("NewProxy() error: %v", err)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+			ctx.Request.SetRequestURI("/api/test")
+			p.ServeHTTP(ctx)
+		}
+	})
+}
+
+// BenchmarkProxyZeroAllocPath 基准测试零分配路径性能。
+// 验证 buildCacheKeyHashValue 的零分配优化效果，
+// 对比旧的字符串构建方式与直接哈希写入的差异。
+func BenchmarkProxyZeroAllocPath(b *testing.B) {
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+	ctx.Request.SetRequestURI("/api/test?query=value&foo=bar")
+
+	p, err := NewProxy(&config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout: config.ProxyTimeout{
+			Connect: 5 * time.Second,
+			Read:    30 * time.Second,
+			Write:   30 * time.Second,
+		},
+	}, []*loadbalance.Target{{URL: "http://localhost:8080"}}, nil, nil)
+	if err != nil {
+		b.Fatalf("NewProxy() error: %v", err)
+	}
+
+	b.Run("ZeroAlloc_buildCacheKeyHashValue", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			hash := p.buildCacheKeyHashValue(ctx)
+			_ = hash
+		}
+	})
+
+	b.Run("WithAlloc_buildCacheKeyHash", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			hash, key := p.buildCacheKeyHash(ctx)
+			_ = hash
+			_ = key
+		}
+	})
+
+	b.Run("ForwardedHeaders_ExtractSet", func(b *testing.B) {
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+		ctx.Request.SetRequestURI("/api/test")
+		ctx.Request.Header.Set("X-Forwarded-For", "10.0.0.1")
+		ctx.Request.Header.Set("X-Real-IP", "10.0.0.2")
+		ctx.Request.Header.Set("Forwarded", "for=10.0.0.3")
+		ctx.Request.Header.Set("X-Forwarded-Proto", "https")
+		ctx.Request.Header.Set("X-Forwarded-Host", "example.com")
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			fh := ExtractForwardedHeaders(ctx)
+			_ = fh
 		}
 	})
 }
