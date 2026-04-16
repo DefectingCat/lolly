@@ -30,6 +30,9 @@ const (
 // 由于 quic-go 使用标准库的 http.Handler 接口，
 // 而 lolly 使用 fasthttp，需要通过适配层进行转换。
 type Adapter struct {
+	// ctxPool 用于复用 fasthttp.RequestCtx 对象
+	ctxPool sync.Pool
+
 	// bufferPool 用于复用字节缓冲区（流式处理优化）
 	bufferPool sync.Pool
 }
@@ -37,6 +40,11 @@ type Adapter struct {
 // NewAdapter 创建新的适配器。
 func NewAdapter() *Adapter {
 	return &Adapter{
+		ctxPool: sync.Pool{
+			New: func() interface{} {
+				return &fasthttp.RequestCtx{}
+			},
+		},
 		bufferPool: sync.Pool{
 			New: func() interface{} {
 				buf := make([]byte, 4096) // 4KB 初始缓冲区
@@ -58,11 +66,16 @@ func NewAdapter() *Adapter {
 //   - http.Handler: 标准库兼容的 HTTP 处理器
 func (a *Adapter) Wrap(handler fasthttp.RequestHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 直接创建 RequestCtx
-		ctx := &fasthttp.RequestCtx{}
+		// 从池中获取 RequestCtx
+		ctx, ok := a.ctxPool.Get().(*fasthttp.RequestCtx)
+		if !ok {
+			// 如果类型断言失败，创建新的上下文（不应该发生，但为了安全）
+			ctx = &fasthttp.RequestCtx{}
+		}
+		defer a.ctxPool.Put(ctx)
 
-		// 初始化 ctx（fasthttp 的 RequestCtx 需要 Init 方法）
-		ctx.Init(&fasthttp.Request{}, nil, nil)
+		// 重置 ctx 状态以避免污染
+		a.resetContext(ctx)
 
 		// 转换请求
 		a.convertRequest(r, ctx)
@@ -76,6 +89,18 @@ func (a *Adapter) Wrap(handler fasthttp.RequestHandler) http.Handler {
 		// 转换响应
 		a.convertResponse(ctx, w)
 	})
+}
+
+// resetContext 重置 fasthttp.RequestCtx 状态。
+//
+// 参数：
+//   - ctx: 需要重置的上下文
+func (a *Adapter) resetContext(ctx *fasthttp.RequestCtx) {
+	// 清空请求头
+	ctx.Request.Header.DisableNormalizing()
+	ctx.Request.Reset()
+	ctx.Response.Reset()
+	ctx.SetUserValueBytes(nil, nil)
 }
 
 // convertRequest 将 net/http.Request 转换为 fasthttp.RequestCtx。

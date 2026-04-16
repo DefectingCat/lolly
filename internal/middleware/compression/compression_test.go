@@ -12,8 +12,11 @@ package compression
 
 import (
 	"bytes"
+	"io"
 	"testing"
 
+	"github.com/andybalholm/brotli"
+	"github.com/klauspost/compress/gzip"
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
 )
@@ -326,5 +329,149 @@ func TestGetters(t *testing.T) {
 	}
 	if len(m.Types()) != 1 {
 		t.Errorf("Expected 1 type, got %d", len(m.Types()))
+	}
+}
+
+func TestProcessStreamingGzip(t *testing.T) {
+	m, _ := New(&config.CompressionConfig{
+		Type:    "gzip",
+		Level:   6,
+		MinSize: 10,
+		Types:   []string{"text/html"},
+	})
+
+	// 创建大于 streamingThreshold 的响应
+	largeResponse := bytes.Repeat([]byte("Hello World! This is streaming test data. "), 2000) // ~80KB
+
+	nextHandler := func(ctx *fasthttp.RequestCtx) {
+		ctx.Response.Header.Set("Content-Type", "text/html")
+		_, _ = ctx.Write(largeResponse)
+	}
+
+	handler := m.Process(nextHandler)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Accept-Encoding", "gzip")
+
+	handler(ctx)
+
+	encoding := ctx.Response.Header.Peek("Content-Encoding")
+	if string(encoding) != "gzip" {
+		t.Errorf("Expected Content-Encoding 'gzip', got %s", encoding)
+	}
+
+	// Content-Length 应该被移除（使用 chunked encoding）
+	contentLength := ctx.Response.Header.Peek("Content-Length")
+	if string(contentLength) != "" {
+		t.Errorf("Expected no Content-Length for streaming, got %s", contentLength)
+	}
+
+	// 读取 body 并解压验证
+	body := ctx.Response.Body()
+	if len(body) == 0 {
+		t.Fatal("Expected non-empty body")
+	}
+
+	// 解压验证
+	gr, err := gzip.NewReader(bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("Failed to create gzip reader: %v", err)
+	}
+	defer gr.Close()
+
+	decompressed, err := io.ReadAll(gr)
+	if err != nil {
+		t.Fatalf("Failed to decompress: %v", err)
+	}
+
+	if !bytes.Equal(decompressed, largeResponse) {
+		t.Errorf("Decompressed body does not match original")
+	}
+}
+
+func TestProcessStreamingBrotli(t *testing.T) {
+	m, _ := New(&config.CompressionConfig{
+		Type:    "brotli",
+		Level:   4,
+		MinSize: 10,
+		Types:   []string{"text/html"},
+	})
+
+	// 创建大于 streamingThreshold 的响应
+	largeResponse := bytes.Repeat([]byte("Hello World! This is brotli streaming test data. "), 2000) // ~100KB
+
+	nextHandler := func(ctx *fasthttp.RequestCtx) {
+		ctx.Response.Header.Set("Content-Type", "text/html")
+		_, _ = ctx.Write(largeResponse)
+	}
+
+	handler := m.Process(nextHandler)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Accept-Encoding", "br")
+
+	handler(ctx)
+
+	encoding := ctx.Response.Header.Peek("Content-Encoding")
+	if string(encoding) != "br" {
+		t.Errorf("Expected Content-Encoding 'br', got %s", encoding)
+	}
+
+	// Content-Length 应该被移除
+	contentLength := ctx.Response.Header.Peek("Content-Length")
+	if string(contentLength) != "" {
+		t.Errorf("Expected no Content-Length for streaming, got %s", contentLength)
+	}
+
+	// 读取 body 并解压验证
+	body := ctx.Response.Body()
+	if len(body) == 0 {
+		t.Fatal("Expected non-empty body")
+	}
+
+	// 解压验证
+	br := brotli.NewReader(bytes.NewReader(body))
+	decompressed, err := io.ReadAll(br)
+	if err != nil {
+		t.Fatalf("Failed to decompress: %v", err)
+	}
+
+	if !bytes.Equal(decompressed, largeResponse) {
+		t.Errorf("Decompressed body does not match original")
+	}
+}
+
+func TestProcessSmallResponseBuffered(t *testing.T) {
+	m, _ := New(&config.CompressionConfig{
+		Type:    "gzip",
+		Level:   6,
+		MinSize: 10,
+		Types:   []string{"text/html"},
+	})
+
+	// 创建小于 streamingThreshold 但大于 MinSize 的响应
+	smallResponse := bytes.Repeat([]byte("Hello World! "), 100) // ~1.3KB
+
+	nextHandler := func(ctx *fasthttp.RequestCtx) {
+		ctx.Response.Header.Set("Content-Type", "text/html")
+		_, _ = ctx.Write(smallResponse)
+	}
+
+	handler := m.Process(nextHandler)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Accept-Encoding", "gzip")
+
+	handler(ctx)
+
+	encoding := ctx.Response.Header.Peek("Content-Encoding")
+	if string(encoding) != "gzip" {
+		t.Errorf("Expected Content-Encoding 'gzip', got %s", encoding)
+	}
+
+	// 小响应应该被压缩且 body 更小
+	body := ctx.Response.Body()
+	if len(body) >= len(smallResponse) {
+		t.Errorf("Expected compressed body smaller than original, got %d >= %d", len(body), len(smallResponse))
 	}
 }
