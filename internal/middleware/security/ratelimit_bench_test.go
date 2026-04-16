@@ -36,7 +36,7 @@ func BenchmarkRateLimiterAllow(b *testing.B) {
 	defer rl.(*RateLimiter).StopCleanup()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rl.(*RateLimiter).Allow("192.168.1.100")
 	}
 }
@@ -133,7 +133,7 @@ func BenchmarkRateLimiterCleanup_1000Buckets(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rl.Cleanup(0) // 清理所有桶
 		// 重新创建桶以保持测试一致性
 		for j := 0; j < 1000; j++ {
@@ -147,7 +147,7 @@ func BenchmarkKeyByIP(b *testing.B) {
 	ctx := setupRateLimitRequestCtx("192.168.1.100")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		keyByIP(ctx)
 	}
 }
@@ -170,7 +170,7 @@ func BenchmarkRateLimiterMiddleware(b *testing.B) {
 	handler := rl.Process(mockHandler)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := setupRateLimitRequestCtx("192.168.1.100")
 		handler(ctx)
 	}
@@ -222,7 +222,7 @@ func BenchmarkRateLimiterStats(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rl.GetStats()
 	}
 }

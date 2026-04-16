@@ -39,7 +39,7 @@ func BenchmarkHTTP2ServerStart(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := NewServer(cfg, handler, nil)
 		if err != nil {
 			b.Fatal(err)
@@ -67,7 +67,7 @@ func BenchmarkHTTP2FrameEncoding(b *testing.B) {
 	b.ReportAllocs()
 
 	b.Run("SettingsFrame", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			if err := framer.WriteSettings(settings...); err != nil {
 				b.Fatal(err)
@@ -83,7 +83,7 @@ func BenchmarkHTTP2FrameEncoding(b *testing.B) {
 		}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			if err := framer.WriteData(1, false, payload); err != nil {
 				b.Fatal(err)
@@ -95,7 +95,7 @@ func BenchmarkHTTP2FrameEncoding(b *testing.B) {
 		payload := []byte(`{"id":1,"name":"test"}`)
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			if err := framer.WriteData(1, false, payload); err != nil {
 				b.Fatal(err)
@@ -107,7 +107,7 @@ func BenchmarkHTTP2FrameEncoding(b *testing.B) {
 		payload := bytes.Repeat([]byte("X"), 16384)
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			if err := framer.WriteData(1, false, payload); err != nil {
 				b.Fatal(err)
@@ -119,7 +119,7 @@ func BenchmarkHTTP2FrameEncoding(b *testing.B) {
 		data := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			if err := framer.WritePing(false, data); err != nil {
 				b.Fatal(err)
@@ -129,7 +129,7 @@ func BenchmarkHTTP2FrameEncoding(b *testing.B) {
 
 	b.Run("RSTStreamFrame", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			if err := framer.WriteRSTStream(1, http2.ErrCodeCancel); err != nil {
 				b.Fatal(err)
@@ -139,7 +139,7 @@ func BenchmarkHTTP2FrameEncoding(b *testing.B) {
 
 	b.Run("WindowUpdateFrame", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			if err := framer.WriteWindowUpdate(1, 65535); err != nil {
 				b.Fatal(err)
@@ -149,7 +149,7 @@ func BenchmarkHTTP2FrameEncoding(b *testing.B) {
 
 	b.Run("GoAwayFrame", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			if err := framer.WriteGoAway(1, http2.ErrCodeNo, []byte("graceful shutdown")); err != nil {
 				b.Fatal(err)
@@ -199,7 +199,7 @@ func BenchmarkHTTP2HeadersEncoding(b *testing.B) {
 		var buf bytes.Buffer
 		encoder := hpack.NewEncoder(&buf)
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			for _, hf := range commonHeaders {
 				if err := encoder.WriteField(hf); err != nil {
@@ -227,7 +227,7 @@ func BenchmarkHTTP2HeadersEncoding(b *testing.B) {
 		var buf bytes.Buffer
 		encoder := hpack.NewEncoder(&buf)
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			for _, hf := range authHeaders {
 				if err := encoder.WriteField(hf); err != nil {
@@ -241,7 +241,7 @@ func BenchmarkHTTP2HeadersEncoding(b *testing.B) {
 		var buf bytes.Buffer
 		encoder := hpack.NewEncoder(&buf)
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			for _, hf := range bodyHeaders {
 				if err := encoder.WriteField(hf); err != nil {
@@ -256,7 +256,7 @@ func BenchmarkHTTP2HeadersEncoding(b *testing.B) {
 		var buf bytes.Buffer
 		encoder := hpack.NewEncoder(&buf)
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			buf.Reset()
 			for _, hf := range commonHeaders {
 				if err := encoder.WriteField(hf); err != nil {
@@ -283,7 +283,7 @@ func BenchmarkHTTP2StreamCreate(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodGet, "/stream/test", nil)
 		req.Header.Set(":authority", "localhost")
 
@@ -353,7 +353,7 @@ func BenchmarkHTTP2RequestRoundTrip(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rec.Body.Reset()
 		adapter.ServeHTTP(rec, req)
 	}
@@ -376,7 +376,7 @@ func BenchmarkHTTP2RequestRoundTrip_WithBody(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/update", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 		req.ContentLength = int64(len(body))
@@ -432,7 +432,7 @@ func BenchmarkHTTP2SettingsValidation(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := ValidateSettings(validSettings); err != nil {
 			b.Fatal(err)
 		}
@@ -457,9 +457,11 @@ func BenchmarkHTTP2AdapterWithHPACKHeaders(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
-		method := methods[i%len(methods)]
-		path := paths[i%len(paths)]
+	var idx int
+	for b.Loop() {
+		method := methods[idx%len(methods)]
+		path := paths[idx%len(paths)]
+		idx++
 
 		req := httptest.NewRequest(method, path, nil)
 		req.Header.Set(":authority", "api.example.com")

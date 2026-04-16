@@ -178,7 +178,7 @@ func BenchmarkTLSCertificateLoad(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := tls.LoadX509KeyPair(certPath, keyPath)
 		if err != nil {
 			b.Fatal(err)
@@ -193,7 +193,7 @@ func BenchmarkTLSCertificateLoad_InMemory(b *testing.B) {
 	certPEM, keyPEM := generateTestCert(&testing.T{})
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := tls.X509KeyPair(certPEM, keyPEM)
 		if err != nil {
 			b.Fatal(err)
@@ -289,7 +289,7 @@ func BenchmarkTLSRenegotiation(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		conn, err := tls.Dial("tcp", listener.Addr().String(), clientTLS)
 		if err != nil {
 			b.Fatalf("Dial failed: %v", err)
@@ -382,8 +382,10 @@ func BenchmarkOCSPStapling_GetStatus(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		serial := string(rune('0' + (i % 10)))
+	var idx int
+	for b.Loop() {
+		serial := string(rune('0' + (idx % 10)))
+		idx++
 		status, hasResponse := ocspMgr.GetStatus(serial)
 		if !hasResponse {
 			b.Error("expected hasResponse=true")
@@ -573,7 +575,7 @@ func BenchmarkSessionTicketManager_ApplyToTLSConfig(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		tlsCfg := baseTLS.Clone()
 		sessionMgr.ApplyToTLSConfig(tlsCfg)
 	}
@@ -657,7 +659,7 @@ func BenchmarkCipherSuiteParsing(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := parseCipherSuites(ciphers)
 		if err != nil {
 			b.Fatal(err)
@@ -670,7 +672,7 @@ func BenchmarkTLSVersionsParsing(b *testing.B) {
 	protocols := []string{"TLSv1.2", "TLSv1.3"}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, err := parseTLSVersions(protocols)
 		if err != nil {
 			b.Fatal(err)

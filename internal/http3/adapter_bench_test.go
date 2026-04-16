@@ -46,7 +46,7 @@ func BenchmarkAdapterWrap(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rw := &mockResponseWriter{}
 		httpHandler.ServeHTTP(rw, req)
 	}
@@ -83,7 +83,7 @@ func BenchmarkAdapterConvertRequest(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx.Request.Reset()
 		adapter.convertRequest(req, ctx)
 	}
@@ -125,7 +125,7 @@ func benchmarkAdapterConvertRequestBody(b *testing.B, bodySize int) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		b.StopTimer()
 		// 每次迭代创建新的 Body，模拟新的请求
 		req := &http.Request{
@@ -169,7 +169,7 @@ func BenchmarkAdapterConvertResponse(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		b.StopTimer()
 		rw := &mockResponseWriter{}
 		b.StartTimer()
@@ -197,7 +197,7 @@ func BenchmarkAdapterCtxPool(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			rw := &mockResponseWriter{}
 			httpHandler.ServeHTTP(rw, req)
 		}
@@ -216,7 +216,7 @@ func BenchmarkAdapterCtxPool(b *testing.B) {
 		b.ResetTimer()
 		b.ReportAllocs()
 
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			rw := &mockResponseWriter{}
 			// 每次创建新的 ctx，不使用 Pool
 			ctx := &fasthttp.RequestCtx{}
@@ -302,7 +302,7 @@ func BenchmarkAdapterFullRoundTrip(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rw := &mockResponseWriter{}
 		httpHandler.ServeHTTP(rw, req)
 	}

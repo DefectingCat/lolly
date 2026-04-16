@@ -30,7 +30,7 @@ func BenchmarkExtractClientIP(b *testing.B) {
 		ctx := createBenchCtx()
 		ctx.Request.Header.Set("X-Forwarded-For", "192.168.1.100")
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ExtractClientIP(ctx)
 		}
 	})
@@ -39,7 +39,7 @@ func BenchmarkExtractClientIP(b *testing.B) {
 		ctx := createBenchCtx()
 		ctx.Request.Header.Set("X-Forwarded-For", "192.168.1.100, 10.0.0.1, 172.16.0.1")
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ExtractClientIP(ctx)
 		}
 	})
@@ -48,7 +48,7 @@ func BenchmarkExtractClientIP(b *testing.B) {
 		ctx := createBenchCtx()
 		ctx.Request.Header.Set("X-Real-IP", "192.168.1.200")
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ExtractClientIP(ctx)
 		}
 	})
@@ -56,7 +56,7 @@ func BenchmarkExtractClientIP(b *testing.B) {
 	b.Run("RemoteAddr fallback", func(b *testing.B) {
 		ctx := createBenchCtx()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ExtractClientIP(ctx)
 		}
 	})
@@ -69,7 +69,7 @@ func BenchmarkExtractClientIPNet(b *testing.B) {
 		ctx := createBenchCtx()
 		ctx.Request.Header.Set("X-Forwarded-For", "192.168.1.100")
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ExtractClientIPNet(ctx)
 		}
 	})
@@ -78,7 +78,7 @@ func BenchmarkExtractClientIPNet(b *testing.B) {
 		ctx := createBenchCtx()
 		ctx.Request.Header.Set("X-Real-IP", "192.168.1.200")
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ExtractClientIPNet(ctx)
 		}
 	})
@@ -86,7 +86,7 @@ func BenchmarkExtractClientIPNet(b *testing.B) {
 	b.Run("RemoteAddr fallback", func(b *testing.B) {
 		ctx := createBenchCtx()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_ = ExtractClientIPNet(ctx)
 		}
 	})
@@ -98,7 +98,7 @@ func BenchmarkStripPort(b *testing.B) {
 	b.Run("IPv4 with port", func(b *testing.B) {
 		host := "example.com:8080"
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			StripPort(host)
 		}
 	})
@@ -106,7 +106,7 @@ func BenchmarkStripPort(b *testing.B) {
 	b.Run("IPv6 with port", func(b *testing.B) {
 		host := "[2001:db8::1]:8443"
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			StripPort(host)
 		}
 	})
@@ -114,7 +114,7 @@ func BenchmarkStripPort(b *testing.B) {
 	b.Run("no port", func(b *testing.B) {
 		host := "example.com"
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			StripPort(host)
 		}
 	})
@@ -122,7 +122,7 @@ func BenchmarkStripPort(b *testing.B) {
 	b.Run("empty string", func(b *testing.B) {
 		host := ""
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			StripPort(host)
 		}
 	})
@@ -134,7 +134,7 @@ func BenchmarkHasPort(b *testing.B) {
 	b.Run("IPv4 with port", func(b *testing.B) {
 		host := "example.com:8080"
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			HasPort(host)
 		}
 	})
@@ -142,7 +142,7 @@ func BenchmarkHasPort(b *testing.B) {
 	b.Run("IPv6 with port", func(b *testing.B) {
 		host := "[2001:db8::1]:443"
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			HasPort(host)
 		}
 	})
@@ -150,7 +150,7 @@ func BenchmarkHasPort(b *testing.B) {
 	b.Run("no port", func(b *testing.B) {
 		host := "example.com"
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			HasPort(host)
 		}
 	})
@@ -158,7 +158,7 @@ func BenchmarkHasPort(b *testing.B) {
 	b.Run("empty string", func(b *testing.B) {
 		host := ""
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			HasPort(host)
 		}
 	})

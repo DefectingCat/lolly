@@ -16,7 +16,7 @@ func BenchmarkCoroutineCreation(b *testing.B) {
 	defer engine.Close()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		coro, err := engine.NewCoroutine(nil)
 		if err != nil {
 			b.Fatal(err)
@@ -34,7 +34,7 @@ func BenchmarkLuaContextPool(b *testing.B) {
 	defer engine.Close()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := NewContext(engine, nil)
 		ctx.SetVariable("key", "value")
 		ctx.Write([]byte("hello"))
@@ -62,7 +62,7 @@ func BenchmarkBytecodeCompilation(b *testing.B) {
 	`
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := engine.CodeCache().GetOrCompileInline(script)
 		if err != nil {
 			b.Fatal(err)
@@ -81,7 +81,7 @@ func BenchmarkSharedDictSetGet(b *testing.B) {
 	dict := engine.CreateSharedDict("bench", 10000)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		dict.Set("key", "value", 0)
 		dict.Get("key")
 	}
@@ -101,7 +101,7 @@ func BenchmarkTimerCallbackThroughput(b *testing.B) {
 	})
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		manager.At(1*time.Millisecond, callback, nil)
 	}
 	b.StopTimer()
@@ -134,7 +134,7 @@ func BenchmarkTimerCallbackWithLuaExecution(b *testing.B) {
 	`
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if err := L.DoString(script); err != nil {
 			b.Fatal(err)
 		}
@@ -159,7 +159,7 @@ func BenchmarkUpvalueDetection(b *testing.B) {
 	RegisterTimerAPI(L, engine.TimerManager(), ngx)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// 尝试注册带有 upvalue 的回调（应该被拒绝）
 		err := L.DoString(`
 			local x = 42
@@ -174,7 +174,7 @@ func BenchmarkUpvalueDetection(b *testing.B) {
 
 // BenchmarkTimerGracefulShutdown 测试优雅关闭开销
 func BenchmarkTimerGracefulShutdown(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		engine, err := NewEngine(DefaultConfig())
 		if err != nil {
 			b.Fatal(err)
@@ -206,7 +206,7 @@ func BenchmarkLuaContextPoolReuse(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// 模拟一次完整的请求生命周期
 		ctx := NewContext(engine, nil)
 		ctx.SetVariable("uri", "/test")
@@ -254,7 +254,7 @@ func BenchmarkLuaTablePool(b *testing.B) {
 	b.Run("NewTable_NoPool", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			t := L.NewTable()
 			t.RawSetString("key1", glua.LString("value1"))
 			t.RawSetString("key2", glua.LString("value2"))
@@ -267,7 +267,7 @@ func BenchmarkLuaTablePool(b *testing.B) {
 		dict := engine.CreateSharedDict("bench_pool", 1000)
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			dict.Set("key", "value_with_pool", 0)
 			dict.Get("key")
 			dict.Delete("key")

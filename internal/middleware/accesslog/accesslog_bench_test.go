@@ -31,7 +31,7 @@ func BenchmarkAccessLogProcess(b *testing.B) {
 	handler := al.Process(mockHandler)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
 		ctx.Request.SetRequestURI("/api/test")

@@ -45,7 +45,7 @@ func BenchmarkLuaMiddlewareOverhead(b *testing.B) {
 	handler := middleware.Process(finalHandler)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		handler(ctx)
 	}
@@ -92,7 +92,7 @@ func BenchmarkLuaMiddlewareMultiPhase(b *testing.B) {
 	handler := multi.Process(finalHandler)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		handler(ctx)
 	}
@@ -130,7 +130,7 @@ func BenchmarkLuaMiddlewareNgxExit(b *testing.B) {
 	handler := middleware.Process(finalHandler)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		handler(ctx)
 	}

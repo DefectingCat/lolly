@@ -15,7 +15,7 @@ func BenchmarkSlidingWindowAllow(b *testing.B) {
 	sw := NewSlidingWindowLimiter(time.Second, 10000, false)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sw.Allow("192.168.1.100")
 	}
 }
@@ -25,7 +25,7 @@ func BenchmarkSlidingWindowAllowPrecise(b *testing.B) {
 	sw := NewSlidingWindowLimiter(time.Second, 10000, true)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sw.Allow("192.168.1.100")
 	}
 }
@@ -78,7 +78,7 @@ func BenchmarkSlidingWindowCleanup(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sw.Cleanup(time.Hour)
 	}
 }
@@ -94,7 +94,7 @@ func BenchmarkSlidingWindowGetCount(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sw.GetCount(key)
 	}
 }
@@ -105,7 +105,7 @@ func BenchmarkSlidingWindowReset(b *testing.B) {
 	key := "192.168.1.100"
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sw.Allow(key)
 		sw.Reset(key)
 	}
@@ -121,7 +121,7 @@ func BenchmarkSlidingWindowMultiKey(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		sw.Allow(keys[i%100])
 	}
 }
@@ -136,7 +136,7 @@ func BenchmarkSlidingWindowStats(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		sw.GetStats()
 	}
 }

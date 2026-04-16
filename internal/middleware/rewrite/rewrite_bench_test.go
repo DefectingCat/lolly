@@ -26,7 +26,7 @@ func BenchmarkRewriteProcess(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/api/v1/users")
 		handler(ctx)
@@ -63,7 +63,7 @@ func BenchmarkRewriteMultipleRules(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/j/resource")
 		handler(ctx)
@@ -89,7 +89,7 @@ func BenchmarkRewriteWithVariableExpand(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/api/data")
 		// 设置 Host 头以供变量展开使用
@@ -119,7 +119,7 @@ func BenchmarkRewriteFlagLast(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/v1/resource")
 		handler(ctx)
@@ -144,7 +144,7 @@ func BenchmarkRewriteNoMatch(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/static/file.txt")
 		handler(ctx)
@@ -170,7 +170,7 @@ func BenchmarkRewriteComplexPattern(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/api/v1/users/123/profile")
 		handler(ctx)
@@ -195,7 +195,7 @@ func BenchmarkRewriteRedirect(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/old/page")
 		handler(ctx)
@@ -221,7 +221,7 @@ func BenchmarkRewriteBreak(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/api/data")
 		handler(ctx)
@@ -246,7 +246,7 @@ func BenchmarkRewriteMultipleCaptures(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/2024/03/15/article")
 		handler(ctx)

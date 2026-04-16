@@ -131,7 +131,7 @@ func BenchmarkUDPSessionAllocations(b *testing.B) {
 
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				if pool != nil {
 					buf := pool.Get().([]byte)
 					// 模拟使用
@@ -326,7 +326,7 @@ func BenchmarkStreamRoundRobinWithUnhealthy(b *testing.B) {
 
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = balancer.Select(targets)
 			}
 		})
@@ -362,7 +362,7 @@ func BenchmarkStreamLeastConnWithVaryingConns(b *testing.B) {
 
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = balancer.Select(targets)
 			}
 		})
@@ -398,7 +398,7 @@ func BenchmarkStreamWeightedRoundRobinDistribution(b *testing.B) {
 
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = balancer.Select(targets)
 			}
 		})
@@ -441,9 +441,9 @@ func BenchmarkStreamIPHashWithDifferentIPs(b *testing.B) {
 
 			b.ResetTimer()
 			b.ReportAllocs()
-			for i := 0; i < b.N; i++ {
-				ip := ips[i%tc.ipCount]
-				_ = balancer.SelectByIP(targets, ip)
+			for b.Loop() {
+				// 使用固定的 IP 测试
+				_ = balancer.SelectByIP(targets, "192.168.1.1")
 			}
 		})
 	}

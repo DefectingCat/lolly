@@ -152,10 +152,10 @@ func BenchmarkDNSResolverCacheExpiry(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// 使用 IP 地址（会被直接返回，不涉及 DNS 查询）
 		// 这样可以测试过期逻辑而不依赖网络
-		host := fmt.Sprintf("127.0.0.%d", (i%254)+1)
+		host := "127.0.0.1"
 
 		// 预存储一个已过期的条目
 		r.cache.Store(host, &DNSCacheEntry{

@@ -147,7 +147,7 @@ func BenchmarkConsistentHashRebuild(b *testing.B) {
 			ch := NewConsistentHash(tc.virtualNodes, "ip")
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				ch.Rebuild(targets)
 			}
 		})
@@ -180,7 +180,7 @@ func BenchmarkConsistentHashSelectExcluding(b *testing.B) {
 			key := "test-request-key"
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				ch.SelectExcludingByKey(targets, excluded, key)
 			}
 		})
@@ -257,7 +257,7 @@ func BenchmarkAllBalancers(b *testing.B) {
 	b.Run("RoundRobin", func(b *testing.B) {
 		rr := NewRoundRobin()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			rr.Select(targets)
 		}
 	})
@@ -265,7 +265,7 @@ func BenchmarkAllBalancers(b *testing.B) {
 	b.Run("WeightedRoundRobin", func(b *testing.B) {
 		wrr := NewWeightedRoundRobin()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			wrr.Select(weightedTargets)
 		}
 	})
@@ -273,7 +273,7 @@ func BenchmarkAllBalancers(b *testing.B) {
 	b.Run("LeastConnections", func(b *testing.B) {
 		lc := NewLeastConnections()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			lc.Select(targets)
 		}
 	})
@@ -281,7 +281,7 @@ func BenchmarkAllBalancers(b *testing.B) {
 	b.Run("IPHash", func(b *testing.B) {
 		iph := NewIPHash()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			iph.SelectByIP(targets, "192.168.1.100")
 		}
 	})
@@ -290,7 +290,7 @@ func BenchmarkAllBalancers(b *testing.B) {
 		ch := NewConsistentHash(150, "ip")
 		ch.Rebuild(targets)
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ch.SelectByKey(targets, "192.168.1.100")
 		}
 	})

@@ -30,7 +30,7 @@ func BenchmarkBodyLimitProcess(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.Header.SetMethod("POST")
 		ctx.Request.Header.SetContentLength(len(body))
@@ -75,7 +75,7 @@ func BenchmarkBodyLimitGetLimit(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		path := testPaths[i%len(testPaths)]
 		_ = bl.GetLimit(path)
 	}
@@ -114,7 +114,7 @@ func BenchmarkBodyLimitPathMatching(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		path := testPaths[i%len(testPaths)]
 		_ = bl.GetLimit(path)
 	}
@@ -137,7 +137,7 @@ func BenchmarkParseSize(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		sizeStr := sizes[i%len(sizes)]
 		_, err := ParseSize(sizeStr)
 		if err != nil {

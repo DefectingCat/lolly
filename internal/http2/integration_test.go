@@ -370,7 +370,7 @@ func BenchmarkAdapterConversion(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rec.Body.Reset()
 		adapter.ServeHTTP(rec, req)
 	}
@@ -389,7 +389,7 @@ func BenchmarkAdapterWithBody(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		req := httptest.NewRequest(http.MethodPost, "/api", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		adapter.ServeHTTP(rec, req)
@@ -407,7 +407,7 @@ func BenchmarkServerCreation(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := NewServer(cfg, handler, nil)
 		if err != nil {
 			b.Fatal(err)

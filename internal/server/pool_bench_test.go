@@ -37,7 +37,7 @@ func BenchmarkGoroutinePoolSubmit(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = pool.Submit(ctx, task)
 	}
 }
@@ -105,7 +105,7 @@ func BenchmarkGoroutinePoolSubmit_BlockingPath(b *testing.B) {
 	task := func(_ *fasthttp.RequestCtx) {}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// 这会触发阻塞路径：队列满 -> 启动新 worker -> 阻塞写入
 		_ = pool.Submit(ctx, task)
 	}
@@ -143,7 +143,7 @@ func BenchmarkGoroutinePoolQueueFull(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		// 这会触发 fallback：直接执行任务
 		_ = pool.Submit(ctx, task)
 	}
@@ -152,7 +152,7 @@ func BenchmarkGoroutinePoolQueueFull(b *testing.B) {
 // BenchmarkGoroutinePoolWorkerRecycle 测试 Worker 空闲回收性能。
 // 测量空闲 worker 超时退出的效率。
 func BenchmarkGoroutinePoolWorkerRecycle(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		pool := NewGoroutinePool(PoolConfig{
 			MaxWorkers:  50,
 			MinWorkers:  5,
@@ -208,7 +208,7 @@ func BenchmarkGoroutinePoolSubmitWithWork(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = pool.Submit(ctx, task)
 			}
 		})
@@ -232,7 +232,7 @@ func BenchmarkGoroutinePoolMinWorkers(b *testing.B) {
 		task := func(_ *fasthttp.RequestCtx) {}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_ = pool.Submit(ctx, task)
 		}
 	})
@@ -251,7 +251,7 @@ func BenchmarkGoroutinePoolMinWorkers(b *testing.B) {
 		task := func(_ *fasthttp.RequestCtx) {}
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_ = pool.Submit(ctx, task)
 		}
 	})
@@ -275,10 +275,9 @@ func BenchmarkGoroutinePoolObjectPool(b *testing.B) {
 	b.Run("PoolTask_Submit", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			captured := i
+		for b.Loop() {
 			task := func(_ *fasthttp.RequestCtx) {
-				_ = captured
+				// 空任务
 			}
 			_ = pool.Submit(ctx, task)
 		}
@@ -291,7 +290,7 @@ func BenchmarkGoroutinePoolObjectPool(b *testing.B) {
 		task := func(_ *fasthttp.RequestCtx) {
 			// 空任务
 		}
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			_ = pool.Submit(ctx, task)
 		}
 	})
@@ -317,11 +316,10 @@ func BenchmarkPoolMemoryReuse(b *testing.B) {
 	b.Run("WithPool_GetPut", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			t := taskPool.Get().(*pooledTask)
 			t.data = t.data[:0]
 			t.data = append(t.data, []byte("pooled data")...)
-			t.id = i
 			taskPool.Put(t)
 		}
 	})
@@ -329,12 +327,11 @@ func BenchmarkPoolMemoryReuse(b *testing.B) {
 	b.Run("WithoutPool_Alloc", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			t := &pooledTask{
 				data: make([]byte, 0, 256),
 			}
 			t.data = append(t.data, []byte("fresh alloc data")...)
-			t.id = i
 		}
 	})
 }

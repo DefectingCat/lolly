@@ -196,7 +196,7 @@ func BenchmarkDelayedWrite(b *testing.B) {
 	body := []byte("Hello, World! This is a test body for benchmarking.")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		drw := NewDelayedResponseWriter(ctx)
 		drw.EnableFilterPhase()
 		drw.Write(body)
@@ -209,7 +209,7 @@ func BenchmarkNormalWrite(b *testing.B) {
 	body := []byte("Hello, World! This is a test body for benchmarking.")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := mockRequestCtx()
 		ctx.Write(body)
 	}
@@ -229,7 +229,7 @@ func BenchmarkHeaderFilter(b *testing.B) {
 	})
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		drw.WriteString("test")
 		_ = drw.Flush()
 		drw.Reset()
@@ -715,7 +715,7 @@ func TestStats(t *testing.T) {
 // BenchmarkPoolPerformance 基准测试对象池性能
 func BenchmarkPoolPerformance(b *testing.B) {
 	b.Run("WithPool", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ctx := mockRequestCtx()
 			ri := AcquireResponseInterceptor(ctx)
 			ri.WriteString("test")
@@ -725,7 +725,7 @@ func BenchmarkPoolPerformance(b *testing.B) {
 	})
 
 	b.Run("WithoutPool", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ctx := mockRequestCtx()
 			ri := NewResponseInterceptor(ctx)
 			ri.Enable()
@@ -747,7 +747,7 @@ func BenchmarkHeaderModification(b *testing.B) {
 		})
 
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			drw.WriteString("test")
 			_ = drw.Flush()
 			drw.Reset()
@@ -757,7 +757,7 @@ func BenchmarkHeaderModification(b *testing.B) {
 
 	b.Run("DirectWrite", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			ctx := mockRequestCtx()
 			ctx.Response.Header.Set("X-Test", "value")
 			ctx.Response.SetBodyString("test")
@@ -842,7 +842,7 @@ func BenchmarkLargeBody(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := mockRequestCtx()
 		drw := NewDelayedResponseWriter(ctx)
 		drw.EnableFilterPhase()

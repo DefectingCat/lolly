@@ -49,7 +49,7 @@ func BenchmarkLoggerLogAccessJSON(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		logger.LogAccess(ctx, 200, 1024, 150*time.Millisecond)
 	}
 }
@@ -78,7 +78,7 @@ func BenchmarkLoggerLogAccessTemplate(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		logger.LogAccess(ctx, 200, 1024, 150*time.Millisecond)
 	}
 }
@@ -104,7 +104,7 @@ func BenchmarkLoggerLogAccessSimpleTemplate(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		logger.LogAccess(ctx, 201, 512, 50*time.Millisecond)
 	}
 }
@@ -132,7 +132,7 @@ func BenchmarkFormatAccessLog(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = logger.formatAccessLog(ctx, 200, 2048, 250*time.Microsecond)
 	}
 }
@@ -158,7 +158,7 @@ func BenchmarkFormatAccessLogMinimal(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = logger.formatAccessLog(ctx, 200, 4, 1*time.Microsecond)
 	}
 }
@@ -171,7 +171,7 @@ func BenchmarkParseLevel(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_ = parseLevel(levels[i%len(levels)])
 	}
 }
@@ -182,7 +182,7 @@ func BenchmarkParseLevelLowercase(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = parseLevel("info")
 	}
 }
@@ -193,7 +193,7 @@ func BenchmarkParseLevelUppercase(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = parseLevel("INFO")
 	}
 }
@@ -220,7 +220,7 @@ func BenchmarkLoggerLogAccessWithUser(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		logger.LogAccess(ctx, 200, 1024, 100*time.Millisecond)
 	}
 }
@@ -246,7 +246,7 @@ func BenchmarkLoggerLogAccessEmptyFormat(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		logger.LogAccess(ctx, 200, 2, 5*time.Microsecond)
 	}
 }

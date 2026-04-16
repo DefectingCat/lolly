@@ -421,7 +421,7 @@ func TestSessionTicketManager_ConcurrentAccess(t *testing.T) {
 
 // BenchmarkGenerateTicketKey 基准测试密钥生成。
 func BenchmarkGenerateTicketKey(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := generateTicketKey()
 		if err != nil {
 			b.Fatal(err)
@@ -447,7 +447,7 @@ func BenchmarkSessionTicketManager_GetKeys(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_ = mgr.GetKeys()
 	}
 }
@@ -465,7 +465,7 @@ func BenchmarkSessionTicketManager_RotateKey(b *testing.B) {
 	defer mgr.Stop()
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		err := mgr.RotateKey()
 		if err != nil {
 			b.Fatal(err)

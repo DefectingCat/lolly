@@ -69,7 +69,7 @@ func BenchmarkFileCacheSet(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for i := 0; b.Loop(); i++ {
 				path := fmt.Sprintf("/newfile%d.txt", i)
 				data := []byte("new cached data content")
 				_ = fc.Set(path, data, int64(len(data)), time.Now())
@@ -84,7 +84,7 @@ func BenchmarkFileCacheSetNoEviction(b *testing.B) {
 	fc := NewFileCache(int64(b.N+1000), 0, 1*time.Hour)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		path := fmt.Sprintf("/file%d.txt", i)
 		data := []byte("cached data content")
 		_ = fc.Set(path, data, int64(len(data)), time.Now())
@@ -165,7 +165,7 @@ func BenchmarkFileCacheSizeEviction(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		path := fmt.Sprintf("/newfile%d.txt", i)
 		newData := make([]byte, 1024)
 		_ = fc.Set(path, newData, int64(len(newData)), time.Now())
@@ -185,7 +185,7 @@ func BenchmarkFileCacheLRUTouch(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		// 按顺序访问，触发 LRU 链表更新
 		path := fmt.Sprintf("/file%d.txt", i%100)
 		fc.Get(path)
@@ -224,7 +224,7 @@ func BenchmarkProxyCacheSet(b *testing.B) {
 	headers := map[string]string{"Content-Type": "application/json"}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		origKey := fmt.Sprintf("key%d", i)
 		hashKey := hashKeyBench(origKey)
 		pc.Set(hashKey, origKey, data, headers, 200, 10*time.Minute)

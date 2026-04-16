@@ -54,7 +54,7 @@ func BenchmarkStaticFileLookup(b *testing.B) {
 	handler := NewStaticHandler(dir, "/", []string{"index.html"}, false)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/style.css")
 		handler.Handle(ctx)
@@ -76,7 +76,7 @@ func BenchmarkStaticFileCacheHit(b *testing.B) {
 	handler.Handle(ctx)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/style.css")
 		handler.Handle(ctx)
@@ -91,7 +91,7 @@ func BenchmarkStaticFileCacheMiss_1KB(b *testing.B) {
 	handler := NewStaticHandler(dir, "/", []string{"index.html"}, false)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/style.css")
 		handler.Handle(ctx)
@@ -106,7 +106,7 @@ func BenchmarkStaticFileCacheMiss_10KB(b *testing.B) {
 	handler := NewStaticHandler(dir, "/", []string{"index.html"}, false)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/large.json")
 		handler.Handle(ctx)
@@ -122,7 +122,7 @@ func BenchmarkStaticTryFiles(b *testing.B) {
 	handler.SetTryFiles([]string{"$uri", "$uri/", "/index.html"}, false, nil)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/nonexistent/path")
 		handler.Handle(ctx)
@@ -137,7 +137,7 @@ func BenchmarkStaticIndex(b *testing.B) {
 	handler := NewStaticHandler(dir, "/", []string{"index.html", "index.htm"}, false)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/")
 		handler.Handle(ctx)
@@ -152,7 +152,7 @@ func BenchmarkStaticNestedFile(b *testing.B) {
 	handler := NewStaticHandler(dir, "/", []string{"index.html"}, false)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/nested/file.js")
 		handler.Handle(ctx)
@@ -167,7 +167,7 @@ func BenchmarkStaticFileNotFound(b *testing.B) {
 	handler := NewStaticHandler(dir, "/", []string{"index.html"}, false)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/nonexistent/file.txt")
 		handler.Handle(ctx)
@@ -205,7 +205,7 @@ func BenchmarkStaticFileLookupWithAlias(b *testing.B) {
 	handler := NewStaticHandlerWithAlias(dir+"/", "/static/", []string{"index.html"}, false)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/static/style.css")
 		handler.Handle(ctx)

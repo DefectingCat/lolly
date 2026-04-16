@@ -372,11 +372,11 @@ func TestCosocketManager_Concurrent(t *testing.T) {
 	var completed int32
 
 	// 并发创建 socket 和连接
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(start int) {
 			defer wg.Done()
-			for j := 0; j < numSockets/numGoroutines; j++ {
+			for j := range numSockets / numGoroutines {
 				socket := NewTCPSocket(cm)
 				if err := socket.Connect("127.0.0.1", 19994); err != nil {
 					errors <- fmt.Errorf("connect failed: %v", err)
@@ -434,7 +434,7 @@ func TestCosocketManager_MemoryLeak(t *testing.T) {
 	initialGoroutines := runtime.NumGoroutine()
 
 	// 创建和关闭大量 socket
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		socket := NewTCPSocket(cm)
 		// 使用同步连接避免竞态
 		socket.Connect("127.0.0.1", 19993)
@@ -552,7 +552,7 @@ func BenchmarkCosocket_SendReceive(b *testing.B) {
 	time.Sleep(100 * time.Millisecond)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		socket.Send([]byte("benchmark"))
 		socket.Receive(1024)
 	}
@@ -636,7 +636,7 @@ func TestCosocketManager_Stress(t *testing.T) {
 	// 使用信号量限制并发
 	sem := make(chan struct{}, concurrency)
 
-	for i := 0; i < totalConnections; i++ {
+	for i := range totalConnections {
 		wg.Add(1)
 		sem <- struct{}{} // 获取信号量
 
@@ -656,7 +656,7 @@ func TestCosocketManager_Stress(t *testing.T) {
 			}
 
 			// 等待连接状态就绪（最多 50ms）
-			for retry := 0; retry < 10; retry++ {
+			for range 10 {
 				if socket.State() == SocketStateConnected {
 					break
 				}
