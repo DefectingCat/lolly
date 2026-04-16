@@ -84,8 +84,8 @@ type Proxy struct {
 	config           *config.ProxyConfig
 	cache            *cache.ProxyCache
 	healthChecker    *HealthChecker
-	luaEngine        *lua.LuaEngine        // Lua 引擎引用
-	redirectRewriter *RedirectRewriter     // 重定向改写器
+	luaEngine        *lua.LuaEngine    // Lua 引擎引用
+	redirectRewriter *RedirectRewriter // 重定向改写器
 	stopCh           chan struct{}
 	targets          []*loadbalance.Target
 	mu               sync.RWMutex

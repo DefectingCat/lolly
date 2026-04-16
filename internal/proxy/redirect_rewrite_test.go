@@ -3,10 +3,9 @@ package proxy
 import (
 	"testing"
 
+	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/testutil"
-
-	"github.com/valyala/fasthttp"
 )
 
 // TestRedirectRewrite_ExactMatch 测试精确匹配改写

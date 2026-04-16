@@ -10,6 +10,12 @@ import (
 	"rua.plus/lolly/internal/netutil"
 )
 
+// 协议常量
+const (
+	protoHTTP  = "http"
+	protoHTTPS = "https"
+)
+
 // ForwardedHeaders 包含 X-Forwarded 系列头信息。
 type ForwardedHeaders struct {
 	ClientIP string // 客户端 IP
@@ -28,9 +34,9 @@ func ExtractForwardedHeaders(ctx *fasthttp.RequestCtx) ForwardedHeaders {
 	clientIP := netutil.ExtractClientIP(ctx)
 	host := string(ctx.Host())
 
-	proto := "http"
+	proto := protoHTTP
 	if ctx.IsTLS() {
-		proto = "https"
+		proto = protoHTTPS
 	}
 
 	return ForwardedHeaders{

@@ -33,28 +33,28 @@ func TestCreateTLSConfig_Disabled(t *testing.T) {
 
 func TestCreateTLSConfig_ServerName(t *testing.T) {
 	tests := []struct {
-		name             string
-		cfg              *config.ProxySSLConfig
+		name              string
+		cfg               *config.ProxySSLConfig
 		defaultServerName string
-		wantServerName   string
+		wantServerName    string
 	}{
 		{
-			name:             "custom server name",
-			cfg:              &config.ProxySSLConfig{Enabled: true, ServerName: "custom.example.com"},
+			name:              "custom server name",
+			cfg:               &config.ProxySSLConfig{Enabled: true, ServerName: "custom.example.com"},
 			defaultServerName: "default.example.com",
-			wantServerName:   "custom.example.com",
+			wantServerName:    "custom.example.com",
 		},
 		{
-			name:             "default server name",
-			cfg:              &config.ProxySSLConfig{Enabled: true},
+			name:              "default server name",
+			cfg:               &config.ProxySSLConfig{Enabled: true},
 			defaultServerName: "default.example.com",
-			wantServerName:   "default.example.com",
+			wantServerName:    "default.example.com",
 		},
 		{
-			name:             "empty default",
-			cfg:              &config.ProxySSLConfig{Enabled: true},
+			name:              "empty default",
+			cfg:               &config.ProxySSLConfig{Enabled: true},
 			defaultServerName: "",
-			wantServerName:   "",
+			wantServerName:    "",
 		},
 	}
 
@@ -97,11 +97,11 @@ func TestCreateTLSConfig_InsecureSkipVerify(t *testing.T) {
 
 func TestCreateTLSConfig_TLSVersions(t *testing.T) {
 	tests := []struct {
-		name        string
-		minVersion  string
-		maxVersion  string
-		wantMin     uint16
-		wantMax     uint16
+		name       string
+		minVersion string
+		maxVersion string
+		wantMin    uint16
+		wantMax    uint16
 	}{
 		{
 			name:       "TLSV1.2 min",
@@ -119,11 +119,11 @@ func TestCreateTLSConfig_TLSVersions(t *testing.T) {
 			wantMax:    tls.VersionTLS12,
 		},
 		{
-			name:        "both versions",
-			minVersion:  "TLSV1.2",
-			maxVersion:  "TLSV1.3",
-			wantMin:     tls.VersionTLS12,
-			wantMax:     tls.VersionTLS13,
+			name:       "both versions",
+			minVersion: "TLSV1.2",
+			maxVersion: "TLSV1.3",
+			wantMin:    tls.VersionTLS12,
+			wantMax:    tls.VersionTLS13,
 		},
 		{
 			name:       "mixed case TLSv1.2",
@@ -135,9 +135,9 @@ func TestCreateTLSConfig_TLSVersions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &config.ProxySSLConfig{
-				Enabled:     true,
-				MinVersion:  tt.minVersion,
-				MaxVersion:  tt.maxVersion,
+				Enabled:    true,
+				MinVersion: tt.minVersion,
+				MaxVersion: tt.maxVersion,
 			}
 			tlsCfg, err := CreateTLSConfig(cfg, "example.com")
 			if err != nil {
@@ -263,11 +263,11 @@ func TestGetCacheDuration_StatusCodeMapping(t *testing.T) {
 			MaxAge: 1 * time.Minute,
 		},
 		CacheValid: &config.ProxyCacheValidConfig{
-			OK:           10 * time.Minute,
-			Redirect:     1 * time.Hour,
-			NotFound:     1 * time.Minute,
-			ClientError:  30 * time.Second,
-			ServerError:  0, // 不缓存
+			OK:          10 * time.Minute,
+			Redirect:    1 * time.Hour,
+			NotFound:    1 * time.Minute,
+			ClientError: 30 * time.Second,
+			ServerError: 0, // 不缓存
 		},
 	}
 	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
@@ -310,11 +310,11 @@ func TestGetCacheDuration_ZeroValuesNoCache(t *testing.T) {
 			MaxAge: 5 * time.Minute,
 		},
 		CacheValid: &config.ProxyCacheValidConfig{
-			OK:           10 * time.Minute, // OK 有值
-			Redirect:     0,                // 不缓存
-			NotFound:     0,                // 不缓存
-			ClientError:  0,                // 不缓存
-			ServerError:  0,                // 不缓存
+			OK:          10 * time.Minute, // OK 有值
+			Redirect:    0,                // 不缓存
+			NotFound:    0,                // 不缓存
+			ClientError: 0,                // 不缓存
+			ServerError: 0,                // 不缓存
 		},
 	}
 	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}

@@ -438,6 +438,9 @@ func (s *Server) Start() error {
 		return s.startVHostMode()
 	case config.ServerModeMultiServer:
 		return s.startMultiServerMode()
+	case config.ServerModeAuto:
+		// auto 模式下 GetMode() 会自动推断，此处为防御性处理
+		return s.startSingleMode()
 	default:
 		// 默认使用单服务器模式
 		return s.startSingleMode()
@@ -513,10 +516,10 @@ func (s *Server) startSingleMode() error {
 		MaxRequestsPerConn: serverCfg.MaxRequestsPerConn,
 		CloseOnShutdown:    true,
 		// 高并发优化配置
-		Concurrency:        serverCfg.Concurrency,
-		ReadBufferSize:     serverCfg.ReadBufferSize,
-		WriteBufferSize:    serverCfg.WriteBufferSize,
-		ReduceMemoryUsage:  serverCfg.ReduceMemoryUsage,
+		Concurrency:       serverCfg.Concurrency,
+		ReadBufferSize:    serverCfg.ReadBufferSize,
+		WriteBufferSize:   serverCfg.WriteBufferSize,
+		ReduceMemoryUsage: serverCfg.ReduceMemoryUsage,
 	}
 
 	s.running = true
@@ -638,10 +641,10 @@ func (s *Server) startVHostMode() error {
 		MaxRequestsPerConn: serverCfg.MaxRequestsPerConn,
 		CloseOnShutdown:    true,
 		// 高并发优化配置
-		Concurrency:        serverCfg.Concurrency,
-		ReadBufferSize:     serverCfg.ReadBufferSize,
-		WriteBufferSize:    serverCfg.WriteBufferSize,
-		ReduceMemoryUsage:  serverCfg.ReduceMemoryUsage,
+		Concurrency:       serverCfg.Concurrency,
+		ReadBufferSize:    serverCfg.ReadBufferSize,
+		WriteBufferSize:   serverCfg.WriteBufferSize,
+		ReduceMemoryUsage: serverCfg.ReduceMemoryUsage,
 	}
 
 	s.running = true
@@ -861,7 +864,7 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 		routePath := proxyCfg.Path
 		// 确保通配符路由格式正确
 		if !strings.HasSuffix(routePath, "/") && routePath != "/" {
-		routePath += "/"
+			routePath += "/"
 		}
 		wildcardPath := routePath + "{path:*}"
 		router.GET(wildcardPath, p.ServeHTTP)

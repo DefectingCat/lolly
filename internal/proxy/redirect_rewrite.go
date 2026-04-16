@@ -10,19 +10,26 @@ import (
 	"rua.plus/lolly/internal/variable"
 )
 
+// RedirectRewrite 模式常量
+const (
+	redirectModeDefault = "default"
+	redirectModeOff     = "off"
+	redirectModeCustom  = "custom"
+)
+
 // compiledRule 预编译的改写规则
 type compiledRule struct {
-	pattern       *regexp.Regexp // 正则模式，nil 表示非正则匹配
-	exactMatch    string         // 精确匹配前缀（用于 prefix 匹配）
-	replacement   string         // 替换模板（含变量）
-	caseInsensitive bool         // 正则大小写不敏感（~* 前缀）
+	pattern         *regexp.Regexp // 正则模式，nil 表示非正则匹配
+	replacement     string         // 替换模板（含变量）
+	exactMatch      string         // 精确匹配前缀（用于 prefix 匹配）
+	caseInsensitive bool           // 正则大小写不敏感（~* 前缀）
 }
 
 // RedirectRewriter Location/Refresh 头改写器
 type RedirectRewriter struct {
+	proxyPath string         // 用于 default 模式（当前代理路径）
 	mode      string         // "default" | "off" | "custom"（空字符串视为 default）
 	rules     []compiledRule // 仅 custom 模式预编译
-	proxyPath string         // 用于 default 模式（当前代理路径）
 }
 
 // NewRedirectRewriter 创建改写器
@@ -32,7 +39,7 @@ func NewRedirectRewriter(cfg *config.RedirectRewriteConfig, proxyPath string) (*
 	if cfg == nil {
 		// 未配置时默认启用 default 模式
 		return &RedirectRewriter{
-			mode:      "default",
+			mode:      redirectModeDefault,
 			proxyPath: proxyPath,
 		}, nil
 	}
@@ -43,7 +50,7 @@ func NewRedirectRewriter(cfg *config.RedirectRewriteConfig, proxyPath string) (*
 	}
 
 	// custom 模式：预编译规则
-	if cfg.Mode == "custom" {
+	if cfg.Mode == redirectModeCustom {
 		rules := make([]compiledRule, 0, len(cfg.Rules))
 		for _, rule := range cfg.Rules {
 			cr := compiledRule{
@@ -52,7 +59,7 @@ func NewRedirectRewriter(cfg *config.RedirectRewriteConfig, proxyPath string) (*
 
 			if strings.HasPrefix(rule.Pattern, "~") {
 				// 正则模式
-				patternStr := rule.Pattern
+				var patternStr string
 				if strings.HasPrefix(rule.Pattern, "~*") {
 					cr.caseInsensitive = true
 					patternStr = rule.Pattern[2:]
@@ -80,7 +87,7 @@ func NewRedirectRewriter(cfg *config.RedirectRewriteConfig, proxyPath string) (*
 // Mode 返回当前模式（处理空字符串默认值）
 func (r *RedirectRewriter) Mode() string {
 	if r.mode == "" {
-		return "default"
+		return redirectModeDefault
 	}
 	return r.mode
 }
@@ -136,13 +143,13 @@ func (r *RedirectRewriter) rewriteURL(headerValue string, ctx *fasthttp.RequestC
 	}
 
 	switch r.Mode() {
-	case "off":
+	case redirectModeOff:
 		return headerValue
 
-	case "custom":
+	case redirectModeCustom:
 		return r.rewriteCustom(headerValue, ctx)
 
-	case "default", "":
+	case redirectModeDefault, "":
 		return r.rewriteDefault(headerValue, ctx, targetURL, originalClientHost)
 
 	default:
@@ -154,7 +161,8 @@ func (r *RedirectRewriter) rewriteURL(headerValue string, ctx *fasthttp.RequestC
 // 使用前缀匹配：如果 headerValue 以 targetURL 开头，替换为 replacement + 原路径后缀
 // replacement 使用 originalClientHost 构建："$scheme://originalClientHost/"
 // 例如：targetURL="http://backend:8000", headerValue="http://backend:8000/api/v2/users"
-//       → 替换为 "$scheme://originalClientHost/api/v2/users"
+//
+//	→ 替换为 "$scheme://originalClientHost/api/v2/users"
 func (r *RedirectRewriter) rewriteDefault(headerValue string, ctx *fasthttp.RequestCtx, targetURL string, originalClientHost string) string {
 	if targetURL == "" {
 		return headerValue
@@ -167,9 +175,9 @@ func (r *RedirectRewriter) rewriteDefault(headerValue string, ctx *fasthttp.Requ
 		// 检查剩余部分是否以合法分隔符开头
 		if len(remaining) == 0 || remaining[0] == '/' || remaining[0] == '?' || remaining[0] == '#' {
 			// 使用客户端原始 host 构建 replacement
-			scheme := "http"
+			scheme := protoHTTP
 			if ctx.IsTLS() {
-				scheme = "https"
+				scheme = protoHTTPS
 			}
 			replacement := scheme + "://" + originalClientHost
 			return replacement + remaining
@@ -198,7 +206,7 @@ func (r *RedirectRewriter) rewriteCustom(headerValue string, ctx *fasthttp.Reque
 					return result
 				}
 			} else {
-			loc := rule.pattern.FindStringIndex(headerValue)
+				loc := rule.pattern.FindStringIndex(headerValue)
 				if loc != nil {
 					expanded := vc.Expand(rule.replacement)
 					result := headerValue[:loc[0]] + expanded + headerValue[loc[1]:]
