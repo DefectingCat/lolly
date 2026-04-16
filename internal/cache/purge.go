@@ -44,6 +44,9 @@ type PurgeRequest struct {
 
 	// Pattern 通配符模式（支持 * 通配符）
 	Pattern string `json:"pattern,omitempty"`
+
+	// Method HTTP 方法，默认 "GET"
+	Method string `json:"method,omitempty"`
 }
 
 // PurgeResponse 清理响应结构。
@@ -249,15 +252,23 @@ func (p *PurgeAPI) purgeByPattern(pattern string) int {
 	return deleted
 }
 
+// HashPathWithMethod 使用 FNV-64a 计算缓存键的哈希值。
+// method 为空时默认使用 "GET"。
+func HashPathWithMethod(path string, method string) uint64 {
+	if method == "" {
+		method = "GET"
+	}
+	key := method + ":" + path
+	h := fnv.New64a()
+	h.Write([]byte(key))
+	return h.Sum64()
+}
+
 // hashPath 使用 FNV-64a 计算路径的哈希值。
 // 与代理层 buildCacheKeyHash 使用相同的算法，确保一致性。
 // 注意：代理层的 key 格式为 "METHOD:URI"，purge 时默认使用 GET 方法。
 func hashPath(path string) uint64 {
-	// 默认使用 GET 方法，与代理层 key 格式一致
-	key := "GET:" + path
-	h := fnv.New64a()
-	h.Write([]byte(key))
-	return h.Sum64()
+	return HashPathWithMethod(path, "GET")
 }
 
 // MatchPattern 检查路径是否匹配通配符模式。

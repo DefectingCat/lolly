@@ -1005,6 +1005,12 @@ func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.
 	p.cache.Set(hashKey, origKey, resp.Body(), headers, resp.StatusCode(), p.getCacheDuration(resp.StatusCode()))
 }
 
+// GetCache 返回代理的 ProxyCache 实例（用于 purge handler）。
+// 如果缓存未启用，返回 nil。
+func (p *Proxy) GetCache() *cache.ProxyCache {
+	return p.cache
+}
+
 // GetCacheStats 返回代理缓存的统计信息。
 // 如果缓存未启用，返回 nil。
 func (p *Proxy) GetCacheStats() *cache.ProxyCacheStats {

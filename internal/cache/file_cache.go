@@ -20,6 +20,7 @@ package cache
 import (
 	"container/list"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -455,6 +456,24 @@ func (c *ProxyCache) Delete(hashKey uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.entries, hashKey)
+}
+
+// DeleteByPatternWithMethod 按通配符模式删除缓存条目。
+// method 过滤：检查 entry.OrigKey 是否以 "method:" 前缀开头。
+// 空 method 匹配所有条目。
+func (c *ProxyCache) DeleteByPatternWithMethod(pattern string, method string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	deleted := 0
+	for hashKey, entry := range c.entries {
+		if MatchPattern(pattern, entry.OrigKey) {
+			if method == "" || strings.HasPrefix(entry.OrigKey, method+":") {
+				delete(c.entries, hashKey)
+				deleted++
+			}
+		}
+	}
+	return deleted
 }
 
 // Clear 清空代理缓存。

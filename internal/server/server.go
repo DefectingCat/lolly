@@ -485,6 +485,16 @@ func (s *Server) startSingleMode() error {
 		}
 	}
 
+	// 注册缓存清理 API（如果配置）
+	if serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
+		purgeHandler, err := NewPurgeHandler(s, serverCfg.CacheAPI)
+		if err != nil {
+			logging.Error().Msg("创建缓存清理处理器失败: " + err.Error())
+		} else {
+			router.POST(purgeHandler.Path(), purgeHandler.ServeHTTP)
+		}
+	}
+
 	// 注册代理路由
 	s.registerProxyRoutes(router, serverCfg)
 
@@ -605,7 +615,16 @@ func (s *Server) startVHostMode() error {
 			}
 		}
 
+		// 注册缓存清理 API（如果配置）
 		defaultSrv := s.config.GetDefaultServerFromList()
+		if defaultSrv != nil && defaultSrv.CacheAPI != nil && defaultSrv.CacheAPI.Enabled {
+			purgeHandler, err := NewPurgeHandler(s, defaultSrv.CacheAPI)
+			if err != nil {
+				logging.Error().Msg("创建缓存清理处理器失败: " + err.Error())
+			} else {
+				router.POST(purgeHandler.Path(), purgeHandler.ServeHTTP)
+			}
+		}
 
 		s.registerProxyRoutes(router, defaultSrv)
 
@@ -713,6 +732,17 @@ func (s *Server) startMultiServerMode() error {
 
 			// 创建路由器
 			router := handler.NewRouter()
+
+			// 注册缓存清理 API（仅第一个服务器）
+			if idx == 0 && serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
+				purgeHandler, purgeErr := NewPurgeHandler(s, serverCfg.CacheAPI)
+				if purgeErr != nil {
+					errCh <- fmt.Errorf("创建缓存清理处理器失败 (server[%d]): %w", idx, purgeErr)
+					return
+				}
+				router.POST(purgeHandler.Path(), purgeHandler.ServeHTTP)
+			}
+
 			s.registerProxyRoutes(router, serverCfg)
 
 			// 静态文件服务
