@@ -94,6 +94,66 @@ func TestLuaContextFlushOutput(t *testing.T) {
 	assert.NotNil(t, ctx.OutputBuffer)
 }
 
+// TestLuaContextPoolStateIsolation 测试池化 context 请求间无状态污染
+func TestLuaContextPoolStateIsolation(t *testing.T) {
+	engine, err := NewEngine(DefaultConfig())
+	require.NoError(t, err)
+	defer engine.Close()
+
+	// 第一次使用：设置变量、输出、阶段、退出标记
+	ctx1 := NewContext(engine, nil)
+	ctx1.SetVariable("key1", "value1")
+	ctx1.SetVariable("key2", "value2")
+	ctx1.Write([]byte("hello"))
+	ctx1.SetPhase(PhaseAccess)
+	ctx1.Exited = true
+
+	// 释放回池
+	ctx1.Release()
+
+	// 第二次使用：从池中获取（可能是同一个对象）
+	ctx2 := NewContext(engine, nil)
+
+	// 验证无状态污染
+	assert.Equal(t, PhaseInit, ctx2.Phase, "Phase should be reset to PhaseInit")
+	assert.False(t, ctx2.Exited, "Exited should be reset to false")
+	assert.Empty(t, ctx2.OutputBuffer, "OutputBuffer should be empty")
+	assert.Empty(t, ctx2.Variables, "Variables map should be empty")
+
+	// 验证旧的 key 不存在
+	_, ok := ctx2.GetVariable("key1")
+	assert.False(t, ok, "key1 should not exist after release")
+	_, ok = ctx2.GetVariable("key2")
+	assert.False(t, ok, "key2 should not exist after release")
+
+	ctx2.Release()
+}
+
+// TestLuaContextPoolMultipleReuse 测试多次复用
+func TestLuaContextPoolMultipleReuse(t *testing.T) {
+	engine, err := NewEngine(DefaultConfig())
+	require.NoError(t, err)
+	defer engine.Close()
+
+	// 循环多次 release/acquire，验证状态始终正确
+	for i := 0; i < 100; i++ {
+		ctx := NewContext(engine, nil)
+		ctx.SetVariable("iter", "val")
+		ctx.Write([]byte("data"))
+		ctx.SetPhase(PhaseLog)
+		ctx.Exited = true
+		ctx.Release()
+	}
+
+	// 最后一次获取，验证状态干净
+	ctx := NewContext(engine, nil)
+	assert.Equal(t, PhaseInit, ctx.Phase)
+	assert.False(t, ctx.Exited)
+	assert.Empty(t, ctx.OutputBuffer)
+	assert.Empty(t, ctx.Variables)
+	ctx.Release()
+}
+
 // TestLuaContextExecute 测试 Lua 执行
 func TestLuaContextExecute(t *testing.T) {
 	engine, err := NewEngine(DefaultConfig())

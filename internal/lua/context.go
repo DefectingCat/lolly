@@ -2,6 +2,8 @@
 package lua
 
 import (
+	"sync"
+
 	"github.com/valyala/fasthttp"
 )
 
@@ -21,14 +23,28 @@ type LuaContext struct {
 	Exited       bool
 }
 
-// NewContext 创建请求上下文
+// luaContextPool LuaContext 对象池
+var luaContextPool = sync.Pool{
+	New: func() interface{} {
+		return &LuaContext{
+			Variables: make(map[string]string),
+		}
+	},
+}
+
+// AcquireContext 从池中获取 LuaContext
+func AcquireContext(engine *LuaEngine, req *fasthttp.RequestCtx) *LuaContext {
+	lc := luaContextPool.Get().(*LuaContext)
+	lc.Engine = engine
+	lc.RequestCtx = req
+	lc.Phase = PhaseInit
+	// Variables 和 OutputBuffer 已在 Release 中重置
+	return lc
+}
+
+// NewContext 创建请求上下文（从池中获取）
 func NewContext(engine *LuaEngine, req *fasthttp.RequestCtx) *LuaContext {
-	return &LuaContext{
-		Engine:     engine,
-		RequestCtx: req,
-		Variables:  make(map[string]string),
-		Phase:      PhaseInit,
-	}
+	return AcquireContext(engine, req)
 }
 
 // InitCoroutine 初始化协程
@@ -99,14 +115,24 @@ func (c *LuaContext) Exit(code int) {
 	c.RequestCtx.SetStatusCode(code)
 }
 
-// Release 释放资源
+// Release 释放资源并放回池中
 func (c *LuaContext) Release() {
 	if c.Coroutine != nil {
 		c.Coroutine.Close()
 		c.Coroutine = nil
 	}
-	c.Variables = nil
-	c.OutputBuffer = nil
+
+	// 重置所有可变状态，防止请求间污染
+	for k := range c.Variables {
+		delete(c.Variables, k)
+	}
+	c.OutputBuffer = c.OutputBuffer[:0]
+	c.Phase = PhaseInit
+	c.Exited = false
+	c.Engine = nil
+	c.RequestCtx = nil
+
+	luaContextPool.Put(c)
 }
 
 // FlushOutput 刷新输出到响应

@@ -25,6 +25,24 @@ func BenchmarkCoroutineCreation(b *testing.B) {
 	}
 }
 
+// BenchmarkLuaContextPool 测试 LuaContext 池化开销
+func BenchmarkLuaContextPool(b *testing.B) {
+	engine, err := NewEngine(DefaultConfig())
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer engine.Close()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ctx := NewContext(engine, nil)
+		ctx.SetVariable("key", "value")
+		ctx.Write([]byte("hello"))
+		ctx.SetPhase(PhaseContent)
+		ctx.Release()
+	}
+}
+
 // BenchmarkBytecodeCompilation 测试字节码编译开销
 func BenchmarkBytecodeCompilation(b *testing.B) {
 	engine, err := NewEngine(DefaultConfig())
