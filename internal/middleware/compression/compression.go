@@ -115,7 +115,7 @@ func New(cfg *config.CompressionConfig) (*Middleware, error) {
 
 	// 初始化缓冲池
 	m.gzipPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			w, err := gzip.NewWriterLevel(nil, cfg.Level)
 			if err != nil {
 				// 使用默认压缩级别作为回退
@@ -127,7 +127,7 @@ func New(cfg *config.CompressionConfig) (*Middleware, error) {
 
 	// 初始化 brotli 缓冲池
 	m.brotliPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return brotli.NewWriterOptions(nil, brotli.WriterOptions{
 				Quality: cfg.Level,
 			})
@@ -166,19 +166,19 @@ func (m *Middleware) Name() string {
 //   - fasthttp.RequestHandler: 包装后的请求处理器
 func (m *Middleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
-		// 检查客户端是否支持压缩
-		acceptEncoding := string(ctx.Request.Header.Peek("Accept-Encoding"))
+		// 检查客户端是否支持压缩（零拷贝使用 []byte）
+		acceptEncoding := ctx.Request.Header.Peek("Accept-Encoding")
 
 		// 根据算法和客户端支持选择压缩方式
 		var useGzip, useBrotli bool
 		switch m.algorithm {
 		case AlgorithmGzip:
-			useGzip = strings.Contains(acceptEncoding, "gzip")
+			useGzip = bytes.Contains(acceptEncoding, []byte("gzip"))
 		case AlgorithmBrotli:
 			// brotli 或 both 模式
-			if strings.Contains(acceptEncoding, "br") {
+			if bytes.Contains(acceptEncoding, []byte("br")) {
 				useBrotli = true
-			} else if strings.Contains(acceptEncoding, "gzip") {
+			} else if bytes.Contains(acceptEncoding, []byte("gzip")) {
 				useGzip = true
 			}
 		}
@@ -201,8 +201,8 @@ func (m *Middleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 			return // 不压缩
 		}
 
-		// 检查 MIME 类型
-		contentType := string(ctx.Response.Header.ContentType())
+		// 检查 MIME 类型（零拷贝使用 []byte）
+		contentType := ctx.Response.Header.ContentType()
 		if !m.isCompressible(contentType) {
 			return // 不压缩此类型
 		}
@@ -244,26 +244,25 @@ func (m *Middleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 // isCompressible 检查 MIME 类型是否可压缩。
 //
 // 参数：
-//   - contentType: 内容类型（MIME 类型）
+//   - contentType: 内容类型（MIME 类型）[]
 //
 // 返回值：
 //   - bool: 是否可压缩
-func (m *Middleware) isCompressible(contentType string) bool {
+func (m *Middleware) isCompressible(contentType []byte) bool {
 	// 移除 charset 等参数
 	ct := contentType
-	if idx := strings.Index(ct, ";"); idx >= 0 {
+	if idx := bytes.IndexByte(ct, ';'); idx >= 0 {
 		ct = ct[:idx]
 	}
-	ct = strings.TrimSpace(strings.ToLower(ct))
+	ct = bytes.TrimSpace(ct)
 
 	for _, t := range m.types {
-		if strings.ToLower(t) == ct {
+		if bytes.Equal(bytes.ToLower([]byte(t)), ct) {
 			return true
 		}
 		// 支持通配符匹配
-		if strings.HasSuffix(t, "/*") {
-			base := strings.TrimSuffix(t, "/*")
-			if strings.HasPrefix(ct, base) {
+		if base, found := strings.CutSuffix(t, "/*"); found {
+			if bytes.HasPrefix(ct, []byte(base)) {
 				return true
 			}
 		}

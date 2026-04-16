@@ -63,12 +63,17 @@ func SetForwardedHeaders(headers *fasthttp.RequestHeader, fh ForwardedHeaders, a
 		if appendXFF {
 			existingXFF := headers.Peek("X-Forwarded-For")
 			if len(existingXFF) > 0 {
-				headers.Set("X-Forwarded-For", string(existingXFF)+", "+fh.ClientIP)
+				// SAFETY: Ephemeral — xffBuf is written to header immediately and not reused.
+				var xffBuf []byte
+				xffBuf = append(xffBuf, existingXFF...)
+				xffBuf = append(xffBuf, ", "...)
+				xffBuf = append(xffBuf, fh.ClientIP...)
+				headers.SetBytesKV([]byte("X-Forwarded-For"), xffBuf)
 			} else {
-				headers.Set("X-Forwarded-For", fh.ClientIP)
+				headers.SetBytesKV([]byte("X-Forwarded-For"), []byte(fh.ClientIP))
 			}
 		} else {
-			headers.Set("X-Forwarded-For", fh.ClientIP)
+			headers.SetBytesKV([]byte("X-Forwarded-For"), []byte(fh.ClientIP))
 		}
 	}
 

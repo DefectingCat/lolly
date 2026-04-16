@@ -244,7 +244,7 @@ func BenchmarkProxyHostClient(b *testing.B) {
 	client := createHostClient("http://"+addr, timeout, nil, nil)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		req := fasthttp.AcquireRequest()
 		resp := fasthttp.AcquireResponse()
 
@@ -450,7 +450,7 @@ func BenchmarkBuildCacheKeyHash(b *testing.B) {
 
 	b.Run("buildCacheKeyHash_with_string", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			hashKey, _ := p.buildCacheKeyHash(ctx)
 			_ = hashKey
 		}
@@ -458,7 +458,7 @@ func BenchmarkBuildCacheKeyHash(b *testing.B) {
 
 	b.Run("buildCacheKeyHashValue_direct", func(b *testing.B) {
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			hashKey := p.buildCacheKeyHashValue(ctx)
 			_ = hashKey
 		}
@@ -494,7 +494,7 @@ func BenchmarkProxyObjectPoolGetRelease(b *testing.B) {
 	b.Run("UpstreamTiming_Pooled", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			timing := NewUpstreamTiming()
 			timing.MarkConnectStart()
 			time.Sleep(time.Microsecond)
@@ -515,7 +515,7 @@ func BenchmarkProxyObjectPoolGetRelease(b *testing.B) {
 
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			vc := variable.NewContext(ctx)
 			vc.Set("key", "value")
 			_ = vc.Expand("$key")
@@ -584,7 +584,7 @@ func BenchmarkProxyZeroAllocPath(b *testing.B) {
 	b.Run("ZeroAlloc_buildCacheKeyHashValue", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			hash := p.buildCacheKeyHashValue(ctx)
 			_ = hash
 		}
@@ -593,7 +593,7 @@ func BenchmarkProxyZeroAllocPath(b *testing.B) {
 	b.Run("WithAlloc_buildCacheKeyHash", func(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			hash, key := p.buildCacheKeyHash(ctx)
 			_ = hash
 			_ = key
@@ -612,7 +612,7 @@ func BenchmarkProxyZeroAllocPath(b *testing.B) {
 
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			fh := ExtractForwardedHeaders(ctx)
 			_ = fh
 		}

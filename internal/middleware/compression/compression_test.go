@@ -101,22 +101,22 @@ func TestIsCompressible(t *testing.T) {
 	})
 
 	tests := []struct {
-		contentType string
+		contentType []byte
 		expected    bool
 	}{
-		{"text/html", true},
-		{"text/html; charset=utf-8", true},
-		{"text/css", true},
-		{"text/plain", true},
-		{"application/json", true},
-		{"application/json; charset=utf-8", true},
-		{"image/png", false},
-		{"application/octet-stream", false},
-		{"", false},
+		{[]byte("text/html"), true},
+		{[]byte("text/html; charset=utf-8"), true},
+		{[]byte("text/css"), true},
+		{[]byte("text/plain"), true},
+		{[]byte("application/json"), true},
+		{[]byte("application/json; charset=utf-8"), true},
+		{[]byte("image/png"), false},
+		{[]byte("application/octet-stream"), false},
+		{[]byte(""), false},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.contentType, func(t *testing.T) {
+		t.Run(string(tt.contentType), func(t *testing.T) {
 			result := m.isCompressible(tt.contentType)
 			if result != tt.expected {
 				t.Errorf("isCompressible(%s) = %v, expected %v", tt.contentType, result, tt.expected)

@@ -34,7 +34,7 @@ func BenchmarkWebSocketHandshake(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/ws?token=abc123&channel=default")
 		ctx.Request.Header.SetHost("client.example.com")
@@ -305,7 +305,7 @@ func BenchmarkWebSocketConcurrent(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		client1, client2 := net.Pipe()
 		target1, target2 := net.Pipe()
 
@@ -370,7 +370,7 @@ func BenchmarkWebSocketWriteUpgradeResponse(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		conn1, conn2 := net.Pipe()
 
 		done := make(chan error, 1)

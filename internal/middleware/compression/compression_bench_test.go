@@ -26,7 +26,7 @@ func BenchmarkGzipCompress_1KB(b *testing.B) {
 	data := tools.GenerateTestData(tools.Size1KB)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mw.compressGzip(data)
 	}
 }
@@ -43,7 +43,7 @@ func BenchmarkGzipCompress_10KB(b *testing.B) {
 	data := tools.GenerateTestData(tools.Size10KB)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mw.compressGzip(data)
 	}
 }
@@ -60,7 +60,7 @@ func BenchmarkGzipCompress_100KB(b *testing.B) {
 	data := tools.GenerateTestData(tools.Size100KB)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mw.compressGzip(data)
 	}
 }
@@ -77,7 +77,7 @@ func BenchmarkBrotliCompress_1KB(b *testing.B) {
 	data := tools.GenerateTestData(tools.Size1KB)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mw.compressBrotli(data)
 	}
 }
@@ -94,7 +94,7 @@ func BenchmarkBrotliCompress_10KB(b *testing.B) {
 	data := tools.GenerateTestData(tools.Size10KB)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mw.compressBrotli(data)
 	}
 }
@@ -113,7 +113,7 @@ func BenchmarkCompressionPool(b *testing.B) {
 	data := tools.GenerateTestData(tools.Size1KB)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		mw.compressGzip(data)
 	}
 }
@@ -145,7 +145,7 @@ func BenchmarkCompressionMiddleware(b *testing.B) {
 	handler := mw.Process(mockHandler)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
 		ctx.Request.SetRequestURI("/api/test")
@@ -176,7 +176,7 @@ func BenchmarkCompressionMiddlewareNoCompress(b *testing.B) {
 	handler := mw.Process(mockHandler)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
 		ctx.Request.SetRequestURI("/api/test")
@@ -197,16 +197,16 @@ func BenchmarkIsCompressible(b *testing.B) {
 	}
 	mw, _ := New(cfg)
 
-	contentTypes := []string{
-		"application/json",
-		"text/html; charset=utf-8",
-		"image/png",
-		"application/octet-stream",
-		"text/css",
+	contentTypes := [][]byte{
+		[]byte("application/json"),
+		[]byte("text/html; charset=utf-8"),
+		[]byte("image/png"),
+		[]byte("application/octet-stream"),
+		[]byte("text/css"),
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, ct := range contentTypes {
 			mw.isCompressible(ct)
 		}
@@ -221,7 +221,7 @@ func BenchmarkCompressionLevelComparison(b *testing.B) {
 		cfg := &config.CompressionConfig{Type: "gzip", Level: 1}
 		mw, _ := New(cfg)
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			mw.compressGzip(data)
 		}
 	})
@@ -230,7 +230,7 @@ func BenchmarkCompressionLevelComparison(b *testing.B) {
 		cfg := &config.CompressionConfig{Type: "gzip", Level: 6}
 		mw, _ := New(cfg)
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			mw.compressGzip(data)
 		}
 	})
@@ -239,7 +239,7 @@ func BenchmarkCompressionLevelComparison(b *testing.B) {
 		cfg := &config.CompressionConfig{Type: "gzip", Level: 9}
 		mw, _ := New(cfg)
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			mw.compressGzip(data)
 		}
 	})

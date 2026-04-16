@@ -69,6 +69,14 @@ const (
 	lbConsistentHash     = "consistent_hash"
 )
 
+// headersPool 复用缓存 headers map，减少分配。
+// 预容量 20 覆盖大多数 HTTP 响应头数量。
+var headersPool = sync.Pool{
+	New: func() interface{} {
+		return make(map[string]string, 20)
+	},
+}
+
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
 //
 // 它为每个后端目标管理连接池，并提供负载均衡功能。
@@ -448,11 +456,17 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		// 关键：修改请求 URI 为完整的目标 URL
 		// HostClient 要求 URI 格式必须与 Addr/IsTLS 一致
 		// 例如：IsTLS=true 时，URI 应为 https://host/path
-		targetURI := target.URL + string(ctx.URI().Path())
-		if len(ctx.URI().QueryString()) > 0 {
-			targetURI += "?" + string(ctx.URI().QueryString())
+		// SAFETY: lifetime=ephemeral - consumed immediately by SetRequestURIBytes
+		path := ctx.URI().Path()
+		query := ctx.URI().QueryString()
+		targetURI := make([]byte, 0, len(target.URL)+len(path)+len(query)+1)
+		targetURI = append(targetURI, target.URL...)
+		targetURI = append(targetURI, path...)
+		if len(query) > 0 {
+			targetURI = append(targetURI, '?')
+			targetURI = append(targetURI, query...)
 		}
-		req.SetRequestURI(targetURI)
+		req.SetRequestURIBytes(targetURI)
 
 		// DEBUG: 打印请求头
 		logging.Debug().Msgf("[PROXY] 请求准备完成: Host=%s, URI=%s, targetURI=%s",
@@ -585,12 +599,20 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		if p.cache != nil {
 			hashKey, origKey := p.buildCacheKeyHash(ctx)
 			if statusCode >= 200 && statusCode < 300 {
-				// 提取响应头
-				headers := make(map[string]string)
+				// 提取响应头（使用 pool 复用 map）
+				headers, ok := headersPool.Get().(map[string]string)
+				if !ok {
+					headers = make(map[string]string, 20)
+				}
+				for k := range headers {
+					delete(headers, k)
+				}
 				for key, value := range ctx.Response.Header.All() {
 					headers[string(key)] = string(value)
 				}
 				p.cache.Set(hashKey, origKey, ctx.Response.Body(), headers, statusCode, p.getCacheDuration(statusCode))
+				// 注意：不能 Put 回 pool，因为 cache.Set 存储了 map 引用
+				// 后续 writeCachedResponse 会读取该 map
 			}
 			p.cache.ReleaseLock(hashKey, nil)
 		}
@@ -967,8 +989,14 @@ func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.
 		return
 	}
 
-	// 提取响应头
-	headers := make(map[string]string)
+	// 提取响应头（使用 pool 复用 map）
+	headers, ok := headersPool.Get().(map[string]string)
+	if !ok {
+		headers = make(map[string]string, 20)
+	}
+	for k := range headers {
+		delete(headers, k)
+	}
 	for key, value := range resp.Header.All() {
 		headers[string(key)] = string(value)
 	}

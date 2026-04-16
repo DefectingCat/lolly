@@ -110,8 +110,8 @@ func getOutput(path string) io.Writer {
 // LogAccess 记录访问日志。
 func LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.Duration) {
 	log.Info().
-		Str("method", string(ctx.Method())).
-		Str("path", string(ctx.Path())).
+		Bytes("method", ctx.Method()).
+		Bytes("path", ctx.Path()).
 		Int("status", status).
 		Int64("size", size).
 		Dur("duration", duration).
@@ -125,7 +125,7 @@ func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, dur
 	if l.accessFormat == formatJSON || l.accessFormat == "" {
 		l.accessLog.Info().
 			Str("remote_addr", ctx.RemoteAddr().String()).
-			Str("request", string(ctx.Method())+" "+string(ctx.Path())).
+			Bytes("request", append(append(ctx.Method(), ' '), ctx.Path()...)).
 			Int("status", status).
 			Int64("body_bytes_sent", size).
 			Dur("request_time", duration).
