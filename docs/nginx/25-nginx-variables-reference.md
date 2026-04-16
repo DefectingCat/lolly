@@ -251,5 +251,105 @@ log_format security '$remote_addr $request_method $request_uri '
 
 ---
 
-*文档生成时间：2026-04-03*
-*基于 nginx 1.24+ 版本*
+## 12. 变量系统源码实现
+
+基于 nginx 1.31.0 源码分析（`src/http/ngx_http_variables.c`）。
+
+### 12.1 变量注册机制
+
+```c
+// src/http/ngx_http_variables.h
+typedef struct {
+    ngx_str_t                   name;       // 变量名
+    ngx_http_get_variable_pt    get_handler; // 获取函数
+    ngx_http_set_variable_pt    set_handler; // 设置函数（可选）
+    ngx_uint_t                  flags;      // 标志位
+    ngx_uint_t                  index;      // 索引（索引变量）
+} ngx_http_variable_t;
+```
+
+### 12.2 变量标志位
+
+| 标志 | 值 | 说明 |
+|------|-----|------|
+| `NGX_HTTP_VAR_CHANGEABLE` | 1 | 可通过 set 指令修改 |
+| `NGX_HTTP_VAR_NOCACHEABLE` | 2 | 每次请求重新计算 |
+| `NGX_HTTP_VAR_INDEXED` | 4 | 索引变量（O(1) 查找） |
+| `NGX_HTTP_VAR_NOHASH` | 8 | 不加入 hash 表 |
+| `NGX_HTTP_VAR_PREFIX` | 16 | 前缀变量（$http_, $cookie_, $arg_） |
+
+### 12.3 索引变量 vs 前缀变量
+
+**索引变量**（配置期注册，运行期 O(1)）：
+- `$uri`, `$args`, `$host`, `$remote_addr` 等
+- 通过 `ngx_http_get_variable_index()` 注册
+- 存储在 `r->variables[index]`
+
+**前缀变量**（运行期动态匹配）：
+- `$http_XXX` → `ngx_http_variable_unknown_header_in`
+- `$cookie_XXX` → `ngx_http_variable_cookie`
+- `$arg_XXX` → `ngx_http_variable_argument`
+- `$sent_http_XXX` → `ngx_http_variable_unknown_header_out`
+
+### 12.4 变量求值流程
+
+```
+ngx_http_get_variable(r, name, key)
+  |
+  +-- 查找 hash 表 (cmcf->variables_hash)
+  |    if found && index: return r->variables[index]
+  |    if found && get_handler: return get_handler(r, data)
+  |
+  +-- 查找前缀变量表 (cmcf->prefix_variables)
+  |    检查 name 是否匹配前缀
+  |    提取后缀部分作为参数
+  |    调用 get_handler(r, data, suffix)
+  |
+  +-- 未找到：返回 NGX_HTTP_VAR_NOT_FOUND
+```
+
+### 12.5 可缓存变量 vs 不可缓存变量
+
+**可缓存**（一次请求只计算一次）：
+- `$host`, `$server_name`, `$nginx_version`
+
+**不可缓存**（每次访问重新计算）：
+- `$uri`（可能被 rewrite 修改）
+- `$args`（可能被 set 修改）
+- `$request_time`（随时间变化）
+- `$upstream_response_time`（请求结束时才确定）
+
+### 12.6 自定义变量
+
+**set 指令**（ngx_http_rewrite_module）：
+```nginx
+set $my_var "value";
+```
+
+源码实现：将赋值编译为 `ngx_http_script_set_code` 指令，运行期执行。
+
+**map 指令**（ngx_http_map_module）：
+```nginx
+map $remote_addr $my_var {
+    default "unknown";
+    192.168.1.0/24 "internal";
+}
+```
+
+源码实现：创建 `ngx_http_map_t` 结构，运行期根据源变量值查表。
+
+**geo 指令**（ngx_http_geo_module）：
+```nginx
+geo $remote_addr $country {
+    default "XX";
+    127.0.0.0/8 "LOCAL";
+}
+```
+
+源码实现：使用 radix tree 存储 IP 范围映射。
+
+---
+
+*文档生成时间：2026-04-16*
+*基于 nginx 1.31.0 源码分析*
+*源码参考：`lib/nginx/src/http/ngx_http_variables.c`（70KB）*

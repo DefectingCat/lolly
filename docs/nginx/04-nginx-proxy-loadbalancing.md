@@ -1484,3 +1484,216 @@ init_worker_by_lua_block {
 - 开源替代且功能优先：**nginx_upstream_check_module**
 - 需要动态配置：**OpenResty + lua-resty-upstream-healthcheck**
 - 新架构选型：**Traefik** 或 **Envoy**（原生支持服务发现）
+
+---
+
+## 19. Upstream 模块源码实现分析
+
+基于 nginx 1.31.0 源码（`lib/nginx/src/http/`）。
+
+### 19.1 核心数据结构
+
+#### ngx_http_upstream_t - 上游请求结构
+
+```c
+// src/http/ngx_http_upstream.h:336-420
+struct ngx_http_upstream_s {
+    ngx_http_upstream_handler_pt     read_event_handler;
+    ngx_http_upstream_handler_pt     write_event_handler;
+
+    ngx_peer_connection_t            peer;      // 对端连接
+
+    ngx_event_pipe_t                *pipe;      // 管道（流式传输）
+
+    ngx_chain_t                     *request_bufs;  // 请求缓冲
+
+    ngx_http_upstream_conf_t        *conf;      // upstream 配置
+    ngx_http_upstream_srv_conf_t    *upstream;  // upstream 组配置
+
+    ngx_http_upstream_headers_in_t   headers_in;  // 上游响应头
+
+    ngx_buf_t                        buffer;    // 响应缓冲
+
+    // 回调函数
+    ngx_int_t                      (*create_request)(ngx_http_request_t *r);
+    ngx_int_t                      (*reinit_request)(ngx_http_request_t *r);
+    ngx_int_t                      (*process_header)(ngx_http_request_t *r);
+    void                           (*finalize_request)(ngx_http_request_t *r, ngx_int_t rc);
+
+    ngx_msec_t                       start_time;
+
+    ngx_http_upstream_state_t       *state;     // 状态信息
+
+    unsigned                         store:1;
+    unsigned                         cacheable:1;
+    unsigned                         buffering:1;
+    unsigned                         keepalive:1;
+    unsigned                         upgrade:1;   // WebSocket 升级
+};
+```
+
+#### ngx_http_upstream_rr_peer_t - 服务器节点
+
+```c
+// src/http/ngx_http_upstream_round_robin.h
+struct ngx_http_upstream_rr_peer_s {
+    ngx_str_t                       name;       // 服务器名称
+    ngx_addr_t                     *addrs;      // 地址数组
+    ngx_uint_t                      naddrs;     // 地址数
+
+    ngx_uint_t                      weight;     // 配置权重
+    ngx_uint_t                      effective_weight;  // 有效权重（故障恢复）
+    ngx_uint_t                      current_weight;    // 当前权重（轮询用）
+
+    ngx_uint_t                      max_conns;  // 最大连接数
+    ngx_uint_t                      conns;      // 当前连接数
+
+    ngx_uint_t                      max_fails;  // 最大失败次数
+    time_t                          fail_timeout; // 失败超时
+    time_t                          accessed;   // 最后访问时间
+    time_t                          checked;    // 最后检查时间
+
+    ngx_uint_t                      fails;      // 失败次数
+
+    ngx_uint_t                      down;       // 是否下线
+
+    unsigned                         backup:1;   // 是否备份服务器
+};
+```
+
+### 19.2 加权轮询算法（平滑分配）
+
+```c
+// src/http/ngx_http_upstream_round_robin.c:810-895
+ngx_http_upstream_get_peer(ngx_peer_connection_t *pc, void *data)
+{
+    // 平滑加权轮询：避免突发集中分配
+    for (p = peers->peer; p; p++) {
+        if (p 已尝试过 || p down || 超过 max_fails || 超过 max_conns)
+            continue;
+
+        p->current_weight += p->effective_weight;  // 累加有效权重
+        total += p->effective_weight;
+
+        // 慢恢复：失败后逐步恢复权重
+        if (p->effective_weight < p->weight)
+            p->effective_weight++;
+
+        // 选 current_weight 最高的
+        if (best == NULL || p->current_weight > best->current_weight)
+            best = p;
+    }
+
+    // 选中后扣减总权重
+    best->current_weight -= total;
+    return best;
+}
+```
+
+**算法特点**：
+- 权重平滑分配，避免请求集中到某台服务器
+- 故障恢复时权重逐步回升，而不是直接恢复
+- 支持 backup 服务器组切换
+
+### 19.3 一致性哈希实现
+
+```c
+// src/http/modules/ngx_http_upstream_hash_module.c
+typedef struct {
+    uint32_t                            hash;
+    ngx_str_t                          *server;
+} ngx_http_upstream_chash_point_t;
+
+typedef struct {
+    ngx_uint_t                          number;
+    ngx_http_upstream_chash_point_t     point[1];  // 虚拟节点数组
+} ngx_http_upstream_chash_points_t;
+
+// 虚拟节点分布在 0-2^32 的圆环上
+// 根据 key 的 hash 值查找最近的节点（二分查找）
+ngx_http_upstream_find_chash_point(points, hash);
+```
+
+### 19.4 Upstream 请求处理流程
+
+```
+ngx_http_upstream_init(r)
+  |
+  v
+ngx_http_upstream_init_request(r)
+  |
+  +-- 解析 upstream 名称
+  +-- 创建 peer 连接 (peer.get = ngx_http_upstream_get_round_robin_peer)
+  |
+  v
+ngx_http_upstream_connect(r, u)
+  |
+  +-- ngx_event_connect_peer() 连接到上游服务器
+  |
+  v
+ngx_http_upstream_send_request() --> 发送客户端请求到上游
+  |
+  v
+ngx_http_upstream_process_header(r, u)
+  |
+  +-- 解析上游响应头
+  +-- ngx_http_upstream_process_headers() 处理 set-cookie 等
+  |
+  v
+分支:
+  +-- 缓冲模式: ngx_http_upstream_process_request()
+  |     (读完整上游响应到临时文件/内存，再转发给客户端)
+  |
+  +-- 非缓冲模式: ngx_http_upstream_process_upgraded()
+        (双向透传，用于 WebSocket 等升级连接)
+  |
+  v
+ngx_http_upstream_finalize_request(r, u, rc)
+  |
+  +-- peer.free() 记录失败/成功，更新权重
+  +-- 清理资源
+```
+
+### 19.5 故障转移机制
+
+```c
+// src/http/ngx_http_upstream.c
+#define NGX_HTTP_UPSTREAM_FT_ERROR           0x00000002
+#define NGX_HTTP_UPSTREAM_FT_TIMEOUT         0x00000004
+#define NGX_HTTP_UPSTREAM_FT_INVALID_HEADER  0x00000008
+#define NGX_HTTP_UPSTREAM_FT_HTTP_500        0x00000010
+#define NGX_HTTP_UPSTREAM_FT_HTTP_502        0x00000020
+#define NGX_HTTP_UPSTREAM_FT_HTTP_503        0x00000040
+#define NGX_HTTP_UPSTREAM_FT_HTTP_504        0x00000080
+
+ngx_http_upstream_next(r, u, ft_type)
+{
+    if (u->peer.tries > u->conf->next_upstream_tries)
+        return finalize;
+
+    if (ft_type & u->conf->next_upstream) {
+        // 符合重试条件，选择下一台服务器
+        ngx_http_upstream_connect(r, u);
+    } else {
+        // 不符合条件，直接结束请求
+        ngx_http_upstream_finalize_request(r, u, status);
+    }
+}
+```
+
+### 19.6 关键源码路径
+
+| 功能 | 文件路径 | 大小 |
+|------|----------|------|
+| Upstream 核心 | `src/http/ngx_http_upstream.c` | 187KB |
+| Upstream 头文件 | `src/http/ngx_http_upstream.h` | 16KB |
+| Round Robin 负载均衡 | `src/http/ngx_http_upstream_round_robin.c` | 32KB |
+| Least Connections | `src/http/modules/ngx_http_upstream_least_conn_module.c` | 4KB |
+| Hash/一致性哈希 | `src/http/modules/ngx_http_upstream_hash_module.c` | 8KB |
+| Random 负载均衡 | `src/http/modules/ngx_http_upstream_random_module.c` | 6KB |
+| Proxy 模块 | `src/http/modules/ngx_http_proxy_module.c` | 80KB |
+
+---
+
+*源码分析基于 nginx 1.31.0*
+*源码目录：`lib/nginx/src/http/`*

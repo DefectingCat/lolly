@@ -1060,3 +1060,173 @@ stream {
 | `inactive` | 非活动文件保留时间 |
 | `valid` | 检查文件是否有效的时间间隔 |
 | `min_uses` | 最小使用次数才缓存 |
+
+---
+
+## 20. Stream 模块源码架构分析
+
+基于 nginx 1.31.0 源码（`lib/nginx/src/stream/`，24 个 .c 文件）。
+
+### 20.1 模块文件结构
+
+```
+src/stream/
+├── ngx_stream.c              # 模块入口（252 行）
+├── ngx_stream_core_module.c  # 核心配置（1524 行）
+├── ngx_stream_handler.c      # 连接处理（390 行）
+├── ngx_stream_proxy_module.c # 反向代理（2870 行）
+├── ngx_stream_upstream.c     # upstream 管理
+├── ngx_stream_upstream_round_robin.c  # 负载均衡
+├── ngx_stream_ssl_module.c   # SSL/TLS 支持
+├── ngx_stream_ssl_preread_module.c    # SSL preread（SNI 路由）
+├── ngx_stream_access_module.c # IP 访问控制
+├── ngx_stream_log_module.c   # 访问日志
+├── ngx_stream_variables.c    # 变量支持
+├── ngx_stream_return_module.c # 返回响应
+├── ngx_stream_map_module.c   # 变量映射
+├── ngx_stream_split_clients_module.c  # A/B 测试
+└── modules/                  # 其他子模块
+```
+
+### 20.2 处理阶段（7 Phase）
+
+```c
+// src/stream/ngx_stream_core_module.h
+typedef enum {
+    NGX_STREAM_POST_ACCEPT_PHASE = 0,   // 接受后处理（proxy_protocol）
+    NGX_STREAM_PREACCESS_PHASE,         // 预访问检查
+    NGX_STREAM_ACCESS_PHASE,            // 访问控制（allow/deny）
+    NGX_STREAM_SSL_PHASE,               // SSL 握手
+    NGX_STREAM_PREREAD_PHASE,           // 协议识别预读（SNI 检测）
+    NGX_STREAM_CONTENT_PHASE,           // 内容处理（调用 handler）
+    NGX_STREAM_LOG_PHASE                // 日志记录
+} ngx_stream_phases;
+```
+
+### 20.3 TCP 代理处理流程
+
+```
+client 连接
+  |
+  v
+ngx_stream_init_connection()
+  |
+  +-- 创建 ngx_stream_session_t
+  +-- 执行 phases (accept, access, ssl, preread, content)
+  |
+  v
+ngx_stream_proxy_handler()
+  |
+  +-- ngx_stream_proxy_connect() 连接上游服务器
+  +-- ngx_stream_proxy_process() 双向数据转发
+  |
+  v
+双向数据流:
+  client <---> ngx_stream_proxy_process <---> upstream
+```
+
+### 20.4 UDP 代理处理流程
+
+```
+client 数据
+  |
+  v
+ngx_stream_core_udp_handler()
+  |
+  +-- 创建临时 UDP session
+  +-- ngx_stream_proxy_init_upstream() 获取上游地址
+  +-- sendto() 直接发送数据
+  |
+  v
+通过 udp_connection_pool 复用连接
+```
+
+### 20.5 SSL Preread 模块（SNI 路由）
+
+```c
+// src/stream/ngx_stream_ssl_preread_module.c
+// 在 PREREAD_PHASE 阶段解析 TLS ClientHello
+// 提取 SNI（Server Name Indication）用于路由决策
+
+typedef struct {
+    ngx_uint_t                  server_name_len;
+    u_char                      server_name[256];
+} ngx_stream_ssl_preread_ctx_t;
+
+// 根据 $ssl_preread_server_name 变量选择 upstream 组
+```
+
+### 20.6 关键源码路径
+
+| 功能 | 文件路径 | 行数 |
+|------|----------|------|
+| Stream 入口 | `src/stream/ngx_stream.c` | 252 |
+| 核心配置 | `src/stream/ngx_stream_core_module.c` | 1524 |
+| 连接处理 | `src/stream/ngx_stream_handler.c` | 390 |
+| 反向代理 | `src/stream/ngx_stream_proxy_module.c` | 2870 |
+| SSL 模块 | `src/stream/ngx_stream_ssl_module.c` | - |
+| SSL Preread | `src/stream/ngx_stream_ssl_preread_module.c` | - |
+| 变量系统 | `src/stream/ngx_stream_variables.c` | - |
+| 负载均衡 | `src/stream/ngx_stream_upstream_round_robin.c` | - |
+
+---
+
+## 21. Mail 模块架构概述
+
+基于 nginx 1.31.0 源码（`lib/nginx/src/mail/`，14 个 .c 文件）。
+
+### 21.1 协议支持
+
+| 协议 | 端口 | SSL 端口 |
+|------|------|----------|
+| IMAP | 143 | 993 |
+| POP3 | 110 | 995 |
+| SMTP | 25/587 | 465 |
+
+### 21.2 模块文件结构
+
+```
+src/mail/
+├── ngx_mail.c                # 模块入口（486 行）
+├── ngx_mail_core_module.c    # 核心配置（534 行）
+├── ngx_mail_handler.c        # 连接处理（750 行）
+├── ngx_mail_imap_module.c    # IMAP 模块
+├── ngx_mail_imap_handler.c   # IMAP 协议处理
+├── ngx_mail_pop3_module.c    # POP3 模块
+├── ngx_mail_pop3_handler.c   # POP3 协议处理
+├── ngx_mail_smtp_module.c    # SMTP 模块
+├── ngx_mail_smtp_handler.c   # SMTP 协议处理
+├── ngx_mail_proxy_module.c   # 邮件代理
+├── ngx_mail_auth.c           # 认证核心
+└── ngx_mail_variables.c      # 变量支持
+```
+
+### 21.3 认证机制支持
+
+- PLAIN、LOGIN（基础认证）
+- CRAM-MD5（挑战-响应认证）
+- EXTERNAL（外部认证）
+- APOP（POP3 专用）
+
+### 21.4 代理流程
+
+```
+client 连接
+  |
+  v
+ngx_mail_init_connection()
+  |
+  +-- 根据端口识别协议（IMAP/POP3/SMTP）
+  +-- ngx_mail_auth() 执行认证
+  |
+  v
+ngx_mail_proxy_init() 连接上游邮件服务器
+  |
+  v
+协议转发: client <-> proxy <-> upstream
+```
+
+---
+
+*源码分析基于 nginx 1.31.0*
+*源码目录：`lib/nginx/src/stream/` 和 `lib/nginx/src/mail/`*

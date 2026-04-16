@@ -1537,3 +1537,220 @@ ls -la /var/run/nginx.pid
 # 手动指定 PID 路径
 nginx -s reload -p /etc/nginx -c nginx.conf
 ```
+
+---
+
+## 10. 事件模块源码架构分析
+
+基于 nginx 1.31.0 源码（`lib/nginx/src/event/`）。
+
+### 10.1 核心数据结构
+
+#### ngx_event_s - 事件结构
+
+```c
+// src/event/ngx_event.h:30-138
+struct ngx_event_s {
+    void            *data;           // 关联的连接或其他数据
+
+    unsigned         write:1;        // 是否写事件
+    unsigned         accept:1;       // 是否接受连接事件
+    unsigned         instance:1;     // 实例标记（防止 stale event）
+
+    unsigned         active:1;       // 是否已添加到事件驱动
+    unsigned         disabled:1;     // 是否禁用
+    unsigned         ready:1;        // 是否就绪
+    unsigned         oneshot:1;      // 是否一次性事件
+
+    unsigned         eof:1;          // 是否 EOF
+    unsigned         error:1;        // 是否错误
+    unsigned         timedout:1;     // 是否超时
+    unsigned         timer_set:1;    // 是否设置了定时器
+    unsigned         posted:1;       // 是否已投递到队列
+
+    ngx_event_handler_pt  handler;   // 事件处理函数
+    ngx_rbtree_node_t   timer;       // 定时器红黑树节点
+    ngx_queue_t      queue;          // posted 队列节点
+};
+```
+
+#### ngx_event_actions_t - 事件操作接口
+
+```c
+// src/event/ngx_event.h:166-183
+typedef struct {
+    ngx_int_t  (*add)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
+    ngx_int_t  (*del)(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
+    ngx_int_t  (*add_conn)(ngx_connection_t *c);
+    ngx_int_t  (*del_conn)(ngx_connection_t *c, ngx_uint_t flags);
+    ngx_int_t  (*notify)(ngx_event_handler_pt handler);
+    ngx_int_t  (*process_events)(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags);
+    ngx_int_t  (*init)(ngx_cycle_t *cycle, ngx_msec_t timer);
+    void       (*done)(ngx_cycle_t *cycle);
+} ngx_event_actions_t;
+```
+
+### 10.2 Worker 主循环
+
+```c
+// src/event/ngx_event.c:195-264
+void ngx_process_events_and_timers(ngx_cycle_t *cycle)
+{
+    // 1. 计算定时器超时
+    timer = ngx_event_find_timer();
+
+    // 2. 尝试获取 accept mutex（防止惊群）
+    if (ngx_trylock_accept_mutex(cycle) == NGX_OK) {
+        flags |= NGX_POST_EVENTS;
+    }
+
+    // 3. 处理事件（调用 epoll_wait/kevent 等）
+    ngx_process_events(cycle, timer, flags);
+
+    // 4. 处理 posted accept events（优先）
+    ngx_event_process_posted(cycle, &ngx_posted_accept_events);
+
+    // 5. 释放 accept mutex
+    if (ngx_accept_mutex_held) {
+        ngx_unlock_accept_mutex();
+    }
+
+    // 6. 处理 posted events
+    ngx_event_process_posted(cycle, &ngx_posted_events);
+
+    // 7. 处理超时定时器
+    ngx_event_expire_timers();
+}
+```
+
+### 10.3 定时器红黑树实现
+
+```c
+// src/event/ngx_event_timer.c
+// 全局红黑树
+ngx_rbtree_t              ngx_event_timer_rbtree;
+static ngx_rbtree_node_t  ngx_event_timer_sentinel;
+
+// 添加定时器
+void ngx_event_add_timer(ngx_event_t *ev, ngx_msec_t timer)
+{
+    key = ngx_current_msec + timer;  // 绝对时间
+    ngx_rbtree_insert(&ngx_event_timer_rbtree, &ev->timer);
+}
+
+// 查找最近超时
+ngx_msec_int_t ngx_event_find_timer(void)
+{
+    node = ngx_rbtree_min(root, sentinel);  // O(log N)
+    timer = node->key - ngx_current_msec;
+    return timer > 0 ? timer : 0;
+}
+```
+
+### 10.4 epoll 模块核心
+
+```c
+// src/event/modules/ngx_epoll_module.c:784-936
+static ngx_int_t ngx_epoll_process_events(...)
+{
+    // 调用 epoll_wait
+    events = epoll_wait(ep, event_list, nevents, timer);
+
+    for (i = 0; i < events; i++) {
+        c = event_list[i].data.ptr;
+
+        // 处理读事件
+        if ((event_list[i].events & EPOLLIN) && rev->active) {
+            rev->ready = 1;
+            if (flags & NGX_POST_EVENTS) {
+                ngx_post_event(rev, queue);
+            } else {
+                rev->handler(rev);
+            }
+        }
+
+        // 处理写事件
+        if ((event_list[i].events & EPOLLOUT) && wev->active) {
+            wev->ready = 1;
+            // 同上...
+        }
+    }
+}
+```
+
+### 10.5 Posted 事件队列
+
+三级 posted 队列优先级：
+```c
+ngx_queue_t  ngx_posted_accept_events;   // accept 事件（最高优先级）
+ngx_queue_t  ngx_posted_next_events;     // next 事件（次优先级）
+ngx_queue_t  ngx_posted_events;          // 普通事件
+```
+
+处理顺序：accept → next → regular → timers
+
+### 10.6 SSL 异步握手
+
+```c
+// src/event/ngx_event_openssl.c:2201
+ngx_int_t ngx_ssl_handshake(ngx_connection_t *c)
+{
+    n = SSL_do_handshake(c->ssl->connection);
+
+    if (n == 1) {
+        c->ssl->handshaked = 1;
+        return NGX_OK;
+    }
+
+    sslerr = SSL_get_error(c->ssl->connection, n);
+    // WANT_READ/WANT_WRITE -> 注册事件，等待回调后递归调用
+}
+```
+
+### 10.7 QUIC 模块架构
+
+```
+src/event/quic/（25 个文件）
+├── ngx_event_quic.c              # 入口：包分发、连接生命周期
+├── ngx_event_quic_transport.c    # 包解析/组装、帧解析
+├── ngx_event_quic_output.c       # 发包、GSO
+├── ngx_event_quic_protection.c   # AEAD 加解密、HKDF
+├── ngx_event_quic_ssl.c          # QUIC-TLS 集成
+├── ngx_event_quic_streams.c      # 流管理、流控
+├── ngx_event_quic_ack.c          # ACK 生成、范围跟踪
+├── ngx_event_quic_migration.c    # 连接迁移、路径验证
+└── ngx_event_quic_connid.c       # 连接 ID 管理
+```
+
+核心连接结构：
+```c
+// src/event/quic/ngx_event_quic_connection.h:222-309
+struct ngx_quic_connection_s {
+    ngx_quic_send_ctx_t        send_ctx[3];  // Initial/Handshake/Application
+    ngx_quic_congestion_t      congestion;   // 拥塞控制
+    ngx_quic_streams_t         streams;      // 流管理
+    ngx_msec_t                 avg_rtt;      // RTT 估计
+    // ...
+};
+```
+
+---
+
+## 11. 关键源码路径
+
+| 功能 | 文件路径 |
+|------|----------|
+| 事件核心 | `src/event/ngx_event.c:195-264` |
+| 定时器 | `src/event/ngx_event_timer.c` |
+| epoll 模块 | `src/event/modules/ngx_epoll_module.c:784` |
+| kqueue 模块 | `src/event/modules/ngx_kqueue_module.c:507` |
+| SSL 实现 | `src/event/ngx_event_openssl.c:2201` |
+| SSL 对象缓存 | `src/event/ngx_event_openssl_cache.c` |
+| 连接接受 | `src/event/ngx_event_accept.c:21-341` |
+| 连接建立 | `src/event/ngx_event_connect.c:20-331` |
+| QUIC 核心 | `src/event/quic/ngx_event_quic.c` |
+
+---
+
+*源码分析基于 nginx 1.31.0*
+*源码目录：`lib/nginx/src/event/`*
