@@ -12,6 +12,7 @@ package server
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -252,6 +253,88 @@ func BenchmarkGoroutinePoolMinWorkers(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			_ = pool.Submit(ctx, task)
+		}
+	})
+}
+
+// BenchmarkGoroutinePoolObjectPool 测试 goroutine 池中对象池化效果。
+// 验证池内任务上下文和回调函数的零分配复用能力。
+func BenchmarkGoroutinePoolObjectPool(b *testing.B) {
+	pool := NewGoroutinePool(PoolConfig{
+		MaxWorkers:  50,
+		MinWorkers:  10,
+		IdleTimeout: 60 * time.Second,
+		QueueSize:   500,
+	})
+	pool.Start()
+	defer pool.Stop()
+
+	// 预填充池
+	ctx := &fasthttp.RequestCtx{}
+
+	b.Run("PoolTask_Submit", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			captured := i
+			task := func(_ *fasthttp.RequestCtx) {
+				_ = captured
+			}
+			_ = pool.Submit(ctx, task)
+		}
+	})
+
+	b.Run("PoolTask_Reuse_NoClosure", func(b *testing.B) {
+		// 无闭包捕获的任务，避免额外分配
+		b.ReportAllocs()
+		b.ResetTimer()
+		task := func(_ *fasthttp.RequestCtx) {
+			// 空任务
+		}
+		for i := 0; i < b.N; i++ {
+			_ = pool.Submit(ctx, task)
+		}
+	})
+}
+
+// BenchmarkPoolMemoryReuse 测试内存复用率。
+// 对比使用池和直接创建对象的内存分配差异。
+func BenchmarkPoolMemoryReuse(b *testing.B) {
+	// 模拟池化结构体
+	type pooledTask struct {
+		data []byte
+		id   int
+	}
+
+	taskPool := &sync.Pool{
+		New: func() any {
+			return &pooledTask{
+				data: make([]byte, 0, 256),
+			}
+		},
+	}
+
+	b.Run("WithPool_GetPut", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			t := taskPool.Get().(*pooledTask)
+			t.data = t.data[:0]
+			t.data = append(t.data, []byte("pooled data")...)
+			t.id = i
+			taskPool.Put(t)
+		}
+	})
+
+	b.Run("WithoutPool_Alloc", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			t := &pooledTask{
+				data: make([]byte, 0, 256),
+			}
+			t.data = append(t.data, []byte("fresh alloc data")...)
+			t.id = i
 		}
 	})
 }
