@@ -9,11 +9,12 @@ import (
 
 // RadixNode Radix Tree 节点
 type RadixNode struct {
-	prefix   string
-	handler  fasthttp.RequestHandler
-	children []*RadixNode
-	isLeaf   bool
-	priority int
+	children     []*RadixNode
+	handler      fasthttp.RequestHandler
+	priority     int
+	isLeaf       bool
+	prefix       string
+	locationType string // exact/prefix/prefix_priority
 }
 
 // RadixTree 前缀匹配 Radix Tree
@@ -30,29 +31,31 @@ func NewRadixTree() *RadixTree {
 }
 
 // Insert 插入路径到 Radix Tree（startup-only）
-func (t *RadixTree) Insert(path string, handler fasthttp.RequestHandler, priority int) error {
+func (t *RadixTree) Insert(path string, handler fasthttp.RequestHandler, priority int, locationType string) error {
 	if t.initialized {
 		return errors.New("RadixTree already initialized")
 	}
-	return t.insertNode(nil, t.root, path, handler, priority)
+	return t.insertNode(nil, t.root, path, handler, priority, locationType)
 }
 
 // insertNode 完整路径分割插入算法
-func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, handler fasthttp.RequestHandler, priority int) error {
+func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, handler fasthttp.RequestHandler, priority int, locationType string) error {
 	// Case 1: 空节点（根节点），直接设置
 	if node.prefix == "" && len(node.children) == 0 && node.handler == nil {
 		if path == "" {
 			node.handler = handler
 			node.priority = priority
 			node.isLeaf = true
+			node.locationType = locationType
 			return nil
 		}
 		// 创建新子节点
 		newNode := &RadixNode{
-			prefix:   path,
-			handler:  handler,
-			isLeaf:   true,
-			priority: priority,
+			prefix:       path,
+			handler:      handler,
+			isLeaf:       true,
+			priority:     priority,
+			locationType: locationType,
 		}
 		node.children = append(node.children, newNode)
 		return nil
@@ -77,22 +80,24 @@ func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, 
 			node.handler = handler
 			node.priority = priority
 			node.isLeaf = true
+			node.locationType = locationType
 			return nil
 		}
 
 		// 搜索匹配剩余路径的子节点
 		for _, child := range node.children {
 			if strings.HasPrefix(remaining, child.prefix) {
-				return t.insertNode(node, child, remaining, handler, priority)
+				return t.insertNode(node, child, remaining, handler, priority, locationType)
 			}
 		}
 
 		// 无匹配子节点，创建新子节点
 		newNode := &RadixNode{
-			prefix:   remaining,
-			handler:  handler,
-			isLeaf:   true,
-			priority: priority,
+			prefix:       remaining,
+			handler:      handler,
+			isLeaf:       true,
+			priority:     priority,
+			locationType: locationType,
 		}
 		node.children = append(node.children, newNode)
 		return nil
@@ -110,10 +115,11 @@ func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, 
 
 	// 创建新节点保存剩余路径
 	newNode := &RadixNode{
-		prefix:   path[commonLen:],
-		handler:  handler,
-		isLeaf:   true,
-		priority: priority,
+		prefix:       path[commonLen:],
+		handler:      handler,
+		isLeaf:       true,
+		priority:     priority,
+		locationType: locationType,
 	}
 
 	// 将原节点和新节点作为 splitNode 的子节点
@@ -159,7 +165,7 @@ func (t *RadixTree) searchLongest(node *RadixNode, path string, bestMatch *Match
 			Handler:      node.handler,
 			Path:         node.prefix,
 			Priority:     node.priority,
-			LocationType: "prefix",
+			LocationType: node.locationType,
 		}
 
 		// nil-safe 优先级比较 + 长度比较

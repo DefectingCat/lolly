@@ -10,24 +10,13 @@ import (
 
 // LocationEngine 统一匹配引擎
 type LocationEngine struct {
-	// 精确匹配 - Hash Map (O(1))
-	exactMatchers map[string]*ExactMatcher
-
-	// 前缀匹配 - Radix Tree (O(log n))
 	prefixPriorityTree *RadixTree // ^~ 类型（优先级 2）
 	prefixTree         *RadixTree // 普通前缀（优先级 4）
-
-	// 正则匹配 - Linear Scan（按配置顺序）
-	regexMatchers []*RegexMatcher
-
-	// 命名 location - Hash Map
-	namedMatchers map[string]*NamedMatcher
-
-	// 初始化标记
-	initialized bool
-
-	// 冲突检测
-	registeredPaths map[string]string
+	exactMatchers      map[string]*ExactMatcher
+	namedMatchers      map[string]*NamedMatcher
+	registeredPaths    map[string]string
+	regexMatchers      []*RegexMatcher
+	initialized        bool
 }
 
 // NewLocationEngine 创建新引擎
@@ -67,7 +56,7 @@ func (e *LocationEngine) AddPrefixPriority(path string, handler fasthttp.Request
 		return err
 	}
 
-	return e.prefixPriorityTree.Insert(path, handler, 2)
+	return e.prefixPriorityTree.Insert(path, handler, 2, "prefix_priority")
 }
 
 // AddRegex 添加正则匹配 location
@@ -95,7 +84,7 @@ func (e *LocationEngine) AddPrefix(path string, handler fasthttp.RequestHandler)
 		return err
 	}
 
-	return e.prefixTree.Insert(path, handler, 4)
+	return e.prefixTree.Insert(path, handler, 4, "prefix")
 }
 
 // AddNamed 添加命名 location

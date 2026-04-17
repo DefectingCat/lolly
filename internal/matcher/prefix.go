@@ -18,7 +18,7 @@ func NewPrefixMatcher() *PrefixMatcher {
 
 // AddPath 添加路径
 func (pm *PrefixMatcher) AddPath(path string, handler fasthttp.RequestHandler) error {
-	return pm.tree.Insert(path, handler, pm.priority)
+	return pm.tree.Insert(path, handler, pm.priority, "prefix")
 }
 
 // Match 前缀匹配，返回最长前缀匹配结果

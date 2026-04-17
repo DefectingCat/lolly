@@ -19,7 +19,7 @@ func BenchmarkRadixTree_Insert(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, p := range paths {
-			tree.Insert(p, handler, i)
+			tree.Insert(p, handler, i, "prefix")
 		}
 	}
 }
@@ -30,7 +30,7 @@ func BenchmarkRadixTree_Find(b *testing.B) {
 
 	paths := []string{"/", "/api", "/api/v1", "/api/v2/users/123"}
 	for i, p := range paths {
-		tree.Insert(p, handler, i+1)
+		tree.Insert(p, handler, i+1, "prefix")
 	}
 	tree.MarkInitialized()
 

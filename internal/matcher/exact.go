@@ -6,8 +6,8 @@ import (
 
 // ExactMatcher Hash Map 精确匹配
 type ExactMatcher struct {
-	path     string
 	handler  fasthttp.RequestHandler
+	path     string
 	priority int
 }
 
@@ -31,6 +31,6 @@ func (m *ExactMatcher) Result() *MatchResult {
 		Handler:      m.handler,
 		Path:         m.path,
 		Priority:     m.priority,
-		LocationType: "exact",
+		LocationType: LocationTypeExact,
 	}
 }

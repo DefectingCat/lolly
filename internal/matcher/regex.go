@@ -10,9 +10,9 @@ import (
 type RegexMatcher struct {
 	pattern         *regexp.Regexp
 	handler         fasthttp.RequestHandler
+	captures        map[string]string
 	priority        int
 	caseInsensitive bool
-	captures        map[string]string
 }
 
 // NewRegexMatcher 创建正则匹配器
@@ -47,9 +47,9 @@ func (m *RegexMatcher) Match(path string) bool {
 
 // Result 返回匹配结果
 func (m *RegexMatcher) Result() *MatchResult {
-	locType := "regex"
+	locType := LocationTypeRegex
 	if m.caseInsensitive {
-		locType = "regex_caseless"
+		locType = LocationTypeRegexCaseless
 	}
 	return &MatchResult{
 		Handler:      m.handler,

@@ -26,7 +26,7 @@ func TestLocationEngine_NginxPriority(t *testing.T) {
 
 	// 测试 ^~ 阻止正则
 	result = engine.Match("/api/test.php")
-	if result.LocationType != "prefix" {
+	if result.LocationType != "prefix_priority" {
 		t.Errorf("^~ should block regex, got %s", result.LocationType)
 	}
 }
