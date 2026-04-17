@@ -11,13 +11,17 @@
 
 ### 核心功能
 
-- **静态文件服务** - 零拷贝传输（sendfile）、文件缓存、预压缩支持、try_files 配置
-- **反向代理** - 完整的代理功能，支持请求头/响应头修改、超时控制、故障转移（next_upstream）
+- **静态文件服务** - 零拷贝传输（sendfile）、文件缓存、预压缩支持、try_files 配置、符号链接安全检查
+- **反向代理** - 完整的代理功能，支持请求头/响应头修改、超时控制、故障转移（next_upstream）、Location/Refresh 头改写
 - **HTTP/3 (QUIC)** - 基于 quic-go，支持 0-RTT 连接
 - **WebSocket** - 完整的 WebSocket 代理支持
-- **虚拟主机** - 单进程支持多域名独立配置
+- **虚拟主机** - 单进程支持多域名独立配置，server_name 支持通配符和正则匹配
+- **多服务器模式** - 单配置文件支持多个独立 server 实例
+- **Location 匹配** - nginx 风格的精确/前缀/正则匹配引擎
+- **Unix Socket** - 支持 Unix socket 监听
+- **配置引入** - include 指令支持配置拆分
 - **TCP/UDP Stream** - 四层代理，支持 MySQL、Redis 等服务
-- **Lua 脚本** - 基于 gopher-lua 的可编程扩展，支持 nginx-lua 兼容 API
+- **Lua 脚本** - 基于 gopher-lua 的可编程扩展，支持 nginx-lua 兼容 API（ngx.var/ngx.ctx/ngx.req/ngx.resp/ngx.timer/ngx.location.capture/ngx.shared.DICT）
 - **GeoIP 过滤** - 基于 MaxMind GeoIP2 的国家/地区访问控制
 - **自定义错误页面** - 支持为特定状态码配置自定义错误页面
 
@@ -964,9 +968,9 @@ make lint
 
 ### 项目统计
 
-- Go 文件：181
-- 测试文件：85（覆盖率约 47%）
-- 核心模块均有完整测试
+- Go 文件：110
+- 测试文件：113
+- 核心模块均有完整测试和性能基准测试
 - 中文代码注释
 
 ## 依赖

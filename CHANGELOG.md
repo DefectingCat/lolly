@@ -5,6 +5,106 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-04-17
+
+### Added
+
+#### 核心功能
+
+- 多服务器模式支持，可在单个配置中定义多个独立 server
+- Location 匹配引擎，支持 nginx 风格的精确/前缀/正则匹配
+- server_name 通配符和正则匹配支持
+- Unix socket 监听支持
+- 配置引入 (include) 支持，可拆分配置到多个文件
+- 缓存清理 API 端点
+- 状态端点 HTML/Text 输出格式，支持 localhost IP 访问
+- 上游 SSL 配置，支持代理连接使用自定义证书
+- 高并发优化配置项
+- 缓存 TTL 新鲜度验证优化
+- Location/Refresh 头改写功能
+- DNS 缓存 LRU 淘汰机制
+
+#### Lua 中间件系统
+
+- 完整 ngx API 实现：ngx.var/ngx.ctx/ngx.req/ngx.resp/ngx.log
+- 共享字典 API (ngx.shared.DICT)
+- 定时器 API (ngx.timer)，含线程隔离和回调限制
+- 子请求 API (ngx.location.capture)
+- Cosocket API 和响应拦截器
+- balancer_by_lua 动态负载均衡
+- Lua 脚本嵌入支持，含沙箱安全检查
+
+#### 安全与访问控制
+
+- GeoIP 国家代码访问控制
+- 符号链接安全检查
+- 静态文件处理符号链接安全检查
+
+#### 平台支持
+
+- Docker 容器化部署支持
+- Windows 平台构建和运行兼容性
+
+#### 可观测性
+
+- Prometheus 状态输出端点缓存清理 API
+
+### Changed
+
+- 移除旧版单 server 配置，统一使用 servers 数组格式
+- 结构体内存布局优化减少 padding
+- 提取公共模块：mimeutil、sslutil、netutil、testutil
+- 使用标准库 slices/maps 替代自定义函数
+- gofumpt 替代 goimports 格式化代码
+- 禁用 govet fieldalignment 检查
+
+### Performance
+
+- 零拷贝字节路径减少内存分配
+- EphemeralGet/PersistentGet 零拷贝变量访问 API
+- LuaContext/协程池对象池化
+- 缓存键哈希计算零分配优化
+- 全局变量惰性加载降低每请求开销
+- 滑动窗口限流器分段锁优化并发性能
+- FileCache.Get() 锁粒度优化
+- HTTP/3 移除冗余 ctxPool 提升性能
+
+### Fixed
+
+- ClientMaxBodySize 默认值设置
+- sendfile 高并发下连接断开处理
+- WebSocket 升级失败时的资源泄漏
+- 代理请求 URI 和 Host 设置
+- BodyStream nil 检查防止空指针
+- 负载均衡器 hostnameOnce 并发安全
+- SSL 证书验证禁用的安全警告
+- 大量 golangci-lint 错误修复
+
+### Documentation
+
+- nginx 源码架构分析文档
+- fasthttp 源码分析任务规划
+- 重构文档目录结构，nginx 文档移至子目录
+- Lua 配置示例和示例脚本
+- 更新 README 添加 GeoIP 和 Lua 功能说明
+
+### Tests
+
+- 端到端集成性能基准测试
+- HTTP/2/HTTP/3/WebSocket 性能基准测试
+- Lua 协程和字节编译性能基准测试
+- DNS 解析、状态端点、负载均衡器完整测试
+- 静态文件发送处理测试
+- 基准测试迁移到 Go 1.24 b.Loop() API
+
+### Build
+
+- Docker 构建支持
+- Windows 平台构建兼容性
+- golangci-lint 配置重构，重新启用多项检查
+
+---
+
 ## [0.2.0] - 2026-04-10
 
 ### Added
