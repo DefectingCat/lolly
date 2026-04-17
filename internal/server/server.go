@@ -1038,6 +1038,9 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 			staticHandler.SetGzipStatic(true, cfg.Compression.GzipStaticExtensions)
 		}
 
+		// 设置符号链接安全检查
+		staticHandler.SetSymlinkCheck(static.SymlinkCheck)
+
 		// 根据 LocationType 注册路由
 		locType := static.LocationType
 		if locType == "" {
@@ -1382,6 +1385,9 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 		if cfg.Compression.GzipStatic {
 			staticHandler.SetGzipStatic(true, cfg.Compression.GzipStaticExtensions)
 		}
+
+		// 设置符号链接安全检查
+		staticHandler.SetSymlinkCheck(static.SymlinkCheck)
 
 		// 设置 try_files 配置
 		if len(static.TryFiles) > 0 {
