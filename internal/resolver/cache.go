@@ -6,7 +6,6 @@
 package resolver
 
 import (
-	"sync"
 	"time"
 )
 
@@ -27,19 +26,16 @@ func (r *DNSResolver) GetCacheStats() CacheStats {
 	// 统计缓存条目
 	var entries, expired int
 	now := time.Now()
-	r.cache.Range(func(_ interface{}, value interface{}) bool {
+	r.mu.RLock()
+	for _, entry := range r.cache {
 		entries++
-		entry, ok := value.(*DNSCacheEntry)
-		if !ok {
-			return true
-		}
 		entry.mu.RLock()
 		if now.After(entry.ExpiresAt) {
 			expired++
 		}
 		entry.mu.RUnlock()
-		return true
-	})
+	}
+	r.mu.RUnlock()
 
 	return CacheStats{
 		Hits:    hits,
@@ -51,28 +47,35 @@ func (r *DNSResolver) GetCacheStats() CacheStats {
 
 // GetCacheEntry 获取指定主机的缓存条目（用于测试）。
 func (r *DNSResolver) GetCacheEntry(host string) (*DNSCacheEntry, bool) {
-	if entry, ok := r.cache.Load(host); ok {
-		cacheEntry, ok := entry.(*DNSCacheEntry)
-		if !ok {
-			return nil, false
-		}
-		return cacheEntry, true
+	r.mu.RLock()
+	entry, ok := r.cache[host]
+	r.mu.RUnlock()
+	if !ok {
+		return nil, false
 	}
-	return nil, false
+	return entry, true
 }
 
 // DeleteCacheEntry 删除指定主机的缓存条目。
 func (r *DNSResolver) DeleteCacheEntry(host string) {
-	r.cache.Delete(host)
 	r.mu.Lock()
+	delete(r.cache, host)
+	// 从 LRU 链表中移除
+	for i, h := range r.lruOrder {
+		if h == host {
+			r.lruOrder = append(r.lruOrder[:i], r.lruOrder[i+1:]...)
+			break
+		}
+	}
 	delete(r.refreshHosts, host)
 	r.mu.Unlock()
 }
 
 // ClearCache 清空所有缓存。
 func (r *DNSResolver) ClearCache() {
-	r.cache = sync.Map{}
 	r.mu.Lock()
+	r.cache = make(map[string]*DNSCacheEntry)
+	r.lruOrder = make([]string, 0, r.config.CacheSize)
 	r.refreshHosts = make(map[string]struct{})
 	r.mu.Unlock()
 }
@@ -90,15 +93,14 @@ func (r *DNSResolver) GetHitRate() float64 {
 
 // IsCached 检查指定主机是否在缓存中且未过期。
 func (r *DNSResolver) IsCached(host string) bool {
-	if entry, ok := r.cache.Load(host); ok {
-		cacheEntry, ok := entry.(*DNSCacheEntry)
-		if !ok {
-			return false
-		}
-		cacheEntry.mu.RLock()
-		expiresAt := cacheEntry.ExpiresAt
-		cacheEntry.mu.RUnlock()
-		return time.Now().Before(expiresAt)
+	r.mu.RLock()
+	entry, ok := r.cache[host]
+	r.mu.RUnlock()
+	if !ok {
+		return false
 	}
-	return false
+	entry.mu.RLock()
+	expiresAt := entry.ExpiresAt
+	entry.mu.RUnlock()
+	return time.Now().Before(expiresAt)
 }

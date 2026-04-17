@@ -29,7 +29,7 @@ func createTestResolver() *DNSResolver {
 	// 预填充缓存条目，模拟真实的解析场景
 	for i := 0; i < 100; i++ {
 		host := fmt.Sprintf("host%d.example.com", i)
-		r.cache.Store(host, &DNSCacheEntry{
+		r.storeCache(host, &DNSCacheEntry{
 			IPs:        []string{fmt.Sprintf("192.168.1.%d", i%256), fmt.Sprintf("192.168.2.%d", i%256)},
 			ExpiresAt:  time.Now().Add(30 * time.Second),
 			LastLookup: time.Now(),
@@ -106,7 +106,7 @@ func BenchmarkDNSResolverConcurrent(b *testing.B) {
 
 	// 只添加一个缓存条目，所有 goroutine 都访问同一个条目
 	targetHost := "concurrent.example.com"
-	r.cache.Store(targetHost, &DNSCacheEntry{
+	r.storeCache(targetHost, &DNSCacheEntry{
 		IPs:        []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"},
 		ExpiresAt:  time.Now().Add(30 * time.Second),
 		LastLookup: time.Now(),
@@ -158,7 +158,7 @@ func BenchmarkDNSResolverCacheExpiry(b *testing.B) {
 		host := "127.0.0.1"
 
 		// 预存储一个已过期的条目
-		r.cache.Store(host, &DNSCacheEntry{
+		r.storeCache(host, &DNSCacheEntry{
 			IPs:        []string{"192.168.1.1"},
 			ExpiresAt:  time.Now().Add(-1 * time.Second), // 已过期
 			LastLookup: time.Now().Add(-2 * time.Second),
@@ -216,7 +216,7 @@ func BenchmarkDNSResolverMixedWorkload(b *testing.B) {
 	// 预填充一些缓存
 	for i := 0; i < 50; i++ {
 		host := fmt.Sprintf("cached%d.example.com", i)
-		r.cache.Store(host, &DNSCacheEntry{
+		r.storeCache(host, &DNSCacheEntry{
 			IPs:       []string{fmt.Sprintf("192.168.1.%d", i%256)},
 			ExpiresAt: time.Now().Add(30 * time.Second),
 		})

@@ -56,12 +56,55 @@ type Stats struct {
 	AverageLatency time.Duration // 平均解析延迟
 }
 
+// storeCache 存入缓存（带 LRU 淘汰）。
+func (r *DNSResolver) storeCache(host string, entry *DNSCacheEntry) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// 已存在则更新并移到头部
+	if _, ok := r.cache[host]; ok {
+		r.cache[host] = entry
+		r.moveToFrontLocked(host)
+		return
+	}
+
+	// 检查是否需要淘汰
+	if r.config.CacheSize > 0 && len(r.cache) >= r.config.CacheSize {
+		r.evictLRULocked()
+	}
+
+	r.cache[host] = entry
+	r.lruOrder = append(r.lruOrder, host)
+}
+
+// evictLRULocked 淘汰最久未使用的条目（需持有锁）。
+func (r *DNSResolver) evictLRULocked() {
+	if len(r.lruOrder) == 0 {
+		return
+	}
+	oldest := r.lruOrder[0]
+	delete(r.cache, oldest)
+	r.lruOrder = r.lruOrder[1:]
+}
+
+// moveToFrontLocked 将条目移到 LRU 链表尾部（最新）（需持有锁）。
+func (r *DNSResolver) moveToFrontLocked(host string) {
+	for i, h := range r.lruOrder {
+		if h == host {
+			r.lruOrder = append(r.lruOrder[:i], r.lruOrder[i+1:]...)
+			r.lruOrder = append(r.lruOrder, host)
+			return
+		}
+	}
+}
+
 // DNSResolver 实现 Resolver 接口的 DNS 解析器。
 type DNSResolver struct {
 	config       *config.ResolverConfig
 	stopCh       chan struct{}
 	refreshHosts map[string]struct{}
-	cache        sync.Map
+	cache        map[string]*DNSCacheEntry // DNS 缓存
+	lruOrder     []string                  // LRU 访问顺序（最旧在前）
 	hits         atomic.Int64
 	misses       atomic.Int64
 	errors       atomic.Int64
@@ -109,6 +152,8 @@ func New(cfg *config.ResolverConfig) Resolver {
 		config:       &configCopy,
 		stopCh:       make(chan struct{}),
 		refreshHosts: make(map[string]struct{}),
+		cache:        make(map[string]*DNSCacheEntry),
+		lruOrder:     make([]string, 0, cfg.CacheSize),
 	}
 }
 
@@ -131,23 +176,24 @@ func (r *DNSResolver) lookup(ctx context.Context, host string, useCache bool) ([
 
 	// 尝试从缓存获取
 	if useCache {
-		if entry, ok := r.cache.Load(host); ok {
-			cacheEntry, ok := entry.(*DNSCacheEntry)
-			if ok {
-				cacheEntry.mu.RLock()
-				ips := cacheEntry.IPs
-				expiresAt := cacheEntry.ExpiresAt
-				cacheErr := cacheEntry.Error
-				cacheEntry.mu.RUnlock()
+		r.mu.RLock()
+		entry, ok := r.cache[host]
+		r.mu.RUnlock()
 
-				// 缓存未过期，返回缓存结果
-				if time.Now().Before(expiresAt) {
-					r.hits.Add(1)
-					if cacheErr != nil {
-						return nil, cacheErr
-					}
-					return ips, nil
+		if ok {
+			entry.mu.RLock()
+			ips := entry.IPs
+			expiresAt := entry.ExpiresAt
+			cacheErr := entry.Error
+			entry.mu.RUnlock()
+
+			// 缓存未过期，返回缓存结果
+			if time.Now().Before(expiresAt) {
+				r.hits.Add(1)
+				if cacheErr != nil {
+					return nil, cacheErr
 				}
+				return ips, nil
 			}
 		}
 	}
@@ -173,7 +219,7 @@ func (r *DNSResolver) lookup(ctx context.Context, host string, useCache bool) ([
 		LastLookup: time.Now(),
 		Error:      err,
 	}
-	r.cache.Store(host, entry)
+	r.storeCache(host, entry)
 
 	// 添加到刷新列表
 	r.mu.Lock()
@@ -365,11 +411,9 @@ func (r *DNSResolver) Stats() Stats {
 	misses := r.misses.Load()
 
 	// 统计缓存条目数
-	var entries int
-	r.cache.Range(func(_, _ interface{}) bool {
-		entries++
-		return true
-	})
+	r.mu.RLock()
+	entries := len(r.cache)
+	r.mu.RUnlock()
 
 	// 计算平均延迟
 	var avgLatency time.Duration

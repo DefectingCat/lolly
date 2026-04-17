@@ -108,7 +108,7 @@ func TestCache(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 模拟缓存条目
-	r.cache.Store("test.example.com", &DNSCacheEntry{
+	r.storeCache("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1", "192.168.1.2"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -133,7 +133,7 @@ func TestCache(t *testing.T) {
 
 	// 测试缓存过期
 	// 更新缓存条目为过期
-	r.cache.Store("test.example.com", &DNSCacheEntry{
+	r.storeCache("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(-1 * time.Second), // 已过期
 	})
@@ -157,13 +157,13 @@ func TestIsCached(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加未过期的缓存
-	r.cache.Store("active.example.com", &DNSCacheEntry{
+	r.storeCache("active.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
 
 	// 添加已过期的缓存
-	r.cache.Store("expired.example.com", &DNSCacheEntry{
+	r.storeCache("expired.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.2"},
 		ExpiresAt: time.Now().Add(-1 * time.Second),
 	})
@@ -194,7 +194,7 @@ func TestCacheHitRate(t *testing.T) {
 	}
 
 	// 模拟缓存命中
-	r.cache.Store("test.example.com", &DNSCacheEntry{
+	r.storeCache("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -227,11 +227,11 @@ func TestStats(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加缓存条目
-	r.cache.Store("test1.example.com", &DNSCacheEntry{
+	r.storeCache("test1.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
-	r.cache.Store("test2.example.com", &DNSCacheEntry{
+	r.storeCache("test2.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.2"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -329,7 +329,7 @@ func TestDeleteCacheEntry(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加缓存
-	r.cache.Store("test.example.com", &DNSCacheEntry{
+	r.storeCache("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -358,7 +358,7 @@ func TestClearCache(t *testing.T) {
 	// 添加多个缓存
 	for i := 0; i < 5; i++ {
 		host := fmt.Sprintf("test%d.example.com", i)
-		r.cache.Store(host, &DNSCacheEntry{
+		r.storeCache(host, &DNSCacheEntry{
 			IPs:       []string{fmt.Sprintf("192.168.1.%d", i)},
 			ExpiresAt: time.Now().Add(1 * time.Minute),
 		})
@@ -387,7 +387,7 @@ func TestConcurrentAccess(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加测试缓存
-	r.cache.Store("test.example.com", &DNSCacheEntry{
+	r.storeCache("test.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
@@ -533,13 +533,13 @@ func TestCacheStats(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加活跃缓存
-	r.cache.Store("active.example.com", &DNSCacheEntry{
+	r.storeCache("active.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.1"},
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 	})
 
 	// 添加过期缓存
-	r.cache.Store("expired.example.com", &DNSCacheEntry{
+	r.storeCache("expired.example.com", &DNSCacheEntry{
 		IPs:       []string{"192.168.1.2"},
 		ExpiresAt: time.Now().Add(-1 * time.Second),
 	})
@@ -564,5 +564,173 @@ func TestCacheStats(t *testing.T) {
 	}
 	if stats.Expired != 1 {
 		t.Errorf("expected 1 expired, got %d", stats.Expired)
+	}
+}
+
+// TestCacheSizeLimit 测试缓存大小限制。
+func TestCacheSizeLimit(t *testing.T) {
+	cfg := &config.ResolverConfig{
+		Enabled:   true,
+		Valid:     30 * time.Second,
+		CacheSize: 3, // 限制 3 个条目
+	}
+
+	r := New(cfg).(*DNSResolver)
+
+	// 添加 5 个缓存条目，应淘汰 2 个
+	for i := 0; i < 5; i++ {
+		host := fmt.Sprintf("host%d.example.com", i)
+		r.storeCache(host, &DNSCacheEntry{
+			IPs:       []string{fmt.Sprintf("192.168.1.%d", i)},
+			ExpiresAt: time.Now().Add(1 * time.Minute),
+		})
+	}
+
+	// 验证缓存条目数不超过限制
+	stats := r.GetCacheStats()
+	if stats.Entries > 3 {
+		t.Errorf("expected at most 3 entries with CacheSize=3, got %d", stats.Entries)
+	}
+
+	// 验证最早添加的条目被淘汰（LRU）
+	if r.IsCached("host0.example.com") {
+		t.Error("host0.example.com should be evicted (oldest)")
+	}
+	if r.IsCached("host1.example.com") {
+		t.Error("host1.example.com should be evicted (second oldest)")
+	}
+
+	// 验证最新添加的条目存在
+	if !r.IsCached("host2.example.com") {
+		t.Error("host2.example.com should be cached")
+	}
+	if !r.IsCached("host3.example.com") {
+		t.Error("host3.example.com should be cached")
+	}
+	if !r.IsCached("host4.example.com") {
+		t.Error("host4.example.com should be cached")
+	}
+}
+
+// TestCacheSizeZero 测试 cache_size=0 时无限制。
+func TestCacheSizeZero(t *testing.T) {
+	cfg := &config.ResolverConfig{
+		Enabled:   true,
+		Valid:     30 * time.Second,
+		CacheSize: 0, // 无限制
+	}
+
+	r := New(cfg).(*DNSResolver)
+
+	// 添加大量缓存条目
+	for i := 0; i < 100; i++ {
+		host := fmt.Sprintf("host%d.example.com", i)
+		r.storeCache(host, &DNSCacheEntry{
+			IPs:       []string{fmt.Sprintf("192.168.1.%d", i%256)},
+			ExpiresAt: time.Now().Add(1 * time.Minute),
+		})
+	}
+
+	// 验证所有条目都存在
+	stats := r.GetCacheStats()
+	if stats.Entries != 100 {
+		t.Errorf("expected 100 entries with CacheSize=0, got %d", stats.Entries)
+	}
+}
+
+// TestLRUEvictionOrder 测试 LRU 淘汰顺序。
+func TestLRUEvictionOrder(t *testing.T) {
+	cfg := &config.ResolverConfig{
+		Enabled:   true,
+		Valid:     30 * time.Second,
+		CacheSize: 3,
+	}
+
+	r := New(cfg).(*DNSResolver)
+
+	// 添加 3 个条目填满缓存
+	r.storeCache("a.example.com", &DNSCacheEntry{
+		IPs:       []string{"192.168.1.1"},
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+	})
+	r.storeCache("b.example.com", &DNSCacheEntry{
+		IPs:       []string{"192.168.1.2"},
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+	})
+	r.storeCache("c.example.com", &DNSCacheEntry{
+		IPs:       []string{"192.168.1.3"},
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+	})
+
+	// 访问 a.example.com 使其变为最新
+	r.storeCache("a.example.com", &DNSCacheEntry{
+		IPs:       []string{"192.168.1.1"},
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+	})
+
+	// 添加新条目，应淘汰 b.example.com（最久未使用）
+	r.storeCache("d.example.com", &DNSCacheEntry{
+		IPs:       []string{"192.168.1.4"},
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+	})
+
+	// 验证淘汰顺序
+	if r.IsCached("b.example.com") {
+		t.Error("b.example.com should be evicted (least recently used)")
+	}
+	if !r.IsCached("a.example.com") {
+		t.Error("a.example.com should be cached (recently accessed)")
+	}
+	if !r.IsCached("c.example.com") {
+		t.Error("c.example.com should be cached")
+	}
+	if !r.IsCached("d.example.com") {
+		t.Error("d.example.com should be cached (newly added)")
+	}
+}
+
+// TestCacheUpdatePreservesOrder 测试更新已存在条目不触发淘汰。
+func TestCacheUpdatePreservesOrder(t *testing.T) {
+	cfg := &config.ResolverConfig{
+		Enabled:   true,
+		Valid:     30 * time.Second,
+		CacheSize: 3,
+	}
+
+	r := New(cfg).(*DNSResolver)
+
+	// 添加 3 个条目填满缓存
+	r.storeCache("a.example.com", &DNSCacheEntry{
+		IPs:       []string{"192.168.1.1"},
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+	})
+	r.storeCache("b.example.com", &DNSCacheEntry{
+		IPs:       []string{"192.168.1.2"},
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+	})
+	r.storeCache("c.example.com", &DNSCacheEntry{
+		IPs:       []string{"192.168.1.3"},
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+	})
+
+	// 更新已存在的条目（不应触发淘汰）
+	r.storeCache("b.example.com", &DNSCacheEntry{
+		IPs:       []string{"192.168.1.20"}, // 新 IP
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+	})
+
+	// 验证所有条目仍然存在
+	stats := r.GetCacheStats()
+	if stats.Entries != 3 {
+		t.Errorf("expected 3 entries after update, got %d", stats.Entries)
+	}
+
+	// 验证更新生效
+	entry, ok := r.GetCacheEntry("b.example.com")
+	if !ok {
+		t.Fatal("b.example.com should exist")
+	}
+	if len(entry.IPs) != 1 || entry.IPs[0] != "192.168.1.20" {
+		t.Errorf("expected IP 192.168.1.20, got %v", entry.IPs)
 	}
 }
