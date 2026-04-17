@@ -157,6 +157,8 @@ linters-settings:
 
   govet:
     enable-all: true
+    disable:
+      - fieldalignment
 
   staticcheck:
     checks: ["all", "-ST1000", "-ST1003"]

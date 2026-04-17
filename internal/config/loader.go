@@ -12,9 +12,9 @@ const maxIncludeDepth = 10
 
 // ConfigLoader 配置加载器
 type ConfigLoader struct {
-	baseDir     string
 	loadedFiles map[string]bool // 所有已加载文件（用于跳过重复处理）
 	stack       map[string]bool // 当前调用栈（用于 DAG 循环检测）
+	baseDir     string
 	depth       int
 }
 
@@ -98,7 +98,7 @@ func (l *ConfigLoader) Load(path string) (*Config, error) {
 }
 
 // merge 合并配置
-func (l *ConfigLoader) merge(dst, src *Config, srcPath string) error {
+func (l *ConfigLoader) merge(dst, src *Config, _ string) error {
 	// Server name collision（listen collision 由 validate.go 处理）
 	for _, newServer := range src.Servers {
 		for _, existing := range dst.Servers {
