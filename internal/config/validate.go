@@ -1043,9 +1043,6 @@ func validateStream(s *StreamConfig) error {
 //   - error: 验证失败时返回错误信息，成功返回 nil
 func validatePerformance(p *PerformanceConfig) error {
 	// 检查 Transport 配置（可能导致性能问题）
-	if p.Transport.MaxIdleConnsPerHost < 0 {
-		return errors.New("transport.max_idle_conns_per_host 不能为负数")
-	}
 	if p.Transport.MaxConnsPerHost < 0 {
 		return errors.New("transport.max_conns_per_host 不能为负数")
 	}

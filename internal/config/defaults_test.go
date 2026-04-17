@@ -121,9 +121,6 @@ func TestDefaultConfigPerformance(t *testing.T) {
 	}
 
 	// 验证 Transport 默认值
-	if cfg.Performance.Transport.MaxIdleConnsPerHost != 32 {
-		t.Errorf("Transport.MaxIdleConnsPerHost 期望 32, 实际 %d", cfg.Performance.Transport.MaxIdleConnsPerHost)
-	}
 	if cfg.Performance.Transport.IdleConnTimeout != 90*time.Second {
 		t.Errorf("Transport.IdleConnTimeout 期望 90s, 实际 %v", cfg.Performance.Transport.IdleConnTimeout)
 	}

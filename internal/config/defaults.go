@@ -173,9 +173,8 @@ func DefaultConfig() *Config {
 				Inactive:   20 * time.Second,
 			},
 			Transport: TransportConfig{
-				MaxIdleConnsPerHost: 32,
-				IdleConnTimeout:     90 * time.Second,
-				MaxConnsPerHost:     0, // 0 表示不限制
+				IdleConnTimeout: 90 * time.Second,
+				MaxConnsPerHost: 0, // 0 表示不限制
 			},
 		},
 		Monitoring: MonitoringConfig{
@@ -600,7 +599,6 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "    max_size: %d              # 内存上限（字节，%dMB）\n", cfg.Performance.FileCache.MaxSize, cfg.Performance.FileCache.MaxSize/1024/1024)
 	fmt.Fprintf(&buf, "    inactive: %ds             # 未访问淘汰时间\n", int(cfg.Performance.FileCache.Inactive.Seconds()))
 	buf.WriteString("  transport:                   # HTTP Transport 连接池\n")
-	fmt.Fprintf(&buf, "    max_idle_conns_per_host: %d   # 每主机空闲连接\n", cfg.Performance.Transport.MaxIdleConnsPerHost)
 	fmt.Fprintf(&buf, "    idle_conn_timeout: %ds        # 空闲超时\n", int(cfg.Performance.Transport.IdleConnTimeout.Seconds()))
 	fmt.Fprintf(&buf, "    max_conns_per_host: %d        # 每主机最大连接（0 表示不限制）\n", cfg.Performance.Transport.MaxConnsPerHost)
 	buf.WriteString("\n")

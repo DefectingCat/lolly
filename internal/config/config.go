@@ -1377,27 +1377,21 @@ type FileCacheConfig struct {
 // 配置代理后端连接的连接池参数。
 //
 // 注意事项：
-//   - MaxIdleConnsPerHost 控制每个后端主机的空闲连接
 //   - IdleConnTimeout 控制空闲连接的保持时间
-//   - MaxConnsPerHost 限制每个后端主机的总连接数
+//   - MaxConnsPerHost 限制每个后端主机的总连接数（含活跃和空闲）
 //
 // 使用示例：
 //
 //	transport:
-//	  max_idle_conns_per_host: 10
 //	  idle_conn_timeout: 90s
 //	  max_conns_per_host: 100
 type TransportConfig struct {
-	// MaxIdleConnsPerHost 每主机最大空闲连接
-	// 单个后端主机的最大空闲连接数
-	MaxIdleConnsPerHost int `yaml:"max_idle_conns_per_host"`
-
 	// IdleConnTimeout 空闲连接超时
 	// 空闲连接的最大存活时间
 	IdleConnTimeout time.Duration `yaml:"idle_conn_timeout"`
 
 	// MaxConnsPerHost 每主机最大连接数
-	// 单个后端主机的总连接数上限
+	// 单个后端主机的总连接数上限（包括活跃连接和空闲连接）
 	MaxConnsPerHost int `yaml:"max_conns_per_host"`
 }
 

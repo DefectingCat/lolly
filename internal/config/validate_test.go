@@ -1048,8 +1048,7 @@ func TestValidatePerformance(t *testing.T) {
 			name: "有效的 transport 配置（零值）",
 			config: PerformanceConfig{
 				Transport: TransportConfig{
-					MaxIdleConnsPerHost: 0,
-					MaxConnsPerHost:     0,
+					MaxConnsPerHost: 0,
 				},
 			},
 			wantErr: false,
@@ -1058,21 +1057,10 @@ func TestValidatePerformance(t *testing.T) {
 			name: "有效的 transport 配置（正值）",
 			config: PerformanceConfig{
 				Transport: TransportConfig{
-					MaxIdleConnsPerHost: 10,
-					MaxConnsPerHost:     50,
+					MaxConnsPerHost: 50,
 				},
 			},
 			wantErr: false,
-		},
-		{
-			name: "MaxIdleConnsPerHost 负数",
-			config: PerformanceConfig{
-				Transport: TransportConfig{
-					MaxIdleConnsPerHost: -1,
-				},
-			},
-			wantErr: true,
-			errMsg:  "transport.max_idle_conns_per_host 不能为负数",
 		},
 		{
 			name: "MaxConnsPerHost 负数",
@@ -1083,17 +1071,6 @@ func TestValidatePerformance(t *testing.T) {
 			},
 			wantErr: true,
 			errMsg:  "transport.max_conns_per_host 不能为负数",
-		},
-		{
-			name: "多个 transport 字段为负",
-			config: PerformanceConfig{
-				Transport: TransportConfig{
-					MaxIdleConnsPerHost: -2,
-					MaxConnsPerHost:     -3,
-				},
-			},
-			wantErr: true,
-			errMsg:  "transport.max_idle_conns_per_host 不能为负数",
 		},
 	}
 

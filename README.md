@@ -283,7 +283,6 @@ performance:
     max_size: 268435456  # 256MB
     inactive: 60s
   transport:
-    max_idle_conns_per_host: 100
     idle_conn_timeout: 90s
     max_conns_per_host: 500
 
@@ -751,7 +750,6 @@ performance:
     max_entries: 50000   # 根据内存调整
     max_size: 268435456  # 256MB
   transport:
-    max_idle_conns_per_host: 100
     idle_conn_timeout: 90s
     max_conns_per_host: 500  # 根据后端容量调整
 ```
