@@ -21,7 +21,7 @@ func TestVHostManager_Handler(t *testing.T) {
 	t.Run("匹配已知主机", func(t *testing.T) {
 		manager := NewVHostManager()
 		hostCalled := false
-		manager.AddHost("example.com", mockHandler("example", &hostCalled))
+		_ = manager.AddHost("example.com", mockHandler("example", &hostCalled))
 
 		handler := manager.Handler()
 		ctx := &fasthttp.RequestCtx{}
@@ -40,7 +40,7 @@ func TestVHostManager_Handler(t *testing.T) {
 	t.Run("匹配带端口的主机", func(t *testing.T) {
 		manager := NewVHostManager()
 		hostCalled := false
-		manager.AddHost("example.com", mockHandler("example", &hostCalled))
+		_ = manager.AddHost("example.com", mockHandler("example", &hostCalled))
 
 		handler := manager.Handler()
 		ctx := &fasthttp.RequestCtx{}
@@ -60,7 +60,7 @@ func TestVHostManager_Handler(t *testing.T) {
 		manager := NewVHostManager()
 		exampleCalled := false
 		defaultCalled := false
-		manager.AddHost("example.com", mockHandler("example", &exampleCalled))
+		_ = manager.AddHost("example.com", mockHandler("example", &exampleCalled))
 		manager.SetDefault(mockHandler("default", &defaultCalled))
 
 		handler := manager.Handler()
@@ -83,7 +83,7 @@ func TestVHostManager_Handler(t *testing.T) {
 	t.Run("无匹配无默认返回404", func(t *testing.T) {
 		manager := NewVHostManager()
 		exampleCalled := false
-		manager.AddHost("example.com", mockHandler("example", &exampleCalled))
+		_ = manager.AddHost("example.com", mockHandler("example", &exampleCalled))
 
 		handler := manager.Handler()
 		ctx := &fasthttp.RequestCtx{}
@@ -102,7 +102,7 @@ func TestVHostManager_Handler(t *testing.T) {
 	t.Run("IPv6地址Host", func(t *testing.T) {
 		manager := NewVHostManager()
 		ipv6Called := false
-		manager.AddHost("[::1]", mockHandler("ipv6", &ipv6Called))
+		_ = manager.AddHost("[::1]", mockHandler("ipv6", &ipv6Called))
 
 		handler := manager.Handler()
 		ctx := &fasthttp.RequestCtx{}
@@ -157,7 +157,7 @@ func TestVHostManager_AddHost(t *testing.T) {
 	t.Run("添加单个主机", func(t *testing.T) {
 		manager := NewVHostManager()
 		called := false
-		manager.AddHost("test.com", mockHandler("test", &called))
+		_ = manager.AddHost("test.com", mockHandler("test", &called))
 
 		handler := manager.Handler()
 		ctx := &fasthttp.RequestCtx{}
@@ -174,8 +174,8 @@ func TestVHostManager_AddHost(t *testing.T) {
 		manager := NewVHostManager()
 		host1Called := false
 		host2Called := false
-		manager.AddHost("host1.com", mockHandler("host1", &host1Called))
-		manager.AddHost("host2.com", mockHandler("host2", &host2Called))
+		_ = manager.AddHost("host1.com", mockHandler("host1", &host1Called))
+		_ = manager.AddHost("host2.com", mockHandler("host2", &host2Called))
 
 		handler := manager.Handler()
 
@@ -200,8 +200,8 @@ func TestVHostManager_AddHost(t *testing.T) {
 		manager := NewVHostManager()
 		firstCalled := false
 		secondCalled := false
-		manager.AddHost("test.com", mockHandler("first", &firstCalled))
-		manager.AddHost("test.com", mockHandler("second", &secondCalled))
+		_ = manager.AddHost("test.com", mockHandler("first", &firstCalled))
+		_ = manager.AddHost("test.com", mockHandler("second", &secondCalled))
 
 		handler := manager.Handler()
 		ctx := &fasthttp.RequestCtx{}
@@ -281,7 +281,7 @@ func TestVHostManager_PortStripping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			manager := NewVHostManager()
 			called := false
-			manager.AddHost(tt.expected, mockHandler("matched", &called))
+			_ = manager.AddHost(tt.expected, mockHandler("matched", &called))
 
 			handler := manager.Handler()
 			ctx := &fasthttp.RequestCtx{}
