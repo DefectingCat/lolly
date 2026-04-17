@@ -296,6 +296,7 @@ func (a *App) Run() int {
 
 	// 创建升级管理器
 	a.upgradeMgr = server.NewUpgradeManager(a.srv)
+	a.srv.SetUpgradeManager(a.upgradeMgr)
 	if a.pidFile != "" {
 		a.upgradeMgr.SetPidFile(a.pidFile)
 		_ = a.upgradeMgr.WritePid()
