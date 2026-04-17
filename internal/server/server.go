@@ -62,10 +62,9 @@ import (
 //   - 创建后需调用 Start 方法启动服务器
 //   - 关闭时建议使用 GracefulStop 实现优雅关闭
 type Server struct {
-	startTime           time.Time
+	handler             fasthttp.RequestHandler
 	resolver            resolver.Resolver
 	tlsManager          *ssl.TLSManager
-	handler             fasthttp.RequestHandler
 	accessLogMiddleware *accesslog.AccessLog
 	luaEngine           *lua.LuaEngine
 	accessControl       *security.AccessControl
@@ -79,11 +78,12 @@ type Server struct {
 	proxies             []*proxy.Proxy
 	listeners           []net.Listener
 	healthCheckers      []*proxy.HealthChecker
+	locationEngine      *matcher.LocationEngine
+	startTime           time.Time
 	connections         atomic.Int64
 	requests            atomic.Int64
 	bytesSent           atomic.Int64
 	bytesReceived       atomic.Int64
-	locationEngine      *matcher.LocationEngine
 	running             bool
 }
 
@@ -686,8 +686,16 @@ func (s *Server) startVHostMode() error {
 			handler = s.pool.WrapHandler(handler)
 		}
 
-		if err := vhostMgr.AddHost(s.config.Servers[i].Name, handler); err != nil {
-			return err
+		// 注册 server_names 数组中的所有主机名
+		names := s.config.Servers[i].ServerNames
+		if len(names) == 0 {
+			// 如果未配置 server_names，使用 Name 字段
+			names = []string{s.config.Servers[i].Name}
+		}
+		for _, name := range names {
+			if err := vhostMgr.AddHost(name, handler); err != nil {
+				return fmt.Errorf("add host %s: %w", name, err)
+			}
 		}
 	}
 
@@ -770,7 +778,7 @@ func (s *Server) startVHostMode() error {
 	s.running = true
 
 	// 创建监听器并保存，用于热升级
-	ln, err := net.Listen("tcp", serverCfg.Listen)
+	ln, err := s.createListener(serverCfg)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
 	}
@@ -824,7 +832,7 @@ func (s *Server) startMultiServerMode() error {
 			serverCfg := &s.config.Servers[idx]
 
 			// 创建监听器
-			ln, err := net.Listen("tcp", serverCfg.Listen)
+			ln, err := s.createListener(serverCfg)
 			if err != nil {
 				errCh <- fmt.Errorf("监听地址 %s 失败: %w", serverCfg.Listen, err)
 				return
@@ -984,22 +992,22 @@ func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerC
 		// 根据 LocationType 注册路由
 		locType := proxyCfg.LocationType
 		if locType == "" {
-			locType = "prefix"
+			locType = matcher.LocationTypePrefix
 		}
 
 		switch locType {
-		case "exact":
+		case matcher.LocationTypeExact:
 			_ = s.locationEngine.AddExact(proxyCfg.Path, p.ServeHTTP)
-		case "prefix_priority":
+		case matcher.LocationTypePrefixPriority:
 			_ = s.locationEngine.AddPrefixPriority(proxyCfg.Path, p.ServeHTTP)
-		case "regex", "regex_caseless":
-			caseInsensitive := locType == "regex_caseless"
+		case matcher.LocationTypeRegex, matcher.LocationTypeRegexCaseless:
+			caseInsensitive := locType == matcher.LocationTypeRegexCaseless
 			_ = s.locationEngine.AddRegex(proxyCfg.Path, p.ServeHTTP, caseInsensitive)
-		case "named":
+		case matcher.LocationTypeNamed:
 			if proxyCfg.LocationName != "" {
 				_ = s.locationEngine.AddNamed(proxyCfg.LocationName, p.ServeHTTP)
 			}
-		case "prefix":
+		case matcher.LocationTypePrefix:
 			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP)
 		default:
 			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP)
@@ -1033,15 +1041,15 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 		// 根据 LocationType 注册路由
 		locType := static.LocationType
 		if locType == "" {
-			locType = "prefix"
+			locType = matcher.LocationTypePrefix
 		}
 
 		switch locType {
-		case "exact":
+		case matcher.LocationTypeExact:
 			_ = s.locationEngine.AddExact(path, staticHandler.Handle)
-		case "prefix_priority":
+		case matcher.LocationTypePrefixPriority:
 			_ = s.locationEngine.AddPrefixPriority(path, staticHandler.Handle)
-		case "prefix":
+		case matcher.LocationTypePrefix:
 			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle)
 		default:
 			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle)

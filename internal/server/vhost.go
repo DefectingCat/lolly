@@ -31,26 +31,17 @@ import (
 // 支持默认主机作为未匹配请求的 fallback。
 // 支持精确匹配、前缀通配（*.example.com）、后缀通配（example.*）和正则匹配。
 type VHostManager struct {
-	// 精确匹配
-	hosts map[string]*VirtualHost
-
-	// 前缀通配 - suffix map（O(1) 查找）
+	hosts             map[string]*VirtualHost
 	wildcardSuffixMap map[string]*VirtualHost // suffix -> vhost
-
-	// 后缀通配 - TLD map
-	wildcardTLDMap map[string]*VirtualHost // TLD -> vhost
-
-	// 正则匹配
-	regexHosts []*RegexHostMatcher
-
-	// defaultHost 默认主机，处理未匹配的 Host 头请求
-	defaultHost *VirtualHost
+	wildcardTLDMap    map[string]*VirtualHost // TLD -> vhost
+	regexHosts        []*RegexHostMatcher
+	defaultHost       *VirtualHost
 }
 
 // RegexHostMatcher 正则主机匹配器。
 type RegexHostMatcher struct {
-	pattern *regexp.Regexp
 	vhost   *VirtualHost
+	pattern *regexp.Regexp
 }
 
 // VirtualHost 虚拟主机。
