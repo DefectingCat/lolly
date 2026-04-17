@@ -398,14 +398,6 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #       #   replacement: \"$scheme://$host/$1\"  # 使用捕获组 $1\n")
 	buf.WriteString("\n")
 
-	// include 配置
-	buf.WriteString("# 配置文件拆分（include 机制）\n")
-	buf.WriteString("# include:\n")
-	buf.WriteString("#   - path: \"conf.d/*.yaml\"       # 相对路径 + glob 模式\n")
-	buf.WriteString("#   - path: \"sites/example.yaml\"  # 单个文件引入\n")
-	buf.WriteString("# 支持循环检测和深度限制（最大 10 层）\n")
-	buf.WriteString("\n")
-
 	// SSL 配置
 	buf.WriteString("    # SSL/TLS 配置\n")
 	buf.WriteString("    # ssl:\n")
@@ -663,6 +655,14 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("  set: {}                  # 自定义变量集合，如 {app_name: \"lolly\"}\n")
 	buf.WriteString("  # 注意：变量名只允许字母、数字、下划线，不能与内置变量冲突\n")
 	buf.WriteString("  # 不能以 arg_、http_、cookie_ 开头（这些是动态变量前缀）\n")
+	buf.WriteString("\n")
+
+	// include 配置
+	buf.WriteString("# 配置文件拆分（include 机制）\n")
+	buf.WriteString("# include:\n")
+	buf.WriteString("#   - path: \"conf.d/*.yaml\"       # 相对路径 + glob 模式\n")
+	buf.WriteString("#   - path: \"sites/example.yaml\"  # 单个文件引入\n")
+	buf.WriteString("# 支持循环检测和深度限制（最大 10 层）\n")
 
 	return buf.Bytes(), nil
 }
