@@ -237,7 +237,6 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	var buf bytes.Buffer
 
 	buf.WriteString("# Lolly 配置文件\n")
-	// buf.WriteString("# 文档: https://github.com/xfy/lolly\n")
 	buf.WriteString("\n")
 
 	// mode 配置
@@ -255,6 +254,14 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("  - # 服务器配置\n")
 	fmt.Fprintf(&buf, "    listen: \"%s\"           # 监听地址\n", cfg.Servers[0].Listen)
 	fmt.Fprintf(&buf, "    name: \"%s\"             # 服务器名称（虚拟主机匹配）\n", cfg.Servers[0].Name)
+	buf.WriteString("    # server_names:                 # 多个 server_name（支持通配符和正则）\n")
+	buf.WriteString("    #   - \"example.com\"             # 精确匹配\n")
+	buf.WriteString("    #   - \"*.example.com\"           # 前缀通配（匹配 xxx.example.com）\n")
+	buf.WriteString("    #   - \"~^www\\.\"                 # 正则匹配（以 www. 开头）\n")
+	buf.WriteString("    # unix_socket:                  # Unix socket 配置（监听 Unix 域套接字）\n")
+	buf.WriteString("    #   mode: 0666                  # 文件权限\n")
+	buf.WriteString("    #   user: \"\"                    # 文件所有者（空表示当前用户）\n")
+	buf.WriteString("    #   group: \"\"                   # 文件组（空表示当前组）\n")
 	buf.WriteString("    # default: false           # 虚拟主机模式下标记为默认服务器（接收未匹配的请求）\n")
 	fmt.Fprintf(&buf, "    read_timeout: %ds            # 读取超时（0 表示不限制）\n", int(cfg.Servers[0].ReadTimeout.Seconds()))
 	fmt.Fprintf(&buf, "    write_timeout: %ds           # 写入超时（0 表示不限制）\n", int(cfg.Servers[0].WriteTimeout.Seconds()))
@@ -327,6 +334,8 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    # 反向代理配置\n")
 	buf.WriteString("    # proxy:\n")
 	buf.WriteString("    #   - path: /api                  # 匹配路径前缀\n")
+	buf.WriteString("    #     location_type: \"prefix\"     # 匹配类型（有效值: exact, prefix_priority, regex, regex_caseless, prefix, named）\n")
+	buf.WriteString("    #     location_name: \"\"           # 命名 location 名称（仅 location_type=named 时使用，如 @fallback）\n")
 	buf.WriteString("    #     targets:                    # 后端目标列表\n")
 	buf.WriteString("    #       - url: http://backend1:8080\n")
 	buf.WriteString("    #         weight: 3               # 权重（加权轮询时有效）\n")
@@ -387,6 +396,14 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #       #   replacement: \"$scheme://$host:$server_port/\"  # 替换目标（支持 $host, $scheme, $server_port 等变量）\n")
 	buf.WriteString("    #       # - pattern: \"~^http://[^/]+:8000/(.*)$\"  # 正则匹配示例\n")
 	buf.WriteString("    #       #   replacement: \"$scheme://$host/$1\"  # 使用捕获组 $1\n")
+	buf.WriteString("\n")
+
+	// include 配置
+	buf.WriteString("# 配置文件拆分（include 机制）\n")
+	buf.WriteString("# include:\n")
+	buf.WriteString("#   - path: \"conf.d/*.yaml\"       # 相对路径 + glob 模式\n")
+	buf.WriteString("#   - path: \"sites/example.yaml\"  # 单个文件引入\n")
+	buf.WriteString("# 支持循环检测和深度限制（最大 10 层）\n")
 	buf.WriteString("\n")
 
 	// SSL 配置

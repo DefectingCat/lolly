@@ -82,6 +82,20 @@ type Config struct {
 	Resolver    ResolverConfig    `yaml:"resolver"`
 	Performance PerformanceConfig `yaml:"performance"`
 	Shutdown    ShutdownConfig    `yaml:"shutdown"`
+	Include     []IncludeConfig   `yaml:"include"` // 配置引入，支持从其他文件引入配置片段
+}
+
+// IncludeConfig 配置引入配置。
+//
+// 用于从其他文件加载配置片段并合并到当前配置。
+// 支持 glob 模式展开多个文件。
+//
+// 使用示例：
+//
+//	include:
+//	  - path: "conf.d/*.yaml"
+type IncludeConfig struct {
+	Path string `yaml:"path"`
 }
 
 // VariablesConfig 自定义变量配置。
@@ -197,6 +211,9 @@ type ServerConfig struct {
 	Security    SecurityConfig    `yaml:"security"`
 	Compression CompressionConfig `yaml:"compression"`
 	SSL         SSLConfig         `yaml:"ssl"`
+	UnixSocket  UnixSocketConfig  `yaml:"unix_socket"` // Unix socket 配置
+	// 切片字段
+	ServerNames []string `yaml:"server_names"` // 支持多个 server_name
 	// time.Duration 字段（int64）
 	ReadTimeout  time.Duration `yaml:"read_timeout"`
 	IdleTimeout  time.Duration `yaml:"idle_timeout"`
@@ -281,6 +298,10 @@ type StaticConfig struct {
 	// 默认为 false，启用后会验证符号链接指向的文件是否在允许的路径范围内
 	// 防止通过符号链接访问敏感文件（如 /etc/passwd）
 	SymlinkCheck bool `yaml:"symlink_check"`
+
+	// LocationType 位置匹配类型
+	// 可选值：exact、prefix、regex、regex_caseless、prefix_priority、named
+	LocationType string `yaml:"location_type"`
 }
 
 // ProxyConfig 反向代理配置，支持负载均衡和健康检查。
@@ -328,6 +349,14 @@ type ProxyConfig struct {
 	Timeout       ProxyTimeout        `yaml:"timeout"`
 	// 基本类型字段
 	VirtualNodes int `yaml:"virtual_nodes"`
+
+	// LocationType 位置匹配类型
+	// 可选值：exact、prefix_priority、regex、regex_caseless、prefix、named
+	LocationType string `yaml:"location_type"`
+
+	// LocationName 位置名称
+	// 仅当 LocationType 为 named 时使用，用于命名位置块
+	LocationName string `yaml:"location_name"`
 }
 
 // BalancerByLuaConfig Lua 负载均衡配置
@@ -1725,6 +1754,35 @@ type StreamProxySSLConfig struct {
 	Enabled      bool     `yaml:"enabled"`
 	Verify       bool     `yaml:"verify"`
 	SessionReuse bool     `yaml:"session_reuse"`
+}
+
+// UnixSocketConfig Unix socket 特定配置。
+//
+// 用于配置服务器监听 Unix domain socket 时的文件权限和所有权。
+//
+// 注意事项：
+//   - Mode 为 socket 文件权限，默认 0666
+//   - User 为 socket 文件所有者用户名
+//   - Group 为 socket 文件所属用户组
+//
+// 使用示例：
+//
+//	unix_socket:
+//	  mode: 0660
+//	  user: "www-data"
+//	  group: "www-data"
+type UnixSocketConfig struct {
+	// Mode 文件权限
+	// Unix socket 文件的访问权限，默认 0666
+	Mode int `yaml:"mode"`
+
+	// User 文件所有者
+	// Unix socket 文件的所有者用户名
+	User string `yaml:"user"`
+
+	// Group 文件组
+	// Unix socket 文件的所属用户组
+	Group string `yaml:"group"`
 }
 
 // Load 从文件加载配置。
