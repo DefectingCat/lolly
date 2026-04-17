@@ -45,6 +45,7 @@ func DefaultConfig() *Config {
 			IdleTimeout:        120 * time.Second,
 			MaxConnsPerIP:      1000,
 			MaxRequestsPerConn: 10000,
+			ClientMaxBodySize:  "10MB",
 			// 高并发优化配置默认值
 			Concurrency:       256 * 1024, // 256K 最大并发连接
 			ReadBufferSize:    16 * 1024,  // 16KB 读缓冲
@@ -267,7 +268,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "    idle_timeout: %ds            # 空闲超时（0 表示不限制）\n", int(cfg.Servers[0].IdleTimeout.Seconds()))
 	fmt.Fprintf(&buf, "    max_conns_per_ip: %d         # 每 IP 最大连接数（0 表示不限制）\n", cfg.Servers[0].MaxConnsPerIP)
 	fmt.Fprintf(&buf, "    max_requests_per_conn: %d    # 每连接最大请求数（0 表示不限制）\n", cfg.Servers[0].MaxRequestsPerConn)
-	fmt.Fprintf(&buf, "    client_max_body_size: \"1MB\"  # 请求体大小限制（支持单位: b, kb, mb, gb）\n")
+	fmt.Fprintf(&buf, "    client_max_body_size: \"%s\"  # 请求体大小限制（支持单位: b, kb, mb, gb）\n", cfg.Servers[0].ClientMaxBodySize)
 	buf.WriteString("    # 高并发优化配置（可选，未配置时使用默认值）\n")
 	fmt.Fprintf(&buf, "    # concurrency: %d           # 最大并发连接数（默认 %d）\n", cfg.Servers[0].Concurrency, cfg.Servers[0].Concurrency)
 	fmt.Fprintf(&buf, "    # read_buffer_size: %d       # 读缓冲区大小（字节，默认 %d）\n", cfg.Servers[0].ReadBufferSize, cfg.Servers[0].ReadBufferSize)
