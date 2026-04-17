@@ -51,13 +51,22 @@ var log zerolog.Logger
 
 const formatJSON = "json"
 
+const formatText = "text"
+
 // Init 初始化日志系统（兼容旧接口）。
-func Init(level string, pretty bool) {
+func Init(level string, format string) {
 	l := parseLevel(level)
-	if pretty {
-		log = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}).Level(l).With().Timestamp().Logger()
-	} else {
-		log = zerolog.New(os.Stdout).Level(l).With().Timestamp().Logger()
+	w := getOutput("") // stdout
+
+	switch format {
+	case "console":
+		log = zerolog.New(zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339}).Level(l).With().Timestamp().Logger()
+	case formatText:
+		// text 格式：使用 ConsoleWriter 但不带颜色
+		log = zerolog.New(zerolog.ConsoleWriter{Out: w, TimeFormat: time.RFC3339, NoColor: true}).Level(l).With().Timestamp().Logger()
+	default:
+		// json 或空格式：使用 JSON
+		log = zerolog.New(w).Level(l).With().Timestamp().Logger()
 	}
 }
 
@@ -283,7 +292,15 @@ func NewAppLogger(cfg *config.LoggingConfig) *AppLogger {
 	}
 
 	writer := getOutput(cfg.Error.Path)
-	errorLog := zerolog.New(writer).Level(parseLevel(cfg.Error.Level)).With().Timestamp().Logger()
+
+	var errorLog zerolog.Logger
+	if format == "text" {
+		// text 格式：使用 ConsoleWriter（无颜色）
+		errorLog = zerolog.New(zerolog.ConsoleWriter{Out: writer, TimeFormat: time.RFC3339, NoColor: true}).Level(parseLevel(cfg.Error.Level)).With().Timestamp().Logger()
+	} else {
+		// json 格式
+		errorLog = zerolog.New(writer).Level(parseLevel(cfg.Error.Level)).With().Timestamp().Logger()
+	}
 
 	return &AppLogger{
 		format:   format,
@@ -294,50 +311,21 @@ func NewAppLogger(cfg *config.LoggingConfig) *AppLogger {
 
 // LogStartup 记录启动消息。
 func (l *AppLogger) LogStartup(msg string, fields map[string]string) {
-	if l.format == formatJSON {
-		event := l.errorLog.Info()
-		for k, v := range fields {
-			event.Str(k, v)
-		}
-		event.Msg(msg)
-		return
-	}
-
-	// 纯文本格式
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	if len(fields) == 0 {
-		fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
-		return
-	}
-
-	// 带字段的文本格式
-	extra := ""
+	event := l.errorLog.Info()
 	for k, v := range fields {
-		extra += fmt.Sprintf(" %s=%s", k, v)
+		event.Str(k, v)
 	}
-	fmt.Fprintf(l.writer, "[%s] INFO %s%s\n", timestamp, msg, extra)
+	event.Msg(msg)
 }
 
 // LogShutdown 记录停止消息。
 func (l *AppLogger) LogShutdown(msg string) {
-	if l.format == formatJSON {
-		l.errorLog.Info().Msg(msg)
-		return
-	}
-
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	fmt.Fprintf(l.writer, "[%s] INFO %s\n", timestamp, msg)
+	l.errorLog.Info().Msg(msg)
 }
 
 // LogSignal 记录信号处理消息。
 func (l *AppLogger) LogSignal(sig string, action string) {
-	if l.format == formatJSON {
-		l.errorLog.Info().Str("signal", sig).Str("action", action).Msg("")
-		return
-	}
-
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	fmt.Fprintf(l.writer, "[%s] INFO 收到 %s，%s\n", timestamp, sig, action)
+	l.errorLog.Info().Str("signal", sig).Str("action", action).Msg("收到信号")
 }
 
 // Info 返回 Info 级别日志记录器。

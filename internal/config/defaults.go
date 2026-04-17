@@ -150,7 +150,7 @@ func DefaultConfig() *Config {
 			},
 		}},
 		Logging: LoggingConfig{
-			Format: "json",
+			Format: "text",
 			Access: AccessLogConfig{
 				// 近似 nginx combined 格式
 				// nginx: $remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"

@@ -226,17 +226,17 @@ func TestInit(t *testing.T) {
 	tests := []struct {
 		name   string
 		level  string
-		pretty bool
+		format string
 	}{
-		{"debug pretty", "debug", true},
-		{"info not pretty", "info", false},
-		{"warn pretty", "warn", true},
-		{"error not pretty", "error", false},
+		{"debug console", "debug", "console"},
+		{"info json", "info", "json"},
+		{"warn text", "warn", "text"},
+		{"error json", "error", "json"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(_ *testing.T) {
-			Init(tt.level, tt.pretty)
+			Init(tt.level, tt.format)
 			// 验证全局 logger 已初始化
 			Debug().Msg("test debug")
 			Info().Msg("test info")
@@ -247,7 +247,7 @@ func TestInit(t *testing.T) {
 }
 
 func TestGlobalLogFunctions(_ *testing.T) {
-	Init("debug", false)
+	Init("debug", "json")
 
 	// 测试全局日志函数
 	Debug().Str("key", "value").Msg("global debug")
@@ -257,7 +257,7 @@ func TestGlobalLogFunctions(_ *testing.T) {
 }
 
 func TestLogAccessGlobal(_ *testing.T) {
-	Init("info", false)
+	Init("info", "json")
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.SetRequestURI("/global-test")

@@ -417,7 +417,7 @@ func (s *Server) buildLuaMiddlewares(luaCfg *config.LuaMiddlewareConfig) ([]midd
 //   - 调用前需确保配置已正确加载
 //   - Goroutine池和文件缓存根据配置自动启用
 func (s *Server) Start() error {
-	logging.Init(s.config.Logging.Error.Level, true)
+	logging.Init(s.config.Logging.Error.Level, s.config.Logging.Format)
 
 	// 记录启动时间
 	s.startTime = time.Now()

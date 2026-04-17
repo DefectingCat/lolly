@@ -459,7 +459,7 @@ func (a *App) reloadConfig() {
 func (a *App) reopenLogs() {
 	// 重新初始化日志系统
 	if a.cfg != nil {
-		logging.Init(a.cfg.Logging.Error.Level, false)
+		logging.Init(a.cfg.Logging.Error.Level, a.cfg.Logging.Format)
 		a.logger = logging.NewAppLogger(&a.cfg.Logging)
 	}
 	a.logger.LogStartup("日志已重新打开", nil)
