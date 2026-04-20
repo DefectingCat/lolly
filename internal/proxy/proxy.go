@@ -17,8 +17,9 @@
 //   - 临时文件：大响应自动写入临时文件，避免内存溢出
 //
 // 主要用途：
-//   用于将客户端 HTTP 请求代理转发到后端服务器集群，实现负载均衡、缓存加速、
-//   协议转换等功能，适用于 API 网关、反向代理服务器等场景。
+//
+//	用于将客户端 HTTP 请求代理转发到后端服务器集群，实现负载均衡、缓存加速、
+//	协议转换等功能，适用于 API 网关、反向代理服务器等场景。
 //
 // 注意事项：
 //   - Proxy 实例的公开方法均为并发安全
@@ -86,19 +87,19 @@ var headersPool = sync.Pool{
 //   - 所有公开方法均为并发安全
 //   - 使用前需确保 targets 中至少有一个健康目标
 type Proxy struct {
-	balancer         loadbalance.Balancer    // 主负载均衡器
-	fallbackBalancer loadbalance.Balancer    // Lua 失败时的备用均衡器
-	resolver         resolver.Resolver       // DNS 解析器
+	balancer         loadbalance.Balancer            // 主负载均衡器
+	fallbackBalancer loadbalance.Balancer            // Lua 失败时的备用均衡器
+	resolver         resolver.Resolver               // DNS 解析器
 	clients          map[string]*fasthttp.HostClient // 后端连接池，key 为 target URL
-	config           *config.ProxyConfig     // 代理配置
-	cache            *cache.ProxyCache       // 代理缓存
-	healthChecker    *HealthChecker          // 健康检查器
-	luaEngine        *lua.LuaEngine          // Lua 引擎，用于 balancer_by_lua 功能
-	redirectRewriter *RedirectRewriter       // 重定向改写器
-	stopCh           chan struct{}           // 停止信号通道
-	targets          []*loadbalance.Target   // 后端目标列表
-	mu               sync.RWMutex            // 保护并发访问的读写锁
-	started          atomic.Bool             // 代理启动标志
+	config           *config.ProxyConfig             // 代理配置
+	cache            *cache.ProxyCache               // 代理缓存
+	healthChecker    *HealthChecker                  // 健康检查器
+	luaEngine        *lua.LuaEngine                  // Lua 引擎，用于 balancer_by_lua 功能
+	redirectRewriter *RedirectRewriter               // 重定向改写器
+	stopCh           chan struct{}                   // 停止信号通道
+	targets          []*loadbalance.Target           // 后端目标列表
+	mu               sync.RWMutex                    // 保护并发访问的读写锁
+	started          atomic.Bool                     // 代理启动标志
 }
 
 // NewProxy 使用给定的配置和后台目标创建一个新的反向代理实例。
@@ -244,7 +245,7 @@ func createBalancer(cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
 // createHostClient 为指定的后端目标 URL 创建 fasthttp.HostClient。
 //
 // 从目标 URL 解析地址和 TLS 标志，应用 Transport 连接池配置
-//（空闲连接超时、最大连接数），以及上游 SSL 配置。
+// （空闲连接超时、最大连接数），以及上游 SSL 配置。
 //
 // 参数：
 //   - targetURL: 后端目标 URL（如 http://backend:8080）
