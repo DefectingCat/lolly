@@ -19,6 +19,7 @@ package lua
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/valyala/fasthttp"
 	glua "github.com/yuin/gopher-lua"
@@ -174,8 +175,12 @@ func (api *ngxVarAPI) getVariableLua(name string) glua.LValue {
 	case "remote_port":
 		addr := api.ctx.RemoteAddr()
 		if addr != nil {
-			// 简化处理，实际可能需要解析端口
-			return glua.LString("")
+			addrStr := addr.String()
+			// IPv6 地址格式: [ip]:port，IPv4 格式: ip:port
+			// 统一使用 LastIndex(":") 可正确处理两种格式
+			if idx := strings.LastIndex(addrStr, ":"); idx >= 0 {
+				return glua.LString(addrStr[idx+1:])
+			}
 		}
 		return glua.LString("")
 	case "binary_remote_addr":
@@ -189,6 +194,13 @@ func (api *ngxVarAPI) getVariableLua(name string) glua.LValue {
 		}
 		return glua.LString("")
 	case "server_port":
+		addr := api.ctx.LocalAddr()
+		if addr != nil {
+			addrStr := addr.String()
+			if idx := strings.LastIndex(addrStr, ":"); idx >= 0 {
+				return glua.LString(addrStr[idx+1:])
+			}
+		}
 		return glua.LString("")
 	case "server_name":
 		return glua.LString(string(api.ctx.Host()))
@@ -259,6 +271,13 @@ func (api *ngxVarAPI) getVariable(name string) string {
 	case "remote_addr":
 		return api.ctx.RemoteAddr().String()
 	case "remote_port":
+		addr := api.ctx.RemoteAddr()
+		if addr != nil {
+			addrStr := addr.String()
+			if idx := strings.LastIndex(addrStr, ":"); idx >= 0 {
+				return addrStr[idx+1:]
+			}
+		}
 		return ""
 	case "binary_remote_addr":
 		return ""
@@ -269,6 +288,13 @@ func (api *ngxVarAPI) getVariable(name string) string {
 		}
 		return ""
 	case "server_port":
+		addr := api.ctx.LocalAddr()
+		if addr != nil {
+			addrStr := addr.String()
+			if idx := strings.LastIndex(addrStr, ":"); idx >= 0 {
+				return addrStr[idx+1:]
+			}
+		}
 		return ""
 	case "server_name":
 		return string(api.ctx.Host())
