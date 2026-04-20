@@ -212,6 +212,8 @@ type ServerConfig struct {
 	Compression CompressionConfig `yaml:"compression"`
 	SSL         SSLConfig         `yaml:"ssl"`
 	UnixSocket  UnixSocketConfig  `yaml:"unix_socket"` // Unix socket 配置
+	LimitRate   LimitRateConfig   `yaml:"limit_rate"`  // 响应速率限制配置
+	Types       TypesConfig       `yaml:"types"`       // MIME 类型配置
 	// 切片字段
 	ServerNames []string `yaml:"server_names"` // 支持多个 server_name
 	// time.Duration 字段（int64）
@@ -227,6 +229,7 @@ type ServerConfig struct {
 	// 布尔字段（放在一起减少 padding）
 	Default           bool `yaml:"default,omitempty"`   // VHost 默认主机标记
 	ReduceMemoryUsage bool `yaml:"reduce_memory_usage"` // 是否优先减少内存使用（默认 false，优先性能）
+	ServerTokens      bool `yaml:"server_tokens"`       // false 隐藏版本号，默认 true（零值表示显示版本）
 }
 
 // StaticConfig 静态文件服务配置。
@@ -302,6 +305,10 @@ type StaticConfig struct {
 	// LocationType 位置匹配类型
 	// 可选值：exact、prefix、regex、regex_caseless、prefix_priority、named
 	LocationType string `yaml:"location_type"`
+
+	// Internal 仅允许内部访问
+	// 设置为 true 时，该位置仅允许内部重定向访问
+	Internal bool `yaml:"internal"`
 }
 
 // ProxyConfig 反向代理配置，支持负载均衡和健康检查。
@@ -357,6 +364,10 @@ type ProxyConfig struct {
 	// LocationName 位置名称
 	// 仅当 LocationType 为 named 时使用，用于命名位置块
 	LocationName string `yaml:"location_name"`
+
+	// Internal 仅允许内部访问
+	// 设置为 true 时，该位置仅允许内部重定向访问
+	Internal bool `yaml:"internal"`
 }
 
 // BalancerByLuaConfig Lua 负载均衡配置
@@ -933,6 +944,37 @@ type RateLimitConfig struct {
 	Burst             int    `yaml:"burst"`
 	ConnLimit         int    `yaml:"conn_limit"`
 	SlidingWindow     int    `yaml:"sliding_window"`
+}
+
+// LimitRateConfig 响应速率限制配置。
+//
+// 控制响应数据的发送速率，防止单个连接占用过多带宽。
+//
+// 注意事项：
+//   - Rate 为每秒发送的字节数，0 表示不限速
+//   - Burst 为突发流量允许的字节数
+//   - LargeFileThreshold 为大文件阈值，超过此大小的文件采用特殊策略
+//   - LargeFileStrategy 为大文件策略：skip（跳过限速）或 coarse（粗粒度限速）
+//
+// 使用示例：
+//
+//	limit_rate:
+//	  rate: 1048576        # 1MB/s
+//	  burst: 524288        # 512KB 突发
+//	  large_file_threshold: 10485760  # 10MB
+//	  large_file_strategy: "skip"
+type LimitRateConfig struct {
+	// Rate 字节/秒，0 表示不限速
+	Rate int64 `yaml:"rate"`
+
+	// Burst 突发流量字节数
+	Burst int64 `yaml:"burst"`
+
+	// LargeFileThreshold 大文件阈值（字节），默认 10MB
+	LargeFileThreshold int64 `yaml:"large_file_threshold"`
+
+	// LargeFileStrategy 大文件策略：skip（跳过限速）或 coarse（粗粒度限速）
+	LargeFileStrategy string `yaml:"large_file_strategy"`
 }
 
 // AuthConfig 认证配置。
@@ -1748,6 +1790,32 @@ type StreamProxySSLConfig struct {
 	Enabled      bool     `yaml:"enabled"`
 	Verify       bool     `yaml:"verify"`
 	SessionReuse bool     `yaml:"session_reuse"`
+}
+
+// TypesConfig MIME 类型配置
+//
+// 用于配置静态文件的 MIME 类型映射。
+//
+// 注意事项：
+//   - DefaultType 为默认 MIME 类型
+//   - Map 为扩展名到 MIME 类型的映射
+//
+// 使用示例：
+//
+//	types:
+//	  default_type: "application/octet-stream"
+//	  map:
+//	    ".html": "text/html"
+//	    ".css": "text/css"
+//	    ".js": "application/javascript"
+type TypesConfig struct {
+	// DefaultType 默认 MIME 类型
+	// 当无法识别文件扩展名时使用
+	DefaultType string `yaml:"default_type"`
+
+	// Map 扩展名到 MIME 类型的映射
+	// 键为文件扩展名（如 ".html"），值为 MIME 类型
+	Map map[string]string `yaml:"map"`
 }
 
 // UnixSocketConfig Unix socket 特定配置。
