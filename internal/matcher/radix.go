@@ -214,8 +214,8 @@ func (t *RadixTree) FindLongestPrefix(path string) *MatchResult {
 // searchLongest 递归搜索最长前缀匹配。
 //
 // 匹配规则：
-//   1. 优先级数值越小越优先
-//   2. 相同优先级时，前缀越长越优先
+//  1. 优先级数值越小越优先
+//  2. 相同优先级时，前缀越长越优先
 //
 // 参数：
 //   - node: 当前搜索节点
