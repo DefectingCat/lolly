@@ -40,3 +40,5 @@ ulw 分析下 lib/fasthttp/ 的源码，然后看下 lolly 的用法合不合理
 ## 兼容性
 
 ulw @docs/config/ 下有些nginx的配置示例,深度分析下当前 lolly 项目,然后看看 lolly 是否支持实现这些 nginx 的效果
+
+ulw 查看 @docs/nginx/03-nginx-http-core.md 分析下 lolly 是否实现了这些功能
