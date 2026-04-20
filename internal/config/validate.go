@@ -494,6 +494,33 @@ func validateProxy(p *ProxyConfig) error {
 		return fmt.Errorf("redirect_rewrite: %w", err)
 	}
 
+	// 验证 location_type 和 path 组合
+	validLocationTypes := []string{"", "exact", "prefix_priority", "regex", "regex_caseless", "prefix", "named"}
+	if p.LocationType != "" {
+		if err := ValidateEnum(p.LocationType, validLocationTypes, "location_type"); err != nil {
+			return fmt.Errorf("无效的 location_type: %s", p.LocationType)
+		}
+	}
+
+	// 当 location_type 为 regex 类型时，验证 path 是否是有效正则
+	if p.LocationType == "regex" || p.LocationType == "regex_caseless" {
+		// Path 必填且必须能编译为有效正则
+		if p.Path == "" {
+			return errors.New("location_type 为 regex/regex_caseless 时，path 必填")
+		}
+		// 使用 regexp.Compile 验证正则语法有效性
+		if _, err := regexp.Compile(p.Path); err != nil {
+			return fmt.Errorf("location_type 为 '%s' 时，path '%s' 不是有效正则: %v", p.LocationType, p.Path, err)
+		}
+	}
+
+	// 当 location_type 为 named 时，验证 location_name 必填
+	if p.LocationType == "named" {
+		if p.LocationName == "" {
+			return errors.New("location_type 为 named 时，location_name 必填")
+		}
+	}
+
 	return nil
 }
 
