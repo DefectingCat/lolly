@@ -24,6 +24,8 @@ import (
 	"rua.plus/lolly/internal/loadbalance"
 )
 
+// healthPath 默认健康检查路径。
+// 当配置中未指定 path 时使用此值。
 const healthPath = "/health"
 
 // HealthChecker 对后端目标执行健康检查。

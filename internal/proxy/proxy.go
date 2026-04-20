@@ -1,33 +1,31 @@
 // Package proxy 反向代理包，为 Lolly HTTP 服务器提供反向代理功能。
 //
 // 该包使用 fasthttp.HostClient 实现高性能反向代理，支持连接池和自动 keep-alive 管理。
-// 支持负载均衡、WebSocket 转发、自定义请求头/响应头和全面的超时配置。
+// 支持负载均衡、WebSocket 转发、自定义请求头/响应头、上游 SSL/TLS、DNS 动态解析、
+// 代理缓存、重定向改写和全面的超时配置。
 //
-// 使用示例：
+// 主要功能：
+//   - 多后端负载均衡：支持 round_robin、weighted_round_robin、least_conn、ip_hash、consistent_hash
+//   - Lua 动态选择：通过 balancer_by_lua 脚本实现自定义负载均衡逻辑
+//   - 故障转移：支持 next_upstream 配置，自动重试失败请求到其他健康目标
+//   - WebSocket 代理：支持 ws:// 和 wss:// 协议的透明双向转发
+//   - 上游 SSL/TLS：支持自定义 CA 证书、客户端证书（mTLS）、SNI 和 TLS 版本控制
+//   - DNS 动态解析：支持后端域名自动解析、IP 缓存和定时刷新
+//   - 代理缓存：支持响应缓存、缓存锁防击穿、后台刷新过期缓存
+//   - 重定向改写：支持 default/custom/off 模式改写 Location 和 Refresh 响应头
+//   - 健康检查：支持主动 HTTP 探测和被动失败标记
+//   - 临时文件：大响应自动写入临时文件，避免内存溢出
 //
-//	targets := []*loadbalance.Target{
-//	    {URL: "http://backend1:8080", Weight: 1},
-//	    {URL: "http://backend2:8080", Weight: 2},
-//	}
-//	targets[0].Healthy.Store(true)
-//	targets[1].Healthy.Store(true)
+// 主要用途：
+//   用于将客户端 HTTP 请求代理转发到后端服务器集群，实现负载均衡、缓存加速、
+//   协议转换等功能，适用于 API 网关、反向代理服务器等场景。
 //
-//	proxyConfig := &config.ProxyConfig{
-//	    Path:        "/api",
-//	    LoadBalance: "weighted_round_robin",
-//	    Timeout: config.ProxyTimeout{
-//	        Connect: 5 * time.Second,
-//	        Read:    30 * time.Second,
-//	        Write:   30 * time.Second,
-//	    },
-//	}
+// 注意事项：
+//   - Proxy 实例的公开方法均为并发安全
+//   - 使用前需确保 targets 中至少有一个健康目标
+//   - Lua 脚本执行有超时保护，默认 100ms
 //
-//	p, err := proxy.NewProxy(proxyConfig, targets)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//
-//	// 使用 p.ServeHTTP 作为 fasthttp 请求处理器
+// 作者：xfy
 //
 //go:generate go test -v ./...
 package proxy
@@ -57,20 +55,22 @@ import (
 )
 
 const (
-	// upstreamCache 上游缓存标识
-	// 用于标记请求可直接使用缓存响应，无需转发到上游
+	// upstreamCache 上游缓存标识。
+	// 用于标记请求可直接使用缓存响应，无需转发到上游。
 	upstreamCache = "CACHE"
 
-	// 负载均衡算法名称
-	lbRoundRobin         = "round_robin"
-	lbWeightedRoundRobin = "weighted_round_robin"
-	lbLeastConn          = "least_conn"
-	lbIPHash             = "ip_hash"
-	lbConsistentHash     = "consistent_hash"
+	// 负载均衡算法名称，与配置中的 LoadBalance 字段对应。
+	lbRoundRobin         = "round_robin"          // 简单轮询
+	lbWeightedRoundRobin = "weighted_round_robin" // 加权轮询
+	lbLeastConn          = "least_conn"           // 最少连接
+	lbIPHash             = "ip_hash"              // IP 哈希
+	lbConsistentHash     = "consistent_hash"      // 一致性哈希
 )
 
 // headersPool 复用缓存 headers map，减少分配。
 // 预容量 20 覆盖大多数 HTTP 响应头数量。
+// 注意：从 pool 获取的 map 使用后不能 Put 回 pool，
+// 因为 cache.Set 存储了 map 引用。
 var headersPool = sync.Pool{
 	New: func() interface{} {
 		return make(map[string]string, 20)
@@ -79,25 +79,26 @@ var headersPool = sync.Pool{
 
 // Proxy 表示反向代理实例，负责将 HTTP 请求转发到后端目标。
 //
-// 它为每个后端目标管理连接池，并提供负载均衡功能。
+// 它为每个后端目标管理连接池（HostClient），并提供负载均衡、
+// 缓存、健康检查、Lua 动态选择等功能。
 //
 // 注意事项：
 //   - 所有公开方法均为并发安全
 //   - 使用前需确保 targets 中至少有一个健康目标
 type Proxy struct {
-	balancer         loadbalance.Balancer
-	fallbackBalancer loadbalance.Balancer // Lua 失败时的备用均衡器
-	resolver         resolver.Resolver
-	clients          map[string]*fasthttp.HostClient
-	config           *config.ProxyConfig
-	cache            *cache.ProxyCache
-	healthChecker    *HealthChecker
-	luaEngine        *lua.LuaEngine    // Lua 引擎引用
-	redirectRewriter *RedirectRewriter // 重定向改写器
-	stopCh           chan struct{}
-	targets          []*loadbalance.Target
-	mu               sync.RWMutex
-	started          atomic.Bool
+	balancer         loadbalance.Balancer    // 主负载均衡器
+	fallbackBalancer loadbalance.Balancer    // Lua 失败时的备用均衡器
+	resolver         resolver.Resolver       // DNS 解析器
+	clients          map[string]*fasthttp.HostClient // 后端连接池，key 为 target URL
+	config           *config.ProxyConfig     // 代理配置
+	cache            *cache.ProxyCache       // 代理缓存
+	healthChecker    *HealthChecker          // 健康检查器
+	luaEngine        *lua.LuaEngine          // Lua 引擎，用于 balancer_by_lua 功能
+	redirectRewriter *RedirectRewriter       // 重定向改写器
+	stopCh           chan struct{}           // 停止信号通道
+	targets          []*loadbalance.Target   // 后端目标列表
+	mu               sync.RWMutex            // 保护并发访问的读写锁
+	started          atomic.Bool             // 代理启动标志
 }
 
 // NewProxy 使用给定的配置和后台目标创建一个新的反向代理实例。
@@ -179,7 +180,22 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 	return p, nil
 }
 
-// createBalancerByName 根据算法名称创建负载均衡器
+// createBalancerByName 根据算法名称创建负载均衡器。
+//
+// 支持的算法：
+//   - round_robin: 简单轮询，按顺序选择目标
+//   - weighted_round_robin: 加权轮询，按权重比例分配
+//   - least_conn: 最少连接，选择当前连接数最少的目标
+//   - ip_hash: IP 哈希，同一客户端 IP 固定选择同一目标
+//   - consistent_hash: 一致性哈希，支持虚拟节点和自定义 hash_key
+//
+// 参数：
+//   - name: 算法名称
+//   - cfg: 代理配置，用于获取虚拟节点数和 hash_key
+//
+// 返回值：
+//   - loadbalance.Balancer: 创建的负载均衡器实例
+//   - error: 不支持的算法时返回错误
 func createBalancerByName(name string, cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
 	switch name {
 	case lbRoundRobin, "":
@@ -202,17 +218,42 @@ func createBalancerByName(name string, cfg *config.ProxyConfig) (loadbalance.Bal
 }
 
 // SetHealthChecker 设置健康检查器用于被动健康检查。
-// 当代理请求失败时，将调用健康检查器的 MarkUnhealthy 方法。
+//
+// 当代理请求失败时，将调用健康检查器的 MarkUnhealthy 方法，
+// 将失败的目标标记为不健康，避免后续请求继续路由到该目标。
+//
+// 参数：
+//   - hc: 健康检查器实例，nil 时禁用被动健康检查
 func (p *Proxy) SetHealthChecker(hc *HealthChecker) {
 	p.healthChecker = hc
 }
 
-// createBalancer 根据配置的算法创建负载均衡器。
+// createBalancer 根据配置中指定的算法名称创建负载均衡器。
+// 是对 createBalancerByName 的便捷封装。
+//
+// 参数：
+//   - cfg: 代理配置，从 cfg.LoadBalance 读取算法名称
+//
+// 返回值：
+//   - loadbalance.Balancer: 创建的负载均衡器实例
+//   - error: 不支持的算法时返回错误
 func createBalancer(cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
 	return createBalancerByName(cfg.LoadBalance, cfg)
 }
 
-// createHostClient 为后台目标 URL 创建 fasthttp.HostClient。
+// createHostClient 为指定的后端目标 URL 创建 fasthttp.HostClient。
+//
+// 从目标 URL 解析地址和 TLS 标志，应用 Transport 连接池配置
+//（空闲连接超时、最大连接数），以及上游 SSL 配置。
+//
+// 参数：
+//   - targetURL: 后端目标 URL（如 http://backend:8080）
+//   - timeout: 代理超时配置（读写超时、连接超时）
+//   - transportCfg: 可选的 Transport 连接池配置，nil 时使用默认值
+//   - sslCfg: 可选的上游 SSL 配置
+//
+// 返回值：
+//   - *fasthttp.HostClient: 配置完成的 HostClient 实例
 func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCfg *config.TransportConfig, sslCfg *config.ProxySSLConfig) *fasthttp.HostClient {
 	// 从目标 URL 解析主机和协议
 	// addDefaultPort=true 确保 HostClient.Addr 包含端口（host:port 格式）
@@ -256,43 +297,54 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 	return client
 }
 
-// UpstreamTiming 上游时间记录，用于捕获各种时间戳
+// UpstreamTiming 记录上游请求的各个时间戳。
+//
+// 用于捕获连接建立、首字节接收、响应完成等关键时间点，
+// 计算连接时间、首字节时间和总响应时间，供日志和监控使用。
 type UpstreamTiming struct {
-	start          time.Time
-	connectStart   time.Time
-	connectEnd     time.Time
-	headerReceived time.Time
-	responseEnd    time.Time
+	start          time.Time // 请求开始时间
+	connectStart   time.Time // 连接开始时间
+	connectEnd     time.Time // 连接完成时间
+	headerReceived time.Time // 接收到响应头的时间
+	responseEnd    time.Time // 响应完成时间
 }
 
-// NewUpstreamTiming 创建新的上游时间记录器
+// NewUpstreamTiming 创建并初始化上游计时器。
+// 自动记录请求开始时间。
+//
+// 返回值：
+//   - *UpstreamTiming: 初始化的计时器实例
 func NewUpstreamTiming() *UpstreamTiming {
 	return &UpstreamTiming{
 		start: time.Now(),
 	}
 }
 
-// MarkConnectStart 标记连接开始
+// MarkConnectStart 标记连接开始时间点。
 func (t *UpstreamTiming) MarkConnectStart() {
 	t.connectStart = time.Now()
 }
 
-// MarkConnectEnd 标记连接完成
+// MarkConnectEnd 标记连接完成时间点。
 func (t *UpstreamTiming) MarkConnectEnd() {
 	t.connectEnd = time.Now()
 }
 
-// MarkHeaderReceived 标记接收到响应头
+// MarkHeaderReceived 标记接收到响应头时间点。
 func (t *UpstreamTiming) MarkHeaderReceived() {
 	t.headerReceived = time.Now()
 }
 
-// MarkResponseEnd 标记响应完成
+// MarkResponseEnd 标记响应完成时间点。
 func (t *UpstreamTiming) MarkResponseEnd() {
 	t.responseEnd = time.Now()
 }
 
-// GetConnectTime 获取连接时间（秒）
+// GetConnectTime 获取连接建立耗时（秒）。
+// 如果连接开始或结束时间未记录，返回 0。
+//
+// 返回值：
+//   - float64: 连接耗时，单位为秒
 func (t *UpstreamTiming) GetConnectTime() float64 {
 	if t.connectStart.IsZero() || t.connectEnd.IsZero() {
 		return 0
@@ -300,7 +352,12 @@ func (t *UpstreamTiming) GetConnectTime() float64 {
 	return t.connectEnd.Sub(t.connectStart).Seconds()
 }
 
-// GetHeaderTime 获取首字节时间（秒）
+// GetHeaderTime 获取首字节响应时间（秒）。
+// 计算从连接完成到接收到响应头的耗时。
+// 如果任一时间点未记录，返回 0。
+//
+// 返回值：
+//   - float64: 首字节耗时，单位为秒
 func (t *UpstreamTiming) GetHeaderTime() float64 {
 	if t.connectEnd.IsZero() || t.headerReceived.IsZero() {
 		return 0
@@ -308,7 +365,12 @@ func (t *UpstreamTiming) GetHeaderTime() float64 {
 	return t.headerReceived.Sub(t.connectEnd).Seconds()
 }
 
-// GetResponseTime 获取响应时间（秒）
+// GetResponseTime 获取总响应时间（秒）。
+// 计算从连接完成到响应完成的耗时。
+// 如果任一时间点未记录，返回 0。
+//
+// 返回值：
+//   - float64: 响应耗时，单位为秒
 func (t *UpstreamTiming) GetResponseTime() float64 {
 	if t.connectEnd.IsZero() || t.responseEnd.IsZero() {
 		return 0
@@ -316,8 +378,20 @@ func (t *UpstreamTiming) GetResponseTime() float64 {
 	return t.responseEnd.Sub(t.connectEnd).Seconds()
 }
 
-// FinalizeUpstreamVars 在请求处理结束时设置上游变量到 Context
-// 这个函数应该在 ServeHTTP 的 defer 中调用
+// FinalizeUpstreamVars 在请求处理结束时设置上游变量到变量上下文。
+//
+// 该函数应在 ServeHTTP 的 defer 中调用，用于计算并设置以下变量：
+//   - upstream_addr: 上游服务器地址
+//   - upstream_status: 上游响应状态码
+//   - upstream_response_time: 响应耗时
+//   - upstream_connect_time: 连接耗时
+//   - upstream_header_time: 首字节耗时
+//
+// 参数：
+//   - vc: 变量上下文，用于存储上游变量
+//   - upstreamAddr: 上游服务器地址
+//   - upstreamStatus: 上游响应状态码
+//   - timing: 时间记录器
 func FinalizeUpstreamVars(vc *variable.Context, upstreamAddr string, upstreamStatus int, timing *UpstreamTiming) {
 	if vc == nil {
 		return
@@ -647,8 +721,18 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	}
 }
 
-// selectTarget 使用配置的负载均衡器选择后端目标
-// 如果启用 Lua balancer，先尝试 Lua 脚本选择
+// selectTarget 使用配置的负载均衡器选择后端目标。
+//
+// 选择优先级：
+//  1. 如果启用了 Lua balancer，先尝试 Lua 脚本选择
+//  2. Lua 选择失败时，使用 fallback 算法
+//  3. 否则使用传统负载均衡算法
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文，用于提取客户端 IP 等信息
+//
+// 返回值：
+//   - *loadbalance.Target: 选中的后端目标，无可用目标时返回 nil
 func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 	p.mu.RLock()
 	targets := p.targets
@@ -678,7 +762,18 @@ func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 	return p.selectByBalancer(ctx, targets)
 }
 
-// selectByLua 使用 Lua 脚本选择目标
+// selectByLua 使用 Lua 脚本选择后端目标。
+//
+// 执行配置的 Lua 脚本，脚本可通过 ngx.balancer.set_current_peer() 选择目标。
+// 如果 Lua 脚本执行失败或未调用 set_current_peer，返回 nil 表示需要使用 fallback 算法。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//   - targets: 候选目标列表
+//
+// 返回值：
+//   - *loadbalance.Target: Lua 脚本选中的目标，nil 表示未选择
+//   - error: Lua 执行失败时返回错误
 func (p *Proxy) selectByLua(ctx *fasthttp.RequestCtx, targets []*loadbalance.Target) (*loadbalance.Target, error) {
 	clientIP := netutil.ExtractClientIP(ctx)
 
@@ -728,7 +823,17 @@ func (p *Proxy) selectByLua(ctx *fasthttp.RequestCtx, targets []*loadbalance.Tar
 	return bctx.Selected, nil
 }
 
-// selectByFallback 使用 fallback 算法选择目标
+// selectByFallback 使用 fallback 负载均衡算法选择目标。
+//
+// 当 Lua balancer 执行失败或未选择目标时使用。
+// 对于 IPHash 算法，会自动提取客户端 IP 进行哈希选择。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//   - targets: 候选目标列表
+//
+// 返回值：
+//   - *loadbalance.Target: fallback 算法选中的目标
 func (p *Proxy) selectByFallback(ctx *fasthttp.RequestCtx, targets []*loadbalance.Target) *loadbalance.Target {
 	p.mu.RLock()
 	balancer := p.fallbackBalancer
@@ -742,7 +847,17 @@ func (p *Proxy) selectByFallback(ctx *fasthttp.RequestCtx, targets []*loadbalanc
 	return balancer.Select(targets)
 }
 
-// selectByBalancer 使用主负载均衡器选择目标
+// selectByBalancer 使用主负载均衡器选择目标。
+//
+// 对于特殊算法（IPHash、ConsistentHash），会从请求上下文中提取
+// 相应的哈希键（客户端 IP、URI、自定义 Header 等）。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//   - targets: 候选目标列表
+//
+// 返回值：
+//   - *loadbalance.Target: 主负载均衡器选中的目标
 func (p *Proxy) selectByBalancer(ctx *fasthttp.RequestCtx, targets []*loadbalance.Target) *loadbalance.Target {
 	p.mu.RLock()
 	balancer := p.balancer
@@ -793,7 +908,19 @@ func (p *Proxy) selectTargetExcluding(ctx *fasthttp.RequestCtx, excluded []*load
 	return balancer.SelectExcluding(targets, excluded)
 }
 
-// extractHashKey 根据配置提取哈希键值。
+// extractHashKey 根据一致性哈希配置提取哈希键值。
+//
+// 支持的 hash_key 配置：
+//   - "ip" 或 "": 使用客户端 IP 地址
+//   - "uri": 使用完整请求 URI
+//   - "header:NAME": 使用指定请求头的值，缺失时回退到客户端 IP
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//   - hashKey: 哈希键配置
+//
+// 返回值：
+//   - string: 提取的哈希键值
 func (p *Proxy) extractHashKey(ctx *fasthttp.RequestCtx, hashKey string) string {
 	switch {
 	case hashKey == "ip" || hashKey == "":
@@ -812,7 +939,14 @@ func (p *Proxy) extractHashKey(ctx *fasthttp.RequestCtx, hashKey string) string 
 	}
 }
 
-// getClient 返回给定目标 URL 对应的 HostClient。
+// getClient 返回指定目标 URL 对应的 HostClient 连接池实例。
+// 如果目标 URL 不存在于连接池中，返回 nil。
+//
+// 参数：
+//   - targetURL: 后端目标 URL
+//
+// 返回值：
+//   - *fasthttp.HostClient: 对应的连接池实例
 func (p *Proxy) getClient(targetURL string) *fasthttp.HostClient {
 	p.mu.RLock()
 	client := p.clients[targetURL]
@@ -820,8 +954,17 @@ func (p *Proxy) getClient(targetURL string) *fasthttp.HostClient {
 	return client
 }
 
-// modifyRequestHeaders 在转发到后端之前修改请求头。
-// 添加标准代理请求头并应用自定义请求头配置。
+// modifyRequestHeaders 在转发请求到后端之前修改请求头。
+//
+// 执行以下操作：
+//  1. 设置 Host header 为目标主机地址
+//  2. 提取并设置 X-Forwarded-For、X-Real-IP、X-Forwarded-Host、X-Forwarded-Proto
+//  3. 应用自定义请求头配置（支持变量展开）
+//  4. 移除配置的请求头
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//   - target: 选中的后端目标
 func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalance.Target) {
 	headers := &ctx.Request.Header
 
@@ -855,6 +998,11 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 }
 
 // modifyResponseHeaders 在发送给客户端之前修改响应头。
+//
+// 应用自定义响应头配置，支持变量展开（如 $upstream_addr、$status 等）。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
 func (p *Proxy) modifyResponseHeaders(ctx *fasthttp.RequestCtx) {
 	// 从配置设置自定义响应头（支持变量展开）
 	if p.config.Headers.SetResponse != nil {
@@ -868,6 +1016,16 @@ func (p *Proxy) modifyResponseHeaders(ctx *fasthttp.RequestCtx) {
 }
 
 // isWebSocketRequest 检查请求是否为 WebSocket 升级请求。
+//
+// 通过检查 Connection 和 Upgrade 请求头判断：
+//   - Connection 头需包含 "upgrade"（不区分大小写）
+//   - Upgrade 头需等于 "websocket"（不区分大小写）
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//
+// 返回值：
+//   - bool: true 表示是 WebSocket 升级请求
 func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
 	// 检查 Connection 请求头
 	connection := ctx.Request.Header.Peek("Connection")
@@ -883,8 +1041,16 @@ func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
 	return strings.EqualFold(string(upgrade), "websocket")
 }
 
-// UpdateTargets 更新代理目标并重新初始化客户端。
-// 适用于动态配置更新。
+// UpdateTargets 更新代理的后端目标列表并重新初始化连接池。
+//
+// 清除旧的 HostClient 连接池，为每个新目标创建新的连接。
+// 适用于动态配置更新场景（如热重载配置）。
+//
+// 参数：
+//   - targets: 新的后端目标列表
+//
+// 返回值：
+//   - error: 目标列表为空时返回错误
 func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
 	if len(targets) == 0 {
 		return errors.New("no targets provided")
@@ -910,22 +1076,36 @@ func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
 	return nil
 }
 
-// GetTargets 返回当前的目标列表。
+// GetTargets 返回当前的后端目标列表。
+//
+// 返回值：
+//   - []*loadbalance.Target: 后端目标列表
 func (p *Proxy) GetTargets() []*loadbalance.Target {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.targets
 }
 
-// GetConfig 返回代理配置。
+// GetConfig 返回代理的配置。
+//
+// 返回值：
+//   - *config.ProxyConfig: 代理配置
 func (p *Proxy) GetConfig() *config.ProxyConfig {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.config
 }
 
-// buildCacheKey 构建缓存键。
-// 保留此函数用于日志记录和调试。
+// buildCacheKey 构建缓存键字符串。
+//
+// 使用请求方法和完整请求 URI 作为缓存键。
+// 该函数保留用于日志记录和调试场景。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//
+// 返回值：
+//   - string: 缓存键（格式 "METHOD:URI"）
 func (p *Proxy) buildCacheKey(ctx *fasthttp.RequestCtx) string {
 	// 使用请求方法和路径作为缓存键
 	return string(ctx.Request.Header.Method()) + ":" + string(ctx.Request.URI().RequestURI())
@@ -955,7 +1135,13 @@ func (p *Proxy) buildCacheKeyHashValue(ctx *fasthttp.RequestCtx) uint64 {
 	return h.Sum64()
 }
 
-// writeCachedResponse 写入缓存的响应。
+// writeCachedResponse 将缓存的响应写入 FastHTTP 响应上下文。
+//
+// 设置响应体、状态码、响应头，并添加 X-Cache: HIT 头标记缓存命中。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//   - entry: 缓存条目，包含响应数据和元数据
 func (p *Proxy) writeCachedResponse(ctx *fasthttp.RequestCtx, entry *cache.ProxyCacheEntry) {
 	ctx.Response.SetBody(entry.Data)
 	ctx.Response.SetStatusCode(entry.Status)
@@ -965,7 +1151,16 @@ func (p *Proxy) writeCachedResponse(ctx *fasthttp.RequestCtx, entry *cache.Proxy
 	ctx.Response.Header.Set("X-Cache", "HIT")
 }
 
-// backgroundRefresh 后台刷新缓存。
+// backgroundRefresh 在后台异步刷新缓存条目。
+//
+// 向对应的上游目标发送请求，获取最新响应并更新缓存。
+// 该方法在独立 goroutine 中运行，不阻塞主请求流程。
+//
+// 参数：
+//   - ctx: 原始 FastHTTP 请求上下文（仅用于复制请求信息）
+//   - target: 要刷新的后端目标
+//   - hashKey: 缓存哈希键
+//   - origKey: 缓存原始键
 func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.Target, hashKey uint64, origKey string) {
 	// 创建新的请求上下文副本
 	req := fasthttp.AcquireRequest()
@@ -1021,8 +1216,16 @@ func (p *Proxy) GetCacheStats() *cache.ProxyCacheStats {
 	return &stats
 }
 
-// extractHostFromURL 从 URL 中提取 host:port。
-// 用于设置代理请求的 Host header。
+// extractHostFromURL 从 URL 字符串中提取 host:port 部分。
+//
+// 移除 http:// 或 https:// 协议前缀，以及路径部分，
+// 仅保留主机名和端口（如 "example.com:8080"）。
+//
+// 参数：
+//   - urlStr: 完整 URL 字符串
+//
+// 返回值：
+//   - string: host:port 格式的主机地址
 func extractHostFromURL(urlStr string) string {
 	// 移除协议前缀
 	host := urlStr

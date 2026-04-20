@@ -2,6 +2,23 @@
 //
 // 该文件提供上游 SSL/TLS 配置支持，包括自定义 CA 证书、
 // 客户端证书（mTLS）、SNI 和 TLS 版本控制。
+//
+// 主要功能：
+//   - 自定义 CA 证书验证：支持指定受信任的 CA 证书文件
+//   - 客户端证书认证（mTLS）：支持双向 TLS 认证
+//   - SNI 支持：自动从目标 URL 提取或使用配置的主机名
+//   - TLS 版本控制：支持 TLSv1.0 到 TLSv1.3 的最小/最大版本限制
+//   - 跳过证书验证：仅测试环境使用
+//
+// 主要用途：
+//   用于代理与上游服务器之间的 TLS 连接配置，支持自签名证书、
+//   内部 CA 签发证书以及双向认证场景。
+//
+// 注意事项：
+//   - InsecureSkipVerify 仅建议在测试环境使用
+//   - 证书文件路径为绝对路径或相对于工作目录
+//
+// 作者：xfy
 package proxy
 
 import (
@@ -14,8 +31,10 @@ import (
 	"rua.plus/lolly/internal/config"
 )
 
-// TLS 版本字符串到 tls 常量的映射。
-// 支持 TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3 格式（大小写不敏感）
+// tlsVersionMap TLS 版本字符串到 tls 常量的映射表。
+//
+// 支持 TLSv1.0、TLSv1.1、TLSv1.2、TLSv1.3 格式（大小写不敏感）。
+// 空字符串表示使用 Go 标准库默认值。
 var tlsVersionMap = map[string]uint16{
 	"TLSV1.0": tls.VersionTLS10,
 	"TLSV1.1": tls.VersionTLS11,

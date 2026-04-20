@@ -247,6 +247,13 @@ func StartGlobalTempFileCleaner(tempPath string) {
 }
 
 // StopGlobalTempFileCleaner 停止全局临时文件清理器。
+//
+// 该函数安全地停止并清理全局清理器实例。如果清理器
+// 尚未初始化，则不执行任何操作。
+//
+// 注意事项：
+//   - 该函数是并发安全的
+//   - 停止后如需再次使用，需调用 StartGlobalTempFileCleaner 重新启动
 func StopGlobalTempFileCleaner() {
 	globalCleanerMu.Lock()
 	defer globalCleanerMu.Unlock()

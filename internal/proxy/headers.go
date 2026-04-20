@@ -1,6 +1,20 @@
 // Package proxy 反向代理包，为 Lolly HTTP 服务器提供反向代理功能。
 //
-// 该文件提供统一的 X-Forwarded 头设置逻辑。
+// 该文件提供统一的 X-Forwarded 系列请求头设置逻辑，包括：
+//   - X-Forwarded-For: 客户端 IP 地址链
+//   - X-Real-IP: 客户端真实 IP 地址
+//   - X-Forwarded-Host: 原始请求 Host
+//   - X-Forwarded-Proto: 原始请求协议（http/https）
+//
+// 主要用途：
+//   用于在代理转发时保留客户端原始请求信息，使后端服务能够获取
+//   客户端的真实 IP、Host 和协议。
+//
+// 注意事项：
+//   - 所有函数均为非并发安全（无状态函数）
+//   - X-Forwarded-For 支持追加模式和覆盖模式
+//
+// 作者：xfy
 package proxy
 
 import (
@@ -10,17 +24,19 @@ import (
 	"rua.plus/lolly/internal/netutil"
 )
 
-// 协议常量
+// 协议常量，用于标识请求使用的传输层协议。
 const (
-	protoHTTP  = "http"
-	protoHTTPS = "https"
+	protoHTTP  = "http"  // 明文 HTTP 协议
+	protoHTTPS = "https" // TLS 加密的 HTTPS 协议
 )
 
 // ForwardedHeaders 包含 X-Forwarded 系列头信息。
+//
+// 用于在代理转发时保留客户端原始请求信息。
 type ForwardedHeaders struct {
-	ClientIP string // 客户端 IP
-	Host     string // 原始 Host
-	Proto    string // 协议 (http/https)
+	ClientIP string // 客户端 IP 地址，从连接信息或 X-Real-IP 头提取
+	Host     string // 原始请求 Host 头，表示客户端访问的主机名
+	Proto    string // 原始请求协议，http 或 https
 }
 
 // ExtractForwardedHeaders 从请求上下文中提取 X-Forwarded 头信息。
