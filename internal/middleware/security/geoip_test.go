@@ -250,7 +250,12 @@ func TestGeoIPLookup_Close(t *testing.T) {
 
 // TestGeoIPLookup_TTLExpiration 测试缓存 TTL 过期。
 func TestGeoIPLookup_TTLExpiration(t *testing.T) {
-	geoip, err := NewGeoIPLookup("/tmp/GeoIP2-Country-Test.mmdb", 1000, 1*time.Millisecond, "allow")
+	testDB := "/tmp/GeoIP2-Country-Test.mmdb"
+	if _, err := os.Stat(testDB); os.IsNotExist(err) {
+		t.Skipf("Skipping test: GeoIP test database not available: %v", err)
+	}
+
+	geoip, err := NewGeoIPLookup(testDB, 1000, 1*time.Millisecond, "allow")
 	require.NoError(t, err)
 	defer geoip.Close()
 

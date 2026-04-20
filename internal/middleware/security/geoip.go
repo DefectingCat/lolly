@@ -88,7 +88,7 @@ func NewGeoIPLookup(dbPath string, cacheSize int, ttl time.Duration, privateIPBe
 
 	// 默认私有 IP 行为
 	if privateIPBehavior == "" {
-		privateIPBehavior = "allow"
+		privateIPBehavior = accessAllow
 	}
 
 	return &GeoIPLookup{
@@ -114,7 +114,7 @@ func (g *GeoIPLookup) LookupCountry(ip net.IP) (string, error) {
 	// 检查私有 IP
 	if isPrivateIP(ip) {
 		switch g.privateIPBehavior {
-		case "allow":
+		case accessAllow:
 			return "PRIVATE_ALLOW", nil // 特殊标记，表示允许
 		case accessDeny:
 			return "PRIVATE_DENY", nil // 特殊标记，表示拒绝

@@ -32,7 +32,7 @@ type limiterBucket struct {
 	// counters 限流键到计数器的映射
 	counters map[string]*windowCounter
 	// mu 读写锁，保护 counters 的并发访问
-	mu       sync.RWMutex
+	mu sync.RWMutex
 }
 
 // SlidingWindowLimiter 滑动窗口限流器。
@@ -43,9 +43,9 @@ type SlidingWindowLimiter struct {
 	// buckets 分段锁桶数组，固定 16 个桶
 	buckets [16]*limiterBucket
 	// window 滑动窗口大小
-	window  time.Duration
+	window time.Duration
 	// limit 窗口内最大请求数
-	limit   int
+	limit int
 	// precise 是否使用精确模式
 	precise bool
 }
@@ -71,9 +71,9 @@ type windowCounter struct {
 	// timestamps 请求时间戳列表
 	timestamps []time.Time
 	// count 当前窗口内的请求计数
-	count      int64
+	count int64
 	// mu 互斥锁，保护并发访问
-	mu         sync.Mutex
+	mu sync.Mutex
 }
 
 // NewSlidingWindowLimiter 创建滑动窗口限流器。

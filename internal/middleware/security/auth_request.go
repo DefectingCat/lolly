@@ -56,7 +56,7 @@ type AuthRequest struct {
 	// config 认证子请求配置
 	config config.AuthRequestConfig
 	// mu 读写锁，保护并发访问 client 和 config
-	mu     sync.RWMutex
+	mu sync.RWMutex
 }
 
 // NewAuthRequest 使用给定的配置创建一个新的 AuthRequest 中间件。

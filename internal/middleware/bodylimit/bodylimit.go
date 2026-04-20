@@ -184,13 +184,13 @@ type limitedBodyReader struct {
 		Read(p []byte) (n int, err error)
 	}
 	// ctx 请求上下文，用于设置错误响应
-	ctx   *fasthttp.RequestCtx
+	ctx *fasthttp.RequestCtx
 	// limit 最大允许读取的字节数
 	limit int64
 	// read 已读取的字节数
-	read  int64
+	read int64
 	// done 是否已达到限制
-	done  bool
+	done bool
 }
 
 // Read 实现读取接口，在超过限制时返回错误。

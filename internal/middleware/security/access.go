@@ -48,6 +48,7 @@ const (
 
 	accessAllow     = "allow"
 	accessDeny      = "deny"
+	accessUnknown   = "unknown"
 	geoPrivateAllow = "PRIVATE_ALLOW"
 	geoPrivateDeny  = "PRIVATE_DENY"
 )
@@ -478,7 +479,7 @@ func actionToString(action Action) string {
 	case ActionDeny:
 		return accessDeny
 	default:
-		return "unknown"
+		return accessUnknown
 	}
 }
 
