@@ -28,12 +28,12 @@ ARG BUILD_PLATFORM=unknown
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w \
-        -X 'rua.plus/lolly/internal/app.Version=${VERSION}' \
-        -X 'rua.plus/lolly/internal/app.GitCommit=${GIT_COMMIT}' \
-        -X 'rua.plus/lolly/internal/app.GitBranch=${GIT_BRANCH}' \
-        -X 'rua.plus/lolly/internal/app.BuildTime=${BUILD_TIME}' \
-        -X 'rua.plus/lolly/internal/app.GoVersion=${GO_VERSION}' \
-        -X 'rua.plus/lolly/internal/app.BuildPlatform=${BUILD_PLATFORM}'" \
+        -X 'rua.plus/lolly/internal/version.Version=${VERSION}' \
+        -X 'rua.plus/lolly/internal/version.GitCommit=${GIT_COMMIT}' \
+        -X 'rua.plus/lolly/internal/version.GitBranch=${GIT_BRANCH}' \
+        -X 'rua.plus/lolly/internal/version.BuildTime=${BUILD_TIME}' \
+        -X 'rua.plus/lolly/internal/version.GoVersion=${GO_VERSION}' \
+        -X 'rua.plus/lolly/internal/version.BuildPlatform=${BUILD_PLATFORM}'" \
     -gcflags="-l=4" \
     -asmflags="-l=4" \
     -trimpath \

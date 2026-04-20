@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- internal 指令：防止外部直接访问特定 location，支持 X-Accel-Redirect 内部重定向
+- limit_rate 中间件：响应速率限制，支持令牌桶算法和大文件回退策略
+- server_tokens 配置：控制 Server 响应头是否显示版本号
+- types 配置块：自定义 MIME 类型映射，线程安全实现
+
 ## [0.2.1] - 2026-04-17
 
 ### Added
