@@ -45,9 +45,11 @@ import (
 	"rua.plus/lolly/internal/middleware/errorintercept"
 	"rua.plus/lolly/internal/middleware/rewrite"
 	"rua.plus/lolly/internal/middleware/security"
+	"rua.plus/lolly/internal/mimeutil"
 	"rua.plus/lolly/internal/proxy"
 	"rua.plus/lolly/internal/resolver"
 	"rua.plus/lolly/internal/ssl"
+	"rua.plus/lolly/internal/version"
 )
 
 // Server HTTP 服务器，封装 fasthttp.Server 并提供中间件链和生命周期管理。
@@ -99,6 +101,41 @@ type Server struct {
 //   - *Server: 创建的服务器实例
 func New(cfg *config.Config) *Server {
 	return &Server{config: cfg}
+}
+
+// getServerName 根据配置返回服务器名称。
+//
+// 当 ServerTokens 为 false 时隐藏版本号，仅返回 "lolly"。
+// 默认（ServerTokens 为 true 或零值）返回完整版本信息。
+//
+// 参数：
+//   - cfg: 服务器配置对象
+//
+// 返回值：
+//   - string: 服务器名称
+func (s *Server) getServerName(cfg *config.ServerConfig) string {
+	if cfg != nil && !cfg.ServerTokens {
+		return "lolly"
+	}
+	return "lolly/" + version.Version
+}
+
+// applyTypesConfig 应用 MIME 类型配置。
+//
+// 根据配置设置自定义 MIME 类型映射和默认类型。
+//
+// 参数：
+//   - cfg: 服务器配置对象
+func (s *Server) applyTypesConfig(cfg *config.ServerConfig) {
+	if cfg == nil {
+		return
+	}
+	if len(cfg.Types.Map) > 0 {
+		mimeutil.AddTypes(cfg.Types.Map)
+	}
+	if cfg.Types.DefaultType != "" {
+		mimeutil.SetDefaultType(cfg.Types.DefaultType)
+	}
 }
 
 // trackStats 包装处理器以统计请求数和数据传输量。
@@ -543,6 +580,9 @@ func (s *Server) startSingleMode() error {
 	// 使用 Servers[0] 配置（迁移后 Server 字段为空）
 	serverCfg := &s.config.Servers[0]
 
+	// 应用 MIME 类型配置
+	s.applyTypesConfig(serverCfg)
+
 	// 创建 LocationEngine
 	s.locationEngine = matcher.NewLocationEngine()
 
@@ -552,7 +592,7 @@ func (s *Server) startSingleMode() error {
 		if err != nil {
 			logging.Error().Msg("创建状态处理器失败: " + err.Error())
 		} else {
-			_ = s.locationEngine.AddExact(statusHandler.Path(), statusHandler.ServeHTTP)
+			_ = s.locationEngine.AddExact(statusHandler.Path(), statusHandler.ServeHTTP, false)
 		}
 	}
 
@@ -562,8 +602,8 @@ func (s *Server) startSingleMode() error {
 		if err != nil {
 			logging.Error().Msg("创建 pprof 处理器失败: " + err.Error())
 		} else {
-			_ = s.locationEngine.AddExact(pprofHandler.Path(), pprofHandler.ServeHTTP)
-			_ = s.locationEngine.AddPrefixPriority(pprofHandler.Path()+"/", pprofHandler.ServeHTTP)
+			_ = s.locationEngine.AddExact(pprofHandler.Path(), pprofHandler.ServeHTTP, false)
+			_ = s.locationEngine.AddPrefixPriority(pprofHandler.Path()+"/", pprofHandler.ServeHTTP, false)
 		}
 	}
 
@@ -573,7 +613,7 @@ func (s *Server) startSingleMode() error {
 		if err != nil {
 			logging.Error().Msg("创建缓存清理处理器失败: " + err.Error())
 		} else {
-			_ = s.locationEngine.AddExact(purgeHandler.Path(), purgeHandler.ServeHTTP)
+			_ = s.locationEngine.AddExact(purgeHandler.Path(), purgeHandler.ServeHTTP, false)
 		}
 	}
 
@@ -616,7 +656,7 @@ func (s *Server) startSingleMode() error {
 	s.handler = handler
 
 	s.fastServer = &fasthttp.Server{
-		Name:               "lolly",
+		Name:               s.getServerName(serverCfg),
 		Handler:            s.handler,
 		ReadTimeout:        serverCfg.ReadTimeout,
 		WriteTimeout:       serverCfg.WriteTimeout,
@@ -760,7 +800,7 @@ func (s *Server) startVHostMode() error {
 	serverCfg := &s.config.Servers[0]
 
 	s.fastServer = &fasthttp.Server{
-		Name:               "lolly",
+		Name:               s.getServerName(serverCfg),
 		Handler:            s.handler,
 		ReadTimeout:        serverCfg.ReadTimeout,
 		WriteTimeout:       serverCfg.WriteTimeout,
@@ -873,7 +913,7 @@ func (s *Server) startMultiServerMode() error {
 
 			// 创建 fasthttp.Server
 			fastSrv := &fasthttp.Server{
-				Name:               "lolly",
+				Name:               s.getServerName(serverCfg),
 				Handler:            h,
 				ReadTimeout:        serverCfg.ReadTimeout,
 				WriteTimeout:       serverCfg.WriteTimeout,
@@ -997,20 +1037,20 @@ func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerC
 
 		switch locType {
 		case matcher.LocationTypeExact:
-			_ = s.locationEngine.AddExact(proxyCfg.Path, p.ServeHTTP)
+			_ = s.locationEngine.AddExact(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
 		case matcher.LocationTypePrefixPriority:
-			_ = s.locationEngine.AddPrefixPriority(proxyCfg.Path, p.ServeHTTP)
+			_ = s.locationEngine.AddPrefixPriority(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
 		case matcher.LocationTypeRegex, matcher.LocationTypeRegexCaseless:
 			caseInsensitive := locType == matcher.LocationTypeRegexCaseless
-			_ = s.locationEngine.AddRegex(proxyCfg.Path, p.ServeHTTP, caseInsensitive)
+			_ = s.locationEngine.AddRegex(proxyCfg.Path, p.ServeHTTP, caseInsensitive, proxyCfg.Internal)
 		case matcher.LocationTypeNamed:
 			if proxyCfg.LocationName != "" {
 				_ = s.locationEngine.AddNamed(proxyCfg.LocationName, p.ServeHTTP)
 			}
 		case matcher.LocationTypePrefix:
-			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP)
+			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
 		default:
-			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP)
+			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
 		}
 	}
 }
@@ -1041,6 +1081,9 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 		// 设置符号链接安全检查
 		staticHandler.SetSymlinkCheck(static.SymlinkCheck)
 
+		// 设置 internal 限制
+		staticHandler.SetInternal(static.Internal)
+
 		// 根据 LocationType 注册路由
 		locType := static.LocationType
 		if locType == "" {
@@ -1049,13 +1092,13 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 
 		switch locType {
 		case matcher.LocationTypeExact:
-			_ = s.locationEngine.AddExact(path, staticHandler.Handle)
+			_ = s.locationEngine.AddExact(path, staticHandler.Handle, static.Internal)
 		case matcher.LocationTypePrefixPriority:
-			_ = s.locationEngine.AddPrefixPriority(path, staticHandler.Handle)
+			_ = s.locationEngine.AddPrefixPriority(path, staticHandler.Handle, static.Internal)
 		case matcher.LocationTypePrefix:
-			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle)
+			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle, static.Internal)
 		default:
-			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle)
+			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle, static.Internal)
 		}
 	}
 }
