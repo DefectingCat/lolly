@@ -256,35 +256,36 @@ func (e *LocationEngine) checkConflict(path, locationType string) error {
 // ParseRegexPattern 解析 nginx 风格的正则模式。
 //
 // 支持以下前缀：
-//   - ~:  大小写不敏感正则
-//   - ~*: 大小写不敏感正则（同上）
-//   - ^~: 前缀优先（非正则，但在此解析）
+//   - ~:  大小写敏感正则（case-sensitive regex）
+//   - ~*: 大小写不敏感正则（case-insensitive regex）
+//   - ^~: 前缀优先匹配（非正则）
 //
-// 参数：
-//   - pattern: 原始模式字符串
-//
-// 返回值：
-//   - cleanPattern: 去除前缀后的正则模式
-//   - caseInsensitive: 是否大小写不敏感
-//   - isRegex: 是否为正则模式
+// 该函数用于配置验证层，检测用户配置的模式格式是否正确。
+// 运行时匹配器直接使用 LocationType 枚举进行匹配。
 func ParseRegexPattern(pattern string) (cleanPattern string, caseInsensitive bool, isRegex bool) {
 	if len(pattern) == 0 {
 		return pattern, false, false
 	}
 
-	switch pattern[0] {
-	case '~':
-		cleanPattern = pattern[1:]
-		caseInsensitive = true
-		return cleanPattern, caseInsensitive, true
-	case '^':
-		if len(pattern) > 1 && pattern[1] == '~' {
-			cleanPattern = pattern[2:]
-			caseInsensitive = false
-			return cleanPattern, caseInsensitive, true
-		}
+	// Handle ~* (case-insensitive regex) - must check first (2-char prefix)
+	if len(pattern) >= 2 && pattern[0] == '~' && pattern[1] == '*' {
+		cleanPattern = pattern[2:]
+		return cleanPattern, true, true // case-insensitive, is regex
 	}
 
+	// Handle ~ (case-sensitive regex)
+	if pattern[0] == '~' {
+		cleanPattern = pattern[1:]
+		return cleanPattern, false, true // case-sensitive, is regex
+	}
+
+	// Handle ^~ (prefix priority, NOT regex)
+	if len(pattern) >= 2 && pattern[0] == '^' && pattern[1] == '~' {
+		cleanPattern = pattern[2:]
+		return cleanPattern, false, false // NOT a regex
+	}
+
+	// Default: exact/prefix match
 	return pattern, false, false
 }
 

@@ -347,10 +347,10 @@ func TestParseRegexPattern(t *testing.T) {
 	}{
 		{"", "", false, false},
 		{"/api", "/api", false, false},
-		{"~\\.php$", "\\.php$", true, true},
-		{"^~", "", false, true},
-		{"^~/static", "/static", false, true},
-		{"~*.php$", "*.php$", true, true},
+		{"~\\.php$", "\\.php$", false, true},   // ~ is case-sensitive regex
+		{"^~", "", false, false},               // ^~ is NOT regex (prefix priority)
+		{"^~/static", "/static", false, false}, // ^~ is NOT regex
+		{"~*.php$", ".php$", true, true},       // ~* is case-insensitive regex
 	}
 
 	for _, tt := range tests {
