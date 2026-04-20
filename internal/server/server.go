@@ -1138,6 +1138,10 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 // 返回值：
 //   - error: 聚合错误，无错误或全部成功时返回 nil
 func shutdownServers(ctx context.Context, servers []*fasthttp.Server) error {
+	// 防御性检查：nil ctx 使用默认背景
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if len(servers) == 0 {
 		return nil
 	}
