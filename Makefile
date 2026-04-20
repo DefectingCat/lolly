@@ -269,6 +269,8 @@ clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)
 	rm -f coverage.out coverage.html
+	go clean -cache -testcache
+	# go clean -modcache
 	@echo "Clean complete."
 
 # ============================================
