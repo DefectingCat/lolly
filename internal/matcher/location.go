@@ -1,3 +1,15 @@
+// Package matcher 提供 nginx 风格的 location 匹配引擎实现。
+//
+// 该文件实现统一的 LocationEngine，整合所有匹配策略，
+// 按照 nginx 优先级顺序执行匹配。
+//
+// 匹配优先级从高到低：
+//   1. 精确匹配（=）
+//   2. 前缀优先匹配（^~）
+//   3. 正则匹配（~, ~*）
+//   4. 普通前缀匹配
+//
+// 作者：xfy
 package matcher
 
 import (
@@ -8,18 +20,44 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// LocationEngine 统一匹配引擎
+// LocationEngine 统一匹配引擎。
+//
+// 整合所有 location 匹配策略，按照 nginx 优先级顺序执行：
+//   - 精确匹配：O(1) hash map 查找
+//   - 前缀优先：Radix Tree 最长前缀匹配
+//   - 正则匹配：按注册顺序逐个尝试
+//   - 普通前缀：Radix Tree 最长前缀匹配
+//
+// 注意事项：
+//   - 调用 MarkInitialized 后不可再添加 location
+//   - 正则匹配器按注册顺序执行，配置时应将高频模式放在前面
 type LocationEngine struct {
-	prefixPriorityTree *RadixTree // ^~ 类型（优先级 2）
-	prefixTree         *RadixTree // 普通前缀（优先级 4）
-	exactMatchers      map[string]*ExactMatcher
-	namedMatchers      map[string]*NamedMatcher
-	registeredPaths    map[string]string
-	regexMatchers      []*RegexMatcher
-	initialized        bool
+	// prefixPriorityTree ^~ 类型前缀优先匹配树（优先级 2）
+	prefixPriorityTree *RadixTree
+
+	// prefixTree 普通前缀匹配树（优先级 4）
+	prefixTree *RadixTree
+
+	// exactMatchers 精确匹配映射
+	exactMatchers map[string]*ExactMatcher
+
+	// namedMatchers 命名 location 映射
+	namedMatchers map[string]*NamedMatcher
+
+	// registeredPaths 已注册路径（用于冲突检测）
+	registeredPaths map[string]string
+
+	// regexMatchers 正则匹配器列表（按注册顺序）
+	regexMatchers []*RegexMatcher
+
+	// initialized 是否已完成初始化
+	initialized bool
 }
 
-// NewLocationEngine 创建新引擎
+// NewLocationEngine 创建新的匹配引擎实例。
+//
+// 返回值：
+//   - *LocationEngine: 初始化的引擎实例
 func NewLocationEngine() *LocationEngine {
 	return &LocationEngine{
 		exactMatchers:      make(map[string]*ExactMatcher),
@@ -31,7 +69,14 @@ func NewLocationEngine() *LocationEngine {
 	}
 }
 
-// AddExact 添加精确匹配 location
+// AddExact 添加精确匹配 location。
+//
+// 参数：
+//   - path: 精确匹配路径
+//   - handler: 请求处理器
+//
+// 返回值：
+//   - error: 引擎已初始化或路径冲突时返回错误
 func (e *LocationEngine) AddExact(path string, handler fasthttp.RequestHandler) error {
 	if e.initialized {
 		return errors.New("LocationEngine already initialized")
@@ -46,7 +91,14 @@ func (e *LocationEngine) AddExact(path string, handler fasthttp.RequestHandler) 
 	return nil
 }
 
-// AddPrefixPriority 添加 ^~ 前缀优先匹配 location
+// AddPrefixPriority 添加 ^~ 前缀优先匹配 location。
+//
+// 参数：
+//   - path: 前缀优先路径
+//   - handler: 请求处理器
+//
+// 返回值：
+//   - error: 引擎已初始化或路径冲突时返回错误
 func (e *LocationEngine) AddPrefixPriority(path string, handler fasthttp.RequestHandler) error {
 	if e.initialized {
 		return errors.New("LocationEngine already initialized")
@@ -59,7 +111,15 @@ func (e *LocationEngine) AddPrefixPriority(path string, handler fasthttp.Request
 	return e.prefixPriorityTree.Insert(path, handler, 2, "prefix_priority")
 }
 
-// AddRegex 添加正则匹配 location
+// AddRegex 添加正则匹配 location。
+//
+// 参数：
+//   - pattern: 正则表达式模式
+//   - handler: 请求处理器
+//   - caseInsensitive: 是否大小写不敏感（~* 模式）
+//
+// 返回值：
+//   - error: 引擎已初始化或正则表达式无效时返回错误
 func (e *LocationEngine) AddRegex(pattern string, handler fasthttp.RequestHandler, caseInsensitive bool) error {
 	if e.initialized {
 		return errors.New("LocationEngine already initialized")
@@ -74,7 +134,14 @@ func (e *LocationEngine) AddRegex(pattern string, handler fasthttp.RequestHandle
 	return nil
 }
 
-// AddPrefix 添加普通前缀匹配 location
+// AddPrefix 添加普通前缀匹配 location。
+//
+// 参数：
+//   - path: 前缀路径
+//   - handler: 请求处理器
+//
+// 返回值：
+//   - error: 引擎已初始化或路径冲突时返回错误
 func (e *LocationEngine) AddPrefix(path string, handler fasthttp.RequestHandler) error {
 	if e.initialized {
 		return errors.New("LocationEngine already initialized")
@@ -87,7 +154,16 @@ func (e *LocationEngine) AddPrefix(path string, handler fasthttp.RequestHandler)
 	return e.prefixTree.Insert(path, handler, 4, "prefix")
 }
 
-// AddNamed 添加命名 location
+// AddNamed 添加命名 location。
+//
+// 命名 location 用于内部跳转（如 error_page），不直接匹配请求路径。
+//
+// 参数：
+//   - name: location 名称（不含 @ 前缀）
+//   - handler: 请求处理器
+//
+// 返回值：
+//   - error: 引擎已初始化或名称重复时返回错误
 func (e *LocationEngine) AddNamed(name string, handler fasthttp.RequestHandler) error {
 	if e.initialized {
 		return errors.New("LocationEngine already initialized")
@@ -102,8 +178,19 @@ func (e *LocationEngine) AddNamed(name string, handler fasthttp.RequestHandler) 
 	return nil
 }
 
-// Match 统一匹配入口
-// nginx 优先级：精确匹配 → 前缀优先(^~) → 正则 → 普通前缀
+// Match 统一匹配入口。
+//
+// 按照 nginx 优先级顺序执行匹配：
+//   1. 精确匹配（=）- O(1)
+//   2. 前缀优先匹配（^~）- O(log n)
+//   3. 正则匹配（~, ~*）- 按顺序
+//   4. 普通前缀匹配 - O(log n)
+//
+// 参数：
+//   - path: 请求路径
+//
+// 返回值：
+//   - *MatchResult: 匹配结果，无匹配时返回 nil
 func (e *LocationEngine) Match(path string) *MatchResult {
 	// 1. 精确匹配 (=) - O(1)
 	if m, ok := e.exactMatchers[path]; ok {
@@ -129,19 +216,34 @@ func (e *LocationEngine) Match(path string) *MatchResult {
 	return e.prefixTree.FindLongestPrefix(path)
 }
 
-// GetNamed 获取命名 location
+// GetNamed 获取命名 location。
+//
+// 参数：
+//   - name: location 名称
+//
+// 返回值：
+//   - *NamedMatcher: 命名匹配器，不存在时返回 nil
 func (e *LocationEngine) GetNamed(name string) *NamedMatcher {
 	return e.namedMatchers[name]
 }
 
-// MarkInitialized 标记初始化完成
+// MarkInitialized 标记初始化完成。
+//
+// 调用后所有 Add 方法均返回错误，确保运行时安全。
 func (e *LocationEngine) MarkInitialized() {
 	e.initialized = true
 	e.prefixPriorityTree.MarkInitialized()
 	e.prefixTree.MarkInitialized()
 }
 
-// checkConflict 检查路径冲突
+// checkConflict 检查路径冲突。
+//
+// 参数：
+//   - path: 待注册的路径
+//   - locationType: location 类型
+//
+// 返回值：
+//   - error: 路径已存在时返回冲突错误
 func (e *LocationEngine) checkConflict(path, locationType string) error {
 	if existing, ok := e.registeredPaths[path]; ok {
 		return fmt.Errorf("path conflict: '%s' already registered as '%s', trying to register as '%s'",
@@ -151,7 +253,20 @@ func (e *LocationEngine) checkConflict(path, locationType string) error {
 	return nil
 }
 
-// ParseRegexPattern 解析 nginx 风格的正则模式（支持 ^~ ~ ~* 前缀）
+// ParseRegexPattern 解析 nginx 风格的正则模式。
+//
+// 支持以下前缀：
+//   - ~:  大小写不敏感正则
+//   - ~*: 大小写不敏感正则（同上）
+//   - ^~: 前缀优先（非正则，但在此解析）
+//
+// 参数：
+//   - pattern: 原始模式字符串
+//
+// 返回值：
+//   - cleanPattern: 去除前缀后的正则模式
+//   - caseInsensitive: 是否大小写不敏感
+//   - isRegex: 是否为正则模式
 func ParseRegexPattern(pattern string) (cleanPattern string, caseInsensitive bool, isRegex bool) {
 	if len(pattern) == 0 {
 		return pattern, false, false
@@ -173,7 +288,13 @@ func ParseRegexPattern(pattern string) (cleanPattern string, caseInsensitive boo
 	return pattern, false, false
 }
 
-// MustCompileRegex 编译正则表达式，失败返回原始字符串
+// MustCompileRegex 编译正则表达式，失败返回 nil。
+//
+// 参数：
+//   - pattern: 正则表达式模式
+//
+// 返回值：
+//   - *regexp.Regexp: 编译后的正则表达式，失败时返回 nil
 func MustCompileRegex(pattern string) *regexp.Regexp {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
