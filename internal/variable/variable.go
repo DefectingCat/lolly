@@ -428,7 +428,7 @@ func (vc *Context) EphemeralGet(name string) []byte {
 // PersistentGet 获取持久化字符串变量值。
 //
 // 当需要跨请求存储变量值时使用此方法
-//（如保存到数据库、缓存或长期存活的结构体中）。
+// （如保存到数据库、缓存或长期存活的结构体中）。
 func (vc *Context) PersistentGet(name string) string {
 	// 直接调用 Get，它返回 string
 	v, _ := vc.Get(name)

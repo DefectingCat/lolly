@@ -329,7 +329,7 @@ func parseLevel(level string) zerolog.Level {
 // NewAppLogger 创建应用日志管理器。
 //
 // 根据配置创建 AppLogger 实例，用于统一管理应用生命周期日志
-//（启动、停止、信号处理等）。默认使用 text 格式输出到错误日志路径。
+// （启动、停止、信号处理等）。默认使用 text 格式输出到错误日志路径。
 //
 // 参数：
 //   - cfg: 日志配置，包含输出路径、级别、格式等设置
