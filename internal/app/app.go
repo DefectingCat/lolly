@@ -35,22 +35,7 @@ import (
 	"rua.plus/lolly/internal/server"
 	"rua.plus/lolly/internal/stream"
 	"rua.plus/lolly/internal/variable"
-)
-
-// 版本信息，通过 -ldflags 注入。
-var (
-	// Version 版本号
-	Version = "dev"
-	// GitCommit Git 提交哈希
-	GitCommit = "unknown"
-	// GitBranch Git 分支名
-	GitBranch = "unknown"
-	// BuildTime 构建时间
-	BuildTime = "unknown"
-	// GoVersion Go 版本
-	GoVersion = "unknown"
-	// BuildPlatform 构建平台
-	BuildPlatform = "unknown"
+	"rua.plus/lolly/internal/version"
 )
 
 // App 应用程序结构。
@@ -146,11 +131,11 @@ func generateConfig(outputPath string) int {
 
 // printVersion 打印版本信息。
 func printVersion() {
-	fmt.Printf("lolly version %s\n", Version)
-	fmt.Printf("  Git: %s (%s)\n", GitCommit, GitBranch)
-	fmt.Printf("  Built: %s\n", BuildTime)
-	fmt.Printf("  Go: %s\n", GoVersion)
-	fmt.Printf("  Platform: %s\n", BuildPlatform)
+	fmt.Printf("lolly version %s\n", version.Version)
+	fmt.Printf("  Git: %s (%s)\n", version.GitCommit, version.GitBranch)
+	fmt.Printf("  Built: %s\n", version.BuildTime)
+	fmt.Printf("  Go: %s\n", version.GoVersion)
+	fmt.Printf("  Platform: %s\n", version.BuildPlatform)
 }
 
 // Run 启动应用程序。

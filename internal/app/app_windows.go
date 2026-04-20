@@ -24,16 +24,7 @@ import (
 	"rua.plus/lolly/internal/server"
 	"rua.plus/lolly/internal/stream"
 	"rua.plus/lolly/internal/variable"
-)
-
-// 版本信息，通过 -ldflags 注入。
-var (
-	Version       = "dev"
-	GitCommit     = "unknown"
-	GitBranch     = "unknown"
-	BuildTime     = "unknown"
-	GoVersion     = "unknown"
-	BuildPlatform = "unknown"
+	"rua.plus/lolly/internal/version"
 )
 
 // App 应用程序结构（Windows 版本）。
@@ -121,11 +112,11 @@ func generateConfig(outputPath string) int {
 
 // printVersion 打印版本信息。
 func printVersion() {
-	fmt.Printf("lolly version %s\n", Version)
-	fmt.Printf("  Git: %s (%s)\n", GitCommit, GitBranch)
-	fmt.Printf("  Built: %s\n", BuildTime)
-	fmt.Printf("  Go: %s\n", GoVersion)
-	fmt.Printf("  Platform: %s\n", BuildPlatform)
+	fmt.Printf("lolly version %s\n", version.Version)
+	fmt.Printf("  Git: %s (%s)\n", version.GitCommit, version.GitBranch)
+	fmt.Printf("  Built: %s\n", version.BuildTime)
+	fmt.Printf("  Go: %s\n", version.GoVersion)
+	fmt.Printf("  Platform: %s\n", version.BuildPlatform)
 }
 
 // Run 启动应用程序。
@@ -341,7 +332,7 @@ func (a *App) reloadConfig() {
 // reopenLogs 重新打开日志文件（Windows stub）。
 func (a *App) reopenLogs() {
 	if a.cfg != nil {
-		logging.Init(a.cfg.Logging.Error.Level, false)
+		logging.Init(a.cfg.Logging.Error.Level, a.cfg.Logging.Format)
 		a.logger = logging.NewAppLogger(&a.cfg.Logging)
 	}
 	a.logger.LogStartup("日志已重新打开", nil)
