@@ -8,7 +8,7 @@ import (
 
 func TestExactMatcher_Match(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := NewExactMatcher("/api", handler, 1)
+	m := NewExactMatcher("/api", handler, 1, false)
 
 	if !m.Match("/api") {
 		t.Error("should match exact path")
@@ -19,7 +19,7 @@ func TestExactMatcher_Match(t *testing.T) {
 }
 
 func TestRegexMatcher_Match(t *testing.T) {
-	m := MustRegexMatcher(`\.php$`, nil, 3, false)
+	m := MustRegexMatcher(`\.php$`, nil, 3, false, false)
 
 	if !m.Match("/index.php") {
 		t.Error("should match .php")
@@ -30,7 +30,7 @@ func TestRegexMatcher_Match(t *testing.T) {
 }
 
 func TestRegexMatcher_GetCaptures(t *testing.T) {
-	m := MustRegexMatcher(`^/user/(?P<id>[0-9]+)$`, nil, 3, false)
+	m := MustRegexMatcher(`^/user/(?P<id>[0-9]+)$`, nil, 3, false, false)
 
 	captures := m.GetCaptures("/user/123")
 	if captures["id"] != "123" {
@@ -39,7 +39,7 @@ func TestRegexMatcher_GetCaptures(t *testing.T) {
 }
 
 func TestRegexMatcher_GetCaptures_NoMatch(t *testing.T) {
-	m := MustRegexMatcher(`^/user/(?P<id>[0-9]+)$`, nil, 3, false)
+	m := MustRegexMatcher(`^/user/(?P<id>[0-9]+)$`, nil, 3, false, false)
 
 	captures := m.GetCaptures("/user/abc")
 	if captures != nil {
@@ -49,7 +49,7 @@ func TestRegexMatcher_GetCaptures_NoMatch(t *testing.T) {
 
 func TestRegexMatcher_CaseInsensitive(t *testing.T) {
 	// caseInsensitive flag only affects Result().LocationType, not matching
-	m := MustRegexMatcher(`\.php$`, nil, 3, true)
+	m := MustRegexMatcher(`\.php$`, nil, 3, true, false)
 
 	if !m.Match("/index.php") {
 		t.Error("should match .php")
@@ -67,14 +67,14 @@ func TestRegexMatcher_CaseInsensitive(t *testing.T) {
 
 func TestRegexMatcher_Result_LocationType(t *testing.T) {
 	// Case sensitive
-	m := MustRegexMatcher(`\.php$`, nil, 3, false)
+	m := MustRegexMatcher(`\.php$`, nil, 3, false, false)
 	result := m.Result()
 	if result.LocationType != "regex" {
 		t.Errorf("expected location type 'regex', got %s", result.LocationType)
 	}
 
 	// Case insensitive
-	m2 := MustRegexMatcher(`\.php$`, nil, 3, true)
+	m2 := MustRegexMatcher(`\.php$`, nil, 3, true, false)
 	result2 := m2.Result()
 	if result2.LocationType != "regex_caseless" {
 		t.Errorf("expected location type 'regex_caseless', got %s", result2.LocationType)
@@ -82,7 +82,7 @@ func TestRegexMatcher_Result_LocationType(t *testing.T) {
 }
 
 func TestNewRegexMatcher_InvalidPattern(t *testing.T) {
-	_, err := NewRegexMatcher(`[invalid`, nil, 3, false)
+	_, err := NewRegexMatcher(`[invalid`, nil, 3, false, false)
 	if err == nil {
 		t.Error("expected error for invalid regex pattern")
 	}

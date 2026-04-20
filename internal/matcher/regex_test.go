@@ -8,7 +8,7 @@ import (
 
 func TestRegexMatcher_New(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m, err := NewRegexMatcher(`^/api/`, handler, 3, false)
+	m, err := NewRegexMatcher(`^/api/`, handler, 3, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestRegexMatcher_New(t *testing.T) {
 }
 
 func TestRegexMatcher_New_InvalidPattern(t *testing.T) {
-	_, err := NewRegexMatcher(`[invalid`, nil, 3, false)
+	_, err := NewRegexMatcher(`[invalid`, nil, 3, false, false)
 	if err == nil {
 		t.Fatal("expected error for invalid regex")
 	}
@@ -32,7 +32,7 @@ func TestRegexMatcher_New_InvalidPattern(t *testing.T) {
 
 func TestRegexMatcher_Match_Paths(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`^/api/`, handler, 3, false)
+	m := MustRegexMatcher(`^/api/`, handler, 3, false, false)
 
 	tests := []struct {
 		path  string
@@ -57,7 +57,7 @@ func TestRegexMatcher_Match_Paths(t *testing.T) {
 
 func TestRegexMatcher_Match_CaseInsensitive(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`(?i)^/api/`, handler, 3, true)
+	m := MustRegexMatcher(`(?i)^/api/`, handler, 3, true, false)
 
 	if !m.Match("/api/users") {
 		t.Error("should match lowercase")
@@ -72,7 +72,7 @@ func TestRegexMatcher_Match_CaseInsensitive(t *testing.T) {
 
 func TestRegexMatcher_Result(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`\.php$`, handler, 3, false)
+	m := MustRegexMatcher(`\.php$`, handler, 3, false, false)
 
 	result := m.Result()
 	if result == nil {
@@ -91,7 +91,7 @@ func TestRegexMatcher_Result(t *testing.T) {
 
 func TestRegexMatcher_Result_Caseless(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`\.php$`, handler, 3, true)
+	m := MustRegexMatcher(`\.php$`, handler, 3, true, false)
 
 	result := m.Result()
 	if result.LocationType != LocationTypeRegexCaseless {
@@ -101,7 +101,7 @@ func TestRegexMatcher_Result_Caseless(t *testing.T) {
 
 func TestRegexMatcher_GetCaptures_NamedGroups(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`^/user/(?P<id>[0-9]+)/post/(?P<post>[a-z]+)$`, handler, 3, false)
+	m := MustRegexMatcher(`^/user/(?P<id>[0-9]+)/post/(?P<post>[a-z]+)$`, handler, 3, false, false)
 
 	captures := m.GetCaptures("/user/42/post/hello")
 	if captures == nil {
@@ -117,7 +117,7 @@ func TestRegexMatcher_GetCaptures_NamedGroups(t *testing.T) {
 
 func TestRegexMatcher_GetCaptures_NoMatchPath(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`^/user/(?P<id>[0-9]+)$`, handler, 3, false)
+	m := MustRegexMatcher(`^/user/(?P<id>[0-9]+)$`, handler, 3, false, false)
 
 	captures := m.GetCaptures("/user/abc")
 	if captures != nil {
@@ -127,7 +127,7 @@ func TestRegexMatcher_GetCaptures_NoMatchPath(t *testing.T) {
 
 func TestRegexMatcher_GetCaptures_NoNamedGroups(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`^/user/[0-9]+$`, handler, 3, false)
+	m := MustRegexMatcher(`^/user/[0-9]+$`, handler, 3, false, false)
 
 	// No named groups, should return empty map
 	captures := m.GetCaptures("/user/123")
@@ -141,7 +141,7 @@ func TestRegexMatcher_GetCaptures_NoNamedGroups(t *testing.T) {
 
 func TestRegexMatcher_Match_UnicodePath(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`^/文档/`, handler, 3, false)
+	m := MustRegexMatcher(`^/文档/`, handler, 3, false, false)
 
 	if !m.Match("/文档/报告") {
 		t.Error("should match unicode path")
@@ -153,7 +153,7 @@ func TestRegexMatcher_Match_UnicodePath(t *testing.T) {
 
 func TestRegexMatcher_Match_SpecialChars(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`^/path\?query=`, handler, 3, false)
+	m := MustRegexMatcher(`^/path\?query=`, handler, 3, false, false)
 
 	if !m.Match("/path?query=test") {
 		t.Error("should match path with query string")
@@ -162,7 +162,7 @@ func TestRegexMatcher_Match_SpecialChars(t *testing.T) {
 
 func TestRegexMatcher_Match_EmptyPath(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := MustRegexMatcher(`^$`, handler, 3, false)
+	m := MustRegexMatcher(`^$`, handler, 3, false, false)
 
 	if !m.Match("") {
 		t.Error("should match empty string with ^$ pattern")
@@ -175,5 +175,5 @@ func TestMustRegexMatcher_Panic(t *testing.T) {
 			t.Error("expected panic for invalid regex")
 		}
 	}()
-	MustRegexMatcher(`[invalid`, nil, 3, false)
+	MustRegexMatcher(`[invalid`, nil, 3, false, false)
 }

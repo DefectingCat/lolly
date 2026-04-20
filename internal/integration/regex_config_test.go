@@ -10,7 +10,7 @@ import (
 func TestRegexConfigCaseSensitive(t *testing.T) {
 	// 测试 ~ 修饰符（case-sensitive）
 	// 创建 regex matcher，验证只匹配小写
-	m, err := matcher.NewRegexMatcher(`\.php$`, nil, 3, false)
+	m, err := matcher.NewRegexMatcher(`\.php$`, nil, 3, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestRegexConfigCaseSensitive(t *testing.T) {
 
 func TestRegexConfigCaseInsensitive(t *testing.T) {
 	// 测试 ~* 修饰符（case-insensitive）
-	m, err := matcher.NewRegexMatcher(`(?i)\.php$`, nil, 3, true)
+	m, err := matcher.NewRegexMatcher(`(?i)\.php$`, nil, 3, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestPrefixPriorityNotRegex(t *testing.T) {
 	dummyHandler := func(ctx *fasthttp.RequestCtx) {}
 
 	engine := matcher.NewLocationEngine()
-	err := engine.AddPrefixPriority("/images", dummyHandler)
+	err := engine.AddPrefixPriority("/images", dummyHandler, false)
 	if err != nil {
 		t.Fatal(err)
 	}

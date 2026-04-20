@@ -12,10 +12,10 @@ func TestLocationEngine_NginxPriority(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
 	// 注册不同类型
-	engine.AddExact("/api", handler)           // priority 1
-	engine.AddPrefixPriority("/api/", handler) // priority 2 (^~)
-	engine.AddRegex(`\.php$`, handler, false)  // priority 3
-	engine.AddPrefix("/", handler)             // priority 4
+	engine.AddExact("/api", handler, false)           // priority 1
+	engine.AddPrefixPriority("/api/", handler, false) // priority 2 (^~)
+	engine.AddRegex(`\.php$`, handler, false, false)  // priority 3
+	engine.AddPrefix("/", handler, false)             // priority 4
 	engine.MarkInitialized()
 
 	// 测试精确匹配优先
@@ -35,9 +35,9 @@ func TestLocationEngine_RegexMatch(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddPrefixPriority("/api/", handler)
-	engine.AddRegex(`\.php$`, handler, false)
-	engine.AddPrefix("/", handler)
+	engine.AddPrefixPriority("/api/", handler, false)
+	engine.AddRegex(`\.php$`, handler, false, false)
+	engine.AddPrefix("/", handler, false)
 	engine.MarkInitialized()
 
 	// 正则匹配（^~ 不匹配 /index.php）
@@ -51,7 +51,7 @@ func TestLocationEngine_PrefixFallback(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddPrefix("/", handler)
+	engine.AddPrefix("/", handler, false)
 	engine.MarkInitialized()
 
 	result := engine.Match("/any/path")
@@ -74,7 +74,7 @@ func TestLocationEngine_RegexCaptures(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddRegex(`^/user/(?P<id>[0-9]+)$`, handler, false)
+	engine.AddRegex(`^/user/(?P<id>[0-9]+)$`, handler, false, false)
 	engine.MarkInitialized()
 
 	result := engine.Match("/user/42")
@@ -92,7 +92,7 @@ func TestLocationEngine_Initialized_Twice(t *testing.T) {
 
 	engine.MarkInitialized()
 
-	err := engine.AddExact("/api", handler)
+	err := engine.AddExact("/api", handler, false)
 	if err == nil {
 		t.Error("should fail when adding after initialized")
 	}
@@ -102,8 +102,8 @@ func TestLocationEngine_PathConflict(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddExact("/api", handler)
-	err := engine.AddExact("/api", handler)
+	engine.AddExact("/api", handler, false)
+	err := engine.AddExact("/api", handler, false)
 	if err == nil {
 		t.Error("should fail on path conflict")
 	}

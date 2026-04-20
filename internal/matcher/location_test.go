@@ -32,7 +32,7 @@ func TestLocationEngine_AddExact(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	err := engine.AddExact("/api", handler)
+	err := engine.AddExact("/api", handler, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestLocationEngine_AddExact_AfterInitialized(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
 	engine.MarkInitialized()
-	err := engine.AddExact("/api", handler)
+	err := engine.AddExact("/api", handler, false)
 	if err == nil {
 		t.Error("expected error after initialized")
 	}
@@ -64,8 +64,8 @@ func TestLocationEngine_AddExact_PathConflict(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddExact("/api", handler)
-	err := engine.AddExact("/api", handler)
+	engine.AddExact("/api", handler, false)
+	err := engine.AddExact("/api", handler, false)
 	if err == nil {
 		t.Error("expected conflict error")
 	}
@@ -75,7 +75,7 @@ func TestLocationEngine_AddPrefixPriority(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	err := engine.AddPrefixPriority("/static", handler)
+	err := engine.AddPrefixPriority("/static", handler, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestLocationEngine_AddPrefixPriority_AfterInitialized(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
 	engine.MarkInitialized()
-	err := engine.AddPrefixPriority("/static", handler)
+	err := engine.AddPrefixPriority("/static", handler, false)
 	if err == nil {
 		t.Error("expected error after initialized")
 	}
@@ -107,7 +107,7 @@ func TestLocationEngine_AddPrefix(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	err := engine.AddPrefix("/api", handler)
+	err := engine.AddPrefix("/api", handler, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestLocationEngine_AddPrefix_AfterInitialized(t *testing.T) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
 	engine.MarkInitialized()
-	err := engine.AddPrefix("/api", handler)
+	err := engine.AddPrefix("/api", handler, false)
 	if err == nil {
 		t.Error("expected error after initialized")
 	}
@@ -136,7 +136,7 @@ func TestLocationEngine_AddRegex(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	err := engine.AddRegex(`\.php$`, handler, false)
+	err := engine.AddRegex(`\.php$`, handler, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestLocationEngine_AddRegex_CaseInsensitive(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	err := engine.AddRegex(`(?i)\.php$`, handler, true)
+	err := engine.AddRegex(`(?i)\.php$`, handler, true, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestLocationEngine_AddRegex_InvalidPattern(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	err := engine.AddRegex(`[invalid`, handler, false)
+	err := engine.AddRegex(`[invalid`, handler, false, false)
 	if err == nil {
 		t.Error("expected error for invalid regex")
 	}
@@ -182,7 +182,7 @@ func TestLocationEngine_AddRegex_Captures(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	err := engine.AddRegex(`^/user/(?P<id>[0-9]+)$`, handler, false)
+	err := engine.AddRegex(`^/user/(?P<id>[0-9]+)$`, handler, false, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -207,10 +207,10 @@ func TestLocationEngine_Match_PriorityOrder(t *testing.T) {
 	hPrefix := func(ctx *fasthttp.RequestCtx) {}
 
 	// All match "/api/path"
-	engine.AddExact("/api/path", hExact)
-	engine.AddPrefixPriority("/api", hPrefixPriority)
-	engine.AddRegex(`^/api/`, hRegex, false)
-	engine.AddPrefix("/api/path", hPrefix)
+	engine.AddExact("/api/path", hExact, false)
+	engine.AddPrefixPriority("/api", hPrefixPriority, false)
+	engine.AddRegex(`^/api/`, hRegex, false, false)
+	engine.AddPrefix("/api/path", hPrefix, false)
 
 	// Exact should win (priority 1)
 	result := engine.Match("/api/path")
@@ -228,8 +228,8 @@ func TestLocationEngine_Match_PrefixPriorityBeatsRegex(t *testing.T) {
 	hRegex := func(ctx *fasthttp.RequestCtx) {}
 
 	// No exact match for this path
-	engine.AddPrefixPriority("/static", hPrefixPriority)
-	engine.AddRegex(`\.css$`, hRegex, false)
+	engine.AddPrefixPriority("/static", hPrefixPriority, false)
+	engine.AddRegex(`\.css$`, hRegex, false, false)
 
 	// ^~ prefix priority should beat regex
 	result := engine.Match("/static/style.css")
@@ -246,8 +246,8 @@ func TestLocationEngine_Match_RegexBeatsPrefix(t *testing.T) {
 	hRegex := func(ctx *fasthttp.RequestCtx) {}
 	hPrefix := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddRegex(`\.php$`, hRegex, false)
-	engine.AddPrefix("/", hPrefix)
+	engine.AddRegex(`\.php$`, hRegex, false, false)
+	engine.AddPrefix("/", hPrefix, false)
 
 	// Regex should win over plain prefix
 	result := engine.Match("/index.php")
@@ -263,7 +263,7 @@ func TestLocationEngine_Match_FallbackToPrefix(t *testing.T) {
 	engine := NewLocationEngine()
 	hPrefix := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddPrefix("/api", hPrefix)
+	engine.AddPrefix("/api", hPrefix, false)
 
 	result := engine.Match("/api/users")
 	if result == nil {
@@ -278,7 +278,7 @@ func TestLocationEngine_Match_NoMatch(t *testing.T) {
 	engine := NewLocationEngine()
 	hPrefix := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddPrefix("/api", hPrefix)
+	engine.AddPrefix("/api", hPrefix, false)
 
 	result := engine.Match("/other")
 	if result != nil {
@@ -290,7 +290,7 @@ func TestLocationEngine_Match_EmptyString(t *testing.T) {
 	engine := NewLocationEngine()
 	hPrefix := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddPrefix("/api", hPrefix)
+	engine.AddPrefix("/api", hPrefix, false)
 
 	result := engine.Match("")
 	if result != nil {
@@ -302,7 +302,7 @@ func TestLocationEngine_Match_UnicodePath(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddPrefixPriority("/文档", handler)
+	engine.AddPrefixPriority("/文档", handler, false)
 
 	result := engine.Match("/文档/报告")
 	if result == nil {
@@ -317,20 +317,20 @@ func TestLocationEngine_MarkInitialized(t *testing.T) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddPrefix("/api", handler)
+	engine.AddPrefix("/api", handler, false)
 	engine.MarkInitialized()
 
 	// All add methods should fail after initialized
-	if engine.AddExact("/exact", handler) == nil {
+	if engine.AddExact("/exact", handler, false) == nil {
 		t.Error("AddExact should fail after initialized")
 	}
-	if engine.AddPrefixPriority("/pp", handler) == nil {
+	if engine.AddPrefixPriority("/pp", handler, false) == nil {
 		t.Error("AddPrefixPriority should fail after initialized")
 	}
-	if engine.AddPrefix("/pre", handler) == nil {
+	if engine.AddPrefix("/pre", handler, false) == nil {
 		t.Error("AddPrefix should fail after initialized")
 	}
-	if engine.AddRegex(`test`, handler, false) == nil {
+	if engine.AddRegex(`test`, handler, false, false) == nil {
 		t.Error("AddRegex should fail after initialized")
 	}
 	if engine.AddNamed("test", handler) == nil {

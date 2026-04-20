@@ -20,7 +20,7 @@ func TestPrefixPriorityMatcher_AddPath(t *testing.T) {
 	ppm := NewPrefixPriorityMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	err := ppm.AddPath("/static", handler)
+	err := ppm.AddPath("/static", handler, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -35,8 +35,8 @@ func TestPrefixPriorityMatcher_Match(t *testing.T) {
 	ppm := NewPrefixPriorityMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	ppm.AddPath("/static", handler)
-	ppm.AddPath("/static/images", handler)
+	ppm.AddPath("/static", handler, false)
+	ppm.AddPath("/static/images", handler, false)
 
 	tests := []struct {
 		path    string
@@ -68,8 +68,8 @@ func TestPrefixPriorityMatcher_Priority(t *testing.T) {
 	h1 := func(ctx *fasthttp.RequestCtx) {}
 	h2 := func(ctx *fasthttp.RequestCtx) {}
 
-	ppm.AddPath("/api/v1", h1)
-	ppm.AddPath("/api/v2", h2)
+	ppm.AddPath("/api/v1", h1, false)
+	ppm.AddPath("/api/v2", h2, false)
 
 	result := ppm.Match("/api/v2/data")
 	if result == nil {
@@ -88,7 +88,7 @@ func TestPrefixPriorityMatcher_Match_EmptyString(t *testing.T) {
 	ppm := NewPrefixPriorityMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	ppm.AddPath("/", handler)
+	ppm.AddPath("/", handler, false)
 	result := ppm.Match("")
 	if result != nil {
 		t.Error("empty string should not match '/' prefix")
@@ -99,7 +99,7 @@ func TestPrefixPriorityMatcher_Match_UnicodePath(t *testing.T) {
 	ppm := NewPrefixPriorityMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	ppm.AddPath("/文档", handler)
+	ppm.AddPath("/文档", handler, false)
 
 	result := ppm.Match("/文档/报告")
 	if result == nil {
@@ -111,10 +111,10 @@ func TestPrefixPriorityMatcher_MarkInitialized(t *testing.T) {
 	ppm := NewPrefixPriorityMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	ppm.AddPath("/static", handler)
+	ppm.AddPath("/static", handler, false)
 	ppm.MarkInitialized()
 
-	err := ppm.AddPath("/static/v2", handler)
+	err := ppm.AddPath("/static/v2", handler, false)
 	if err == nil {
 		t.Error("should fail after initialized")
 	}
@@ -124,8 +124,8 @@ func TestPrefixPriorityMatcher_AddPath_Duplicate(t *testing.T) {
 	ppm := NewPrefixPriorityMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	ppm.AddPath("/static", handler)
-	err := ppm.AddPath("/static", handler)
+	ppm.AddPath("/static", handler, false)
+	err := ppm.AddPath("/static", handler, false)
 	if err == nil {
 		t.Error("should fail on duplicate path")
 	}
@@ -135,7 +135,7 @@ func TestPrefixPriorityMatcher_Result_LocationType(t *testing.T) {
 	ppm := NewPrefixPriorityMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	ppm.AddPath("/static", handler)
+	ppm.AddPath("/static", handler, false)
 
 	result := ppm.Match("/static/file.txt")
 	if result == nil {

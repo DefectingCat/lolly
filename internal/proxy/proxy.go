@@ -642,6 +642,13 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		// 请求成功，减少连接计数
 		loadbalance.DecrementConnections(target)
 
+		// 检测 X-Accel-Redirect 头，支持内部重定向
+		if redirectPath := ctx.Response.Header.Peek("X-Accel-Redirect"); len(redirectPath) > 0 {
+			utils.SetInternalRedirect(ctx, string(redirectPath))
+			ctx.Request.SetRequestURI(string(redirectPath))
+			return
+		}
+
 		// 检查响应状态码是否需要重试
 		statusCode := ctx.Response.StatusCode()
 		upstreamStatus = statusCode

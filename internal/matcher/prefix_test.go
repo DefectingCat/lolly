@@ -20,7 +20,7 @@ func TestPrefixMatcher_AddPath(t *testing.T) {
 	pm := NewPrefixMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	err := pm.AddPath("/api", handler)
+	err := pm.AddPath("/api", handler, false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -35,8 +35,8 @@ func TestPrefixMatcher_Match(t *testing.T) {
 	pm := NewPrefixMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	pm.AddPath("/api", handler)
-	pm.AddPath("/api/v2", handler)
+	pm.AddPath("/api", handler, false)
+	pm.AddPath("/api/v2", handler, false)
 
 	tests := []struct {
 		path    string
@@ -67,7 +67,7 @@ func TestPrefixMatcher_Match_EmptyString(t *testing.T) {
 	pm := NewPrefixMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	pm.AddPath("/", handler)
+	pm.AddPath("/", handler, false)
 	result := pm.Match("")
 	if result != nil {
 		t.Error("empty string should not match '/' prefix")
@@ -78,7 +78,7 @@ func TestPrefixMatcher_Match_UnicodePath(t *testing.T) {
 	pm := NewPrefixMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	pm.AddPath("/café", handler)
+	pm.AddPath("/café", handler, false)
 
 	result := pm.Match("/café/latte")
 	if result == nil {
@@ -91,8 +91,8 @@ func TestPrefixMatcher_Match_LongestPrefix(t *testing.T) {
 	h1 := func(ctx *fasthttp.RequestCtx) { ctx.SetBodyString("1") }
 	h2 := func(ctx *fasthttp.RequestCtx) { ctx.SetBodyString("2") }
 
-	pm.AddPath("/static", h1)
-	pm.AddPath("/static/css", h2)
+	pm.AddPath("/static", h1, false)
+	pm.AddPath("/static/css", h2, false)
 
 	result := pm.Match("/static/css/main.css")
 	if result == nil {
@@ -110,10 +110,10 @@ func TestPrefixMatcher_MarkInitialized(t *testing.T) {
 	pm := NewPrefixMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	pm.AddPath("/api", handler)
+	pm.AddPath("/api", handler, false)
 	pm.MarkInitialized()
 
-	err := pm.AddPath("/api/v2", handler)
+	err := pm.AddPath("/api/v2", handler, false)
 	if err == nil {
 		t.Error("should fail after initialized")
 	}
@@ -123,8 +123,8 @@ func TestPrefixMatcher_AddPath_Duplicate(t *testing.T) {
 	pm := NewPrefixMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	pm.AddPath("/api", handler)
-	err := pm.AddPath("/api", handler)
+	pm.AddPath("/api", handler, false)
+	err := pm.AddPath("/api", handler, false)
 	if err == nil {
 		t.Error("should fail on duplicate path")
 	}
@@ -134,7 +134,7 @@ func TestPrefixMatcher_Match_SpecialChars(t *testing.T) {
 	pm := NewPrefixMatcher()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	pm.AddPath("/api/v1", handler)
+	pm.AddPath("/api/v1", handler, false)
 
 	result := pm.Match("/api/v1?key=value&other=123")
 	if result == nil {

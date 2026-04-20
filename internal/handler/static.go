@@ -57,6 +57,7 @@ type StaticHandler struct {
 	useSendfile  bool
 	tryFilesPass bool
 	symlinkCheck bool
+	internal     bool
 }
 
 // NewStaticHandler 创建静态文件处理器。
@@ -208,6 +209,17 @@ func (h *StaticHandler) SetSymlinkCheck(enabled bool) {
 	h.symlinkCheck = enabled
 }
 
+// SetInternal 设置内部访问限制。
+//
+// 启用后，仅允许内部重定向访问该静态位置。
+// 外部直接请求将返回 404 Not Found。
+//
+// 参数：
+//   - enabled: 是否启用内部访问限制
+func (h *StaticHandler) SetInternal(enabled bool) {
+	h.internal = enabled
+}
+
 // SetCacheTTL 设置缓存新鲜度 TTL。
 //
 // TTL 控制缓存条目的新鲜度验证间隔。
@@ -244,6 +256,12 @@ func (h *StaticHandler) SetCacheTTL(ttl time.Duration) {
 //  8. 读取文件并存入缓存
 func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 	reqPath := string(ctx.Path())
+
+	// 检查 internal 限制
+	if h.internal && !utils.IsInternalRedirect(ctx) {
+		utils.SendError(ctx, utils.ErrNotFound)
+		return
+	}
 
 	// 安全检查：防止目录遍历
 	if strings.Contains(reqPath, "..") {

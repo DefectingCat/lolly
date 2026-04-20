@@ -19,7 +19,7 @@ func BenchmarkRadixTree_Insert(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, p := range paths {
-			tree.Insert(p, handler, i, "prefix")
+			tree.Insert(p, handler, i, "prefix", false)
 		}
 	}
 }
@@ -30,7 +30,7 @@ func BenchmarkRadixTree_Find(b *testing.B) {
 
 	paths := []string{"/", "/api", "/api/v1", "/api/v2/users/123"}
 	for i, p := range paths {
-		tree.Insert(p, handler, i+1, "prefix")
+		tree.Insert(p, handler, i+1, "prefix", false)
 	}
 	tree.MarkInitialized()
 
@@ -42,7 +42,7 @@ func BenchmarkRadixTree_Find(b *testing.B) {
 
 func BenchmarkExactMatcher_Match(b *testing.B) {
 	handler := func(ctx *fasthttp.RequestCtx) {}
-	m := NewExactMatcher("/api/users", handler, 1)
+	m := NewExactMatcher("/api/users", handler, 1, false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -51,7 +51,7 @@ func BenchmarkExactMatcher_Match(b *testing.B) {
 }
 
 func BenchmarkRegexMatcher_Match(b *testing.B) {
-	m := MustRegexMatcher(`^/api/v[0-9]+/users/[0-9]+$`, nil, 3, false)
+	m := MustRegexMatcher(`^/api/v[0-9]+/users/[0-9]+$`, nil, 3, false, false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -63,10 +63,10 @@ func BenchmarkLocationEngine_Match(b *testing.B) {
 	engine := NewLocationEngine()
 	handler := func(ctx *fasthttp.RequestCtx) {}
 
-	engine.AddExact("/api", handler)
-	engine.AddPrefixPriority("/api/", handler)
-	engine.AddRegex(`\.php$`, handler, false)
-	engine.AddPrefix("/", handler)
+	engine.AddExact("/api", handler, false)
+	engine.AddPrefixPriority("/api/", handler, false)
+	engine.AddRegex(`\.php$`, handler, false, false)
+	engine.AddPrefix("/", handler, false)
 	engine.MarkInitialized()
 
 	b.ResetTimer()

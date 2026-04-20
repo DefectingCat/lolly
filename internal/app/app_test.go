@@ -24,6 +24,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/server"
+	"rua.plus/lolly/internal/version"
 )
 
 // captureStdout 捕获 stdout 输出，返回捕获的内容和恢复函数。
@@ -606,23 +607,23 @@ func TestGracefulUpgrade_NoListener(_ *testing.T) {
 
 // TestVersionVariables 测试版本变量默认值
 func TestVersionVariables(t *testing.T) {
-	if Version != "dev" {
-		t.Errorf("Default Version should be 'dev', got '%s'", Version)
+	if version.Version != "dev" {
+		t.Errorf("Default Version should be 'dev', got '%s'", version.Version)
 	}
-	if GitCommit != "unknown" {
-		t.Errorf("Default GitCommit should be 'unknown', got '%s'", GitCommit)
+	if version.GitCommit != "unknown" {
+		t.Errorf("Default GitCommit should be 'unknown', got '%s'", version.GitCommit)
 	}
-	if GitBranch != "unknown" {
-		t.Errorf("Default GitBranch should be 'unknown', got '%s'", GitBranch)
+	if version.GitBranch != "unknown" {
+		t.Errorf("Default GitBranch should be 'unknown', got '%s'", version.GitBranch)
 	}
-	if BuildTime != "unknown" {
-		t.Errorf("Default BuildTime should be 'unknown', got '%s'", BuildTime)
+	if version.BuildTime != "unknown" {
+		t.Errorf("Default BuildTime should be 'unknown', got '%s'", version.BuildTime)
 	}
-	if GoVersion != "unknown" {
-		t.Errorf("Default GoVersion should be 'unknown', got '%s'", GoVersion)
+	if version.GoVersion != "unknown" {
+		t.Errorf("Default GoVersion should be 'unknown', got '%s'", version.GoVersion)
 	}
-	if BuildPlatform != "unknown" {
-		t.Errorf("Default BuildPlatform should be 'unknown', got '%s'", BuildPlatform)
+	if version.BuildPlatform != "unknown" {
+		t.Errorf("Default BuildPlatform should be 'unknown', got '%s'", version.BuildPlatform)
 	}
 }
 
