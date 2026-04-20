@@ -47,9 +47,15 @@ import (
 )
 
 // AuthRequest 实现外部认证子请求中间件。
+//
+// 将认证委托给外部服务，根据认证服务的响应状态码决定是否允许原请求继续。
+// 支持完整 URL 和相对路径两种认证服务地址。
 type AuthRequest struct {
+	// client 用于向认证服务发送子请求的 HTTP 客户端
 	client *fasthttp.HostClient
+	// config 认证子请求配置
 	config config.AuthRequestConfig
+	// mu 读写锁，保护并发访问 client 和 config
 	mu     sync.RWMutex
 }
 
@@ -107,12 +113,24 @@ func NewAuthRequest(cfg config.AuthRequestConfig) (*AuthRequest, error) {
 	return ar, nil
 }
 
-// isFullURL 检查 URI 是否为完整 URL。
+// isFullURL 检查 URI 是否为完整 URL（以 http:// 或 https:// 开头）。
+//
+// 参数：
+//   - uri: 待检查的 URI 字符串
+//
+// 返回值：
+//   - bool: true 表示为完整 URL
 func isFullURL(uri string) bool {
 	return strings.HasPrefix(uri, "http://") || strings.HasPrefix(uri, "https://")
 }
 
 // initClient 初始化用于认证子请求的 HTTP 客户端。
+//
+// 解析认证服务 URL 并创建独立连接池的 HTTP 客户端。
+// 调用者需持有写锁。
+//
+// 返回值：
+//   - error: URL 解析失败时返回错误
 func (a *AuthRequest) initClient() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -182,12 +200,23 @@ func parseAuthURL(url string) (string, bool, error) {
 }
 
 // Name 返回中间件名称。
+//
+// 返回值：
+//   - string: 中间件标识名 "auth_request"
 func (a *AuthRequest) Name() string {
 	return "auth_request"
 }
 
 // Process 实现中间件处理逻辑。
+//
 // 向认证服务发送子请求，根据响应决定是否允许原请求继续。
+// 配置未启用时直接透传。
+//
+// 参数：
+//   - next: 下一个请求处理器
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 包装后的请求处理器
 func (a *AuthRequest) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	if !a.config.Enabled {
 		return next
@@ -294,7 +323,17 @@ func (a *AuthRequest) doAuthRequest(ctx *fasthttp.RequestCtx) (bool, int, error)
 	}
 }
 
-// expandVars 展开字符串中的变量。
+// expandVars 展开字符串中的变量（如 $request_uri）。
+//
+// 使用 variable 包展开请求上下文中的变量引用。
+// 如果字符串中不包含变量标记，则直接返回原字符串。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文
+//   - template: 包含变量引用的模板字符串
+//
+// 返回值：
+//   - string: 展开后的字符串
 func (a *AuthRequest) expandVars(ctx *fasthttp.RequestCtx, template string) string {
 	if template == "" {
 		return ""

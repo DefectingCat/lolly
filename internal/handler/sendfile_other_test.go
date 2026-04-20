@@ -18,6 +18,7 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
+// TestMinSendfileSize 验证 MinSendfileSize 常量值。
 func TestMinSendfileSize(t *testing.T) {
 	if MinSendfileSize != 8*1024 {
 		t.Errorf("Expected MinSendfileSize 8KB, got %d", MinSendfileSize)

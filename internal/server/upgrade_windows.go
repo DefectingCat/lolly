@@ -16,6 +16,15 @@ import (
 type UpgradeManager struct{}
 
 // NewUpgradeManager 创建空的升级管理器 stub。
+//
+// Windows 平台不支持优雅升级（热升级）功能，该函数返回
+// 一个空的 UpgradeManager 实例，所有方法均为空操作。
+//
+// 参数：
+//   - server: 服务器实例（Windows 上不使用）
+//
+// 返回值：
+//   - *UpgradeManager: 空操作的管理器实例
 func NewUpgradeManager(server *Server) *UpgradeManager {
 	return &UpgradeManager{}
 }

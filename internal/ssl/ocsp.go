@@ -81,6 +81,15 @@ type OCSPConfig struct {
 }
 
 // DefaultOCSPConfig 返回默认的 OCSP 配置。
+//
+// 该函数提供一组适用于大多数生产环境的默认 OCSP Stapling 设置：
+//   - Enabled: true（默认启用 OCSP Stapling）
+//   - RefreshInterval: 1 小时（响应刷新间隔）
+//   - Timeout: 10 秒（HTTP 请求超时）
+//   - MaxRetries: 3（失败重试次数）
+//
+// 返回值：
+//   - *OCSPConfig: 包含默认值的 OCSP 配置指针
 func DefaultOCSPConfig() *OCSPConfig {
 	return &OCSPConfig{
 		Enabled:         true,

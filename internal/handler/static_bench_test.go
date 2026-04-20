@@ -14,7 +14,14 @@ import (
 	"rua.plus/lolly/internal/cache"
 )
 
-// setupStaticTestDir 创建临时测试目录。
+// setupStaticTestDir 创建临时测试目录并填充测试文件。
+//
+// 创建包含 index.html、style.css、large.json、nested/file.js 的目录结构，
+// 用于静态文件基准测试。
+//
+// 返回值：
+//   - string: 临时测试目录路径
+//   - func(): 清理函数，调用后删除临时目录
 func setupStaticTestDir() (string, func()) {
 	dir, err := os.MkdirTemp("", "static_bench_*")
 	if err != nil {

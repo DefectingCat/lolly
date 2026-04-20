@@ -37,7 +37,14 @@ type Adapter struct {
 	bufferPool sync.Pool
 }
 
-// NewAdapter 创建新的适配器。
+// NewAdapter 创建 HTTP/3 适配器实例。
+//
+// 初始化用于将 fasthttp.RequestHandler 适配为标准库 http.Handler
+// 的适配器。内部使用 sync.Pool 复用 RequestCtx 和缓冲区对象，
+// 以降低内存分配开销。
+//
+// 返回值：
+//   - *Adapter: 初始化的 HTTP/3 适配器实例
 func NewAdapter() *Adapter {
 	return &Adapter{
 		ctxPool: sync.Pool{

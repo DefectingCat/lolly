@@ -150,6 +150,15 @@ func GetSSLClientVerify(ctx *fasthttp.RequestCtx) string {
 }
 
 // GetSSLClientSerial 获取客户端证书序列号。
+//
+// 从请求上下文中读取 mTLS 客户端证书的序列号。
+// 证书信息由连接处理器通过 SetSSLClientInfoInContext 预先设置。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 返回值：
+//   - string: 证书序列号字符串，未提供证书时返回空字符串
 func GetSSLClientSerial(ctx *fasthttp.RequestCtx) string {
 	if v := ctx.UserValue(VarSSLClientSerial); v != nil {
 		if s, ok := v.(string); ok {
@@ -160,6 +169,14 @@ func GetSSLClientSerial(ctx *fasthttp.RequestCtx) string {
 }
 
 // GetSSLClientSubject 获取客户端证书主题。
+//
+// 从请求上下文中读取 mTLS 客户端证书的主题（Distinguished Name）。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 返回值：
+//   - string: 证书主题字符串，未提供证书时返回空字符串
 func GetSSLClientSubject(ctx *fasthttp.RequestCtx) string {
 	if v := ctx.UserValue(VarSSLClientSubject); v != nil {
 		if s, ok := v.(string); ok {
@@ -170,6 +187,14 @@ func GetSSLClientSubject(ctx *fasthttp.RequestCtx) string {
 }
 
 // GetSSLClientIssuer 获取客户端证书颁发者。
+//
+// 从请求上下文中读取 mTLS 客户端证书的颁发者（Distinguished Name）。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 返回值：
+//   - string: 证书颁发者字符串，未提供证书时返回空字符串
 func GetSSLClientIssuer(ctx *fasthttp.RequestCtx) string {
 	if v := ctx.UserValue(VarSSLClientIssuer); v != nil {
 		if s, ok := v.(string); ok {
@@ -180,6 +205,14 @@ func GetSSLClientIssuer(ctx *fasthttp.RequestCtx) string {
 }
 
 // GetSSLClientFingerprint 获取客户端证书指纹。
+//
+// 从请求上下文中读取 mTLS 客户端证书的 SHA1 指纹。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 返回值：
+//   - string: 证书 SHA1 指纹（十六进制大写），未提供证书时返回空字符串
 func GetSSLClientFingerprint(ctx *fasthttp.RequestCtx) string {
 	if v := ctx.UserValue(VarSSLClientFingerprint); v != nil {
 		if s, ok := v.(string); ok {
@@ -190,6 +223,14 @@ func GetSSLClientFingerprint(ctx *fasthttp.RequestCtx) string {
 }
 
 // GetSSLClientNotBefore 获取客户端证书生效时间。
+//
+// 从请求上下文中读取 mTLS 客户端证书的生效时间（ISO8601 格式）。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 返回值：
+//   - string: 证书生效时间，格式为 "2006-01-02T15:04:05Z"，未提供证书时返回空字符串
 func GetSSLClientNotBefore(ctx *fasthttp.RequestCtx) string {
 	if v := ctx.UserValue(VarSSLClientNotBefore); v != nil {
 		if s, ok := v.(string); ok {
@@ -200,6 +241,14 @@ func GetSSLClientNotBefore(ctx *fasthttp.RequestCtx) string {
 }
 
 // GetSSLClientNotAfter 获取客户端证书过期时间。
+//
+// 从请求上下文中读取 mTLS 客户端证书的过期时间（ISO8601 格式）。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 返回值：
+//   - string: 证书过期时间，格式为 "2006-01-02T15:04:05Z"，未提供证书时返回空字符串
 func GetSSLClientNotAfter(ctx *fasthttp.RequestCtx) string {
 	if v := ctx.UserValue(VarSSLClientNotAfter); v != nil {
 		if s, ok := v.(string); ok {
@@ -210,6 +259,14 @@ func GetSSLClientNotAfter(ctx *fasthttp.RequestCtx) string {
 }
 
 // GetSSLClientEmail 获取客户端证书邮箱。
+//
+// 从请求上下文中读取 mTLS 客户端证书中包含的邮箱地址。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 返回值：
+//   - string: 证书中的第一个邮箱地址，未提供证书或无邮箱时返回空字符串
 func GetSSLClientEmail(ctx *fasthttp.RequestCtx) string {
 	if v := ctx.UserValue(VarSSLClientEmail); v != nil {
 		if s, ok := v.(string); ok {

@@ -26,13 +26,27 @@ import (
 	"rua.plus/lolly/internal/testutil"
 )
 
-// newTestHandler 创建测试用的静态文件处理器
+// newTestHandler 创建测试用的静态文件处理器。
+//
+// 参数：
+//   - t: 测试上下文，用于标记 helper
+//   - root: 静态文件根目录
+//
+// 返回值：
+//   - *StaticHandler: 配置好索引文件的静态文件处理器（禁用 sendfile）
 func newTestHandler(t *testing.T, root string) *StaticHandler {
 	t.Helper()
 	return NewStaticHandler(root, "/", []string{"index.html", "index.htm"}, false) // 测试时禁用 sendfile
 }
 
-// newTestContext 创建测试用的 fasthttp 请求上下文
+// newTestContext 创建测试用的 fasthttp 请求上下文。
+//
+// 参数：
+//   - t: 测试上下文，用于标记 helper
+//   - path: 请求路径
+//
+// 返回值：
+//   - *fasthttp.RequestCtx: 初始化好的请求上下文
 func newTestContext(t *testing.T, path string) *fasthttp.RequestCtx {
 	t.Helper()
 	return testutil.NewRequestCtx("GET", path)

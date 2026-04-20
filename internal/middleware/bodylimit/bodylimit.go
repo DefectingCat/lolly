@@ -176,13 +176,20 @@ func (bl *BodyLimit) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 }
 
 // limitedBodyReader 包装请求体读取器以限制最大读取字节数。
+//
+// 当读取的字节数超过限制时，返回错误并在上下文中设置 413 状态码。
 type limitedBodyReader struct {
+	// original 原始读取器
 	original interface {
 		Read(p []byte) (n int, err error)
 	}
+	// ctx 请求上下文，用于设置错误响应
 	ctx   *fasthttp.RequestCtx
+	// limit 最大允许读取的字节数
 	limit int64
+	// read 已读取的字节数
 	read  int64
+	// done 是否已达到限制
 	done  bool
 }
 
@@ -269,13 +276,15 @@ func ParseSize(sizeStr string) (int64, error) {
 	return int64(value * multiplier), nil
 }
 
-// FormatSize 将字节数格式化为人类可读的字符串。
+// formatSize 将字节数格式化为人类可读的字符串。
+//
+// 根据大小自动选择合适的单位（b、kb、mb、gb）。
 //
 // 参数：
 //   - size: 字节数
 //
 // 返回值：
-//   - string: 格式化后的字符串，如 "1mb", "10kb" 等
+//   - string: 格式化后的字符串，如 "1.00mb"、"10.00kb"
 func formatSize(size int64) string {
 	const (
 		KB = 1024

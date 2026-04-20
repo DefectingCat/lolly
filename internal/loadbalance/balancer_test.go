@@ -17,7 +17,16 @@ import (
 	"time"
 )
 
-// createHealthyTarget 创建一个带有健康状态的目标（辅助函数）
+// createHealthyTarget 创建并返回一个指定 URL 和健康状态的 Target 实例。
+//
+// 该辅助函数简化测试中 Target 的创建过程，自动初始化 Healthy 状态。
+//
+// 参数：
+//   - url: 目标 URL 地址
+//   - healthy: 健康状态，true 表示健康，false 表示不健康
+//
+// 返回值：
+//   - 初始化完成的 Target 指针
 func createHealthyTarget(url string, healthy bool) *Target {
 	t := &Target{URL: url}
 	t.Healthy.Store(healthy)

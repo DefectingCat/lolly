@@ -337,7 +337,13 @@ type AdapterConfig struct {
 	Timeout time.Duration
 }
 
-// DefaultAdapterConfig 返回默认配置。
+// DefaultAdapterConfig 返回适配器的默认配置。
+//
+// 返回包含默认缓冲区大小（4096 字节）、最大请求体大小（64KB）
+// 和超时时间（30 秒）的配置实例。
+//
+// 返回值：
+//   - *AdapterConfig: 初始化的适配器默认配置实例
 func DefaultAdapterConfig() *AdapterConfig {
 	return &AdapterConfig{
 		BufferSize:  4096,
@@ -352,7 +358,17 @@ type ConfigurableAdapter struct {
 	config *AdapterConfig
 }
 
-// NewConfigurableAdapter 创建可配置适配器。
+// NewConfigurableAdapter 创建可配置的 HTTP/2 适配器。
+//
+// 根据传入的配置参数创建适配器实例，如果配置为 nil 则使用默认配置。
+// 适用于需要自定义缓冲区大小、请求体大小限制或超时时间的场景。
+//
+// 参数：
+//   - handler: fasthttp 请求处理器，用于处理 HTTP/2 请求
+//   - config: 适配器配置，为 nil 时使用默认配置
+//
+// 返回值：
+//   - *ConfigurableAdapter: 初始化的可配置适配器实例
 func NewConfigurableAdapter(handler fasthttp.RequestHandler, config *AdapterConfig) *ConfigurableAdapter {
 	if config == nil {
 		config = DefaultAdapterConfig()

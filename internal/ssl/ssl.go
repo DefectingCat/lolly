@@ -377,7 +377,7 @@ func (m *TLSManager) getConfigForClientWithOCSP(hello *tls.ClientHelloInfo) (*tl
 		baseCfg = m.defaultCfg
 	}
 
-	// If no OCSP manager or no certificates, return base config
+	// 无 OCSP 管理器或无证书时，返回基础配置
 	if m.ocspManager == nil || len(baseCfg.Certificates) == 0 {
 		return baseCfg, nil
 	}
@@ -385,7 +385,7 @@ func (m *TLSManager) getConfigForClientWithOCSP(hello *tls.ClientHelloInfo) (*tl
 	// 创建配置副本并附加 OCSP 响应
 	cfgCopy := baseCfg.Clone()
 
-	// Attach OCSP response to the certificate
+	// 将 OCSP 响应附加到证书
 	cert := &cfgCopy.Certificates[0]
 	if len(cert.Certificate) > 0 {
 		// 解析叶子证书以获取序列号
@@ -394,7 +394,7 @@ func (m *TLSManager) getConfigForClientWithOCSP(hello *tls.ClientHelloInfo) (*tl
 			serial := leafCert.SerialNumber.String()
 			ocspResp := m.ocspManager.GetOCSPResponse(serial)
 			if ocspResp != nil {
-				// Attach OCSP response to certificate
+				// 将 OCSP 响应附加到证书
 				cert.OCSPStaple = ocspResp
 			}
 		}
@@ -526,8 +526,8 @@ func extractPEMBlock(data []byte) ([]byte, []byte) {
 	blockData := data[start : start+end+len(endMarker)]
 	rest := data[start+end+len(endMarker):]
 
-	// Decode PEM to DER (simplified - actual implementation would use encoding/pem)
-	// For now, we return the raw block data
+	// 注意：此处为简化实现，直接返回原始 PEM 块数据
+	// 生产环境建议使用 encoding/pem 进行完整解码
 	return blockData, rest
 }
 

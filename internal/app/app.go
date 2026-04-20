@@ -72,7 +72,15 @@ type App struct {
 	listeners  []net.Listener
 }
 
-// NewApp 创建应用程序。
+// NewApp 创建应用程序实例。
+//
+// 该函数初始化 App 结构体，保存配置文件路径供后续加载使用。
+//
+// 参数：
+//   - cfgPath: 配置文件路径（YAML 格式），用于加载服务器配置
+//
+// 返回值：
+//   - *App: 初始化的应用程序实例，包含配置路径等信息
 func NewApp(cfgPath string) *App {
 	return &App{
 		cfgPath: cfgPath,
@@ -89,7 +97,18 @@ func (a *App) SetLogFile(path string) {
 	a.logFile = path
 }
 
-// Run 应用程序入口。
+// Run 应用程序入口函数。
+//
+// 根据参数决定行为：生成配置、打印版本或启动应用。
+//
+// 参数：
+//   - cfgPath: 配置文件路径
+//   - genConfig: 是否仅生成默认配置并退出
+//   - outputPath: 配置输出路径，为空时输出到 stdout
+//   - showVersion: 是否仅打印版本信息并退出
+//
+// 返回值：
+//   - int: 退出码，0 表示正常退出，1 表示异常
 func Run(cfgPath string, genConfig bool, outputPath string, showVersion bool) int {
 	if genConfig {
 		return generateConfig(outputPath)

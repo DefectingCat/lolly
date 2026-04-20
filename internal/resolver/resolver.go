@@ -125,6 +125,19 @@ type DNSCacheEntry struct {
 }
 
 // New 创建新的 DNS 解析器。
+//
+// 该函数根据配置创建一个 DNSResolver 实例。如果配置中
+// Enabled 为 false，则返回空操作的 noopResolver。
+// 对于启用的解析器，会自动设置合理的默认值：
+//   - Valid: 30 秒（缓存有效期）
+//   - Timeout: 5 秒（查询超时）
+//   - IPv4: 默认启用（除非显式禁用）
+//
+// 参数：
+//   - cfg: 解析器配置，包含 DNS 服务器地址、缓存大小等
+//
+// 返回值：
+//   - Resolver: DNS 解析器接口实现，禁用时返回 noopResolver
 func New(cfg *config.ResolverConfig) Resolver {
 	if !cfg.Enabled {
 		return &noopResolver{}

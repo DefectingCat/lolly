@@ -128,7 +128,9 @@ func TestGetSocketFd_UnsupportedType(t *testing.T) {
 	}
 }
 
-// mockConn 是一个不实现 TCPConn/UnixConn 的连接
+// mockConn 是一个不实现 TCPConn/UnixConn 的模拟连接。
+//
+// 用于测试 getSocketFd 对不支持连接类型的处理。
 type mockConn struct{}
 
 func (m *mockConn) Read([]byte) (n int, err error)   { return 0, nil }

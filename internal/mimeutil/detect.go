@@ -1,4 +1,18 @@
-// Package mimeutil 提供 MIME 类型检测工具。
+// Package mimeutil 提供 MIME 类型检测工具函数。
+//
+// 该文件实现了基于文件扩展名的 MIME 类型检测，
+// 补充 Go 标准库 mime 包中缺失或错误的映射。
+//
+// 主要功能：
+//   - 本地 MIME 映射：避免 mime.AddExtensionType 的全局副作用
+//   - 自动回退：未覆盖的扩展名回退到标准库
+//   - 大小写处理：自动将扩展名转为小写再查找
+//
+// 注意事项：
+//   - 使用包本地映射而非全局修改，确保多线程安全
+//   - 部分扩展名（如 .otf、.webm）Go 标准库返回错误类型，已在此纠正
+//
+// 作者：xfy
 package mimeutil
 
 import (

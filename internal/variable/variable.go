@@ -78,6 +78,16 @@ func SetGlobalVariables(vars map[string]string) {
 }
 
 // GetGlobalVariable 获取全局变量值。
+//
+// 线程安全地查询全局自定义变量存储。
+// 使用读锁保护，可在多个 goroutine 中并发调用。
+//
+// 参数：
+//   - name: 变量名称
+//
+// 返回值：
+//   - string: 变量值，不存在时返回空字符串
+//   - bool: 变量是否存在，true 表示存在，false 表示不存在
 func GetGlobalVariable(name string) (string, bool) {
 	globalVariablesLock.RLock()
 	defer globalVariablesLock.RUnlock()
@@ -89,6 +99,12 @@ func GetGlobalVariable(name string) (string, bool) {
 }
 
 // GetAllGlobalVariables 获取所有全局变量的副本。
+//
+// 线程安全地返回全局自定义变量存储的完整快照。
+// 返回的是副本，外部修改不会影响全局存储。
+//
+// 返回值：
+//   - map[string]string: 所有全局变量的键值对副本，未初始化时返回 nil
 func GetAllGlobalVariables() map[string]string {
 	globalVariablesLock.RLock()
 	defer globalVariablesLock.RUnlock()
@@ -279,14 +295,14 @@ func (vc *Context) Get(name string) (string, bool) {
 	return "", false
 }
 
-// EphemeralGet returns []byte view valid only within request scope.
+// EphemeralGet 获取请求作用域内的变量值（返回 []byte）。
 //
-// WARNING: The returned []byte becomes INVALID after request completes.
-// SAFETY: Use only for immediate consumption (logging, header write).
-// For persistent storage, use PersistentGet().
+// 警告：返回的 []byte 在请求结束后失效。
+// 安全用法：仅用于即时消费场景（如写入日志、响应头）。
+// 如需持久化存储，请使用 PersistentGet()。
 //
-// This method provides zero-copy access to variable values by using
-// GetterBytes functions registered in BuiltinVariable.
+// 该方法通过 BuiltinVariable 中注册的 GetterBytes 函数
+// 提供零拷贝访问变量值。
 func (vc *Context) EphemeralGet(name string) []byte {
 	// 1. 先查自定义变量（需要转换为 []byte）
 	if v, ok := vc.store[name]; ok {
@@ -409,10 +425,10 @@ func (vc *Context) EphemeralGet(name string) []byte {
 	return nil
 }
 
-// PersistentGet returns string for cross-request storage.
+// PersistentGet 获取持久化字符串变量值。
 //
-// Use this method when you need to store the variable value beyond
-// the current request scope (e.g., in a database, cache, or long-lived struct).
+// 当需要跨请求存储变量值时使用此方法
+//（如保存到数据库、缓存或长期存活的结构体中）。
 func (vc *Context) PersistentGet(name string) string {
 	// 直接调用 Get，它返回 string
 	v, _ := vc.Get(name)

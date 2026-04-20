@@ -75,13 +75,22 @@ type Balancer interface {
 }
 
 // RoundRobin 实现简单的轮询负载均衡。
-// 它按顺序将请求均匀分配到所有健康目标上。
+//
+// 它按顺序将请求均匀分配到所有健康目标上，适合后端服务器性能相近的场景。
+//
+// 并发安全：counter 使用 atomic 操作，支持多 goroutine 并发调用。
 type RoundRobin struct {
-	// counter 原子地为每个请求递增
+	// counter 请求计数器，原子递增，用于确定轮询位置
 	counter uint64
 }
 
 // NewRoundRobin 创建一个新的轮询负载均衡器。
+//
+// 该函数初始化一个无状态的 RoundRobin 实例，内部 counter 从零开始。
+// 适合后端服务器性能相近、无需权重区分的场景。
+//
+// 返回值：
+//   - *RoundRobin: 初始化的轮询均衡器实例
 func NewRoundRobin() *RoundRobin {
 	return &RoundRobin{}
 }
@@ -100,13 +109,22 @@ func (r *RoundRobin) Select(targets []*Target) *Target {
 }
 
 // WeightedRoundRobin 实现权重轮询负载均衡。
-// 权重越高的目标接收成比例更多的请求。
+//
+// 权重越高的目标接收成比例更多的请求，适合后端服务器性能差异较大的场景。
+//
+// 并发安全：counter 使用 atomic 操作，支持多 goroutine 并发调用。
 type WeightedRoundRobin struct {
-	// counter 原子地为每个请求递增
+	// counter 请求计数器，原子递增，用于确定权重分布位置
 	counter uint64
 }
 
 // NewWeightedRoundRobin 创建一个新的权重轮询负载均衡器。
+//
+// 该函数初始化一个 WeightedRoundRobin 实例，内部 counter 从零开始。
+// 权重越高的目标接收成比例更多的请求，适合后端服务器性能差异较大的场景。
+//
+// 返回值：
+//   - *WeightedRoundRobin: 初始化的权重轮询均衡器实例
 func NewWeightedRoundRobin() *WeightedRoundRobin {
 	return &WeightedRoundRobin{}
 }
@@ -155,10 +173,16 @@ func (w *WeightedRoundRobin) Select(targets []*Target) *Target {
 }
 
 // LeastConnections 实现最少连接负载均衡。
-// 它选择活跃连接数最少的目标。
+//
+// 它选择活跃连接数最少的目标，适合请求处理时间差异较大的场景。
+//
+// 该算法无状态设计，不维护内部计数器，直接读取目标连接数。
 type LeastConnections struct{}
 
 // NewLeastConnections 创建一个新的最少连接负载均衡器。
+//
+// 返回值：
+//   - 初始化的 LeastConnections 实例
 func NewLeastConnections() *LeastConnections {
 	return &LeastConnections{}
 }
@@ -187,10 +211,15 @@ func (l *LeastConnections) Select(targets []*Target) *Target {
 }
 
 // IPHash 实现基于 IP 哈希的负载均衡。
-// 它将来自同一客户端 IP 的请求始终路由到同一目标。
+//
+// 它将来自同一客户端 IP 的请求始终路由到同一目标，实现会话保持。
+// 适合需要会话粘性的场景，如无状态后端的有状态请求处理。
 type IPHash struct{}
 
 // NewIPHash 创建一个新的 IP 哈希负载均衡器。
+//
+// 返回值：
+//   - 初始化的 IPHash 实例
 func NewIPHash() *IPHash {
 	return &IPHash{}
 }
@@ -219,8 +248,16 @@ func (i *IPHash) SelectByIP(targets []*Target, clientIP string) *Target {
 	return healthy[idx]
 }
 
-// filterHealthy 返回仅包含健康目标的新切片。
-// 这是负载均衡实现使用的辅助函数。
+// filterHealthy 从目标列表中筛选出所有健康的目标，返回新切片。
+//
+// 该函数遍历输入切片，仅保留 Healthy 状态为 true 的目标。
+// 返回的切片容量与输入相同，避免多次内存分配。
+//
+// 参数：
+//   - targets: 原始目标列表
+//
+// 返回值：
+//   - 仅包含健康目标的新切片，当无健康目标时返回空切片
 func filterHealthy(targets []*Target) []*Target {
 	healthy := make([]*Target, 0, len(targets))
 	for _, t := range targets {
@@ -243,8 +280,17 @@ func DecrementConnections(t *Target) {
 	atomic.AddInt64(&t.Connections, -1)
 }
 
-// filterHealthyAndExclude 返回仅包含健康目标且不在排除列表中的新切片。
-// 这是 SelectExcluding 使用的辅助函数。
+// filterHealthyAndExclude 从目标列表中筛选出健康且不在排除列表中的目标，返回新切片。
+//
+// 该函数用于 SelectExcluding 方法，同时处理健康过滤和排除逻辑。
+// 排除判断基于目标的 URL 进行匹配。
+//
+// 参数：
+//   - targets: 原始目标列表
+//   - excluded: 需要排除的目标列表（nil 值会被安全忽略）
+//
+// 返回值：
+//   - 包含健康且非排除目标的新切片
 func filterHealthyAndExclude(targets []*Target, excluded []*Target) []*Target {
 	// 构建排除集合（使用 URL 作为键）
 	excludeSet := make(map[string]bool, len(excluded))

@@ -26,7 +26,7 @@ import (
 //
 // 拦截 HTTP 错误响应（4xx 和 5xx），并使用预加载的自定义错误页面内容替换响应。
 type ErrorIntercept struct {
-	// manager 错误页面管理器
+	// manager 错误页面管理器，用于获取预加载的错误页面内容
 	manager *handler.ErrorPageManager
 }
 

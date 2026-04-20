@@ -318,7 +318,18 @@ type pendingRequest struct {
 	err  error         // 生成结果
 }
 
-// NewProxyCache 创建代理缓存。
+// NewProxyCache 创建代理缓存实例。
+//
+// 根据指定的缓存规则、锁开关和过期复用时间创建 ProxyCache。
+// 启用 cacheLock 可防止缓存击穿，多个并发请求共享同一个生成过程。
+//
+// 参数：
+//   - rules: 代理缓存规则列表，定义可缓存的路径、方法、状态码等
+//   - cacheLock: 是否启用缓存生成锁，防止多个请求同时生成缓存
+//   - staleTime: 过期缓存可复用的额外时间，设为 0 表示不启用
+//
+// 返回值：
+//   - *ProxyCache: 初始化的代理缓存实例
 func NewProxyCache(rules []ProxyCacheRule, cacheLock bool, staleTime time.Duration) *ProxyCache {
 	return &ProxyCache{
 		rules:     rules,

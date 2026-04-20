@@ -121,6 +121,9 @@ type PartialLoadError struct {
 }
 
 // Error 实现 error 接口。
+//
+// 返回值：
+//   - string: 格式化的错误消息，包含失败的数量
 func (e *PartialLoadError) Error() string {
 	return fmt.Sprintf("部分错误页面加载失败: %d 个错误", len(e.Errors))
 }

@@ -22,10 +22,12 @@ const (
 	// 小于该值的文件使用普通 io.Copy，避免系统调用开销。
 	MinSendfileSize = 8 * 1024
 
-	// sendfile 最大重试次数
+	// sendfileMaxRetries sendfile 系统调用最大重试次数。
+	// 用于处理 EAGAIN/EWOULDBLOCK 等临时性错误。
 	sendfileMaxRetries = 100
 
-	// sendfile 重试等待时间
+	// sendfileRetryDelay sendfile 重试间隔等待时间。
+	// 短暂等待以允许 socket 缓冲区恢复。
 	sendfileRetryDelay = 1 * time.Millisecond
 )
 
@@ -70,11 +72,30 @@ func SendFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 }
 
 // getNetConn 从 fasthttp.RequestCtx 获取底层 net.Conn。
+//
+// 用于获取网络连接以便提取 socket 文件描述符。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 返回值：
+//   - net.Conn: 底层网络连接，如果无法获取则返回 nil
 func getNetConn(ctx *fasthttp.RequestCtx) net.Conn {
 	return ctx.Conn()
 }
 
 // copyFile 普通文件拷贝（fallback）。
+//
+// 使用 io.Copy 进行文件传输，适用于不支持 sendfile 的场景或小文件。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，作为写入目标
+//   - file: 源文件对象
+//   - offset: 文件起始偏移量
+//   - length: 传输长度，0 表示拷贝到文件末尾
+//
+// 返回值：
+//   - error: 拷贝过程中的错误
 func copyFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) error {
 	if offset > 0 {
 		if _, err := file.Seek(offset, io.SeekStart); err != nil {
@@ -95,6 +116,15 @@ func copyFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 //
 // 使用 Linux 特有的 sendfile 系统调用实现零拷贝传输。
 // 正确处理临时错误（EAGAIN、EINTR）和连接断开（EPIPE、ECONNRESET）。
+//
+// 参数：
+//   - conn: 目标网络连接（必须是 TCPConn 或 UnixConn）
+//   - fileFd: 源文件的文件描述符
+//   - offset: 文件起始偏移量（未使用，由内核自动处理）
+//   - length: 传输长度（字节）
+//
+// 返回值：
+//   - error: 传输过程中的错误，nil 表示成功
 func linuxSendfile(conn net.Conn, fileFd uintptr, _, length int64) error {
 	socketFd, err := getSocketFd(conn)
 	if err != nil {
@@ -156,6 +186,14 @@ func linuxSendfile(conn net.Conn, fileFd uintptr, _, length int64) error {
 // getSocketFd 获取 socket 文件描述符。
 //
 // 从网络连接中提取底层的文件描述符，用于 sendfile 系统调用。
+// 支持 TCPConn 和 UnixConn 两种连接类型。
+//
+// 参数：
+//   - conn: 网络连接对象
+//
+// 返回值：
+//   - uintptr: socket 文件描述符，失败时返回 0
+//   - error: 获取失败时的错误，不支持的连接类型返回 ENOTSUP
 func getSocketFd(conn net.Conn) (uintptr, error) {
 	switch c := conn.(type) {
 	case *net.TCPConn:

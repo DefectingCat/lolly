@@ -152,6 +152,19 @@ type SlidingWindowLimiterWrapper struct {
 }
 
 // NewSlidingWindowLimiterWrapper 创建滑动窗口限流器包装。
+//
+// 该函数基于配置创建一个滑动窗口限流器，并将其包装为实现
+// middleware.Middleware 接口的结构体。滑动窗口模式提供更精确
+// 的限流控制，适用于需要平滑流量分布的场景。
+//
+// 参数：
+//   - cfg: 限流配置，包含速率和键类型
+//   - window: 滑动窗口持续时间
+//   - precise: 是否使用精确模式（true）或粗略模式（false）
+//
+// 返回值：
+//   - *SlidingWindowLimiterWrapper: 限流器包装实例
+//   - error: 键类型无效时返回错误
 func NewSlidingWindowLimiterWrapper(cfg *config.RateLimitConfig, window time.Duration, precise bool) (*SlidingWindowLimiterWrapper, error) {
 	keyFunc, err := parseKeyFunc(cfg.Key)
 	if err != nil {
@@ -626,15 +639,18 @@ func (m *connLimiterMiddleware) Process(next fasthttp.RequestHandler) fasthttp.R
 }
 
 // 连接数原子操作辅助函数
+
+// loadInt64 原子加载 int64 值。
 func loadInt64(ptr *int64) int64 {
 	return atomic.LoadInt64(ptr)
 }
+
+// addInt64 原子添加 int64 增量。
 
 func addInt64(ptr *int64, delta int64) {
 	atomic.AddInt64(ptr, delta)
 }
 
-// 验证接口实现
 // 验证接口实现
 var (
 	_ middleware.Middleware = (*RateLimiter)(nil)

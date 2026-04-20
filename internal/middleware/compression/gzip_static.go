@@ -1,15 +1,25 @@
-// Package compression 提供 gzip_static 预压缩文件支持。
+// Package compression 提供预压缩静态文件支持。
 //
 // 该文件实现预压缩文件的检测和发送，避免实时压缩开销。
 //
+// 主要功能：
+//   - 检测 .gz 和 .br 预压缩文件
+//   - 按优先级选择编码（brotli > gzip）
+//   - 客户端 Accept-Encoding 协商
+//   - 扩展名过滤，仅对文本类资源启用预压缩
+//
 // 主要用途：
 //
-//	用于发送预压缩的 .gz 文件，减少服务器 CPU 开销，提升响应速度。
+//	用于发送预压缩的静态资源文件，减少服务器 CPU 开销，提升响应速度。
 //
 // 使用场景：
 //   - 静态资源预先压缩（如 CSS、JS、HTML 文件）
-//   - 构建时生成 .gz 文件
-//   - 运行时直接发送预压缩文件
+//   - 构建时生成 .gz 或 .br 文件
+//   - 运行时直接发送预压缩文件，避免实时压缩
+//
+// 注意事项：
+//   - 需要客户端支持对应的 Content-Encoding
+//   - 预压缩文件需要与源文件放在同一目录
 //
 // 作者：xfy
 package compression
@@ -23,23 +33,32 @@ import (
 	"rua.plus/lolly/internal/mimeutil"
 )
 
-// GzipStatic 预压缩文件支持。
+// GzipStatic 预压缩文件支持中间件。
 //
 // 检查是否存在预压缩的 .gz 或 .br 文件，如果存在且客户端支持对应编码，
 // 则直接发送，避免实时压缩的 CPU 开销。
 type GzipStatic struct {
-	root                    string
+	// root 静态文件根目录路径
+	root string
+	// precompressedExtensions 预压缩文件扩展名列表（如 .br, .gz）
 	precompressedExtensions []string
-	extensions              []string
-	enabled                 bool
+	// extensions 支持预压缩的源文件扩展名列表（如 .html, .css, .js）
+	extensions []string
+	// enabled 是否启用预压缩支持
+	enabled bool
 }
 
 // NewGzipStatic 创建预压缩文件处理器。
 //
+// 根据配置创建预压缩文件处理器实例，设置默认扩展名列表。
+//
 // 参数：
 //   - enabled: 是否启用预压缩支持
-//   - root: 静态文件根目录
-//   - extensions: 支持预压缩的文件扩展名，为空则使用默认值
+//   - root: 静态文件根目录路径
+//   - extensions: 支持预压缩的文件扩展名列表，为空则使用默认值
+//
+// 返回值：
+//   - *GzipStatic: 创建的预压缩文件处理器
 func NewGzipStatic(enabled bool, root string, extensions []string) *GzipStatic {
 	if len(extensions) == 0 {
 		extensions = []string{".html", ".css", ".js", ".json", ".xml", ".svg", ".txt"}
@@ -117,7 +136,13 @@ func (g *GzipStatic) ServeFile(ctx *fasthttp.RequestCtx, filePath string) bool {
 	return false
 }
 
-// matchExtension 检查文件扩展名是否匹配。
+// matchExtension 检查文件扩展名是否在支持的预压缩扩展名列表中。
+//
+// 参数：
+//   - filePath: 文件路径
+//
+// 返回值：
+//   - bool: true 表示文件扩展名匹配支持列表
 func (g *GzipStatic) matchExtension(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	for _, e := range g.extensions {
@@ -129,18 +154,32 @@ func (g *GzipStatic) matchExtension(filePath string) bool {
 }
 
 // Enabled 返回是否启用预压缩。
+//
+// 返回值：
+//   - bool: true 表示已启用预压缩支持
 func (g *GzipStatic) Enabled() bool {
 	return g.enabled
 }
 
-// Extensions 返回支持的扩展名列表。
+// Extensions 返回支持的源文件扩展名列表。
+//
+// 返回值：
+//   - []string: 支持预压缩的源文件扩展名列表
 func (g *GzipStatic) Extensions() []string {
 	return g.extensions
 }
 
 // supportsEncoding 检查客户端是否支持指定编码。
 //
-// 简单检查，忽略 q-value，固定优先级由遍历顺序决定。
+// 通过检查 Accept-Encoding 请求头中是否包含指定编码名称。
+// 忽略 q-value（质量因子），固定优先级由遍历顺序决定。
+//
+// 参数：
+//   - acceptEncoding: Accept-Encoding 请求头值
+//   - ext: 预压缩文件扩展名（如 ".br"、".gz"）
+//
+// 返回值：
+//   - bool: true 表示客户端支持该编码
 func supportsEncoding(acceptEncoding []byte, ext string) bool {
 	if len(acceptEncoding) == 0 {
 		return false

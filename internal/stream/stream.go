@@ -371,7 +371,14 @@ type HealthCheckSpec struct {
 	Enabled bool
 }
 
-// NewServer 创建 Stream 服务器。
+// NewServer 创建 Stream 代理服务器实例。
+//
+// 初始化 TCP/UDP 第四层代理服务器，包含监听器、上游配置和
+// 会话管理的空映射。创建后需通过 AddUpstream、ListenTCP/UDP
+// 等方法配置后再启动。
+//
+// 返回值：
+//   - *Server: 初始化的 Stream 代理服务器实例
 func NewServer() *Server {
 	return &Server{
 		listeners:  make(map[string]net.Listener),

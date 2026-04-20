@@ -1,7 +1,11 @@
 // Package netutil 提供网络相关的通用工具函数。
 //
-// 该包包含 URL 解析、客户端 IP 提取等网络操作的工具函数，
+// 该文件包含 URL 解析和主机地址提取的工具函数，
 // 供 proxy、middleware、server 等模块共享使用。
+//
+// 主要功能：
+//   - ParseTargetURL: 解析目标 URL，提取主机地址和 TLS 标志
+//   - ExtractHost: 简化版 URL 解析，始终添加默认端口
 //
 // 作者：xfy
 package netutil

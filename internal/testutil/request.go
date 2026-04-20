@@ -1,3 +1,17 @@
+// Package testutil 提供测试辅助工具函数。
+//
+// 该文件包含请求上下文创建相关的辅助函数，用于单元测试：
+//   - 创建测试用的 fasthttp.RequestCtx
+//   - 支持 method、path、body、header 配置
+//
+// 主要用途：
+//
+//	简化单元测试中请求上下文的创建，避免重复代码。
+//
+// 注意事项：
+//   - 仅用于测试，不应在生产代码中使用
+//
+// 作者：xfy
 package testutil
 
 import "github.com/valyala/fasthttp"

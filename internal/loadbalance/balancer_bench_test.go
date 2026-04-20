@@ -1,4 +1,21 @@
 // Package loadbalance 提供负载均衡算法的基准测试。
+//
+// 该文件测试各负载均衡算法在不同规模下的性能表现，包括：
+//   - 轮询算法（RoundRobin）在不同目标数量下的吞吐量
+//   - 加权轮询算法（WeightedRoundRobin）在等权重/变权重场景下的性能
+//   - 一致性哈希算法（ConsistentHash）在不同虚拟节点数下的选择和重建开销
+//   - 一致性哈希排除选择（SelectExcludingByKey）的性能
+//   - 最少连接（LeastConnections）和 IP 哈希（IPHash）的基准性能
+//   - 所有算法的横向对比测试
+//
+// 主要用途：
+//   用于评估负载均衡算法在不同规模下的性能特征，指导算法选型和参数调优。
+//
+// 注意事项：
+//   - 基准测试使用并行模式（RunParallel），结果受 CPU 核心数影响
+//   - 测试前需确保目标均为健康状态
+//
+// 作者：xfy
 package loadbalance
 
 import (
@@ -7,7 +24,13 @@ import (
 	"testing"
 )
 
-// generateTargets 生成指定数量的健康目标用于基准测试。
+// generateTargets 生成指定数量的健康目标，用于基准测试。
+//
+// 参数：
+//   - count: 目标数量
+//
+// 返回值：
+//   - 包含 count 个健康目标的切片，权重均为 1
 func generateTargets(count int) []*Target {
 	targets := make([]*Target, count)
 	for i := 0; i < count; i++ {
@@ -20,7 +43,14 @@ func generateTargets(count int) []*Target {
 	return targets
 }
 
-// generateWeightedTargets 生成带权重的目标用于基准测试。
+// generateWeightedTargets 生成带指定权重的健康目标，用于基准测试。
+//
+// 参数：
+//   - count: 目标数量
+//   - weights: 权重列表，长度不足时默认权重为 1
+//
+// 返回值：
+//   - 包含 count 个健康目标的切片，按 weights 分配权重
 func generateWeightedTargets(count int, weights []int) []*Target {
 	targets := make([]*Target, count)
 	for i := 0; i < count; i++ {
@@ -37,7 +67,12 @@ func generateWeightedTargets(count int, weights []int) []*Target {
 	return targets
 }
 
-// BenchmarkRoundRobinSelect 基准测试轮询算法。
+// BenchmarkRoundRobinSelect 基准测试轮询算法在不同目标数量下的性能。
+//
+// 测试用例：
+//   - 3 个目标：小规模场景
+//   - 50 个目标：中等规模场景
+//   - 200 个目标：大规模场景
 func BenchmarkRoundRobinSelect(b *testing.B) {
 	testCases := []struct {
 		name    string
@@ -63,7 +98,12 @@ func BenchmarkRoundRobinSelect(b *testing.B) {
 	}
 }
 
-// BenchmarkWeightedRoundRobin 基准测试加权轮询算法。
+// BenchmarkWeightedRoundRobin 基准测试加权轮询算法在等权重和变权重场景下的性能。
+//
+// 测试用例：
+//   - 等权重：所有目标权重相同（1:1:1）
+//   - 变权重：目标权重差异较大（1:5:10）
+//   - 不同规模：3/50/200 个目标
 func BenchmarkWeightedRoundRobin(b *testing.B) {
 	testCases := []struct {
 		name    string
@@ -92,7 +132,13 @@ func BenchmarkWeightedRoundRobin(b *testing.B) {
 	}
 }
 
-// BenchmarkConsistentHashSelect 基准测试一致性哈希算法。
+// BenchmarkConsistentHashSelect 基准测试一致性哈希算法在不同虚拟节点数下的选择性能。
+//
+// 测试用例：
+//   - 10 个目标 + 50/150/200 个虚拟节点
+//   - 50/100 个目标 + 150 个虚拟节点
+//
+// 验证虚拟节点数量对哈希环遍历性能的影响。
 func BenchmarkConsistentHashSelect(b *testing.B) {
 	testCases := []struct {
 		name         string
@@ -187,6 +233,10 @@ func BenchmarkConsistentHashSelectExcluding(b *testing.B) {
 	}
 }
 
+// BenchmarkLeastConnSelect 基准测试最少连接算法在不同目标数量下的性能。
+//
+// 测试用例：
+//   - 3/50/200 个目标，连接数按递增方式分配（模拟负载差异）
 func BenchmarkLeastConnSelect(b *testing.B) {
 	testCases := []struct {
 		name    string

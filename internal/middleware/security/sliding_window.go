@@ -7,8 +7,14 @@
 //	用于更精确地控制请求速率，相比令牌桶算法提供更平滑的限流效果。
 //
 // 算法特点：
-//   - 近似模式：O(1) 时间复杂度，内存占用低
-//   - 精确模式：O(n) 时间复杂度，限流更精确
+//   - 近似模式：O(1) 时间复杂度，内存占用低，适合高并发场景
+//   - 精确模式：O(n) 时间复杂度，记录每个请求时间戳，限流更精确
+//   - 分段锁结构：采用 16 个分段锁桶，减少锁竞争
+//
+// 注意事项：
+//   - 近似模式使用时间戳数组进行估算，可能存在精度偏差
+//   - 精确模式在限流键较多时内存占用较大
+//   - 建议定期调用 Cleanup 清理过期计数器
 //
 // 作者：xfy
 package security
@@ -20,20 +26,27 @@ import (
 )
 
 // limiterBucket 分段锁桶，每个桶持有部分键的计数器。
+//
 // 使用分段锁减少全局锁竞争，提高并发性能。
 type limiterBucket struct {
+	// counters 限流键到计数器的映射
 	counters map[string]*windowCounter
+	// mu 读写锁，保护 counters 的并发访问
 	mu       sync.RWMutex
 }
 
 // SlidingWindowLimiter 滑动窗口限流器。
 //
 // 使用滑动窗口算法限制请求速率，支持近似和精确两种模式。
-// 采用16个分段锁桶结构，减少锁竞争，提高并发性能。
+// 采用 16 个分段锁桶结构，减少锁竞争，提高并发性能。
 type SlidingWindowLimiter struct {
+	// buckets 分段锁桶数组，固定 16 个桶
 	buckets [16]*limiterBucket
+	// window 滑动窗口大小
 	window  time.Duration
+	// limit 窗口内最大请求数
 	limit   int
+	// precise 是否使用精确模式
 	precise bool
 }
 
@@ -51,19 +64,29 @@ func (s *SlidingWindowLimiter) getBucket(key string) *limiterBucket {
 	return s.buckets[h.Sum64()%16]
 }
 
-// windowCounter 窗口计数器。
+// windowCounter 滑动窗口计数器。
+//
+// 记录窗口内的请求时间戳，用于精确或近似限流计算。
 type windowCounter struct {
+	// timestamps 请求时间戳列表
 	timestamps []time.Time
+	// count 当前窗口内的请求计数
 	count      int64
+	// mu 互斥锁，保护并发访问
 	mu         sync.Mutex
 }
 
 // NewSlidingWindowLimiter 创建滑动窗口限流器。
 //
+// 初始化 16 个分段锁桶并配置窗口参数。
+//
 // 参数：
-//   - window: 窗口大小（如 1s、1m）
+//   - window: 滑动窗口大小（如 1s、1m）
 //   - limit: 窗口内最大请求数
-//   - precise: 是否使用精确模式
+//   - precise: 是否使用精确模式（true 为精确，false 为近似）
+//
+// 返回值：
+//   - *SlidingWindowLimiter: 创建的限流器实例
 func NewSlidingWindowLimiter(window time.Duration, limit int, precise bool) *SlidingWindowLimiter {
 	s := &SlidingWindowLimiter{
 		window:  window,

@@ -482,6 +482,12 @@ type Settings struct {
 }
 
 // DefaultSettings 返回默认 HTTP/2 设置。
+//
+// 返回包含 HTTP/2 协议推荐的默认参数设置，包括头部表大小、
+// 并发流数量、初始窗口大小、帧大小等。
+//
+// 返回值：
+//   - Settings: 默认 HTTP/2 配置参数
 func DefaultSettings() Settings {
 	return Settings{
 		HeaderTableSize:      4096,
