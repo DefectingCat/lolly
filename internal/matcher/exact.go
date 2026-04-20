@@ -15,6 +15,9 @@ type ExactMatcher struct {
 	// handler 请求处理器
 	handler fasthttp.RequestHandler
 
+	// internal 是否为 internal location
+	internal bool
+
 	// path 精确匹配路径
 	path string
 
@@ -28,14 +31,16 @@ type ExactMatcher struct {
 //   - path: 精确匹配的路径
 //   - handler: 匹配成功后的请求处理器
 //   - priority: 优先级（通常设为 1）
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - *ExactMatcher: 精确匹配器实例
-func NewExactMatcher(path string, handler fasthttp.RequestHandler, priority int) *ExactMatcher {
+func NewExactMatcher(path string, handler fasthttp.RequestHandler, priority int, internal bool) *ExactMatcher {
 	return &ExactMatcher{
 		path:     path,
 		handler:  handler,
 		priority: priority,
+		internal: internal,
 	}
 }
 
@@ -60,5 +65,6 @@ func (m *ExactMatcher) Result() *MatchResult {
 		Path:         m.path,
 		Priority:     m.priority,
 		LocationType: LocationTypeExact,
+		Internal:     m.internal,
 	}
 }

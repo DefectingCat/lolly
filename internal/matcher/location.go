@@ -74,10 +74,11 @@ func NewLocationEngine() *LocationEngine {
 // 参数：
 //   - path: 精确匹配路径
 //   - handler: 请求处理器
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - error: 引擎已初始化或路径冲突时返回错误
-func (e *LocationEngine) AddExact(path string, handler fasthttp.RequestHandler) error {
+func (e *LocationEngine) AddExact(path string, handler fasthttp.RequestHandler, internal bool) error {
 	if e.initialized {
 		return errors.New("LocationEngine already initialized")
 	}
@@ -86,7 +87,7 @@ func (e *LocationEngine) AddExact(path string, handler fasthttp.RequestHandler) 
 		return err
 	}
 
-	matcher := NewExactMatcher(path, handler, 1)
+	matcher := NewExactMatcher(path, handler, 1, internal)
 	e.exactMatchers[path] = matcher
 	return nil
 }
@@ -96,10 +97,11 @@ func (e *LocationEngine) AddExact(path string, handler fasthttp.RequestHandler) 
 // 参数：
 //   - path: 前缀优先路径
 //   - handler: 请求处理器
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - error: 引擎已初始化或路径冲突时返回错误
-func (e *LocationEngine) AddPrefixPriority(path string, handler fasthttp.RequestHandler) error {
+func (e *LocationEngine) AddPrefixPriority(path string, handler fasthttp.RequestHandler, internal bool) error {
 	if e.initialized {
 		return errors.New("LocationEngine already initialized")
 	}
@@ -108,7 +110,7 @@ func (e *LocationEngine) AddPrefixPriority(path string, handler fasthttp.Request
 		return err
 	}
 
-	return e.prefixPriorityTree.Insert(path, handler, 2, "prefix_priority")
+	return e.prefixPriorityTree.Insert(path, handler, 2, "prefix_priority", internal)
 }
 
 // AddRegex 添加正则匹配 location。
@@ -117,15 +119,16 @@ func (e *LocationEngine) AddPrefixPriority(path string, handler fasthttp.Request
 //   - pattern: 正则表达式模式
 //   - handler: 请求处理器
 //   - caseInsensitive: 是否大小写不敏感（~* 模式）
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - error: 引擎已初始化或正则表达式无效时返回错误
-func (e *LocationEngine) AddRegex(pattern string, handler fasthttp.RequestHandler, caseInsensitive bool) error {
+func (e *LocationEngine) AddRegex(pattern string, handler fasthttp.RequestHandler, caseInsensitive bool, internal bool) error {
 	if e.initialized {
 		return errors.New("LocationEngine already initialized")
 	}
 
-	matcher, err := NewRegexMatcher(pattern, handler, 3, caseInsensitive)
+	matcher, err := NewRegexMatcher(pattern, handler, 3, caseInsensitive, internal)
 	if err != nil {
 		return fmt.Errorf("invalid regex pattern: %w", err)
 	}
@@ -139,10 +142,11 @@ func (e *LocationEngine) AddRegex(pattern string, handler fasthttp.RequestHandle
 // 参数：
 //   - path: 前缀路径
 //   - handler: 请求处理器
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - error: 引擎已初始化或路径冲突时返回错误
-func (e *LocationEngine) AddPrefix(path string, handler fasthttp.RequestHandler) error {
+func (e *LocationEngine) AddPrefix(path string, handler fasthttp.RequestHandler, internal bool) error {
 	if e.initialized {
 		return errors.New("LocationEngine already initialized")
 	}
@@ -151,7 +155,7 @@ func (e *LocationEngine) AddPrefix(path string, handler fasthttp.RequestHandler)
 		return err
 	}
 
-	return e.prefixTree.Insert(path, handler, 4, "prefix")
+	return e.prefixTree.Insert(path, handler, 4, "prefix", internal)
 }
 
 // AddNamed 添加命名 location。

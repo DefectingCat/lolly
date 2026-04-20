@@ -29,6 +29,9 @@ type RadixNode struct {
 	// priority 匹配优先级
 	priority int
 
+	// internal 是否为 internal location
+	internal bool
+
 	// isLeaf 是否为叶子节点（有 handler）
 	isLeaf bool
 
@@ -70,14 +73,15 @@ func NewRadixTree() *RadixTree {
 //   - handler: 匹配成功后的请求处理器
 //   - priority: 匹配优先级
 //   - locationType: 位置类型标识
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - error: 树已初始化或路径已存在时返回错误
-func (t *RadixTree) Insert(path string, handler fasthttp.RequestHandler, priority int, locationType string) error {
+func (t *RadixTree) Insert(path string, handler fasthttp.RequestHandler, priority int, locationType string, internal bool) error {
 	if t.initialized {
 		return errors.New("RadixTree already initialized")
 	}
-	return t.insertNode(nil, t.root, path, handler, priority, locationType)
+	return t.insertNode(nil, t.root, path, handler, priority, locationType, internal)
 }
 
 // insertNode 完整路径分割插入算法。
@@ -95,10 +99,11 @@ func (t *RadixTree) Insert(path string, handler fasthttp.RequestHandler, priorit
 //   - handler: 请求处理器
 //   - priority: 优先级
 //   - locationType: 位置类型
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - error: 路径已存在时返回错误
-func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, handler fasthttp.RequestHandler, priority int, locationType string) error {
+func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, handler fasthttp.RequestHandler, priority int, locationType string, internal bool) error {
 	// Case 1: 空节点（根节点），直接设置
 	if node.prefix == "" && len(node.children) == 0 && node.handler == nil {
 		if path == "" {
@@ -106,6 +111,7 @@ func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, 
 			node.priority = priority
 			node.isLeaf = true
 			node.locationType = locationType
+			node.internal = internal
 			return nil
 		}
 		// 创建新子节点
@@ -115,6 +121,7 @@ func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, 
 			isLeaf:       true,
 			priority:     priority,
 			locationType: locationType,
+			internal:     internal,
 		}
 		node.children = append(node.children, newNode)
 		return nil
@@ -140,13 +147,14 @@ func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, 
 			node.priority = priority
 			node.isLeaf = true
 			node.locationType = locationType
+			node.internal = internal
 			return nil
 		}
 
 		// 搜索匹配剩余路径的子节点
 		for _, child := range node.children {
 			if strings.HasPrefix(remaining, child.prefix) {
-				return t.insertNode(node, child, remaining, handler, priority, locationType)
+				return t.insertNode(node, child, remaining, handler, priority, locationType, internal)
 			}
 		}
 
@@ -157,6 +165,7 @@ func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, 
 			isLeaf:       true,
 			priority:     priority,
 			locationType: locationType,
+			internal:     internal,
 		}
 		node.children = append(node.children, newNode)
 		return nil
@@ -179,6 +188,7 @@ func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, 
 		isLeaf:       true,
 		priority:     priority,
 		locationType: locationType,
+		internal:     internal,
 	}
 
 	// 将原节点和新节点作为 splitNode 的子节点
@@ -243,6 +253,7 @@ func (t *RadixTree) searchLongest(node *RadixNode, path string, bestMatch *Match
 			Path:         node.prefix,
 			Priority:     node.priority,
 			LocationType: node.locationType,
+			Internal:     node.internal,
 		}
 
 		// nil-safe 优先级比较 + 长度比较

@@ -35,11 +35,12 @@ func NewPrefixMatcher() *PrefixMatcher {
 // 参数：
 //   - path: 前缀路径
 //   - handler: 匹配成功后的请求处理器
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - error: 路径重复或树已初始化时返回错误
-func (pm *PrefixMatcher) AddPath(path string, handler fasthttp.RequestHandler) error {
-	return pm.tree.Insert(path, handler, pm.priority, "prefix")
+func (pm *PrefixMatcher) AddPath(path string, handler fasthttp.RequestHandler, internal bool) error {
+	return pm.tree.Insert(path, handler, pm.priority, "prefix", internal)
 }
 
 // Match 前缀匹配，返回最长前缀匹配结果。

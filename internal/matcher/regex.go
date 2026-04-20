@@ -28,6 +28,9 @@ type RegexMatcher struct {
 	// priority 匹配优先级，正则匹配为 3
 	priority int
 
+	// internal 是否为 internal location
+	internal bool
+
 	// caseInsensitive 是否大小写不敏感（~* 模式）
 	caseInsensitive bool
 }
@@ -39,11 +42,12 @@ type RegexMatcher struct {
 //   - handler: 匹配成功后的请求处理器
 //   - priority: 优先级（通常设为 3）
 //   - caseInsensitive: 是否大小写不敏感
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - *RegexMatcher: 正则匹配器实例
 //   - error: 正则表达式编译失败时返回错误
-func NewRegexMatcher(pattern string, handler fasthttp.RequestHandler, priority int, caseInsensitive bool) (*RegexMatcher, error) {
+func NewRegexMatcher(pattern string, handler fasthttp.RequestHandler, priority int, caseInsensitive bool, internal bool) (*RegexMatcher, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err
@@ -54,6 +58,7 @@ func NewRegexMatcher(pattern string, handler fasthttp.RequestHandler, priority i
 		handler:         handler,
 		priority:        priority,
 		caseInsensitive: caseInsensitive,
+		internal:        internal,
 		captures:        make(map[string]string),
 	}, nil
 }
@@ -67,11 +72,12 @@ func NewRegexMatcher(pattern string, handler fasthttp.RequestHandler, priority i
 //   - handler: 匹配成功后的请求处理器
 //   - priority: 优先级
 //   - caseInsensitive: 是否大小写不敏感
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - *RegexMatcher: 正则匹配器实例
-func MustRegexMatcher(pattern string, handler fasthttp.RequestHandler, priority int, caseInsensitive bool) *RegexMatcher {
-	m, err := NewRegexMatcher(pattern, handler, priority, caseInsensitive)
+func MustRegexMatcher(pattern string, handler fasthttp.RequestHandler, priority int, caseInsensitive bool, internal bool) *RegexMatcher {
+	m, err := NewRegexMatcher(pattern, handler, priority, caseInsensitive, internal)
 	if err != nil {
 		panic(err)
 	}
@@ -104,6 +110,7 @@ func (m *RegexMatcher) Result() *MatchResult {
 		Priority:     m.priority,
 		LocationType: locType,
 		Captures:     m.captures,
+		Internal:     m.internal,
 	}
 }
 

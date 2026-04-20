@@ -35,11 +35,12 @@ func NewPrefixPriorityMatcher() *PrefixPriorityMatcher {
 // 参数：
 //   - path: 前缀优先路径
 //   - handler: 匹配成功后的请求处理器
+//   - internal: 是否为 internal location
 //
 // 返回值：
 //   - error: 路径重复或树已初始化时返回错误
-func (ppm *PrefixPriorityMatcher) AddPath(path string, handler fasthttp.RequestHandler) error {
-	return ppm.tree.Insert(path, handler, ppm.priority, "prefix_priority")
+func (ppm *PrefixPriorityMatcher) AddPath(path string, handler fasthttp.RequestHandler, internal bool) error {
+	return ppm.tree.Insert(path, handler, ppm.priority, "prefix_priority", internal)
 }
 
 // Match 前缀优先匹配，返回最长前缀匹配结果。

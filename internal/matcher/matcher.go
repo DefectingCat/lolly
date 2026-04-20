@@ -42,6 +42,9 @@ type MatchResult struct {
 	// Handler 匹配到的请求处理器
 	Handler fasthttp.RequestHandler
 
+	// Internal 是否为 internal location
+	Internal bool
+
 	// LocationType 匹配类型（exact/prefix/regex 等）
 	LocationType string
 
