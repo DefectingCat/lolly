@@ -1,4 +1,17 @@
-// Package lua 提供 Lua 脚本嵌入能力
+// Package lua 提供 Lua 脚本嵌入能力。
+//
+// 该文件包含请求级 Lua 协程的实现，包括：
+//   - Phase：请求处理阶段常量（对应 nginx 生命周期）
+//   - LuaCoroutine：请求级临时协程，每个请求独立创建
+//   - 沙箱机制：隔离用户脚本，防止全局污染和危险操作
+//   - ngx API 注册：为每个协程注册完整的 ngx.* API
+//
+// 注意事项：
+//   - 协程在 ResumeOK 后变成 dead 状态，不能复用
+//   - 每个协程拥有独立的 _ENV 沙箱环境
+//   - 协程库被安全替换，阻止用户创建嵌套协程
+//
+// 作者：xfy
 package lua
 
 import (
@@ -11,7 +24,9 @@ import (
 	glua "github.com/yuin/gopher-lua"
 )
 
-// Phase 处理阶段
+// Phase 处理阶段。
+//
+// 对应 nginx 请求处理生命周期，Lua 脚本可在这些阶段中执行。
 type Phase int
 
 // 处理阶段常量，对应 nginx 请求处理生命周期
@@ -53,7 +68,14 @@ func (p Phase) String() string {
 	}
 }
 
-// LuaCoroutine 请求级临时协程
+// LuaCoroutine 请求级临时协程。
+//
+// 每个 HTTP 请求创建一个独立的 LuaCoroutine，负责：
+//   - 执行用户 Lua 脚本
+//   - 管理 ngx.* API 实例（req、resp、var、log 等）
+//   - 处理 yield/resume 循环（支持 sleep、cosocket 等异步操作）
+//   - 维护沙箱环境（独立 _ENV，受限 coroutine 库）
+//
 // 注意：协程在 ResumeOK 后变成 dead 状态，不能复用
 //
 // 类型命名说明：虽然 lua.LuaCoroutine 存在 stuttering，但保持此命名以：
@@ -61,23 +83,56 @@ func (p Phase) String() string {
 // 2) 明确区分 Lua 运行时协程与 Go 协程概念
 // 3) 保持向后兼容性
 type LuaCoroutine struct {
-	CreatedAt        time.Time
+	// CreatedAt 协程创建时间
+	CreatedAt time.Time
+
+	// ExecutionContext 执行上下文（含超时控制）
 	ExecutionContext context.Context
-	ngxReqAPI        *ngxReqAPI
-	RequestCtx       *fasthttp.RequestCtx
-	Co               *glua.LState
-	ngxVarAPI        *ngxVarAPI
-	ngxRespAPI       *ngxRespAPI
-	ngxLogAPI        *ngxLogAPI
-	Cancel           context.CancelFunc
-	executionCancel  context.CancelFunc
-	Engine           *LuaEngine
-	OutputBuffer     []byte
-	Exited           bool
+
+	// ngx.req API 实例
+	ngxReqAPI *ngxReqAPI
+
+	// 请求上下文
+	RequestCtx *fasthttp.RequestCtx
+
+	// 底层 Lua 协程（gopher-lua LState）
+	Co *glua.LState
+
+	// ngx.var API 实例
+	ngxVarAPI *ngxVarAPI
+
+	// ngx.resp API 实例
+	ngxRespAPI *ngxRespAPI
+
+	// ngx.log API 实例
+	ngxLogAPI *ngxLogAPI
+
+	// Cancel 协程取消函数
+	Cancel context.CancelFunc
+
+	// executionCancel 执行超时取消函数
+	executionCancel context.CancelFunc
+
+	// 所属引擎
+	Engine *LuaEngine
+
+	// 输出缓冲
+	OutputBuffer []byte
+
+	// 退出标记（ngx.exit 触发）
+	Exited bool
 }
 
-// SetupSandbox 创建 per-request _ENV 沙箱
-// 每个请求创建独立的 _ENV 表，通过元表继承全局环境
+// SetupSandbox 创建 per-request _ENV 沙箱。
+//
+// 每个请求创建独立的 _ENV 表，通过元表继承全局环境。
+// 安全层：
+//   - Layer 1 & 2: 替换 coroutine 库，阻止 create/wrap/resume/running
+//   - Layer 3: 注册 ngx.* API（req、resp、var、ctx、log、socket、shared、timer、location）
+//
+// 注意事项：
+//   - 阻止写入全局环境（__newindex 返回错误）
+//   - 不修改引擎级全局表，避免并发竞态条件
 func (c *LuaCoroutine) SetupSandbox() error {
 	// 创建独立的 _ENV 表
 	env := c.Co.NewTable()
@@ -112,8 +167,11 @@ func (c *LuaCoroutine) SetupSandbox() error {
 	return nil
 }
 
-// setupSecureCoroutineLib 创建安全的协程库替换
-// 移除 coroutine.create/wrap/resume，仅保留 yield/status
+// setupSecureCoroutineLib 创建安全的协程库替换。
+//
+// 移除原始 coroutine 库中的危险函数（create、wrap、resume、running），
+// 仅保留安全的 yield 和 status 函数。
+// 被拦截的函数返回友好错误消息，而非直接崩溃。
 func (c *LuaCoroutine) setupSecureCoroutineLib() {
 	// 获取原始 coroutine 表
 	originalCoroutine := c.Engine.L.GetGlobal("coroutine")
@@ -155,8 +213,18 @@ func (c *LuaCoroutine) setupSecureCoroutineLib() {
 	// 因为协程继承的是引擎全局环境，而我们在协程级别设置了独立的 coroutine 表
 }
 
-// setupNgxAPI 创建 ngx API
-// 注册 ngx.req、ngx.resp、ngx.var、ngx.ctx、ngx.log、ngx.socket 和 ngx.shared API
+// setupNgxAPI 创建并注册 ngx API 到协程环境。
+//
+// 注册以下 API 子模块：
+//   - ngx.req：请求头/URI/方法/请求体操作
+//   - ngx.resp：响应状态码/头操作
+//   - ngx.var：nginx 变量访问和自定义变量
+//   - ngx.ctx：请求级上下文 table
+//   - ngx.log：日志输出
+//   - ngx.socket：TCP cosocket
+//   - ngx.shared：共享内存字典
+//   - ngx.timer：定时器
+//   - ngx.location：子请求
 func (c *LuaCoroutine) setupNgxAPI() {
 	// 创建 ngx 表
 	ngx := c.Co.NewTable()
@@ -245,8 +313,13 @@ func setSchedulerMode(L *glua.LState, enabled bool) {
 	L.SetGlobal(schedulerModeKey, glua.LBool(enabled))
 }
 
-// IsSchedulerMode 检查 LState 是否处于 scheduler 模式
-// 用于在 API 函数中判断是否在 timer callback 上下文中
+// IsSchedulerMode 检查 LState 是否处于 scheduler 模式。
+//
+// 用于在 API 函数中判断是否在 timer callback 上下文中。
+// timer callback 环境下某些 API（如 ngx.req、ngx.ctx）不可用。
+//
+// 返回值：
+//   - bool: true 表示处于 scheduler/timer 模式
 func IsSchedulerMode(L *glua.LState) bool {
 	value := L.GetGlobal(schedulerModeKey)
 	if value == glua.LNil {
@@ -258,7 +331,15 @@ func IsSchedulerMode(L *glua.LState) bool {
 	return false
 }
 
-// Execute 在协程中执行 Lua 脚本（支持 Yield/Resume）
+// Execute 在协程中执行 Lua 脚本（支持 Yield/Resume）。
+//
+// 该函数从代码缓存中获取或编译内联脚本，然后执行。
+//
+// 参数：
+//   - script: Lua 源代码字符串
+//
+// 返回值：
+//   - error: 编译或执行失败时返回错误
 func (c *LuaCoroutine) Execute(script string) error {
 	proto, err := c.Engine.codeCache.GetOrCompileInline(script)
 	if err != nil {
@@ -267,7 +348,13 @@ func (c *LuaCoroutine) Execute(script string) error {
 	return c.executeProto(proto)
 }
 
-// ExecuteFile 执行文件脚本
+// ExecuteFile 执行文件中的 Lua 脚本。
+//
+// 参数：
+//   - path: Lua 脚本文件路径
+//
+// 返回值：
+//   - error: 编译或执行失败时返回错误
 func (c *LuaCoroutine) ExecuteFile(path string) error {
 	proto, err := c.Engine.codeCache.GetOrCompileFile(path)
 	if err != nil {
@@ -276,7 +363,14 @@ func (c *LuaCoroutine) ExecuteFile(path string) error {
 	return c.executeProto(proto)
 }
 
-// executeProto 执行编译后的字节码，处理 yield/resume 循环
+// executeProto 执行编译后的字节码，处理 yield/resume 循环。
+//
+// 该函数是协程执行的核心循环：
+//   1. 从 FunctionProto 创建 Lua 函数
+//   2. Resume 执行协程
+//   3. 如果 yield，调用 handleYield 处理并继续 Resume
+//   4. 如果 error，记录统计并返回错误
+//   5. 如果正常结束，更新执行计数
 func (c *LuaCoroutine) executeProto(proto *glua.FunctionProto) error {
 	fn := c.Engine.L.NewFunctionFromProto(proto)
 	st, execErr, values := c.Engine.L.Resume(c.Co, fn)

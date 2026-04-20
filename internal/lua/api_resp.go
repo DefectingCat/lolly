@@ -1,5 +1,21 @@
-// Package lua 提供 ngx.resp API 实现
-// 本文件实现 nginx 风格的响应 API，用于操作 HTTP 响应
+// Package lua 提供 ngx.resp API 实现。
+//
+// 该文件实现 nginx 风格的响应操作 Lua API，用于操作 HTTP 响应。
+// 兼容 OpenResty/ngx_lua 的 ngx.resp 语义。
+//
+// 主要功能：
+//   - ngx.resp.get_status()：获取响应状态码
+//   - ngx.resp.set_status(code)：设置响应状态码
+//   - ngx.resp.get_headers()：获取响应头表
+//   - ngx.resp.set_header(key, value)：设置响应头
+//   - ngx.resp.clear_header(key)：清除响应头
+//
+// 注意事项：
+//   - 响应头缓存使用 sync.Once 延迟初始化
+//   - 修改响应头后会自动清除缓存
+//   - Scheduler 模式下 ngx.resp 不可用
+//
+// 作者：xfy
 package lua
 
 import (

@@ -1,4 +1,20 @@
-// Package lua 提供 Cosocket 管理功能
+// Package lua 提供 Cosocket 管理功能。
+//
+// 该文件实现 TCP Cosocket 管理器，包括：
+//   - SocketState：Socket 生命周期状态机
+//   - SocketOperation：单个 Socket 操作的封装，支持异步等待
+//   - CosocketManager：操作生命周期管理、超时检测、统计追踪
+//
+// 特性：
+//   - 原子操作标记完成状态，避免竞态条件
+//   - 后台清理循环定期检测并取消超时操作
+//   - 统计信息使用 atomic 操作保证并发安全
+//
+// 注意事项：
+//   - 操作一旦标记完成（CompareAndSwap），不可重复完成
+//   - 管理器关闭时会取消所有未完成的操作
+//
+// 作者：xfy
 package lua
 
 import (
@@ -9,9 +25,12 @@ import (
 	"time"
 )
 
-// SocketState 表示 socket 操作状态
+// SocketState 表示 Socket 操作状态。
+//
+// 状态机流转：Idle -> Connecting -> Connected -> Sending/Receiving -> Closing -> Closed
 type SocketState int
 
+// Socket 生命周期状态常量
 const (
 	// SocketStateIdle 空闲状态
 	SocketStateIdle SocketState = iota
@@ -31,6 +50,7 @@ const (
 	SocketStateError
 )
 
+// String 返回状态的字符串表示
 func (s SocketState) String() string {
 	switch s {
 	case SocketStateIdle:
@@ -57,6 +77,7 @@ func (s SocketState) String() string {
 // OperationType 操作类型
 type OperationType string
 
+// 操作类型常量
 const (
 	// OpConnect 连接操作
 	OpConnect OperationType = "connect"
@@ -68,27 +89,60 @@ const (
 	OpClose OperationType = "close"
 )
 
-// SocketOperation 表示一个 socket 操作
+// SocketOperation 表示一个 Socket 操作。
+//
+// 封装单个异步操作的生命周期，包括创建、执行、完成和等待。
+// 使用 atomic 操作标记完成状态，通过 Done channel 通知等待方。
 type SocketOperation struct {
-	CreatedAt    time.Time
+	// ID 操作唯一标识
+	ID uint64
+
+	// Type 操作类型
+	Type OperationType
+
+	// State 当前 Socket 状态
+	State SocketState
+
+	// Socket 关联的 TCP Socket
+	Socket *TCPSocket
+
+	// Timeout 操作超时时间
+	Timeout time.Duration
+
+	// CreatedAt 操作创建时间
+	CreatedAt time.Time
+
+	// LastActivity 最后活动时间（用于超时检测）
 	LastActivity time.Time
-	Error        error
-	Result       interface{}
-	Socket       *TCPSocket
-	Done         chan struct{}
-	Type         OperationType
-	ID           uint64
-	State        SocketState
-	Timeout      time.Duration
-	completed    int32
+
+	// Result 操作结果
+	Result interface{}
+
+	// Error 操作错误
+	Error error
+
+	// Done 完成信号 channel，操作完成时关闭
+	Done chan struct{}
+
+	// completed 原子标记，1=已完成，0=未完成
+	completed int32
 }
 
-// IsCompleted 检查操作是否已完成
+// IsCompleted 检查操作是否已完成。
+//
+// 返回值：
+//   - bool: true 表示已完成
 func (op *SocketOperation) IsCompleted() bool {
 	return atomic.LoadInt32(&op.completed) == 1
 }
 
-// Complete 标记操作完成
+// Complete 标记操作完成。
+//
+// 使用 CompareAndSwap 确保只完成一次，完成后关闭 Done channel 通知等待方。
+//
+// 参数：
+//   - result: 操作结果
+//   - err: 操作错误（nil 表示成功）
 func (op *SocketOperation) Complete(result interface{}, err error) {
 	if atomic.CompareAndSwapInt32(&op.completed, 0, 1) {
 		op.Result = result
@@ -97,7 +151,16 @@ func (op *SocketOperation) Complete(result interface{}, err error) {
 	}
 }
 
-// Wait 等待操作完成
+// Wait 等待操作完成。
+//
+// 阻塞直到操作完成或上下文取消。
+//
+// 参数：
+//   - ctx: 取消上下文
+//
+// 返回值：
+//   - interface{}: 操作结果
+//   - error: 操作错误或上下文取消错误
 func (op *SocketOperation) Wait(ctx context.Context) (interface{}, error) {
 	select {
 	case <-op.Done:
@@ -107,52 +170,81 @@ func (op *SocketOperation) Wait(ctx context.Context) (interface{}, error) {
 	}
 }
 
-// Touch 更新活动时间
+// Touch 更新活动时间（用于超时检测）
 func (op *SocketOperation) Touch() {
 	op.LastActivity = time.Now()
 }
 
-// CosocketStats Cosocket 统计信息
+// CosocketStats Cosocket 统计信息。
+//
+// 包含操作和 Socket 的创建、活跃、超时、错误等统计。
 type CosocketStats struct {
-	// 总操作数
+	// TotalOperations 总操作数
 	TotalOperations uint64
 
-	// 活跃操作数
+	// ActiveOperations 当前活跃操作数
 	ActiveOperations uint64
 
-	// 超时操作数
+	// TimeoutOperations 超时操作数
 	TimeoutOperations uint64
 
-	// 错误操作数
+	// ErrorOperations 错误操作数
 	ErrorOperations uint64
 
-	// 当前 socket 数
+	// ActiveSockets 当前活跃 Socket 数
 	ActiveSockets uint64
 
-	// 总创建 socket 数
+	// TotalSocketsCreated 累计创建的 Socket 总数
 	TotalSocketsCreated uint64
 
-	// 总关闭 socket 数
+	// TotalSocketsClosed 累计关闭的 Socket 总数
 	TotalSocketsClosed uint64
 }
 
-// CosocketManager Cosocket 管理器
+// CosocketManager Cosocket 管理器。
+//
+// 负责管理 Socket 操作的生命周期，包括：
+//   - 创建和跟踪异步操作
+//   - 检测并清理超时操作
+//   - 统计操作和 Socket 的使用情况
 type CosocketManager struct {
-	ctx             context.Context
-	operations      map[uint64]*SocketOperation
-	timeoutChecker  *time.Ticker
-	cancel          context.CancelFunc
-	stats           CosocketStats
-	nextID          uint64
-	defaultTimeout  time.Duration
+	// ctx 上下文（用于控制清理循环）
+	ctx context.Context
+
+	// cancel 取消函数
+	cancel context.CancelFunc
+
+	// operations 进行中的操作映射（ID -> 操作）
+	operations map[uint64]*SocketOperation
+
+	// mu 读写锁
+	mu sync.RWMutex
+
+	// nextID 下一个操作 ID
+	nextID uint64
+
+	// defaultTimeout 默认超时时间
+	defaultTimeout time.Duration
+
+	// timeoutChecker 超时检查定时器
+	timeoutChecker *time.Ticker
+
+	// cleanupInterval 清理间隔
 	cleanupInterval time.Duration
-	mu              sync.RWMutex
+
+	// stats 统计信息
+	stats CosocketStats
 }
 
-// DefaultCosocketManager 全局默认管理器
+// DefaultCosocketManager 全局默认 Cosocket 管理器
 var DefaultCosocketManager = NewCosocketManager()
 
-// NewCosocketManager 创建新的 Cosocket 管理器
+// NewCosocketManager 创建新的 Cosocket 管理器。
+//
+// 启动后台清理循环，每 30 秒检查一次超时操作。
+//
+// 返回值：
+//   - *CosocketManager: 初始化的管理器实例
 func NewCosocketManager() *CosocketManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	cm := &CosocketManager{
@@ -171,7 +263,17 @@ func NewCosocketManager() *CosocketManager {
 	return cm
 }
 
-// StartOperation 开始一个新的 socket 操作
+// StartOperation 开始一个新的 Socket 操作。
+//
+// 创建操作实例，分配唯一 ID，注册到管理器中。
+//
+// 参数：
+//   - socket: 关联的 TCP Socket
+//   - opType: 操作类型
+//   - timeout: 超时时间，零值时使用默认超时
+//
+// 返回值：
+//   - *SocketOperation: 新创建的操作实例
 func (cm *CosocketManager) StartOperation(socket *TCPSocket, opType OperationType, timeout time.Duration) *SocketOperation {
 	if timeout <= 0 {
 		timeout = cm.defaultTimeout
@@ -201,7 +303,14 @@ func (cm *CosocketManager) StartOperation(socket *TCPSocket, opType OperationTyp
 	return op
 }
 
-// CompleteOperation 完成操作
+// CompleteOperation 完成指定 ID 的操作。
+//
+// 从管理器中移除操作，标记完成，更新统计。
+//
+// 参数：
+//   - id: 操作 ID
+//   - result: 操作结果
+//   - err: 操作错误
 func (cm *CosocketManager) CompleteOperation(id uint64, result interface{}, err error) {
 	cm.mu.Lock()
 	op, exists := cm.operations[id]
@@ -219,14 +328,20 @@ func (cm *CosocketManager) CompleteOperation(id uint64, result interface{}, err 
 	}
 }
 
-// GetOperation 获取操作
+// GetOperation 获取指定 ID 的操作。
+//
+// 参数：
+//   - id: 操作 ID
+//
+// 返回值：
+//   - *SocketOperation: 操作实例，不存在时返回 nil
 func (cm *CosocketManager) GetOperation(id uint64) *SocketOperation {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	return cm.operations[id]
 }
 
-// cleanupLoop 清理循环
+// cleanupLoop 清理循环，定期检测超时操作。
 func (cm *CosocketManager) cleanupLoop() {
 	for {
 		select {
@@ -238,7 +353,9 @@ func (cm *CosocketManager) cleanupLoop() {
 	}
 }
 
-// cleanup 清理超时操作
+// cleanup 清理超时操作。
+//
+// 扫描所有未完成的操作，标记超过 LastActivity + Timeout 的操作为超时。
 func (cm *CosocketManager) cleanup() {
 	now := time.Now()
 	timeoutOps := make([]*SocketOperation, 0)
@@ -257,7 +374,10 @@ func (cm *CosocketManager) cleanup() {
 	}
 }
 
-// Stats 获取统计信息
+// Stats 获取 Cosocket 统计信息。
+//
+// 返回值：
+//   - CosocketStats: 当前统计快照
 func (cm *CosocketManager) Stats() CosocketStats {
 	return CosocketStats{
 		TotalOperations:     atomic.LoadUint64(&cm.stats.TotalOperations),
@@ -270,12 +390,17 @@ func (cm *CosocketManager) Stats() CosocketStats {
 	}
 }
 
-// SetDefaultTimeout 设置默认超时
+// SetDefaultTimeout 设置默认超时时间。
+//
+// 参数：
+//   - timeout: 新的默认超时
 func (cm *CosocketManager) SetDefaultTimeout(timeout time.Duration) {
 	cm.defaultTimeout = timeout
 }
 
-// Close 关闭管理器
+// Close 关闭 Cosocket 管理器。
+//
+// 停止清理循环，取消所有未完成的操作。
 func (cm *CosocketManager) Close() {
 	cm.cancel()
 	cm.timeoutChecker.Stop()
@@ -294,19 +419,27 @@ func (cm *CosocketManager) Close() {
 	}
 }
 
-// TrackSocketCreated 跟踪 socket 创建
+// TrackSocketCreated 跟踪 Socket 创建（更新统计）。
 func (cm *CosocketManager) TrackSocketCreated() {
 	atomic.AddUint64(&cm.stats.TotalSocketsCreated, 1)
 	atomic.AddUint64(&cm.stats.ActiveSockets, 1)
 }
 
-// TrackSocketClosed 跟踪 socket 关闭
+// TrackSocketClosed 跟踪 Socket 关闭（更新统计）。
 func (cm *CosocketManager) TrackSocketClosed() {
 	atomic.AddUint64(&cm.stats.TotalSocketsClosed, 1)
 	atomic.AddUint64(&cm.stats.ActiveSockets, ^uint64(0))
 }
 
-// TCPAddr 解析 TCP 地址
+// TCPAddr 解析 TCP 地址。
+//
+// 参数：
+//   - host: 主机地址
+//   - port: 端口号
+//
+// 返回值：
+//   - *net.TCPAddr: 解析后的 TCP 地址
+//   - error: 解析失败时返回错误
 func (cm *CosocketManager) TCPAddr(host string, port int) (*net.TCPAddr, error) {
 	return &net.TCPAddr{
 		IP:   net.ParseIP(host),

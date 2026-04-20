@@ -1,4 +1,18 @@
-// Package lua 提供 ngx.log 和输出控制 API 实现
+// Package lua 提供 ngx.log 和输出控制 API 实现。
+//
+// 该文件实现与 OpenResty/ngx_lua 兼容的日志和输出控制 API，包括：
+//   - ngx.log：日志输出（兼容 OpenResty 日志级别常量）
+//   - ngx.say/print：内容输出（追加到响应缓冲区）
+//   - ngx.flush：刷新输出缓冲区
+//   - ngx.exit：终止请求处理
+//   - ngx.redirect：HTTP 重定向
+//   - HTTP 状态码常量（如 ngx.HTTP_OK、ngx.HTTP_NOT_FOUND 等）
+//
+// 注意事项：
+//   - ngx.exit/ngx.redirect 通过 RaiseError 终止 Lua 执行
+//   - Scheduler 模式下 ngx.log 不依赖 RequestCtx，仅输出到标准日志
+//
+// 作者：xfy
 package lua
 
 import (
@@ -60,19 +74,32 @@ const (
 	HTTPHTTPVersionNotSupported = 505
 )
 
-// ngxLogAPI ngx.log 和输出控制 API 实现
+// ngxLogAPI 封装 ngx.log 和输出控制相关的 API。
+//
+// 包含请求上下文、Lua 上下文和日志记录器，用于：
+//   - 将 Lua 日志消息转发到 zerolog 记录器
+//   - 通过 ngx.say/print 写入响应缓冲区
+//   - 通过 ngx.exit/redirect 终止请求处理
 type ngxLogAPI struct {
-	// 请求上下文
+	// ctx 关联的 fasthttp 请求上下文，用于直接写入响应
 	ctx *fasthttp.RequestCtx
 
-	// Lua 上下文（用于访问输出缓冲等）
+	// luaCtx Lua 上下文，用于访问输出缓冲区
 	luaCtx *LuaContext
 
-	// 日志记录器
+	// logger zerolog 日志记录器，用于结构化日志输出
 	logger *zerolog.Logger
 }
 
-// newNgxLogAPI 创建 ngx.log API 实例
+// newNgxLogAPI 创建 ngx.log API 实例。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文，用于直接写入响应
+//   - luaCtx: Lua 上下文，用于访问输出缓冲区
+//   - logger: zerolog 日志记录器，为 nil 时禁用结构化日志
+//
+// 返回值：
+//   - *ngxLogAPI: 初始化的 API 实例
 func newNgxLogAPI(ctx *fasthttp.RequestCtx, luaCtx *LuaContext, logger *zerolog.Logger) *ngxLogAPI {
 	return &ngxLogAPI{
 		ctx:    ctx,

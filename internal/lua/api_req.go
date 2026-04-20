@@ -1,5 +1,22 @@
-// Package lua 提供 ngx.req API 实现
-// 本文件实现双层 API 边界验证原型，用于测量直接映射层 vs 兼容层的性能差异
+// Package lua 提供 ngx.req API 实现。
+//
+// 该文件实现请求操作相关的 Lua API，兼容 OpenResty/ngx_lua 语义。
+// 采用分层 API 设计：
+//   - 直接映射层（APILayerDirect）：fasthttp 直接映射，零拷贝，最小开销
+//   - 兼容层（APILayerCompatible）：模拟 nginx 语义，增加解析开销
+//   - 伪非阻塞层（APILayerPseudoNonBlocking）：yield/resume 支持
+//
+// 主要功能：
+//   - get_method/get_uri：直接映射层
+//   - get_uri_args/set_uri_args：兼容层（解析 query string）
+//   - get_headers/set_header/clear_header：请求头操作
+//   - get_body_data/read_body：请求体操作
+//
+// 指标收集：
+//   - 每层 API 独立记录调用次数、累积延迟和最大延迟
+//   - 支持性能比率计算（兼容层/直接映射层）
+//
+// 作者：xfy
 package lua
 
 import (

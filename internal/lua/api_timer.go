@@ -1,4 +1,22 @@
-// Package lua 提供 Lua 脚本嵌入能力
+// Package lua 提供 ngx.timer API 实现。
+//
+// 该文件实现定时器相关的 Lua API，兼容 OpenResty/ngx_lua 语义。
+// 包括：
+//   - TimerManager：定时器管理器，支持延迟执行和取消
+//   - TimerEntry：单个定时器条目，包含回调和参数
+//   - TimerHandle：Lua 可见的定时器句柄（userdata）
+//   - 调度器 goroutine：在专用 LState 中安全执行 Lua 回调
+//
+// 设计说明：
+//   - 回调通过 FunctionProto 编译后在调度器 goroutine 中执行
+//   - 不允许回调捕获 upvalue（闭包变量），防止内存泄漏
+//   - 优雅关闭：等待回调队列排空，超时后放弃剩余回调
+//
+// 注意事项：
+//   - 定时器回调中不可用 ngx.req/ngx.resp/ngx.var/ngx.ctx 等请求级 API
+//   - 队列满时回调被丢弃（不重试）
+//
+// 作者：xfy
 package lua
 
 import (
@@ -11,46 +29,115 @@ import (
 	glua "github.com/yuin/gopher-lua"
 )
 
-// CallbackEntry 回调队列条目
+// CallbackEntry 回调队列条目，封装定时器触发的 Lua 回调。
+//
+// 包含编译后的 FunctionProto 和调用参数，
+// 由 TimerManager 推入 engine 的 callbackQueue 供调度器执行。
 type CallbackEntry struct {
+	// proto 编译后的 Lua 函数原型
 	proto *glua.FunctionProto
-	args  []glua.LValue
+
+	// args 调用参数
+	args []glua.LValue
 }
 
-// TimerManager 定时器管理器
+// TimerManager 定时器管理器。
+//
+// 负责创建、取消和执行 Lua 定时器。
+// 回调在专用调度器 goroutine 的 LState 中执行，实现线程隔离。
+//
+// 并发安全说明：
+//   - mu 保护 timers 映射的读写
+//   - queueMu 保护队列关闭状态
+//   - active/stopping 使用 atomic 操作
 type TimerManager struct {
-	timers        map[uint64]*TimerEntry
-	engine        *LuaEngine
+	// timers 活跃定时器映射（ID -> 条目）
+	timers map[uint64]*TimerEntry
+
+	// engine 关联的 Lua 引擎
+	engine *LuaEngine
+
+	// callbackQueue 回调队列，推入调度器执行
 	callbackQueue chan *CallbackEntry
+
+	// schedulerDone 调度器 goroutine 退出信号
 	schedulerDone chan struct{}
-	schedulerL    *glua.LState
-	nextID        uint64
-	mu            sync.Mutex
-	queueMu       sync.Mutex
-	active        int32
-	stopping      int32
-	queueClosed   bool
+
+	// schedulerL 调度器专用 LState
+	schedulerL *glua.LState
+
+	// nextID 下一个定时器 ID（原子操作）
+	nextID uint64
+
+	// mu 定时器映射读写锁
+	mu sync.Mutex
+
+	// queueMu 队列状态锁
+	queueMu sync.Mutex
+
+	// active 活跃定时器计数（原子操作）
+	active int32
+
+	// stopping 停止标记（原子操作）
+	stopping int32
+
+	// queueClosed 队列是否已关闭
+	queueClosed bool
+
+	// closed 是否已完全关闭（防止重复关闭）
+	closed bool
 }
 
-// TimerEntry 定时器条目
+// TimerEntry 定时器条目。
+//
+// 封装单个定时器的回调、参数、生命周期和取消信号。
 type TimerEntry struct {
-	callback      *glua.LFunction
+	// callback 原始回调函数
+	callback *glua.LFunction
+
+	// callbackProto 编译后的回调原型（无 upvalue 限制）
 	callbackProto *glua.FunctionProto
-	timer         *time.Timer
-	cancel        chan struct{}
-	done          chan struct{}
-	args          []glua.LValue
-	id            uint64
-	delay         time.Duration
+
+	// timer 底层 time.Timer
+	timer *time.Timer
+
+	// cancel 取消信号通道
+	cancel chan struct{}
+
+	// done 完成信号通道
+	done chan struct{}
+
+	// args 回调参数
+	args []glua.LValue
+
+	// ID 定时器唯一标识
+	id uint64
+
+	// delay 延迟时间
+	delay time.Duration
 }
 
-// TimerHandle 定时器句柄（Lua userdata）
+// TimerHandle 定时器句柄，暴露给 Lua 的 userdata。
+//
+// 通过该句柄可在 Lua 中取消定时器。
 type TimerHandle struct {
+	// manager 关联的定时器管理器
 	manager *TimerManager
-	id      uint64
+
+	// id 定时器 ID
+	id uint64
 }
 
-// NewTimerManager 创建定时器管理器
+// NewTimerManager 创建定时器管理器实例。
+//
+// 初始化定时器映射、回调队列、调度器 LState，
+// 并启动调度器 goroutine。
+//
+// 参数：
+//   - engine: Lua 引擎实例
+//
+// 返回值：
+//   - *TimerManager: 初始化的管理器实例
 func NewTimerManager(engine *LuaEngine) *TimerManager {
 	m := &TimerManager{
 		timers:        make(map[uint64]*TimerEntry),
@@ -80,8 +167,22 @@ func NewTimerManager(engine *LuaEngine) *TimerManager {
 	return m
 }
 
-// At 创建定时器
-// 返回定时器句柄和错误
+// At 创建延迟定时器。
+//
+// 在指定延迟后执行回调函数。回调在调度器 goroutine 的 LState 中执行。
+//
+// 参数：
+//   - delay: 延迟时间
+//   - callback: Lua 回调函数（不能捕获 upvalue）
+//   - args: 回调参数
+//
+// 返回值：
+//   - *TimerHandle: 定时器句柄
+//   - error: 创建失败或服务器正在关闭时返回错误
+//
+// 安全说明：
+//   - 回调不能捕获 upvalue（闭包变量），因为它们会在不同 goroutine 中执行
+//   - 跨协程数据共享应使用 shared dict
 func (m *TimerManager) At(delay time.Duration, callback *glua.LFunction, args []glua.LValue) (*TimerHandle, error) {
 	if atomic.LoadInt32(&m.stopping) != 0 {
 		return nil, nil // 服务器正在关闭，不接受新定时器
@@ -123,8 +224,10 @@ func (m *TimerManager) At(delay time.Duration, callback *glua.LFunction, args []
 	return &TimerHandle{id: id, manager: m}, nil
 }
 
-// executeTimer 执行定时器回调
-// 通过 channel 将回调调度到调度器 goroutine 执行
+// executeTimer 执行定时器回调。
+//
+// 定时器到期时由 time.AfterFunc 调用，将回调推入调度器队列。
+// 检查取消信号，清理条目，并在队列满时丢弃回调。
 func (m *TimerManager) executeTimer(entry *TimerEntry) {
 	defer func() {
 		atomic.AddInt32(&m.active, -1)
@@ -166,7 +269,10 @@ func (m *TimerManager) executeTimer(entry *TimerEntry) {
 	}
 }
 
-// schedulerLoop 调度器循环，在专用 goroutine 中执行 Lua 回调
+// schedulerLoop 调度器循环，在专用 goroutine 中执行 Lua 回调。
+//
+// 从 callbackQueue 中读取回调条目，从 FunctionProto 重建 Lua 函数并执行。
+// 队列关闭时退出循环。
 func (m *TimerManager) schedulerLoop() {
 	defer close(m.schedulerDone)
 
@@ -188,7 +294,15 @@ func (m *TimerManager) schedulerLoop() {
 	}
 }
 
-// Cancel 取消定时器
+// Cancel 取消定时器。
+//
+// 停止底层 time.Timer，发送取消信号，清理定时器条目。
+//
+// 参数：
+//   - handle: 定时器句柄
+//
+// 返回值：
+//   - bool: true 表示成功取消，false 表示定时器不存在或已执行
 func (m *TimerManager) Cancel(handle *TimerHandle) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -213,7 +327,16 @@ func (m *TimerManager) Cancel(handle *TimerHandle) bool {
 	return true
 }
 
-// WaitAll 等待所有定时器完成
+// WaitAll 等待所有定时器完成。
+//
+// 设置停止标志（拒绝新定时器），轮询等待活跃计数器归零。
+// 超时后强制取消所有剩余定时器。
+//
+// 参数：
+//   - timeout: 最大等待时间
+//
+// 返回值：
+//   - bool: true 表示所有定时器已正常完成，false 表示超时
 func (m *TimerManager) WaitAll(timeout time.Duration) bool {
 	// 设置停止标志
 	atomic.StoreInt32(&m.stopping, 1)
@@ -240,8 +363,19 @@ func (m *TimerManager) WaitAll(timeout time.Duration) bool {
 	return true
 }
 
-// Close 关闭定时器管理器
+// Close 关闭定时器管理器。
+//
+// 执行顺序：
+//   1. 设置停止标志，拒绝新定时器
+//   2. 优雅关闭：等待回调队列排空（5 秒超时）
+//   3. 关闭调度器 LState
+//
+// 注意：该方法是幂等的，可安全调用多次。
 func (m *TimerManager) Close() {
+	if m == nil || atomic.LoadInt32(&m.stopping) != 0 {
+		return // 已关闭或 nil
+	}
+
 	// 1. 停止接受新定时器
 	atomic.StoreInt32(&m.stopping, 1)
 
@@ -255,7 +389,13 @@ func (m *TimerManager) Close() {
 	}
 }
 
-// gracefulShutdown 优雅关闭：排空回调队列，超时后放弃
+// gracefulShutdown 优雅关闭定时器管理器。
+//
+// 关闭回调队列，等待调度器 goroutine 退出。
+// 超时后记录被丢弃的回调数量。
+//
+// 参数：
+//   - timeout: 最大等待时间
 func (m *TimerManager) gracefulShutdown(timeout time.Duration) {
 	m.queueMu.Lock()
 	m.queueClosed = true
@@ -273,12 +413,26 @@ func (m *TimerManager) gracefulShutdown(timeout time.Duration) {
 	}
 }
 
-// ActiveCount 返回活跃定时器数
+// ActiveCount 返回当前活跃定时器数量。
+//
+// 返回值：
+//   - int32: 活跃定时器数量
 func (m *TimerManager) ActiveCount() int32 {
 	return atomic.LoadInt32(&m.active)
 }
 
-// RegisterTimerAPI 注册 ngx.timer API
+// RegisterTimerAPI 注册 ngx.timer API 到 Lua 状态机。
+//
+// 在 ngx 表下创建 timer 子表，注册以下方法：
+//   - at(delay, callback, ...)：创建延迟定时器，返回 userdata 句柄
+//   - running_count()：返回活跃定时器数量
+//
+// 同时创建定时器句柄元表，支持 cancel 方法。
+//
+// 参数：
+//   - L: Lua 状态
+//   - manager: 定时器管理器实例
+//   - ngx: ngx 全局表
 func RegisterTimerAPI(L *glua.LState, manager *TimerManager, ngx *glua.LTable) {
 	// 创建 ngx.timer 表
 	timer := L.NewTable()

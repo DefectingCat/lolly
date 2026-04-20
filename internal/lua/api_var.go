@@ -1,4 +1,20 @@
-// Package lua 提供 ngx.var API 实现
+// Package lua 提供 ngx.var API 实现。
+//
+// 该文件实现 nginx 变量访问的 Lua API，兼容 OpenResty/ngx_lua 语义。
+// 支持：
+//   - 标准 nginx 变量：request_method、request_uri、uri、query_string 等
+//   - 请求头变量：http_host、http_user_agent、http_content_type 等
+//   - 客户端信息：remote_addr、server_addr 等
+//   - arg_ 前缀变量：arg_name 用于访问查询参数
+//   - http_ 前缀变量：http_xxx 用于访问任意请求头
+//   - 自定义变量存储：支持通过 store map 读写自定义变量
+//
+// 实现说明：
+//   - 通过元表（__index/__newindex）实现动态变量读写
+//   - 读取优先级：自定义变量 > fasthttp 内置变量
+//   - 写入始终存储到自定义变量 store 中
+//
+// 作者：xfy
 package lua
 
 import (
@@ -11,16 +27,25 @@ import (
 // argPrefix 是 arg_ 变量的前缀，用于获取查询参数
 const argPrefix = "arg_"
 
-// ngxVarAPI ngx.var API 实现
+// ngxVarAPI 封装 nginx 变量访问 API。
+//
+// 支持读取 fasthttp 请求中的标准 nginx 变量，
+// 以及读写自定义变量（存储于 store map 中）。
 type ngxVarAPI struct {
-	// 请求上下文
+	// ctx 关联的 fasthttp 请求上下文
 	ctx *fasthttp.RequestCtx
 
-	// 变量存储（用于自定义变量）
+	// store 自定义变量存储，支持 Lua 脚本读写自定义变量
 	store map[string]string
 }
 
-// newNgxVarAPI 创建 ngx.var API 实例
+// newNgxVarAPI 创建 ngx.var API 实例。
+//
+// 参数：
+//   - ctx: fasthttp 请求上下文
+//
+// 返回值：
+//   - *ngxVarAPI: 初始化的 API 实例
 func newNgxVarAPI(ctx *fasthttp.RequestCtx) *ngxVarAPI {
 	return &ngxVarAPI{
 		ctx:   ctx,

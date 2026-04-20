@@ -1,4 +1,17 @@
-// Package lua 提供 Lua 中间件实现
+// Package lua 提供 Lua 中间件实现。
+//
+// 该文件包含 fasthttp 中间件的 Lua 集成，包括：
+//   - LuaMiddleware：单阶段 Lua 中间件
+//   - MultiPhaseLuaMiddleware：多阶段 Lua 中间件，支持在请求生命周期不同阶段执行不同脚本
+//
+// 中间件执行顺序（从外到内）：
+//   rewrite -> access -> content -> header_filter -> body_filter -> log
+//
+// 注意事项：
+//   - 中间件在协程创建失败时记录错误并继续执行下一处理器
+//   - ngx.exit/ngx.redirect 导致的终止视为正常行为，不返回 500 错误
+//
+// 作者：xfy
 package lua
 
 import (
@@ -9,27 +22,60 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-// LuaMiddleware Lua 中间件配置
+// LuaMiddleware 单阶段 Lua 中间件。
+//
+// 包装 fasthttp.RequestHandler，在执行实际请求处理前运行指定的 Lua 脚本。
+// 脚本在独立的协程中执行，拥有自己的沙箱环境。
 type LuaMiddleware struct {
-	engine     *LuaEngine
+	// engine Lua 引擎实例
+	engine *LuaEngine
+
+	// scriptPath Lua 脚本文件路径
 	scriptPath string
-	name       string
-	phase      Phase
-	timeout    time.Duration
-	enabled    bool
+
+	// name 中间件名称
+	name string
+
+	// phase 执行阶段
+	phase Phase
+
+	// timeout 执行超时（当前未使用超时控制）
+	timeout time.Duration
+
+	// enabled 是否启用
+	enabled bool
 }
 
-// LuaMiddlewareConfig Lua 中间件配置
+// LuaMiddlewareConfig Lua 中间件配置参数。
 type LuaMiddlewareConfig struct {
+	// ScriptPath Lua 脚本文件路径（必填）
 	ScriptPath string
-	Name       string
-	Phase      Phase
-	Timeout    time.Duration
-	Enabled    bool
+
+	// Name 中间件名称（为空时自动生成）
+	Name string
+
+	// Phase 执行阶段（默认为 PhaseContent）
+	Phase Phase
+
+	// Timeout 执行超时（默认为 30 秒）
+	Timeout time.Duration
+
+	// Enabled 是否启用（默认 true）
+	Enabled bool
+
+	// EnabledSet 是否显式设置了 Enabled（用于区分零值和显式 false）
 	EnabledSet bool
 }
 
-// DefaultLuaMiddlewareConfig 默认配置
+// DefaultLuaMiddlewareConfig 返回 Lua 中间件的默认配置。
+//
+// 该函数提供一组合理的默认值，适用于大多数场景：
+//   - Phase: PhaseContent（内容阶段执行）
+//   - Timeout: 30 秒
+//   - Enabled: true（默认启用）
+//
+// 返回值：
+//   - LuaMiddlewareConfig: 包含默认值的配置结构体
 func DefaultLuaMiddlewareConfig() LuaMiddlewareConfig {
 	return LuaMiddlewareConfig{
 		Phase:   PhaseContent,
@@ -38,7 +84,20 @@ func DefaultLuaMiddlewareConfig() LuaMiddlewareConfig {
 	}
 }
 
-// NewLuaMiddleware 创建 Lua 中间件
+// NewLuaMiddleware 创建 Lua 中间件实例。
+//
+// 参数：
+//   - engine: Lua 引擎实例
+//   - config: 中间件配置
+//
+// 返回值：
+//   - *LuaMiddleware: 中间件实例
+//   - error: 参数验证失败时返回错误
+//
+// 注意事项：
+//   - ScriptPath 不能为空
+//   - engine 不能为 nil
+//   - Timeout 为零时自动设置为 30 秒默认值
 func NewLuaMiddleware(engine *LuaEngine, config LuaMiddlewareConfig) (*LuaMiddleware, error) {
 	if engine == nil {
 		return nil, fmt.Errorf("lua engine is required")
@@ -75,12 +134,26 @@ func NewLuaMiddleware(engine *LuaEngine, config LuaMiddlewareConfig) (*LuaMiddle
 	}, nil
 }
 
-// Name 返回中间件名称
+// Name 返回中间件名称。
 func (m *LuaMiddleware) Name() string {
 	return m.name
 }
 
-// Process 包装请求处理器
+// Process 包装请求处理器，注入 Lua 脚本执行逻辑。
+//
+// 执行流程：
+//   1. 检查中间件是否启用，未启用则直接调用 next
+//   2. 创建 Lua 上下文并设置阶段
+//   3. 初始化协程（失败时记录错误并继续）
+//   4. 执行 Lua 脚本文件
+//   5. 处理 ngx.exit/ngx.redirect 导致的终止（视为正常行为）
+//   6. 非 ngx.exit 错误时设置 500 响应
+//   7. 刷新输出缓冲
+//   8. 如果脚本调用了 ngx.exit，不继续执行 next
+//   9. 否则继续执行后续处理器
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 包装后的处理器
 func (m *LuaMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
 		// 检查是否启用
@@ -176,20 +249,30 @@ func (m *LuaMiddleware) IsEnabled() bool {
 	return m.enabled
 }
 
-// MultiPhaseLuaMiddleware 多阶段 Lua 中间件
-// 支持在不同阶段执行不同的脚本
+// MultiPhaseLuaMiddleware 多阶段 Lua 中间件。
+//
+// 支持在不同请求处理阶段执行不同的 Lua 脚本。
+// 阶段按逆序包装，确保执行顺序为：
+//   rewrite -> access -> content -> header_filter -> body_filter -> log
 type MultiPhaseLuaMiddleware struct {
-	// Lua 引擎
+	// engine Lua 引擎实例
 	engine *LuaEngine
 
-	// 各阶段脚本配置
+	// phases 各阶段对应的单阶段中间件
 	phases map[Phase]*LuaMiddleware
 
-	// 名称
+	// name 中间件名称
 	name string
 }
 
-// NewMultiPhaseLuaMiddleware 创建多阶段 Lua 中间件
+// NewMultiPhaseLuaMiddleware 创建多阶段 Lua 中间件。
+//
+// 参数：
+//   - engine: Lua 引擎实例
+//   - name: 中间件名称
+//
+// 返回值：
+//   - *MultiPhaseLuaMiddleware: 初始化的多阶段中间件
 func NewMultiPhaseLuaMiddleware(engine *LuaEngine, name string) *MultiPhaseLuaMiddleware {
 	return &MultiPhaseLuaMiddleware{
 		engine: engine,
@@ -198,12 +281,20 @@ func NewMultiPhaseLuaMiddleware(engine *LuaEngine, name string) *MultiPhaseLuaMi
 	}
 }
 
-// Name 返回中间件名称
+// Name 返回中间件名称。
 func (m *MultiPhaseLuaMiddleware) Name() string {
 	return m.name
 }
 
-// AddPhase 添加阶段脚本
+// AddPhase 为指定阶段添加 Lua 脚本。
+//
+// 参数：
+//   - phase: 处理阶段
+//   - scriptPath: 脚本文件路径
+//   - timeout: 执行超时
+//
+// 返回值：
+//   - error: 中间件创建失败时返回错误
 func (m *MultiPhaseLuaMiddleware) AddPhase(phase Phase, scriptPath string, timeout time.Duration) error {
 	config := LuaMiddlewareConfig{
 		ScriptPath: scriptPath,
@@ -223,7 +314,12 @@ func (m *MultiPhaseLuaMiddleware) AddPhase(phase Phase, scriptPath string, timeo
 	return nil
 }
 
-// Process 包装请求处理器
+// Process 包装请求处理器，按逆序添加各阶段中间件。
+//
+// 执行顺序（从先到后）：
+//   rewrite -> access -> content -> header_filter -> body_filter -> log
+//
+// 通过在包装链中逆序注册（从 log 开始），确保实际执行时先执行 rewrite。
 func (m *MultiPhaseLuaMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	handler := next
 

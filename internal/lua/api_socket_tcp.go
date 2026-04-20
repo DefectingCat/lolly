@@ -1,4 +1,23 @@
-// Package lua 提供 Cosocket TCP API 实现
+// Package lua 提供 Cosocket TCP API 实现。
+//
+// 该文件实现 ngx.socket.tcp 相关的 Lua API，兼容 OpenResty cosocket 语义。
+// 包括：
+//   - TCPSocket：TCP 连接封装，支持 connect/send/receive/close
+//   - CosocketManager：异步操作生命周期管理（已在 socket_manager.go 中）
+//   - 异步 yield/resume 机制（通过 handleCosocket* 系列函数）
+//   - ReceiveUntil 模式匹配读取
+//
+// 特性：
+//   - 操作状态机：Idle -> Connecting -> Connected -> Sending/Receiving -> Closed
+//   - 超时检测：连接、发送、接收各自独立超时
+//   - 原子操作标记完成，避免竞态条件
+//
+// 注意事项：
+//   - TCPSocket 非并发安全，每个 Lua 协程独占一个 socket
+//   - ReceiveUntil 有 1MB 缓冲区限制，防止内存耗尽
+//   - Cosocket 的 yield 当前为同步模拟，待实现真正的非阻塞 yield
+//
+// 作者：xfy
 package lua
 
 import (
@@ -12,22 +31,55 @@ import (
 	glua "github.com/yuin/gopher-lua"
 )
 
-// TCPSocket TCP socket 对象
+// TCPSocket 封装 TCP 连接，提供同步和异步操作。
+//
+// 支持 connect、send、receive、receiveuntil、close 等操作，
+// 兼容 OpenResty cosocket API 语义。
+//
+// 每个 socket 关联一个 CosocketManager 用于异步操作跟踪和超时检测。
+// 状态转换通过 sync.RWMutex 保护。
 type TCPSocket struct {
-	createdAt      time.Time
-	conn           net.Conn
-	currentOp      *SocketOperation
-	manager        *CosocketManager
-	addr           *net.TCPAddr
-	readTimeout    time.Duration
-	sendTimeout    time.Duration
+	// createdAt 创建时间
+	createdAt time.Time
+
+	// conn 底层 TCP 连接
+	conn net.Conn
+
+	// currentOp 当前进行中的异步操作
+	currentOp *SocketOperation
+
+	// manager 关联的 Cosocket 管理器
+	manager *CosocketManager
+
+	// addr 目标地址
+	addr *net.TCPAddr
+
+	// readTimeout 读取超时
+	readTimeout time.Duration
+
+	// sendTimeout 发送超时
+	sendTimeout time.Duration
+
+	// connectTimeout 连接超时
 	connectTimeout time.Duration
-	state          SocketState
-	mu             sync.RWMutex
-	closed         int32
+
+	// state 当前 socket 状态
+	state SocketState
+
+	// mu 状态读写锁
+	mu sync.RWMutex
+
+	// closed 关闭标记（原子操作）
+	closed int32
 }
 
-// NewTCPSocket 创建新的 TCP socket
+// NewTCPSocket 创建新的 TCP socket 实例。
+//
+// 参数：
+//   - manager: Cosocket 管理器，为 nil 时使用默认全局管理器
+//
+// 返回值：
+//   - *TCPSocket: 初始化的 socket 实例
 func NewTCPSocket(manager *CosocketManager) *TCPSocket {
 	if manager == nil {
 		manager = DefaultCosocketManager
@@ -46,7 +98,17 @@ func NewTCPSocket(manager *CosocketManager) *TCPSocket {
 	return s
 }
 
-// Connect 连接到指定地址（支持 yield）
+// Connect 连接到指定地址（同步版本）。
+//
+// 发起 TCP 连接，并在后台 goroutine 中执行实际的 dial 操作。
+// 连接结果通过 manager 的 SocketOperation 通知。
+//
+// 参数：
+//   - host: 目标主机地址
+//   - port: 目标端口号
+//
+// 返回值：
+//   - error: 状态不正确或地址解析失败时返回错误
 func (s *TCPSocket) Connect(host string, port int) error {
 	s.mu.Lock()
 	if s.state != SocketStateIdle {
@@ -96,7 +158,13 @@ func (s *TCPSocket) Connect(host string, port int) error {
 	return nil
 }
 
-// ConnectAsync 异步连接（用于 Lua yield）
+// ConnectAsync 异步连接（用于 Lua yield/resume）。
+//
+// 调用 Connect 并返回关联的 SocketOperation，供 Lua 协程 yield 等待。
+//
+// 返回值：
+//   - *SocketOperation: 连接操作实例
+//   - error: 连接失败时返回错误
 func (s *TCPSocket) ConnectAsync(_ *glua.LState, host string, port int) (*SocketOperation, error) {
 	err := s.Connect(host, port)
 	if err != nil {

@@ -1,4 +1,16 @@
-// Package lua 提供 Lua 脚本嵌入能力
+// Package lua 提供 ngx.location API 实现。
+//
+// 该文件实现 ngx.location.capture 子请求功能，兼容 OpenResty/ngx_lua 语义。
+// 支持：
+//   - 注册 location handler 映射
+//   - 执行子请求并捕获响应（状态码、响应头、响应体）
+//   - 选项控制：方法、请求体、自定义头、查询参数
+//
+// 注意事项：
+//   - 子请求复用父请求的数据（深拷贝请求体）
+//   - Scheduler 模式下 ngx.location.capture 不可用
+//
+// 作者：xfy
 package lua
 
 import (
@@ -9,34 +21,66 @@ import (
 	glua "github.com/yuin/gopher-lua"
 )
 
-// LocationCaptureResult 子请求结果
+// LocationCaptureResult 子请求捕获结果。
+//
+// 包含子请求的响应状态码、响应头和响应体数据。
 type LocationCaptureResult struct {
+	// Headers 响应头映射
 	Headers map[string]string
-	Body    []byte
-	Status  int
+
+	// Body 响应体数据
+	Body []byte
+
+	// Status HTTP 状态码
+	Status int
 }
 
-// LocationManager location 管理（用于子请求）
+// LocationManager location 管理器，用于注册和管理子请求 handler。
+//
+// 维护 location 路径到 fasthttp.RequestHandler 的映射，
+// 支持并发安全的注册和捕获操作。
 type LocationManager struct {
+	// handlers 路径到 handler 的映射
 	handlers map[string]fasthttp.RequestHandler
-	mu       sync.Mutex
+
+	// mu 读写锁
+	mu sync.Mutex
 }
 
-// NewLocationManager 创建 location 管理器
+// NewLocationManager 创建 location 管理器实例。
+//
+// 返回值：
+//   - *LocationManager: 初始化的管理器实例
 func NewLocationManager() *LocationManager {
 	return &LocationManager{
 		handlers: make(map[string]fasthttp.RequestHandler),
 	}
 }
 
-// Register 注册 location handler
+// Register 注册 location handler。
+//
+// 参数：
+//   - location: 路径标识（如 "/api/internal"）
+//   - handler: fasthttp 请求处理器
 func (m *LocationManager) Register(location string, handler fasthttp.RequestHandler) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.handlers[location] = handler
 }
 
-// Capture 执行子请求
+// Capture 执行子请求。
+//
+// 查找指定 location 的 handler，创建子请求上下文，复制父请求数据，
+// 应用选项（方法、请求体、头、查询参数），执行 handler 并收集响应。
+//
+// 参数：
+//   - parentCtx: 父请求上下文，用于数据复制
+//   - location: 目标 location 路径
+//   - opts: 可选参数映射（method、body、headers、args）
+//
+// 返回值：
+//   - *LocationCaptureResult: 子请求响应结果
+//   - error: 当前实现始终返回 nil
 func (m *LocationManager) Capture(parentCtx *fasthttp.RequestCtx, location string, opts map[string]interface{}) (*LocationCaptureResult, error) {
 	m.mu.Lock()
 	handler, ok := m.handlers[location]
@@ -114,7 +158,14 @@ func getRequestCtx(L *glua.LState) *fasthttp.RequestCtx {
 	return nil
 }
 
-// RegisterLocationAPI 注册 ngx.location API
+// RegisterLocationAPI 注册 ngx.location API 到 Lua 状态机。
+//
+// 在 ngx 表下创建 location 子表，注册 capture 方法用于执行子请求。
+//
+// 参数：
+//   - L: Lua 状态
+//   - manager: location 管理器实例
+//   - ngx: ngx 全局表
 func RegisterLocationAPI(L *glua.LState, manager *LocationManager, ngx *glua.LTable) {
 	// 创建 ngx.location 表
 	location := L.NewTable()

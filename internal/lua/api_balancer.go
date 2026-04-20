@@ -1,5 +1,20 @@
-// Package lua 提供 ngx.balancer API 实现
-// 本文件实现负载均衡相关的 Lua API，用于在 Lua 脚本中选择后端目标
+// Package lua 提供 ngx.balancer API 实现。
+//
+// 该文件实现负载均衡相关的 Lua API，用于在 Lua 脚本中选择后端目标服务器。
+// 兼容 OpenResty/ngx_lua 的 ngx.balancer 语义。
+//
+// 主要功能：
+//   - set_current_peer：选择后端目标（支持 URL 或 host+port 格式）
+//   - set_more_tries：设置重试次数
+//   - get_last_failure：获取上次失败类型
+//   - get_targets：获取所有可用目标列表
+//   - get_client_ip：获取客户端 IP
+//
+// 注意事项：
+//   - BalancerContext 非并发安全，应在单请求上下文中使用
+//   - 回调函数不能捕获 upvalue（闭包变量），需使用共享字典
+//
+// 作者：xfy
 package lua
 
 import (
@@ -10,17 +25,43 @@ import (
 	"rua.plus/lolly/internal/loadbalance"
 )
 
-// BalancerContext Lua Balancer 上下文
+// BalancerContext Lua 负载均衡上下文。
+//
+// 存储当前请求的负载均衡状态，包括可选目标列表、已选目标、客户端 IP 和重试次数。
+// 该上下文在请求级别使用，非并发安全。
 type BalancerContext struct {
+	// LastError 上次失败错误
 	LastError error
-	Selected  *loadbalance.Target
-	ClientIP  string
-	Targets   []*loadbalance.Target
-	Retries   int
-	selected  bool
+
+	// Selected 已选中的目标
+	Selected *loadbalance.Target
+
+	// ClientIP 客户端 IP 地址
+	ClientIP string
+
+	// Targets 所有可用后端目标
+	Targets []*loadbalance.Target
+
+	// Retries 剩余重试次数
+	Retries int
+
+	// selected 是否已调用 set_current_peer
+	selected bool
 }
 
-// RegisterBalancerAPI 注册 ngx.balancer API
+// RegisterBalancerAPI 注册 ngx.balancer API 到 Lua 状态机。
+//
+// 在 ngx 表下创建 balancer 子表，注册以下方法：
+//   - set_current_peer(host, port) 或 set_current_peer(url)：选择后端目标
+//   - set_more_tries(count)：设置重试次数
+//   - get_last_failure()：获取上次失败类型
+//   - get_targets()：获取所有可用目标
+//   - get_client_ip()：获取客户端 IP
+//
+// 参数：
+//   - L: Lua 状态
+//   - bctx: 负载均衡上下文
+//   - ngx: ngx 全局表
 func RegisterBalancerAPI(L *glua.LState, bctx *BalancerContext, ngx *glua.LTable) {
 	balancer := L.NewTable()
 
@@ -118,12 +159,22 @@ func RegisterBalancerAPI(L *glua.LState, bctx *BalancerContext, ngx *glua.LTable
 	L.SetField(ngx, "balancer", balancer)
 }
 
-// IsSelected 检查是否调用了 set_current_peer
+// IsSelected 检查是否已调用 set_current_peer 选择后端目标。
+//
+// 返回值：
+//   - bool: true 表示已选择目标
 func (bctx *BalancerContext) IsSelected() bool {
 	return bctx.selected
 }
 
-// classifyError 分类错误类型
+// classifyError 分类错误类型为 OpenResty 兼容的失败字符串。
+//
+// 根据错误消息内容判断失败类型：
+//   - "timeout"：超时失败
+//   - 其他：连接失败（"failed"）
+//
+// 返回值：
+//   - string: 失败类型字符串
 func classifyError(err error) string {
 	if err == nil {
 		return ""

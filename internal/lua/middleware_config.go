@@ -1,4 +1,18 @@
-// Package lua 提供 Lua 中间件配置
+// Package lua 提供 Lua 中间件配置解析与验证。
+//
+// 该文件定义从配置文件（YAML）加载的中间件配置结构，包括：
+//   - MiddlewareConfig：完整的中间件配置（含脚本列表、全局设置、启用标记）
+//   - ScriptConfig：单个脚本的配置（路径、阶段、超时、启用标记）
+//   - GlobalLuaSettings：全局 Lua 引擎设置（并发、缓存、栈大小等）
+//   - ParsePhase：字符串到 Phase 常量的转换
+//   - ToEngineConfig：将配置文件的设置转换为引擎配置
+//
+// 注意事项：
+//   - Phase 值必须为：rewrite、access、content、log、header_filter、body_filter
+//   - 超时时间至少为 1 秒
+//   - 最大并发协程数至少为 1
+//
+// 作者：xfy
 package lua
 
 import (
