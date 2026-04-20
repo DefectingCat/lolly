@@ -278,9 +278,20 @@ func dictReplace(L *glua.LState) int {
 		ttl = time.Duration(L.CheckNumber(4)) * time.Second
 	}
 
-	// 检查是否存在
-	_, expired, _ := dict.Get(key)
+	// 检查是否存在（Get 返回: value, expired, error）
+	// expired=true 表示存在但已过期，expired=false 表示不存在或存在且未过期
+	// 需要区分不存在和存在的情况
+	val, expired, _ := dict.Get(key)
+	// 如果 val 为空且 expired 为 false，表示 key 不存在
+	// 如果 expired 为 true，表示 key 存在但已过期（也算不存在）
+	if val == "" && !expired {
+		// key 不存在
+		L.Push(glua.LFalse)
+		L.Push(glua.LString("not found"))
+		return 2
+	}
 	if expired {
+		// key 存在但已过期，也算不存在
 		L.Push(glua.LFalse)
 		L.Push(glua.LString("not found"))
 		return 2
