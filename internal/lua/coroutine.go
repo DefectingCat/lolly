@@ -366,11 +366,11 @@ func (c *LuaCoroutine) ExecuteFile(path string) error {
 // executeProto 执行编译后的字节码，处理 yield/resume 循环。
 //
 // 该函数是协程执行的核心循环：
-//   1. 从 FunctionProto 创建 Lua 函数
-//   2. Resume 执行协程
-//   3. 如果 yield，调用 handleYield 处理并继续 Resume
-//   4. 如果 error，记录统计并返回错误
-//   5. 如果正常结束，更新执行计数
+//  1. 从 FunctionProto 创建 Lua 函数
+//  2. Resume 执行协程
+//  3. 如果 yield，调用 handleYield 处理并继续 Resume
+//  4. 如果 error，记录统计并返回错误
+//  5. 如果正常结束，更新执行计数
 func (c *LuaCoroutine) executeProto(proto *glua.FunctionProto) error {
 	fn := c.Engine.L.NewFunctionFromProto(proto)
 	st, execErr, values := c.Engine.L.Resume(c.Co, fn)

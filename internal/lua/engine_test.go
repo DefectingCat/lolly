@@ -402,9 +402,10 @@ func TestEngineCoroutineExecutionContext(t *testing.T) {
 	coro, err := engine.NewCoroutine(nil)
 	require.NoError(t, err)
 
-	// 验证执行上下文已设置
+	// 验证执行上下文已设置（Engine 创建的执行上下文总是存在）
 	assert.NotNil(t, coro.ExecutionContext)
-	assert.NotNil(t, coro.Cancel)
+	// Cancel 可能为 nil（gopher-lua 的 NewThread 只有在主 LState 有 ctx 时才返回 cancel）
+	// ExecutionContext 由 Engine 创建，用于超时控制，这是主要需要验证的
 
 	coro.Close()
 }

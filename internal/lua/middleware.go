@@ -5,7 +5,8 @@
 //   - MultiPhaseLuaMiddleware：多阶段 Lua 中间件，支持在请求生命周期不同阶段执行不同脚本
 //
 // 中间件执行顺序（从外到内）：
-//   rewrite -> access -> content -> header_filter -> body_filter -> log
+//
+//	rewrite -> access -> content -> header_filter -> body_filter -> log
 //
 // 注意事项：
 //   - 中间件在协程创建失败时记录错误并继续执行下一处理器
@@ -142,15 +143,15 @@ func (m *LuaMiddleware) Name() string {
 // Process 包装请求处理器，注入 Lua 脚本执行逻辑。
 //
 // 执行流程：
-//   1. 检查中间件是否启用，未启用则直接调用 next
-//   2. 创建 Lua 上下文并设置阶段
-//   3. 初始化协程（失败时记录错误并继续）
-//   4. 执行 Lua 脚本文件
-//   5. 处理 ngx.exit/ngx.redirect 导致的终止（视为正常行为）
-//   6. 非 ngx.exit 错误时设置 500 响应
-//   7. 刷新输出缓冲
-//   8. 如果脚本调用了 ngx.exit，不继续执行 next
-//   9. 否则继续执行后续处理器
+//  1. 检查中间件是否启用，未启用则直接调用 next
+//  2. 创建 Lua 上下文并设置阶段
+//  3. 初始化协程（失败时记录错误并继续）
+//  4. 执行 Lua 脚本文件
+//  5. 处理 ngx.exit/ngx.redirect 导致的终止（视为正常行为）
+//  6. 非 ngx.exit 错误时设置 500 响应
+//  7. 刷新输出缓冲
+//  8. 如果脚本调用了 ngx.exit，不继续执行 next
+//  9. 否则继续执行后续处理器
 //
 // 返回值：
 //   - fasthttp.RequestHandler: 包装后的处理器
@@ -253,7 +254,8 @@ func (m *LuaMiddleware) IsEnabled() bool {
 //
 // 支持在不同请求处理阶段执行不同的 Lua 脚本。
 // 阶段按逆序包装，确保执行顺序为：
-//   rewrite -> access -> content -> header_filter -> body_filter -> log
+//
+//	rewrite -> access -> content -> header_filter -> body_filter -> log
 type MultiPhaseLuaMiddleware struct {
 	// engine Lua 引擎实例
 	engine *LuaEngine
@@ -317,7 +319,8 @@ func (m *MultiPhaseLuaMiddleware) AddPhase(phase Phase, scriptPath string, timeo
 // Process 包装请求处理器，按逆序添加各阶段中间件。
 //
 // 执行顺序（从先到后）：
-//   rewrite -> access -> content -> header_filter -> body_filter -> log
+//
+//	rewrite -> access -> content -> header_filter -> body_filter -> log
 //
 // 通过在包装链中逆序注册（从 log 开始），确保实际执行时先执行 rewrite。
 func (m *MultiPhaseLuaMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {

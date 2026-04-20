@@ -208,11 +208,11 @@ func (c *LuaContext) Exit(code int) {
 //
 // 该方法必须在请求处理结束时调用。
 // 重置操作包括：
-//   1. 关闭并清空协程引用
-//   2. 清空 Variables map
-//   3. 截断 OutputBuffer
-//   4. 重置 Phase、Exited 标记
-//   5. 清空 Engine 和 RequestCtx 引用
+//  1. 关闭并清空协程引用
+//  2. 清空 Variables map
+//  3. 截断 OutputBuffer
+//  4. 重置 Phase、Exited 标记
+//  5. 清空 Engine 和 RequestCtx 引用
 func (c *LuaContext) Release() {
 	if c.Coroutine != nil {
 		c.Coroutine.Close()

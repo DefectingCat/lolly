@@ -8,10 +8,10 @@
 //   - 对象池：ResponseInterceptorPool、bufferPool 减少 GC 压力
 //
 // 执行流程：
-//   1. 启用拦截模式后，header 和 body 写入被延迟
-//   2. HeaderFilter 阶段可执行 Lua 脚本修改响应头
-//   3. BodyFilter 阶段可执行 Lua 脚本修改响应体
-//   4. Flush 时应用所有修改并发送响应
+//  1. 启用拦截模式后，header 和 body 写入被延迟
+//  2. HeaderFilter 阶段可执行 Lua 脚本修改响应头
+//  3. BodyFilter 阶段可执行 Lua 脚本修改响应体
+//  4. Flush 时应用所有修改并发送响应
 //
 // 注意事项：
 //   - 流式 body（SetBodyStream）无法缓冲，header filter 在设置前应用
@@ -201,10 +201,10 @@ func (ri *ResponseInterceptor) SetBodyString(body string) {
 // Flush 执行 header/body filter 并发送响应。
 //
 // 执行顺序：
-//   1. 执行 header filter 回调
-//   2. 应用 header 修改和删除
-//   3. 执行 body filter 回调
-//   4. 发送最终响应
+//  1. 执行 header filter 回调
+//  2. 应用 header 修改和删除
+//  3. 执行 body filter 回调
+//  4. 发送最终响应
 //
 // 返回值：
 //   - error: filter 执行失败时返回错误

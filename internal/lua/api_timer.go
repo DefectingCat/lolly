@@ -83,9 +83,6 @@ type TimerManager struct {
 
 	// queueClosed 队列是否已关闭
 	queueClosed bool
-
-	// closed 是否已完全关闭（防止重复关闭）
-	closed bool
 }
 
 // TimerEntry 定时器条目。
@@ -366,9 +363,9 @@ func (m *TimerManager) WaitAll(timeout time.Duration) bool {
 // Close 关闭定时器管理器。
 //
 // 执行顺序：
-//   1. 设置停止标志，拒绝新定时器
-//   2. 优雅关闭：等待回调队列排空（5 秒超时）
-//   3. 关闭调度器 LState
+//  1. 设置停止标志，拒绝新定时器
+//  2. 优雅关闭：等待回调队列排空（5 秒超时）
+//  3. 关闭调度器 LState
 //
 // 注意：该方法是幂等的，可安全调用多次。
 func (m *TimerManager) Close() {

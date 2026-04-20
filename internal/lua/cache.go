@@ -138,9 +138,9 @@ func (c *CodeCache) generateFileKey(path string) string {
 // GetOrCompileInline 获取或编译内联脚本。
 //
 // 查找流程：
-//   1. 基于脚本内容生成缓存键
-//   2. 检查缓存是否命中且未过期
-//   3. 未命中则解析并编译脚本，存入缓存
+//  1. 基于脚本内容生成缓存键
+//  2. 检查缓存是否命中且未过期
+//  3. 未命中则解析并编译脚本，存入缓存
 //
 // 参数：
 //   - src: Lua 源代码字符串
@@ -191,9 +191,9 @@ func (c *CodeCache) GetOrCompileInline(src string) (*glua.FunctionProto, error) 
 // GetOrCompileFile 获取或编译文件脚本。
 //
 // 查找流程：
-//   1. 基于文件路径生成缓存键
-//   2. 检查缓存是否命中、未过期且文件未变更
-//   3. 未命中则读取文件、解析并编译，存入缓存
+//  1. 基于文件路径生成缓存键
+//  2. 检查缓存是否命中、未过期且文件未变更
+//  3. 未命中则读取文件、解析并编译，存入缓存
 //
 // 参数：
 //   - path: Lua 脚本文件路径

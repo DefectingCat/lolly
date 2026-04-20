@@ -7,13 +7,15 @@
 //   - 调度器：专用的 LState 用于定时器回调执行，实现线程隔离
 //
 // 架构设计：
-//   采用 Server 级单 LState + 请求级临时协程架构。
-//   所有请求共享一个主 LState 的全局环境，但各自拥有独立的协程状态，
-//   确保请求间的数据隔离性和并发安全性。
+//
+//	采用 Server 级单 LState + 请求级临时协程架构。
+//	所有请求共享一个主 LState 的全局环境，但各自拥有独立的协程状态，
+//	确保请求间的数据隔离性和并发安全性。
 //
 // 主要用途：
-//   用于在 fasthttp 服务中嵌入 Lua 脚本，实现动态请求处理、
-//   负载均衡、响应过滤等可编程功能，兼容 OpenResty/ngx_lua API 语义。
+//
+//	用于在 fasthttp 服务中嵌入 Lua 脚本，实现动态请求处理、
+//	负载均衡、响应过滤等可编程功能，兼容 OpenResty/ngx_lua API 语义。
 //
 // 注意事项：
 //   - LuaEngine 非并发安全，NewEngine/Close 应在初始化/关闭阶段调用
@@ -108,11 +110,11 @@ type EngineStats struct {
 // NewEngine 创建并初始化 Lua 引擎。
 //
 // 该函数执行以下初始化步骤：
-//   1. 创建主 LState，配置栈大小和内存优化选项
-//   2. 加载安全的标准库（base、table、string、math、coroutine）
-//   3. 按需加载危险库（os、io），默认禁止 package 库
-//   4. 初始化字节码缓存、共享字典、定时器、location 管理器
-//   5. 执行协程池预热
+//  1. 创建主 LState，配置栈大小和内存优化选项
+//  2. 加载安全的标准库（base、table、string、math、coroutine）
+//  3. 按需加载危险库（os、io），默认禁止 package 库
+//  4. 初始化字节码缓存、共享字典、定时器、location 管理器
+//  5. 执行协程池预热
 //
 // 参数：
 //   - config: 引擎配置，为 nil 时使用 DefaultConfig()
@@ -122,11 +124,12 @@ type EngineStats struct {
 //   - error: 初始化失败时返回错误
 //
 // 使用示例：
-//   engine, err := lua.NewEngine(nil) // 使用默认配置
-//   if err != nil {
-//       // 处理初始化错误
-//   }
-//   defer engine.Close()
+//
+//	engine, err := lua.NewEngine(nil) // 使用默认配置
+//	if err != nil {
+//	    // 处理初始化错误
+//	}
+//	defer engine.Close()
 //
 // 注意事项：
 //   - 该方法应在服务启动阶段调用，不应在请求处理路径中调用
@@ -198,10 +201,10 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 // Close 关闭 Lua 引擎，释放所有资源。
 //
 // 关闭顺序：
-//   1. 取消引擎上下文，通知所有子 goroutine 退出
-//   2. 关闭定时器管理器（等待定时器回调排空）
-//   3. 关闭共享字典管理器
-//   4. 关闭主 LState
+//  1. 取消引擎上下文，通知所有子 goroutine 退出
+//  2. 关闭定时器管理器（等待定时器回调排空）
+//  3. 关闭共享字典管理器
+//  4. 关闭主 LState
 //
 // 注意：该方法是幂等的，可安全调用多次。
 func (e *LuaEngine) Close() {
@@ -226,10 +229,10 @@ func (e *LuaEngine) Close() {
 // NewCoroutine 创建请求级临时协程。
 //
 // 该方法执行以下操作：
-//   1. 检查并发限制，超过最大协程数时返回错误
-//   2. 通过主 LState.NewThread() 创建底层 Lua 协程
-//   3. 从对象池中获取 LuaCoroutine 结构体（复用内存）
-//   4. 设置执行上下文（含超时控制）和请求上下文
+//  1. 检查并发限制，超过最大协程数时返回错误
+//  2. 通过主 LState.NewThread() 创建底层 Lua 协程
+//  3. 从对象池中获取 LuaCoroutine 结构体（复用内存）
+//  4. 设置执行上下文（含超时控制）和请求上下文
 //
 // 参数：
 //   - req: fasthttp 请求上下文，用于 API 访问（ngx.req、ngx.resp 等）
@@ -282,10 +285,10 @@ func (e *LuaEngine) NewCoroutine(req *fasthttp.RequestCtx) (*LuaCoroutine, error
 // releaseCoroutine 释放协程资源并放回对象池。
 //
 // 该方法执行以下清理操作：
-//   1. 取消执行上下文和协程
-//   2. 清空所有引用字段，防止内存泄漏
-//   3. 更新活跃协程计数和关闭计数
-//   4. 将 LuaCoroutine 结构体放回对象池（仅复用内存）
+//  1. 取消执行上下文和协程
+//  2. 清空所有引用字段，防止内存泄漏
+//  3. 更新活跃协程计数和关闭计数
+//  4. 将 LuaCoroutine 结构体放回对象池（仅复用内存）
 //
 // 注意：这是内部方法，外部应通过 LuaCoroutine.Close() 间接调用。
 func (e *LuaEngine) releaseCoroutine(coro *LuaCoroutine) {
@@ -391,11 +394,11 @@ func (e *LuaEngine) LocationManager() *LocationManager {
 // 该调度器 LState 仅加载安全子集库，禁止危险操作。
 //
 // 初始化步骤：
-//   1. 创建 LState（跳过默认库）
-//   2. 加载安全库（base、table、string、math）
-//   3. 注册安全的 API（ngx.shared、ngx.log、ngx.timer）
-//   4. 创建回调队列（容量 1024）
-//   5. 启动调度器 goroutine
+//  1. 创建 LState（跳过默认库）
+//  2. 加载安全库（base、table、string、math）
+//  3. 注册安全的 API（ngx.shared、ngx.log、ngx.timer）
+//  4. 创建回调队列（容量 1024）
+//  5. 启动调度器 goroutine
 //
 // 返回值：
 //   - error: 初始化失败时返回错误
@@ -522,8 +525,8 @@ func (e *LuaEngine) EnqueueCallback(entry *CallbackEntry) bool {
 // CloseScheduler 关闭调度器。
 //
 // 执行以下操作：
-//   1. 关闭回调队列（阻止新回调入队）
-//   2. 关闭调度器 LState
+//  1. 关闭回调队列（阻止新回调入队）
+//  2. 关闭调度器 LState
 //
 // 注意：该方法是幂等的，可安全调用多次。
 func (e *LuaEngine) CloseScheduler() {
