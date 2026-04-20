@@ -19,6 +19,7 @@ import (
 	"mime"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // mimeOverrides 补充 Go 标准库缺失或错误的 MIME 类型映射。
@@ -27,13 +28,51 @@ import (
 // 注意: 部分扩展名 Go 返回错误类型而非缺失:
 //   - .otf: Go 映射到 OpenDocument 公式模板，应为字体格式
 //   - .webm: Go 返回 audio/webm，但 webm 可包含视频
-var mimeOverrides = map[string]string{
-	".eot":         "application/vnd.ms-fontobject", // 缺失
-	".otf":         "font/otf",                      // Go 返回错误类型
-	".webmanifest": "application/manifest+json",     // 缺失
-	".map":         "application/json",              // 缺失
-	".webm":        "video/webm",                    // Go 返回 audio/webm
-	// 注意: Go 1.26.2+ 已正确支持 .mjs, .avif, .woff, .woff2
+var (
+	mimeOverrides = map[string]string{
+		".eot":         "application/vnd.ms-fontobject", // 缺失
+		".otf":         "font/otf",                      // Go 返回错误类型
+		".webmanifest": "application/manifest+json",     // 缺失
+		".map":         "application/json",              // 缺失
+		".webm":        "video/webm",                    // Go 返回 audio/webm
+		// 注意: Go 1.26.2+ 已正确支持 .mjs, .avif, .woff, .woff2
+	}
+	mimeMutex sync.RWMutex
+
+	defaultMIME  = "application/octet-stream"
+	defaultMutex sync.RWMutex
+)
+
+// AddTypes 添加自定义 MIME 类型映射（线程安全）。
+//
+// 参数:
+//   - types: 扩展名到 MIME 类型的映射，扩展名会自动转为小写
+func AddTypes(types map[string]string) {
+	mimeMutex.Lock()
+	defer mimeMutex.Unlock()
+	for ext, mime := range types {
+		mimeOverrides[strings.ToLower(ext)] = mime
+	}
+}
+
+// SetDefaultType 设置默认 MIME 类型（线程安全）。
+//
+// 参数:
+//   - defaultType: 默认 MIME 类型
+func SetDefaultType(defaultType string) {
+	defaultMutex.Lock()
+	defer defaultMutex.Unlock()
+	defaultMIME = defaultType
+}
+
+// GetDefaultType 获取默认 MIME 类型（线程安全）。
+//
+// 返回值:
+//   - string: 当前默认 MIME 类型
+func GetDefaultType() string {
+	defaultMutex.RLock()
+	defer defaultMutex.RUnlock()
+	return defaultMIME
 }
 
 // DetectContentType 检测文件的 MIME 类型。
@@ -48,8 +87,11 @@ var mimeOverrides = map[string]string{
 //   - string: MIME 类型，未知类型返回空字符串
 func DetectContentType(filePath string) string {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	if mime, ok := mimeOverrides[ext]; ok {
-		return mime
+	mimeMutex.RLock()
+	mimeType, ok := mimeOverrides[ext]
+	mimeMutex.RUnlock()
+	if ok {
+		return mimeType
 	}
 	return mime.TypeByExtension(ext)
 }
