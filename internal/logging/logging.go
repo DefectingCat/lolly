@@ -53,7 +53,14 @@ const formatJSON = "json"
 
 const formatText = "text"
 
-// Init 初始化日志系统（兼容旧接口）。
+// Init 初始化全局日志系统（兼容旧接口）。
+//
+// 该函数用于快速初始化全局 log 实例，支持 console、text 和 json 三种格式。
+// 不指定输出路径时默认输出到标准输出。
+//
+// 参数：
+//   - level: 日志级别，支持 debug、info、warn、error（不区分大小写）
+//   - format: 日志格式，"console" 为带时间彩色、"text" 为纯文本、"json" 为结构化 JSON
 func Init(level string, format string) {
 	l := parseLevel(level)
 	w := getOutput("") // stdout
@@ -71,6 +78,15 @@ func Init(level string, format string) {
 }
 
 // New 创建日志管理器，支持访问/错误日志分离。
+//
+// 根据配置创建 Logger 实例，访问日志和错误日志可分别输出到不同路径。
+// 配置为 nil 时使用默认设置（全部输出到标准输出）。
+//
+// 参数：
+//   - cfg: 日志配置，包含访问日志和错误日志的输出路径、级别、格式等
+//
+// 返回值：
+//   - *Logger: 初始化的日志管理器实例
 func New(cfg *config.LoggingConfig) *Logger {
 	if cfg == nil {
 		cfg = &config.LoggingConfig{}
@@ -116,7 +132,16 @@ func getOutput(path string) io.Writer {
 	return f
 }
 
-// LogAccess 记录访问日志。
+// LogAccess 记录访问日志（全局实例）。
+//
+// 使用全局 log 实例记录 HTTP 请求的基本信息，包括方法、路径、状态码、
+// 响应大小、耗时和客户端地址。
+//
+// 参数：
+//   - ctx: FastHTTP 请求上下文，用于提取请求信息
+//   - status: HTTP 响应状态码
+//   - size: 响应体大小（字节）
+//   - duration: 请求处理耗时
 func LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.Duration) {
 	log.Info().
 		Bytes("method", ctx.Method()).
@@ -235,21 +260,42 @@ func (l *Logger) Close() error {
 }
 
 // Error 返回 Error 级别日志记录器（全局实例）。
+//
+// 用于记录错误信息，调用链式方法添加字段后需调用 Msg() 输出。
+//
+// 返回值：
+//   - *zerolog.Event: 错误级别日志事件，用于链式调用
 func Error() *zerolog.Event {
 	return log.Error()
 }
 
 // Info 返回 Info 级别日志记录器（全局实例）。
+//
+// 用于记录一般信息日志，调用链式方法添加字段后需调用 Msg() 输出。
+//
+// 返回值：
+//   - *zerolog.Event: 信息级别日志事件，用于链式调用
 func Info() *zerolog.Event {
 	return log.Info()
 }
 
 // Warn 返回 Warn 级别日志记录器（全局实例）。
+//
+// 用于记录警告信息，调用链式方法添加字段后需调用 Msg() 输出。
+//
+// 返回值：
+//   - *zerolog.Event: 警告级别日志事件，用于链式调用
 func Warn() *zerolog.Event {
 	return log.Warn()
 }
 
 // Debug 返回 Debug 级别日志记录器（全局实例）。
+//
+// 用于记录调试信息，调用链式方法添加字段后需调用 Msg() 输出。
+// 仅在日志级别设置为 debug 时才会实际输出。
+//
+// 返回值：
+//   - *zerolog.Event: 调试级别日志事件，用于链式调用
 func Debug() *zerolog.Event {
 	return log.Debug()
 }
@@ -281,6 +327,15 @@ func parseLevel(level string) zerolog.Level {
 }
 
 // NewAppLogger 创建应用日志管理器。
+//
+// 根据配置创建 AppLogger 实例，用于统一管理应用生命周期日志
+//（启动、停止、信号处理等）。默认使用 text 格式输出到错误日志路径。
+//
+// 参数：
+//   - cfg: 日志配置，包含输出路径、级别、格式等设置
+//
+// 返回值：
+//   - *AppLogger: 初始化的应用日志记录器实例
 func NewAppLogger(cfg *config.LoggingConfig) *AppLogger {
 	if cfg == nil {
 		cfg = &config.LoggingConfig{}
