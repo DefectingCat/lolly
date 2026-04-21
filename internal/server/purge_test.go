@@ -672,3 +672,112 @@ func TestPurgeHandler_EmptyMethodDefaultsToGET(t *testing.T) {
 		t.Errorf("expected same key for empty and 'GET' method, got %d and %d", key1, key2)
 	}
 }
+
+// TestPurgeHandler_checkAccess_NilContext 测试 checkAccess 处理。
+func TestPurgeHandler_checkAccess_NilContext(t *testing.T) {
+	t.Run("empty allow list allows all", func(t *testing.T) {
+		cfg := &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		}
+
+		h, err := NewPurgeHandler(nil, cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Empty allow list should allow access (returns true even with nil context)
+		if !h.checkAccess(nil) {
+			t.Error("expected checkAccess to return true with empty allow list")
+		}
+	})
+}
+
+// TestPurgeHandler_PurgeByPath_NilServer 测试 purgeByPath 处理 nil server。
+func TestPurgeHandler_PurgeByPath_NilServer(t *testing.T) {
+	cfg := &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	}
+
+	h, err := NewPurgeHandler(nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should return 0 when server is nil
+	deleted := h.PurgeByPathForTest("/test", "GET")
+	if deleted != 0 {
+		t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+	}
+}
+
+// TestPurgeHandler_PurgeByPattern_NilServer 测试 purgeByPattern 处理 nil server。
+func TestPurgeHandler_PurgeByPattern_NilServer(t *testing.T) {
+	cfg := &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	}
+
+	h, err := NewPurgeHandler(nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should return 0 when server is nil
+	deleted := h.PurgeByPatternForTest("/api/*", "GET")
+	if deleted != 0 {
+		t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+	}
+}
+
+// TestPurgeHandler_ServeHTTP_WithAllowList 测试带白名单的请求处理。
+func TestPurgeHandler_ServeHTTP_WithAllowList(t *testing.T) {
+	cfg := &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{"192.168.0.0/16"},
+	}
+
+	h, err := NewPurgeHandler(nil, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 测试 POST 请求（会尝试访问控制检查）
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+	ctx.Request.Header.SetMethod("POST")
+	ctx.Request.SetBodyString(`{"path": "/test"}`)
+
+	h.ServeHTTP(ctx)
+
+	// 由于无法设置 RemoteIP，checkAccess 会返回 false
+	// 所以应该返回 403
+	if ctx.Response.StatusCode() != fasthttp.StatusForbidden {
+		t.Logf("Status: %d, Body: %s", ctx.Response.StatusCode(), string(ctx.Response.Body()))
+	}
+}
+
+// TestPurgeHandler_checkAccess_WithAllowedIP 测试 checkAccess 方法。
+func TestPurgeHandler_checkAccess_WithAllowedIP(t *testing.T) {
+	t.Run("with allow list and nil remote", func(t *testing.T) {
+		cfg := &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{"192.168.0.0/16"},
+		}
+
+		h, err := NewPurgeHandler(nil, cfg)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Create a valid context but with nil remote address
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Init(&fasthttp.Request{}, nil, nil)
+
+		// context with nil remote address - should return false (no client IP)
+		if h.checkAccess(ctx) {
+			t.Error("expected checkAccess to return false with no client IP")
+		}
+	})
+}

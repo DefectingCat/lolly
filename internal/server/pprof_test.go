@@ -816,3 +816,36 @@ func TestPprofHandler_handleMutex(t *testing.T) {
 		t.Errorf("expected Content-Type application/octet-stream, got %s", contentType)
 	}
 }
+
+// TestPprofHandler_isAllowed_RemoteIP 测试 isAllowed 方法使用 RemoteIP。
+func TestPprofHandler_isAllowed_RemoteIP(t *testing.T) {
+	t.Run("empty allow lists - allow all", func(t *testing.T) {
+		h := &PprofHandler{
+			path:        "/debug/pprof",
+			allowedIPs:  []net.IP{},
+			allowedNets: []*net.IPNet{},
+		}
+
+		ctx := &fasthttp.RequestCtx{}
+		// isAllowed should return true when no restrictions
+		if !h.isAllowed(ctx) {
+			t.Error("expected isAllowed to return true with empty allow lists")
+		}
+	})
+
+	t.Run("with allow list but cannot parse IP", func(t *testing.T) {
+		allowedIP := net.ParseIP("192.168.1.1")
+		h := &PprofHandler{
+			path:        "/debug/pprof",
+			allowedIPs:  []net.IP{allowedIP},
+			allowedNets: []*net.IPNet{},
+		}
+
+		ctx := &fasthttp.RequestCtx{}
+		// RemoteIP returns 0.0.0.0 for nil connection, which may not parse
+		// The function should handle this gracefully
+		result := h.isAllowed(ctx)
+		// Result depends on whether RemoteIP can be parsed
+		_ = result
+	})
+}

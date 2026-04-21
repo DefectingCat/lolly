@@ -258,6 +258,221 @@ func TestVHostManager_SetDefault(t *testing.T) {
 	})
 }
 
+// TestVHostManager_WildcardPrefix 测试前缀通配符 *.example.com。
+func TestVHostManager_WildcardPrefix(t *testing.T) {
+	tests := []struct {
+		name        string
+		pattern     string
+		host        string
+		shouldMatch bool
+	}{
+		{"exact subdomain", "*.example.com", "www.example.com", true},
+		{"nested subdomain", "*.example.com", "api.www.example.com", true},
+		{"no subdomain", "*.example.com", "example.com", false},
+		{"different domain", "*.example.com", "www.other.com", false},
+		{"longest match", "*.b.example.com", "a.b.example.com", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manager := NewVHostManager()
+			called := false
+			_ = manager.AddHost(tt.pattern, mockHandler("wildcard", &called))
+
+			handler := manager.Handler()
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.SetHost(tt.host)
+
+			handler(ctx)
+
+			if called != tt.shouldMatch {
+				t.Errorf("expected match %v, got %v", tt.shouldMatch, called)
+			}
+		})
+	}
+}
+
+// TestVHostManager_WildcardSuffix 测试后缀通配符 example.*。
+func TestVHostManager_WildcardSuffix(t *testing.T) {
+	tests := []struct {
+		name        string
+		pattern     string
+		host        string
+		shouldMatch bool
+	}{
+		{"match com", "example.*", "example.com", true},
+		{"match net", "example.*", "example.net", true},
+		{"match org", "example.*", "example.org", true},
+		{"no match subdomain", "example.*", "www.example.com", false},
+		{"no match different prefix", "example.*", "other.com", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manager := NewVHostManager()
+			called := false
+			_ = manager.AddHost(tt.pattern, mockHandler("suffix", &called))
+
+			handler := manager.Handler()
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.SetHost(tt.host)
+
+			handler(ctx)
+
+			if called != tt.shouldMatch {
+				t.Errorf("expected match %v, got %v", tt.shouldMatch, called)
+			}
+		})
+	}
+}
+
+// TestVHostManager_Regex 测试正则匹配。
+func TestVHostManager_Regex(t *testing.T) {
+	tests := []struct {
+		name        string
+		pattern     string
+		host        string
+		shouldMatch bool
+		wantErr     bool
+	}{
+		{"match digits", "~^api[0-9]+\\.example\\.com$", "api1.example.com", true, false},
+		{"match digits 2", "~^api[0-9]+\\.example\\.com$", "api99.example.com", true, false},
+		{"no match letters", "~^api[0-9]+\\.example\\.com$", "apiX.example.com", false, false},
+		{"invalid regex", "~[invalid", "", false, true},
+		{"match any subdomain", "~.*\\.example\\.com", "www.example.com", true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manager := NewVHostManager()
+			called := false
+			err := manager.AddHost(tt.pattern, mockHandler("regex", &called))
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error for invalid regex")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			handler := manager.Handler()
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.SetHost(tt.host)
+
+			handler(ctx)
+
+			if called != tt.shouldMatch {
+				t.Errorf("expected match %v, got %v", tt.shouldMatch, called)
+			}
+		})
+	}
+}
+
+// TestVHostManager_MatchPriority 测试匹配优先级。
+func TestVHostManager_MatchPriority(t *testing.T) {
+	t.Run("exact over wildcard", func(t *testing.T) {
+		manager := NewVHostManager()
+		exactCalled := false
+		wildcardCalled := false
+
+		_ = manager.AddHost("www.example.com", mockHandler("exact", &exactCalled))
+		_ = manager.AddHost("*.example.com", mockHandler("wildcard", &wildcardCalled))
+
+		handler := manager.Handler()
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Request.SetHost("www.example.com")
+
+		handler(ctx)
+
+		if !exactCalled {
+			t.Error("expected exact match to be called")
+		}
+		if wildcardCalled {
+			t.Error("expected wildcard to NOT be called when exact match exists")
+		}
+	})
+
+	t.Run("longest wildcard prefix", func(t *testing.T) {
+		manager := NewVHostManager()
+		shortCalled := false
+		longCalled := false
+
+		_ = manager.AddHost("*.example.com", mockHandler("short", &shortCalled))
+		_ = manager.AddHost("*.b.example.com", mockHandler("long", &longCalled))
+
+		handler := manager.Handler()
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Request.SetHost("a.b.example.com")
+
+		handler(ctx)
+
+		if shortCalled {
+			t.Error("expected short wildcard to NOT be called")
+		}
+		if !longCalled {
+			t.Error("expected longest wildcard match to be called")
+		}
+	})
+}
+
+// TestVHostManager_FindHost 测试 FindHost 方法。
+func TestVHostManager_FindHost(t *testing.T) {
+	manager := NewVHostManager()
+	_ = manager.AddHost("exact.com", mockHandler("exact", new(bool)))
+	_ = manager.AddHost("*.wildcard.com", mockHandler("wildcard", new(bool)))
+	_ = manager.AddHost("suffix.*", mockHandler("suffix", new(bool)))
+	_ = manager.AddHost("~^regex.*", mockHandler("regex", new(bool)))
+	manager.SetDefault(mockHandler("default", new(bool)))
+
+	tests := []struct {
+		host     string
+		wantName string
+	}{
+		{"exact.com", "exact.com"},
+		{"www.wildcard.com", "*.wildcard.com"},
+		{"suffix.net", "suffix.*"},
+		{"regex123", "~^regex.*"},
+		{"unknown.com", "default"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.host, func(t *testing.T) {
+			vhost := manager.FindHost(tt.host)
+			if vhost == nil {
+				t.Fatal("expected non-nil vhost")
+			}
+			if vhost.name != tt.wantName {
+				t.Errorf("expected name %q, got %q", tt.wantName, vhost.name)
+			}
+		})
+	}
+}
+
+// TestVHostManager_FindHost_NilDefault 测试无默认主机时返回 nil。
+func TestVHostManager_FindHost_NilDefault(t *testing.T) {
+	manager := NewVHostManager()
+	_ = manager.AddHost("example.com", mockHandler("example", new(bool)))
+
+	vhost := manager.FindHost("unknown.com")
+	if vhost != nil {
+		t.Error("expected nil when no default host and no match")
+	}
+}
+
+// TestVHostManager_AddHost_InvalidRegex 测试无效正则表达式。
+func TestVHostManager_AddHost_InvalidRegex(t *testing.T) {
+	manager := NewVHostManager()
+	err := manager.AddHost("~[invalid(regex", mockHandler("test", new(bool)))
+
+	if err == nil {
+		t.Error("expected error for invalid regex pattern")
+	}
+}
+
 // TestVHostManager_PortStripping 测试端口剥离逻辑。
 func TestVHostManager_PortStripping(t *testing.T) {
 	tests := []struct {
