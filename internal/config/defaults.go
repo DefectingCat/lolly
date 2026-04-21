@@ -112,6 +112,10 @@ func DefaultConfig() *Config {
 					Allow:   []string{},
 					Deny:    []string{},
 					Default: "allow",
+					GeoIP: GeoIPConfig{
+						CacheSize: 10000,
+						CacheTTL:  3600 * time.Second,
+					},
 				},
 				RateLimit: RateLimitConfig{
 					RequestRate:       0,
@@ -132,6 +136,9 @@ func DefaultConfig() *Config {
 					XFrameOptions:       "DENY",
 					XContentTypeOptions: "nosniff",
 					ReferrerPolicy:      "strict-origin-when-cross-origin",
+				},
+				AuthRequest: AuthRequestConfig{
+					Timeout: 5 * time.Second,
 				},
 			},
 			Compression: CompressionConfig{
@@ -274,6 +281,26 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "    # read_buffer_size: %d       # 读缓冲区大小（字节，默认 %d）\n", cfg.Servers[0].ReadBufferSize, cfg.Servers[0].ReadBufferSize)
 	fmt.Fprintf(&buf, "    # write_buffer_size: %d      # 写缓冲区大小（字节，默认 %d）\n", cfg.Servers[0].WriteBufferSize, cfg.Servers[0].WriteBufferSize)
 	fmt.Fprintf(&buf, "    # reduce_memory_usage: %v    # 是否优先减少内存使用（默认 %v）\n", cfg.Servers[0].ReduceMemoryUsage, cfg.Servers[0].ReduceMemoryUsage)
+	buf.WriteString("    # server_tokens: true          # 是否在响应头中显示版本号（默认 true，false 隐藏 Server 头版本信息）\n")
+	buf.WriteString("\n")
+
+	// types 配置
+	buf.WriteString("    # MIME 类型配置\n")
+	buf.WriteString("    # types:\n")
+	buf.WriteString("    #   default_type: \"application/octet-stream\"  # 默认 MIME 类型（无法识别扩展名时使用）\n")
+	buf.WriteString("    #   map:                                     # 自定义扩展名到 MIME 类型的映射\n")
+	buf.WriteString("    #     \".html\": \"text/html\"\n")
+	buf.WriteString("    #     \".css\": \"text/css\"\n")
+	buf.WriteString("    #     \".js\": \"application/javascript\"\n")
+	buf.WriteString("\n")
+
+	// limit_rate 配置
+	buf.WriteString("    # 响应速率限制配置（限制响应数据发送速率，防止单连接占用过多带宽）\n")
+	buf.WriteString("    # limit_rate:\n")
+	buf.WriteString("    #   rate: 0                    # 字节/秒（0 表示不限速）\n")
+	buf.WriteString("    #   burst: 0                   # 突发流量字节数\n")
+	buf.WriteString("    #   large_file_threshold: 0    # 大文件阈值（字节），超过此大小采用特殊策略（0 表示不区分）\n")
+	buf.WriteString("    #   large_file_strategy: \"\"    # 大文件策略（有效值: skip 跳过限速, coarse 粗粒度限速）\n")
 	buf.WriteString("\n")
 
 	// cache_api 配置
@@ -300,14 +327,14 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #       timeout: 10s              # 执行超时\n")
 	buf.WriteString("    #       enabled: true             # 是否启用此脚本\n")
 	buf.WriteString("    #   global_settings:       # 全局设置\n")
-	buf.WriteString("    #     max_concurrent_coroutines: 1000  # 最大并发协程数\n")
-	buf.WriteString("    #     coroutine_timeout: 30s          # 协程执行超时\n")
-	buf.WriteString("    #     code_cache_size: 1000           # 字节码缓存条目数\n")
-	buf.WriteString("    #     enable_file_watch: true         # 启用文件变更检测\n")
-	buf.WriteString("    #     max_execution_time: 30s         # 最大执行时间\n")
-	buf.WriteString("    #     coroutine_stack_size: 0         # 协程栈大小（0=使用默认值）\n")
-	buf.WriteString("    #     coroutine_pool_warmup: 0        # 协程池预热数量（0=不预热）\n")
-	buf.WriteString("    #     minimize_stack_memory: false    # 最小化栈内存使用\n")
+	fmt.Fprintf(&buf, "    #     max_concurrent_coroutines: %d  # 最大并发协程数\n", cfg.Servers[0].Lua.GlobalSettings.MaxConcurrentCoroutines)
+	fmt.Fprintf(&buf, "    #     coroutine_timeout: %ds          # 协程执行超时\n", int(cfg.Servers[0].Lua.GlobalSettings.CoroutineTimeout.Seconds()))
+	fmt.Fprintf(&buf, "    #     code_cache_size: %d           # 字节码缓存条目数\n", cfg.Servers[0].Lua.GlobalSettings.CodeCacheSize)
+	fmt.Fprintf(&buf, "    #     enable_file_watch: %v         # 启用文件变更检测\n", cfg.Servers[0].Lua.GlobalSettings.EnableFileWatch)
+	fmt.Fprintf(&buf, "    #     max_execution_time: %ds         # 最大执行时间\n", int(cfg.Servers[0].Lua.GlobalSettings.MaxExecutionTime.Seconds()))
+	fmt.Fprintf(&buf, "    #     coroutine_stack_size: %d         # 协程栈大小（0=使用默认值）\n", cfg.Servers[0].Lua.GlobalSettings.CoroutineStackSize)
+	fmt.Fprintf(&buf, "    #     coroutine_pool_warmup: %d        # 协程池预热数量（0=不预热）\n", cfg.Servers[0].Lua.GlobalSettings.CoroutinePoolWarmup)
+	fmt.Fprintf(&buf, "    #     minimize_stack_memory: %v    # 最小化栈内存使用\n", cfg.Servers[0].Lua.GlobalSettings.MinimizeStackMemory)
 	buf.WriteString("\n")
 
 	// static 配置
@@ -323,6 +350,8 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 		buf.WriteString("        try_files: []             # SPA 部署示例: [\"$uri\", \"$uri/\", \"/index.html\"]\n")
 		buf.WriteString("        try_files_pass: false     # 内部重定向是否触发中间件\n")
 		buf.WriteString("        symlink_check: false      # 是否检查符号链接安全（防止路径遍历攻击）\n")
+		buf.WriteString("        # location_type: \"\"         # 位置匹配类型（有效值: exact, prefix, regex, regex_caseless, prefix_priority, named）\n")
+		buf.WriteString("        # internal: false           # 仅允许内部重定向访问\n")
 	}
 	buf.WriteString("    # 示例：额外的静态目录\n")
 	buf.WriteString("    # - path: \"/assets/\"\n")
@@ -341,7 +370,13 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #         weight: 3               # 权重（加权轮询时有效）\n")
 	buf.WriteString("    #       - url: http://backend2:8080\n")
 	buf.WriteString("    #         weight: 1\n")
-	buf.WriteString("    #     load_balance: round_robin   # 负载均衡算法（有效值: round_robin, weighted_round_robin, least_conn, ip_hash, consistent_hash）\n")
+	buf.WriteString("    #         max_conns: 0           # 单目标最大并发连接（0 为不限制）\n")
+	buf.WriteString("    #         max_fails: 1           # 最大失败次数\n")
+	buf.WriteString("    #         fail_timeout: \"10s\"    # 失败超时时间\n")
+	buf.WriteString("    #         backup: false          # 备份服务器标记（仅当主服务器不可用时使用）\n")
+	buf.WriteString("    #         down: false            # 永久不可用标记\n")
+	buf.WriteString("    #         proxy_uri: \"\"          # 代理传递的 URI 路径\n")
+	buf.WriteString("    #     load_balance: round_robin   # 负载均衡算法（有效值: round_robin, weighted_round_robin, least_conn, ip_hash, consistent_hash, random）\n")
 	buf.WriteString("    #     hash_key: ip                # 一致性哈希键（仅 load_balance=consistent_hash 时有效，有效值: ip, uri, header:X-Name）\n")
 	buf.WriteString("    #     virtual_nodes: 150          # 一致性哈希虚拟节点数（仅 load_balance=consistent_hash 时有效）\n")
 	buf.WriteString("    #     health_check:               # 健康检查\n")
@@ -352,10 +387,20 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #       connect: 5s               # 连接超时\n")
 	buf.WriteString("    #       read: 30s                 # 读取超时\n")
 	buf.WriteString("    #       write: 30s                # 写入超时\n")
+	buf.WriteString("    #     buffering:                # 代理缓冲配置\n")
+	buf.WriteString("    #       mode: \"default\"        # 缓冲模式（有效值: default, on, off；off 为流式转发）\n")
+	buf.WriteString("    #       buffer_size: 0         # 响应缓冲区大小（字节，0 表示使用默认值）\n")
+	buf.WriteString("    #     proxy_bind: \"\"           # 代理拨号绑定本地地址\n")
+	buf.WriteString("    #     internal: false          # 仅允许内部重定向访问\n")
 	buf.WriteString("    #     headers:                    # 头部修改\n")
 	buf.WriteString("    #       set_request: {X-Custom: value}\n")
 	buf.WriteString("    #       set_response: {X-Server: lolly}\n")
 	buf.WriteString("    #       remove: [X-Powered-By]\n")
+	buf.WriteString("    #       hide_response: []        # 隐藏的响应头列表\n")
+	buf.WriteString("    #       pass_response: []        # 白名单传递的响应头\n")
+	buf.WriteString("    #       ignore_headers: []       # 完全忽略的头部（不传递给客户端也不记录）\n")
+	buf.WriteString("    #       cookie_domain: \"\"        # Cookie 域重写\n")
+	buf.WriteString("    #       cookie_path: \"\"          # Cookie 路径重写\n")
 	buf.WriteString("    #     cache:                      # 代理缓存\n")
 	buf.WriteString("    #       enabled: false\n")
 	buf.WriteString("    #       max_age: 60s\n")
@@ -383,7 +428,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #     balancer_by_lua:         # Lua 动态负载均衡（在 load_balance 基础上自定义选择逻辑）\n")
 	buf.WriteString("    #       enabled: false         # 是否启用 Lua 负载均衡\n")
 	buf.WriteString("    #       script: \"\"            # Lua 脚本路径，返回目标索引\n")
-	buf.WriteString("    #       fallback: \"round_robin\"  # Lua 失败时的备用算法（有效值: round_robin, weighted_round_robin, least_conn）\n")
+	buf.WriteString("    #       fallback: \"round_robin\"  # Lua 失败时的备用算法（有效值: round_robin, weighted_round_robin, least_conn, ip_hash, consistent_hash, random）\n")
 	buf.WriteString("    #       timeout: 5s            # Lua 执行超时\n")
 	buf.WriteString("    #     redirect_rewrite:        # Location/Refresh 头改写配置（代理响应重定向时改写 Location 头）\n")
 	buf.WriteString("    #       mode: \"default\"       # 运行模式（有效值: default, off, custom）\n")
@@ -464,8 +509,8 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("        private_ip_behavior: \"bypass\"  # 私有 IP 处理方式（有效值: bypass, apply_default, deny）\n")
 	buf.WriteString("        allow_countries: []       # 允许的国家代码列表（如 [\"CN\", \"US\"]）\n")
 	buf.WriteString("        deny_countries: []        # 拒绝的国家代码列表\n")
-	buf.WriteString("        cache_size: 10000         # GeoIP 查询缓存大小\n")
-	buf.WriteString("        cache_ttl: 3600           # 缓存有效期（秒）\n")
+	fmt.Fprintf(&buf, "        cache_size: %d         # GeoIP 查询缓存大小\n", cfg.Servers[0].Security.Access.GeoIP.CacheSize)
+	fmt.Fprintf(&buf, "        cache_ttl: %d           # 缓存有效期（秒）\n", int(cfg.Servers[0].Security.Access.GeoIP.CacheTTL.Seconds()))
 	buf.WriteString("\n")
 	buf.WriteString("      # 速率限制\n")
 	buf.WriteString("      rate_limit:\n")
@@ -505,7 +550,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("        enabled: false              # 是否启用外部认证\n")
 	buf.WriteString("        uri: \"\"                     # 认证服务地址（支持相对路径或完整 URL）\n")
 	buf.WriteString("        method: \"GET\"               # 认证请求方法（有效值: GET, POST, HEAD）\n")
-	buf.WriteString("        auth_timeout: 5s            # 认证请求超时时间\n")
+	fmt.Fprintf(&buf, "        auth_timeout: %ds            # 认证请求超时时间\n", int(cfg.Servers[0].Security.AuthRequest.Timeout.Seconds()))
 	buf.WriteString("        headers: {}                 # 自定义认证请求头，如 {X-Original-Uri: \"$request_uri\"}\n")
 	buf.WriteString("        forward_headers: []         # 需要转发的原请求头，默认包含 Cookie, Authorization, X-Forwarded-For\n")
 	buf.WriteString("\n")
@@ -553,7 +598,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("#           weight: 3              # 权重（加权轮询时有效）\n")
 	buf.WriteString("#         - addr: \"mysql2:3306\"\n")
 	buf.WriteString("#           weight: 1\n")
-	buf.WriteString("#       load_balance: \"round_robin\"  # 负载均衡算法（有效值: round_robin, weighted_round_robin, least_conn, ip_hash）\n")
+	buf.WriteString("#       load_balance: \"round_robin\"  # 负载均衡算法（有效值: round_robin, weighted_round_robin, least_conn, ip_hash, consistent_hash, random）\n")
 	buf.WriteString("#     ssl:                        # 服务端 SSL 配置（仅 TCP 支持）\n")
 	buf.WriteString("#       enabled: false            # 是否启用 TLS 终端\n")
 	buf.WriteString("#       cert: \"/path/to/cert.pem\" # 服务器证书文件\n")

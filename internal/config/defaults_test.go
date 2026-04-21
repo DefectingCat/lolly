@@ -9,6 +9,7 @@
 package config
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +60,52 @@ func TestDefaultConfig(t *testing.T) {
 	for i, ct := range cfg.Servers[0].Compression.Types {
 		if ct != expectedTypes[i] {
 			t.Errorf("Compression.Types[%d] 期望 %s, 实际 %s", i, expectedTypes[i], ct)
+		}
+	}
+}
+
+func TestDefaultConfigGeoIPAndAuthRequest(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Servers[0].Security.Access.GeoIP.CacheSize != 10000 {
+		t.Errorf("GeoIP.CacheSize = %d, want 10000", cfg.Servers[0].Security.Access.GeoIP.CacheSize)
+	}
+	if cfg.Servers[0].Security.Access.GeoIP.CacheTTL != 3600*time.Second {
+		t.Errorf("GeoIP.CacheTTL = %v, want 3600s", cfg.Servers[0].Security.Access.GeoIP.CacheTTL)
+	}
+	if cfg.Servers[0].Security.AuthRequest.Timeout != 5*time.Second {
+		t.Errorf("AuthRequest.Timeout = %v, want 5s", cfg.Servers[0].Security.AuthRequest.Timeout)
+	}
+}
+
+func TestGenerateConfigYAMLFieldsCoverage(t *testing.T) {
+	cfg := DefaultConfig()
+	yamlData, err := GenerateConfigYAML(cfg)
+	if err != nil {
+		t.Fatalf("GenerateConfigYAML failed: %v", err)
+	}
+	yamlStr := string(yamlData)
+
+	checks := []struct {
+		typ  reflect.Type
+		name string
+	}{
+		{reflect.TypeOf(GeoIPConfig{}), "GeoIPConfig"},
+		{reflect.TypeOf(AuthRequestConfig{}), "AuthRequestConfig"},
+		{reflect.TypeOf(LuaGlobalSettings{}), "LuaGlobalSettings"},
+		{reflect.TypeOf(LimitRateConfig{}), "LimitRateConfig"},
+		{reflect.TypeOf(TypesConfig{}), "TypesConfig"},
+	}
+
+	for _, c := range checks {
+		for i := 0; i < c.typ.NumField(); i++ {
+			tag := c.typ.Field(i).Tag.Get("yaml")
+			fieldName := strings.Split(tag, ",")[0]
+			if fieldName == "" || fieldName == "-" {
+				continue
+			}
+			if !strings.Contains(yamlStr, fieldName) {
+				t.Errorf("%s.%s (yaml:%q) not found in GenerateConfigYAML output", c.name, c.typ.Field(i).Name, fieldName)
+			}
 		}
 	}
 }
