@@ -120,11 +120,14 @@ func (h *HealthChecker) Start() {
 // Stop 停止后台健康检查进程。
 // 它向后台 goroutine 发送停止信号并等待其完成。
 // Stop 是幂等的；在已停止的检查器上调用它不会产生任何效果。
+// Stop 后可以再次调用 Start 重新启动检查器。
 func (h *HealthChecker) Stop() {
 	if !h.running.CompareAndSwap(true, false) {
 		return // 已经停止，直接返回
 	}
 	close(h.stopCh)
+	// 重新创建 stopCh 以支持后续 Start
+	h.stopCh = make(chan struct{})
 }
 
 // run 是在后台 goroutine 中运行的主要健康检查循环。
