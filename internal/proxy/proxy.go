@@ -298,10 +298,14 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 	// ProxyBind：使用指定本地地址作为出站连接源
 	if proxyBind != "" {
 		localAddr := proxyBind
+		dialTimeout := client.MaxConnWaitTimeout
+		if dialTimeout <= 0 {
+			dialTimeout = 30 * time.Second
+		}
 		client.Dial = func(addr string) (net.Conn, error) {
 			dialer := &net.Dialer{
 				LocalAddr: &net.TCPAddr{IP: net.ParseIP(localAddr)},
-				Timeout:  client.MaxConnWaitTimeout,
+				Timeout:   dialTimeout,
 			}
 			return dialer.Dial("tcp", addr)
 		}
@@ -1110,7 +1114,7 @@ func (p *Proxy) rewriteCookies(respHeaders *fasthttp.ResponseHeader) {
 		return
 	}
 
-	var cookies []string
+	cookies := make([]string, 0, respHeaders.Len())
 	for _, value := range respHeaders.Cookies() {
 		cookie := string(value)
 		if cookieDomain != "" {
@@ -1130,10 +1134,11 @@ func (p *Proxy) rewriteCookies(respHeaders *fasthttp.ResponseHeader) {
 	}
 }
 
-// rewriteCookieAttr 替换 Cookie 字符串中指定属性的值。
+// rewriteCookieAttr 替换 Cookie 字符串中指定属性的值（大小写不敏感）。
 func rewriteCookieAttr(cookie, attr, newValue string) string {
 	prefix := attr + "="
-	idx := strings.Index(cookie, prefix)
+	lower := strings.ToLower(cookie)
+	idx := strings.Index(lower, strings.ToLower(prefix))
 	if idx == -1 {
 		return cookie
 	}
