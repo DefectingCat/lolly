@@ -1296,7 +1296,7 @@ func TestFilterHealthyAndExclude(t *testing.T) {
 // TestTarget_Hostname 测试Target.Hostname方法。
 func TestTarget_Hostname(t *testing.T) {
 	t.Run("从URL提取主机名", func(_ *testing.T) {
-		target := NewTargetFromConfig("http://example.com:8080/api", 1)
+		target := NewTargetFromConfig("http://example.com:8080/api", 1, 0, 0, 0, false, false, "")
 		got := target.Hostname()
 		if got != "example.com" {
 			t.Errorf("Hostname() = %q, want %q", got, "example.com")
@@ -1304,7 +1304,7 @@ func TestTarget_Hostname(t *testing.T) {
 	})
 
 	t.Run("无端口URL", func(_ *testing.T) {
-		target := NewTargetFromConfig("http://example.com/api", 1)
+		target := NewTargetFromConfig("http://example.com/api", 1, 0, 0, 0, false, false, "")
 		got := target.Hostname()
 		if got != "example.com" {
 			t.Errorf("Hostname() = %q, want %q", got, "example.com")
@@ -1322,7 +1322,7 @@ func TestTarget_Hostname(t *testing.T) {
 	})
 
 	t.Run("缓存行为", func(_ *testing.T) {
-		target := NewTargetFromConfig("http://example.com:8080", 1)
+		target := NewTargetFromConfig("http://example.com:8080", 1, 0, 0, 0, false, false, "")
 		_ = target.Hostname()
 		_ = target.Hostname() // 第二次应使用缓存
 		got := target.Hostname()
@@ -1376,21 +1376,21 @@ func TestTarget_ResolvedIPs(t *testing.T) {
 // TestTarget_NeedsResolve 测试Target.NeedsResolve方法。
 func TestTarget_NeedsResolve(t *testing.T) {
 	t.Run("IP地址不需要解析", func(_ *testing.T) {
-		target := NewTargetFromConfig("http://192.168.1.1:8080", 1)
+		target := NewTargetFromConfig("http://192.168.1.1:8080", 1, 0, 0, 0, false, false, "")
 		if target.NeedsResolve(time.Minute) {
 			t.Error("IP地址URL不需要解析")
 		}
 	})
 
 	t.Run("首次解析需要", func(_ *testing.T) {
-		target := NewTargetFromConfig("http://example.com:8080", 1)
+		target := NewTargetFromConfig("http://example.com:8080", 1, 0, 0, 0, false, false, "")
 		if !target.NeedsResolve(time.Minute) {
 			t.Error("首次解析应该需要")
 		}
 	})
 
 	t.Run("TTL未过期不需要", func(_ *testing.T) {
-		target := NewTargetFromConfig("http://example.com:8080", 1)
+		target := NewTargetFromConfig("http://example.com:8080", 1, 0, 0, 0, false, false, "")
 		target.SetResolvedIPs([]string{"192.168.1.1"})
 		// TTL为1小时，刚设置过，不应过期
 		if target.NeedsResolve(time.Hour) {
@@ -1399,7 +1399,7 @@ func TestTarget_NeedsResolve(t *testing.T) {
 	})
 
 	t.Run("TTL过期需要", func(_ *testing.T) {
-		target := NewTargetFromConfig("http://example.com:8080", 1)
+		target := NewTargetFromConfig("http://example.com:8080", 1, 0, 0, 0, false, false, "")
 		target.SetResolvedIPs([]string{"192.168.1.1"})
 		// 使用极短的TTL模拟过期
 		if !target.NeedsResolve(time.Nanosecond) {
@@ -1434,7 +1434,7 @@ func TestTarget_LastResolved(t *testing.T) {
 // TestNewTargetFromConfig 测试NewTargetFromConfig函数。
 func TestNewTargetFromConfig(t *testing.T) {
 	t.Run("创建健康目标", func(_ *testing.T) {
-		target := NewTargetFromConfig("http://backend:8080", 5)
+		target := NewTargetFromConfig("http://backend:8080", 5, 0, 0, 0, false, false, "")
 		if target.URL != "http://backend:8080" {
 			t.Errorf("URL = %q, want %q", target.URL, "http://backend:8080")
 		}
@@ -1447,7 +1447,7 @@ func TestNewTargetFromConfig(t *testing.T) {
 	})
 
 	t.Run("主机名自动初始化", func(_ *testing.T) {
-		target := NewTargetFromConfig("http://example.com:9090", 1)
+		target := NewTargetFromConfig("http://example.com:9090", 1, 0, 0, 0, false, false, "")
 		got := target.Hostname()
 		if got != "example.com" {
 			t.Errorf("Hostname() = %q, want %q", got, "example.com")
@@ -1599,7 +1599,7 @@ func TestIPHash_ConcurrentSelection(t *testing.T) {
 
 // TestTarget_Hostname_IPURL 测试纯IP地址URL的主机名提取。
 func TestTarget_Hostname_IPURL(t *testing.T) {
-	target := NewTargetFromConfig("http://10.0.0.1:8080", 1)
+	target := NewTargetFromConfig("http://10.0.0.1:8080", 1, 0, 0, 0, false, false, "")
 	got := target.Hostname()
 	if got != "10.0.0.1" {
 		t.Errorf("Hostname() = %q, want %q", got, "10.0.0.1")
@@ -1744,4 +1744,149 @@ func TestLeastConnections_NilTargets(t *testing.T) {
 	if got != nil {
 		t.Errorf("Select(nil) = %v, want nil", got)
 	}
+}
+
+func TestTargetIsAvailable(t *testing.T) {
+	t.Run("healthy target is available", func(t *testing.T) {
+		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 0, 0, false, false, "")
+		if !target.IsAvailable() {
+			t.Error("healthy target should be available")
+		}
+	})
+
+	t.Run("down target is not available", func(t *testing.T) {
+		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 0, 0, false, true, "")
+		if target.IsAvailable() {
+			t.Error("down target should not be available")
+		}
+	})
+
+	t.Run("unhealthy target is not available", func(t *testing.T) {
+		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 0, 0, false, false, "")
+		target.Healthy.Store(false)
+		if target.IsAvailable() {
+			t.Error("unhealthy target should not be available")
+		}
+	})
+
+	t.Run("max connections exceeded", func(t *testing.T) {
+		target := NewTargetFromConfig("http://localhost:8080", 1, 2, 0, 0, false, false, "")
+		IncrementConnections(target)
+		IncrementConnections(target)
+		if target.IsAvailable() {
+			t.Error("target at max connections should not be available")
+		}
+	})
+
+	t.Run("within max connections", func(t *testing.T) {
+		target := NewTargetFromConfig("http://localhost:8080", 1, 2, 0, 0, false, false, "")
+		IncrementConnections(target)
+		if !target.IsAvailable() {
+			t.Error("target under max connections should be available")
+		}
+	})
+}
+
+func TestTargetRecordFailure(t *testing.T) {
+	t.Run("record failure increments count", func(t *testing.T) {
+		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 3, 10*time.Second, false, false, "")
+		count := target.RecordFailure()
+		if count != 1 {
+			t.Errorf("expected fail count 1, got %d", count)
+		}
+	})
+
+	t.Run("target becomes unavailable after max fails", func(t *testing.T) {
+		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 2, 10*time.Second, false, false, "")
+		target.RecordFailure()
+		target.RecordFailure()
+		if target.IsAvailable() {
+			t.Error("target should be unavailable after reaching max fails")
+		}
+	})
+
+	t.Run("default fail timeout is 10s", func(t *testing.T) {
+		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 1, 0, false, false, "")
+		target.RecordFailure()
+		if target.IsAvailable() {
+			t.Error("target should be unavailable with default timeout")
+		}
+	})
+}
+
+func TestTargetRecordSuccess(t *testing.T) {
+	t.Run("record success resets fail count", func(t *testing.T) {
+		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 3, 10*time.Second, false, false, "")
+		target.RecordFailure()
+		target.RecordFailure()
+		target.RecordSuccess()
+		if target.failCount.Load() != 0 {
+			t.Error("fail count should be reset after success")
+		}
+		if !target.IsAvailable() {
+			t.Error("target should be available after success resets cooldown")
+		}
+	})
+}
+
+func TestFilterHealthyBackup(t *testing.T) {
+	t.Run("prefers non-backup targets", func(t *testing.T) {
+		primary := NewTargetFromConfig("http://primary:8080", 1, 0, 0, 0, false, false, "")
+		backup := NewTargetFromConfig("http://backup:8080", 1, 0, 0, 0, true, false, "")
+		targets := []*Target{primary, backup}
+
+		result := filterHealthy(targets)
+		if len(result) != 1 || result[0].URL != "http://primary:8080" {
+			t.Error("should prefer non-backup target")
+		}
+	})
+
+	t.Run("falls back to backup when primary unavailable", func(t *testing.T) {
+		primary := NewTargetFromConfig("http://primary:8080", 1, 0, 0, 0, false, false, "")
+		primary.Healthy.Store(false)
+		backup := NewTargetFromConfig("http://backup:8080", 1, 0, 0, 0, true, false, "")
+		targets := []*Target{primary, backup}
+
+		result := filterHealthy(targets)
+		if len(result) != 1 || result[0].URL != "http://backup:8080" {
+			t.Error("should fall back to backup target")
+		}
+	})
+}
+
+func TestRandomBalancer(t *testing.T) {
+	t.Run("selects from available targets", func(t *testing.T) {
+		targets := []*Target{
+			NewTargetFromConfig("http://a:8080", 1, 0, 0, 0, false, false, ""),
+			NewTargetFromConfig("http://b:8080", 1, 0, 0, 0, false, false, ""),
+		}
+		b := NewRandom()
+		selected := b.Select(targets)
+		if selected == nil {
+			t.Error("should select a target")
+		}
+	})
+
+	t.Run("returns nil when no available targets", func(t *testing.T) {
+		targets := []*Target{
+			NewTargetFromConfig("http://a:8080", 1, 0, 0, 0, false, true, ""),
+		}
+		b := NewRandom()
+		selected := b.Select(targets)
+		if selected != nil {
+			t.Error("should return nil for no available targets")
+		}
+	})
+
+	t.Run("select excluding works", func(t *testing.T) {
+		targets := []*Target{
+			NewTargetFromConfig("http://a:8080", 1, 0, 0, 0, false, false, ""),
+			NewTargetFromConfig("http://b:8080", 1, 0, 0, 0, false, false, ""),
+		}
+		b := NewRandom()
+		selected := b.SelectExcluding(targets, targets[:1])
+		if selected == nil || selected.URL == "http://a:8080" {
+			t.Error("should exclude first target")
+		}
+	})
 }

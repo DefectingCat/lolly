@@ -241,7 +241,7 @@ func BenchmarkProxyHostClient(b *testing.B) {
 		Write:   30 * time.Second,
 	}
 
-	client := createHostClient("http://"+addr, timeout, nil, nil)
+	client := createHostClient("http://"+addr, timeout, nil, nil, "", nil)
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -270,7 +270,7 @@ func BenchmarkProxyHostClientParallel(b *testing.B) {
 		Write:   30 * time.Second,
 	}
 
-	client := createHostClient("http://"+addr, timeout, nil, nil)
+	client := createHostClient("http://"+addr, timeout, nil, nil, "", nil)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
