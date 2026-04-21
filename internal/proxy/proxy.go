@@ -169,9 +169,16 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 	if cfg.Cache.Enabled {
 		rules := make([]cache.ProxyCacheRule, 0)
 		if cfg.Cache.MaxAge > 0 {
+			// 使用配置中的方法，若为空则使用默认值 GET, HEAD (nginx 默认行为)
+			methods := cfg.Cache.Methods
+			if len(methods) == 0 {
+				methods = []string{"GET", "HEAD"}
+			}
 			rules = append(rules, cache.ProxyCacheRule{
-				Path:   cfg.Path,
-				MaxAge: cfg.Cache.MaxAge,
+				Path:     cfg.Path,
+				Methods:  methods,
+				Statuses: nil, // nil = 所有可缓存状态码 (由 getCacheDuration 处理)
+				MaxAge:   cfg.Cache.MaxAge,
 			})
 		}
 		p.cache = cache.NewProxyCache(rules, cfg.Cache.CacheLock, cfg.Cache.StaleWhileRevalidate)
@@ -590,6 +597,15 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		// 尝试从缓存获取（如果启用）
 		if p.cache != nil && attempt == 0 {
+			// 检查请求方法是否允许缓存
+			method := string(ctx.Request.Header.Method())
+			path := string(ctx.Request.URI().Path())
+			rule := p.cache.MatchRule(path, method, 0)
+			if rule == nil {
+				// 方法不在允许列表中，跳过缓存
+				goto proxyRequest
+			}
+
 			hashKey, origKey := p.buildCacheKeyHash(ctx)
 			if entry, ok, stale := p.cache.Get(hashKey, origKey); ok {
 				// 缓存命中
@@ -605,8 +621,13 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 					return
 				}
 				// 过期缓存，尝试后台刷新，同时返回旧数据
-
-				go p.backgroundRefresh(ctx, target, hashKey, origKey)
+				if !p.config.Cache.BackgroundUpdateDisable {
+					entry.Updating.Store(true)
+					go func() {
+						defer entry.Updating.Store(false)
+						p.backgroundRefresh(ctx, target, hashKey, origKey)
+					}()
+				}
 				upstreamAddr = "CACHE"
 				upstreamStatus = entry.Status
 
@@ -618,10 +639,18 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			}
 
 			// 检查是否需要缓存锁（防止缓存击穿）
-			if done := p.cache.AcquireLock(hashKey); done != nil {
+			timeout := p.config.Cache.CacheLockTimeout
+			if timeout == 0 && p.config.Cache.CacheLock {
+				timeout = 5 * time.Second // nginx 默认 5s
+			}
+			waitCh, timedOut := p.cache.AcquireLockWithTimeout(hashKey, timeout)
+			if timedOut {
+				// 超时，跳过缓存直接请求上游
+				// 不缓存响应（nginx 行为）
+			} else if waitCh != nil {
 				// 有其他请求正在生成缓存，等待
 				loadbalance.DecrementConnections(target)
-				<-done
+				<-waitCh
 				// 重新尝试获取缓存
 
 				if entry, ok, _ := p.cache.Get(hashKey, origKey); ok {
@@ -639,6 +668,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			}
 		}
 
+	proxyRequest:
 		// 执行代理请求
 		timing.MarkConnectStart()
 		err := client.Do(req, &ctx.Response)
@@ -723,8 +753,25 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		// 存入缓存（如果启用且响应可缓存）
 		if p.cache != nil {
+			// 再次检查方法是否允许缓存
+			method := string(ctx.Request.Header.Method())
+			path := string(ctx.Request.URI().Path())
+			if rule := p.cache.MatchRule(path, method, statusCode); rule == nil {
+				// 方法或状态码不在允许列表中，不缓存
+				return
+			}
+
 			hashKey, origKey := p.buildCacheKeyHash(ctx)
 			if statusCode >= 200 && statusCode < 300 {
+				// 检查 MinUses 阈值
+				if entry, ok, _ := p.cache.Get(hashKey, origKey); ok {
+					minUses := p.config.Cache.MinUses
+					if minUses > 0 && entry.Uses.Load() < int32(minUses) {
+						p.cache.ReleaseLock(hashKey, nil)
+						return
+					}
+				}
+
 				// 提取响应头（使用 pool 复用 map）
 				headers, ok := headersPool.Get().(map[string]string)
 				if !ok {
@@ -733,10 +780,31 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				for k := range headers {
 					delete(headers, k)
 				}
+				// 构建忽略头部查找表（大小写不敏感）
+				ignoreSet := make(map[string]bool, len(p.config.Cache.CacheIgnoreHeaders))
+				for _, h := range p.config.Cache.CacheIgnoreHeaders {
+					ignoreSet[strings.ToLower(h)] = true
+				}
+
+				var lastModified, etag string
 				for key, value := range ctx.Response.Header.All() {
+					headerName := strings.ToLower(string(key))
+					if ignoreSet[headerName] {
+						continue
+					}
 					headers[string(key)] = string(value)
+
+					switch headerName {
+					case "last-modified":
+						lastModified = string(value)
+					case "etag":
+						etag = string(value)
+					}
 				}
 				p.cache.Set(hashKey, origKey, ctx.Response.Body(), headers, statusCode, p.getCacheDuration(statusCode))
+				if lastModified != "" || etag != "" {
+					p.cache.SetValidationHeaders(hashKey, origKey, lastModified, etag)
+				}
 				// 注意：不能 Put 回 pool，因为 cache.Set 存储了 map 引用
 				// 后续 writeCachedResponse 会读取该 map
 			}
@@ -1312,6 +1380,18 @@ func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.
 	// 复制原始请求
 	ctx.Request.CopyTo(req)
 
+	// 如果启用 Revalidate，添加条件请求头
+	if p.config.Cache.Revalidate {
+		if entry, ok, _ := p.cache.Get(hashKey, origKey); ok {
+			if entry.LastModified != "" {
+				req.Header.Set("If-Modified-Since", entry.LastModified)
+			}
+			if entry.ETag != "" {
+				req.Header.Set("If-None-Match", entry.ETag)
+			}
+		}
+	}
+
 	// 获取客户端
 	client := p.getClient(target.URL)
 	if client == nil {
@@ -1322,6 +1402,19 @@ func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.
 	err := client.Do(req, resp)
 	if err != nil {
 		p.cache.ReleaseLock(hashKey, err)
+		return
+	}
+
+	// 处理 304 Not Modified 响应
+	if resp.StatusCode() == 304 {
+		newHeaders := make(map[string]string)
+		if lm := resp.Header.Peek("Last-Modified"); len(lm) > 0 {
+			newHeaders["Last-Modified"] = string(lm)
+		}
+		if et := resp.Header.Peek("ETag"); len(et) > 0 {
+			newHeaders["ETag"] = string(et)
+		}
+		p.cache.RefreshTTL(hashKey, origKey, newHeaders)
 		return
 	}
 

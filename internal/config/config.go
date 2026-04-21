@@ -594,10 +594,16 @@ type ProxyHeaders struct {
 //	  cache_lock: true
 //	  stale_while_revalidate: 1m
 type ProxyCacheConfig struct {
-	MaxAge               time.Duration `yaml:"max_age"`
-	StaleWhileRevalidate time.Duration `yaml:"stale_while_revalidate"`
-	Enabled              bool          `yaml:"enabled"`
-	CacheLock            bool          `yaml:"cache_lock"`
+	MaxAge                  time.Duration `yaml:"max_age"`
+	StaleWhileRevalidate    time.Duration `yaml:"stale_while_revalidate"`
+	Enabled                 bool          `yaml:"enabled"`
+	CacheLock               bool          `yaml:"cache_lock"`
+	Methods                 []string      `yaml:"methods"`
+	MinUses                 int           `yaml:"min_uses"`                  // 缓存阈值，请求次数达到此值才缓存
+	CacheLockTimeout        time.Duration `yaml:"cache_lock_timeout"`        // 缓存锁超时时间
+	BackgroundUpdateDisable bool          `yaml:"background_update_disable"` // 禁用后台更新（默认 false = 启用后台更新）
+	CacheIgnoreHeaders      []string      `yaml:"cache_ignore_headers"`      // 缓存时忽略的响应头
+	Revalidate              bool          `yaml:"revalidate"`                // 启用条件请求（If-Modified-Since/If-None-Match）
 }
 
 // ProxyCacheValidConfig 缓存有效期分段配置。

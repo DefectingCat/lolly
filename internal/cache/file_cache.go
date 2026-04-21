@@ -22,6 +22,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -293,13 +294,18 @@ type ProxyCacheRule struct {
 
 // ProxyCacheEntry 代理缓存条目。
 type ProxyCacheEntry struct {
-	Created time.Time
-	Headers map[string]string
-	Key     string
-	OrigKey string
-	Data    []byte
-	Status  int
-	MaxAge  time.Duration
+	Created       time.Time
+	Headers       map[string]string
+	Key           string
+	OrigKey       string
+	Data          []byte
+	Status        int
+	MaxAge        time.Duration
+	Uses          atomic.Int32 // 访问计数，用于 min_uses 阈值检查
+	Updating      atomic.Bool  // 后台更新标志，表示正在后台刷新
+	LastModified  string       // Last-Modified 响应头，用于条件请求
+	ETag          string       // ETag 响应头，用于条件请求
+	LastValidated time.Time    // 最后验证时间，用于防止验证循环
 }
 
 // ProxyCache 代理响应缓存，支持缓存锁防击穿。
@@ -355,6 +361,9 @@ func (c *ProxyCache) Get(hashKey uint64, origKey string) (*ProxyCacheEntry, bool
 	if entry.OrigKey != origKey {
 		return nil, false, false
 	}
+
+	// 增加访问计数（原子操作，用于 min_uses 阈值检查）
+	entry.Uses.Add(1)
 
 	// 检查是否过期
 	now := time.Now()
@@ -423,6 +432,50 @@ func (c *ProxyCache) AcquireLock(hashKey uint64) <-chan struct{} {
 	return nil // 获得锁，应该生成缓存
 }
 
+// AcquireLockWithTimeout 获取缓存生成锁（带超时）。
+// 返回值：
+//   - waitCh != nil && timedOut == false: 需要等待其他请求完成
+//   - waitCh == nil && timedOut == false: 获得锁，应该生成缓存
+//   - timedOut == true: 超时，应该放弃缓存直接请求上游
+func (c *ProxyCache) AcquireLockWithTimeout(hashKey uint64, timeout time.Duration) (waitCh <-chan struct{}, timedOut bool) {
+	if !c.cacheLock {
+		return nil, false // 不使用缓存锁
+	}
+
+	c.mu.Lock()
+	// 检查是否已有缓存
+	if _, ok := c.entries[hashKey]; ok {
+		c.mu.Unlock()
+		return nil, false
+	}
+
+	// 检查是否有 pending 请求
+	if pending, ok := c.pending[hashKey]; ok {
+		c.mu.Unlock()
+		// 有其他请求正在生成，需要等待
+		if timeout > 0 {
+			// 带超时等待
+			select {
+			case <-pending.done:
+				// 刚刚完成，重新检查缓存
+				return nil, false
+			case <-time.After(timeout):
+				// 超时
+				return nil, true
+			}
+		}
+		return pending.done, false // 无限等待
+	}
+
+	// 创建新的 pending 请求
+	pending := &pendingRequest{
+		done: make(chan struct{}),
+	}
+	c.pending[hashKey] = pending
+	c.mu.Unlock()
+	return nil, false // 获得锁，应该生成缓存
+}
+
 // ReleaseLock 释放缓存生成锁。
 func (c *ProxyCache) ReleaseLock(hashKey uint64, err error) {
 	if !c.cacheLock {
@@ -442,9 +495,25 @@ func (c *ProxyCache) ReleaseLock(hashKey uint64, err error) {
 // MatchRule 检查请求是否匹配缓存规则。
 func (c *ProxyCache) MatchRule(path, method string, status int) *ProxyCacheRule {
 	for _, rule := range c.rules {
-		// 检查路径匹配（简单前缀匹配）
-		if rule.Path != "" && !MatchPattern(rule.Path, path) {
-			continue
+		// 检查路径匹配
+		if rule.Path != "" {
+			// 如果路径以 / 结尾，使用前缀匹配
+			// 如果路径包含 *，使用通配符匹配
+			// 否则使用前缀匹配（允许 /api 匹配 /api/users）
+			if strings.HasSuffix(rule.Path, "/") {
+				if !strings.HasPrefix(path, rule.Path) {
+					continue
+				}
+			} else if strings.Contains(rule.Path, "*") {
+				if !MatchPattern(rule.Path, path) {
+					continue
+				}
+			} else {
+				// 精确匹配或前缀匹配
+				if path != rule.Path && !strings.HasPrefix(path, rule.Path+"/") && !strings.HasPrefix(path, rule.Path+"?") && len(path) <= len(rule.Path) {
+					continue
+				}
+			}
 		}
 
 		// 检查方法
@@ -493,6 +562,49 @@ func (c *ProxyCache) Clear() {
 	defer c.mu.Unlock()
 	c.entries = make(map[uint64]*ProxyCacheEntry)
 	c.pending = make(map[uint64]*pendingRequest)
+}
+
+// RefreshTTL 刷新缓存条目的 TTL（用于 304 响应处理）。
+// 不替换缓存内容，只更新验证时间和验证头。
+// 返回是否成功（条目可能已被驱逐）。
+func (c *ProxyCache) RefreshTTL(hashKey uint64, origKey string, newHeaders map[string]string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	entry, ok := c.entries[hashKey]
+	if !ok || entry.OrigKey != origKey {
+		return false // 条目已被驱逐
+	}
+
+	// 更新验证时间（不更新 Created，保持 LRU 顺序）
+	entry.LastValidated = time.Now()
+
+	// 更新验证头（如果提供）
+	if newHeaders != nil {
+		if lm, ok := newHeaders["Last-Modified"]; ok {
+			entry.LastModified = lm
+		}
+		if et, ok := newHeaders["ETag"]; ok {
+			entry.ETag = et
+		}
+	}
+
+	return true
+}
+
+// SetValidationHeaders 设置缓存条目的验证头（Last-Modified 和 ETag）。
+func (c *ProxyCache) SetValidationHeaders(hashKey uint64, origKey string, lastModified, etag string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	entry, ok := c.entries[hashKey]
+	if !ok || entry.OrigKey != origKey {
+		return false
+	}
+
+	entry.LastModified = lastModified
+	entry.ETag = etag
+	return true
 }
 
 // Stats 返回代理缓存统计。
