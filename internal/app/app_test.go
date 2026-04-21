@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
-
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/http2"
 	"rua.plus/lolly/internal/http3"
