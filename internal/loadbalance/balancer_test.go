@@ -931,6 +931,7 @@ func TestIsValidAlgorithm(t *testing.T) {
 		{"least_conn", "least_conn", true},
 		{"ip_hash", "ip_hash", true},
 		{"consistent_hash", "consistent_hash", true},
+		{"random", "random", true},
 		{"invalid", "invalid", false},
 		{"empty", "", true}, // 空字符串有效（使用默认值）
 		{"unknown", "unknown-algorithm", false},
@@ -1820,9 +1821,11 @@ func TestTargetRecordSuccess(t *testing.T) {
 		target.RecordFailure()
 		target.RecordFailure()
 		target.RecordSuccess()
-		if target.failCount.Load() != 0 {
+		target.failMu.Lock()
+		if target.failCount != 0 {
 			t.Error("fail count should be reset after success")
 		}
+		target.failMu.Unlock()
 		if !target.IsAvailable() {
 			t.Error("target should be available after success resets cooldown")
 		}
