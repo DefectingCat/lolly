@@ -36,6 +36,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"net"
 	"slices"
 	"strings"
 	"sync"
@@ -66,6 +67,7 @@ const (
 	lbLeastConn          = "least_conn"           // 最少连接
 	lbIPHash             = "ip_hash"              // IP 哈希
 	lbConsistentHash     = "consistent_hash"      // 一致性哈希
+	lbRandom             = "random"               // 随机（Power of Two Choices）
 )
 
 // headersPool 复用缓存 headers map，减少分配。
@@ -155,8 +157,12 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 			continue
 		}
 
-		client := createHostClient(target.URL, cfg.Timeout, transportCfg, cfg.ProxySSL)
-		p.clients[target.URL] = client
+		client := createHostClient(target.URL, cfg.Timeout, transportCfg, cfg.ProxySSL, cfg.ProxyBind, cfg.Buffering)
+		clientKey := target.URL
+		if cfg.ProxyBind != "" {
+			clientKey = target.URL + "|" + cfg.ProxyBind
+		}
+		p.clients[clientKey] = client
 	}
 
 	// 初始化代理缓存（如果启用）
@@ -213,6 +219,8 @@ func createBalancerByName(name string, cfg *config.ProxyConfig) (loadbalance.Bal
 			virtualNodes = 150
 		}
 		return loadbalance.NewConsistentHash(virtualNodes, cfg.HashKey), nil
+	case lbRandom:
+		return loadbalance.NewRandom(), nil
 	default:
 		return nil, errors.New("unsupported load balance algorithm: " + name)
 	}
@@ -255,7 +263,7 @@ func createBalancer(cfg *config.ProxyConfig) (loadbalance.Balancer, error) {
 //
 // 返回值：
 //   - *fasthttp.HostClient: 配置完成的 HostClient 实例
-func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCfg *config.TransportConfig, sslCfg *config.ProxySSLConfig) *fasthttp.HostClient {
+func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCfg *config.TransportConfig, sslCfg *config.ProxySSLConfig, proxyBind string, buffering *config.ProxyBufferingConfig) *fasthttp.HostClient {
 	// 从目标 URL 解析主机和协议
 	// addDefaultPort=true 确保 HostClient.Addr 包含端口（host:port 格式）
 	addr, isTLS := netutil.ParseTargetURL(targetURL, true)
@@ -285,6 +293,27 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 		RetryIf:                nil, // 禁用自动重试
 		DisablePathNormalizing: false,
 		SecureErrorLogMessage:  false,
+	}
+
+	// ProxyBind：使用指定本地地址作为出站连接源
+	if proxyBind != "" {
+		localAddr := proxyBind
+		client.Dial = func(addr string) (net.Conn, error) {
+			dialer := &net.Dialer{
+				LocalAddr: &net.TCPAddr{IP: net.ParseIP(localAddr)},
+				Timeout:  client.MaxConnWaitTimeout,
+			}
+			return dialer.Dial("tcp", addr)
+		}
+	}
+
+	// Buffering 控制
+	if buffering != nil && buffering.Mode == "off" {
+		client.StreamResponseBody = true
+	}
+	if buffering != nil && buffering.BufferSize > 0 {
+		client.ReadBufferSize = buffering.BufferSize
+		client.WriteBufferSize = buffering.BufferSize
 	}
 
 	// 上游 SSL 配置（使用原生 TLSConfig）
@@ -534,6 +563,14 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		// SAFETY: lifetime=ephemeral - consumed immediately by SetRequestURIBytes
 		path := ctx.URI().Path()
 		query := ctx.URI().QueryString()
+
+		// ProxyURI 语义：当 target.ProxyURI 设置时，替换请求路径
+		// 这实现了 nginx proxy_pass URI 传递语义：
+		//   proxy_pass http://backend/v2/ → 请求路径替换为 /v2/
+		if target.ProxyURI != "" {
+			path = []byte(target.ProxyURI)
+		}
+
 		targetURI := make([]byte, 0, len(target.URL)+len(path)+len(query)+1)
 		targetURI = append(targetURI, target.URL...)
 		targetURI = append(targetURI, path...)
@@ -641,6 +678,9 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		// 请求成功，减少连接计数
 		loadbalance.DecrementConnections(target)
+
+		// 记录成功，重置软失败状态
+		target.RecordSuccess()
 
 		// 检测 X-Accel-Redirect 头，支持内部重定向
 		if redirectPath := ctx.Response.Header.Peek("X-Accel-Redirect"); len(redirectPath) > 0 {
@@ -949,15 +989,13 @@ func (p *Proxy) extractHashKey(ctx *fasthttp.RequestCtx, hashKey string) string 
 
 // getClient 返回指定目标 URL 对应的 HostClient 连接池实例。
 // 如果目标 URL 不存在于连接池中，返回 nil。
-//
-// 参数：
-//   - targetURL: 后端目标 URL
-//
-// 返回值：
-//   - *fasthttp.HostClient: 对应的连接池实例
 func (p *Proxy) getClient(targetURL string) *fasthttp.HostClient {
+	key := targetURL
+	if p.config.ProxyBind != "" {
+		key = targetURL + "|" + p.config.ProxyBind
+	}
 	p.mu.RLock()
-	client := p.clients[targetURL]
+	client := p.clients[key]
 	p.mu.RUnlock()
 	return client
 }
@@ -1012,15 +1050,101 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 // 参数：
 //   - ctx: FastHTTP 请求上下文
 func (p *Proxy) modifyResponseHeaders(ctx *fasthttp.RequestCtx) {
+	respHeaders := &ctx.Response.Header
+
+	// 构建 PassResponse 集合（多处使用）
+	passSet := make(map[string]bool, len(p.config.Headers.PassResponse))
+	for _, h := range p.config.Headers.PassResponse {
+		passSet[h] = true
+	}
+
+	// PassResponse 白名单模式：仅传递列出的头部
+	if len(passSet) > 0 {
+		var toDelete []string
+		for key := range respHeaders.All() {
+			if !passSet[string(key)] {
+				toDelete = append(toDelete, string(key))
+			}
+		}
+		for _, k := range toDelete {
+			respHeaders.Del(k)
+		}
+	}
+
+	// HideResponse：移除指定的响应头（PassResponse 优先，跳过已传递的头部）
+	for _, key := range p.config.Headers.HideResponse {
+		if !passSet[key] {
+			respHeaders.Del(key)
+		}
+	}
+
+	// IgnoreHeaders：从请求和响应中移除（PassResponse 优先）
+	for _, key := range p.config.Headers.IgnoreHeaders {
+		ctx.Request.Header.Del(key)
+		if !passSet[key] {
+			respHeaders.Del(key)
+		}
+	}
+
+	// Cookie 域/路径重写
+	if p.config.Headers.CookieDomain != "" || p.config.Headers.CookiePath != "" {
+		p.rewriteCookies(respHeaders)
+	}
+
 	// 从配置设置自定义响应头（支持变量展开）
 	if p.config.Headers.SetResponse != nil {
 		vc := variable.NewContext(ctx)
 		defer variable.ReleaseContext(vc)
 		for key, value := range p.config.Headers.SetResponse {
 			expanded := vc.Expand(value)
-			ctx.Response.Header.Set(key, expanded)
+			respHeaders.Set(key, expanded)
 		}
 	}
+}
+
+// rewriteCookies 重写响应中 Set-Cookie 头的 domain 和 path。
+func (p *Proxy) rewriteCookies(respHeaders *fasthttp.ResponseHeader) {
+	cookieDomain := p.config.Headers.CookieDomain
+	cookiePath := p.config.Headers.CookiePath
+	if cookieDomain == "" && cookiePath == "" {
+		return
+	}
+
+	var cookies []string
+	for _, value := range respHeaders.Cookies() {
+		cookie := string(value)
+		if cookieDomain != "" {
+			cookie = rewriteCookieAttr(cookie, "Domain", cookieDomain)
+		}
+		if cookiePath != "" {
+			cookie = rewriteCookieAttr(cookie, "Path", cookiePath)
+		}
+		cookies = append(cookies, cookie)
+	}
+
+	if len(cookies) > 0 {
+		respHeaders.Del("Set-Cookie")
+		for _, c := range cookies {
+			respHeaders.Add("Set-Cookie", c)
+		}
+	}
+}
+
+// rewriteCookieAttr 替换 Cookie 字符串中指定属性的值。
+func rewriteCookieAttr(cookie, attr, newValue string) string {
+	prefix := attr + "="
+	idx := strings.Index(cookie, prefix)
+	if idx == -1 {
+		return cookie
+	}
+
+	start := idx + len(prefix)
+	end := start
+	for end < len(cookie) && cookie[end] != ';' && cookie[end] != ' ' {
+		end++
+	}
+
+	return cookie[:start] + newValue + cookie[end:]
 }
 
 // isWebSocketRequest 检查请求是否为 WebSocket 升级请求。
@@ -1076,8 +1200,12 @@ func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
 			continue
 		}
 
-		client := createHostClient(target.URL, p.config.Timeout, nil, p.config.ProxySSL)
-		p.clients[target.URL] = client
+		client := createHostClient(target.URL, p.config.Timeout, nil, p.config.ProxySSL, p.config.ProxyBind, p.config.Buffering)
+		clientKey := target.URL
+		if p.config.ProxyBind != "" {
+			clientKey = target.URL + "|" + p.config.ProxyBind
+		}
+		p.clients[clientKey] = client
 	}
 
 	p.targets = targets

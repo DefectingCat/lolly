@@ -999,7 +999,15 @@ func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerC
 		// 转换目标
 		targets := make([]*loadbalance.Target, len(proxyCfg.Targets))
 		for j, t := range proxyCfg.Targets {
-			targets[j] = loadbalance.NewTargetFromConfig(t.URL, t.Weight)
+			failTimeout := t.FailTimeout
+			if t.MaxFails > 0 && failTimeout == 0 {
+				failTimeout = 10 * time.Second
+			}
+			targets[j] = loadbalance.NewTargetFromConfig(
+				t.URL, t.Weight,
+				int64(t.MaxConns), int64(t.MaxFails), failTimeout,
+				t.Backup, t.Down, t.ProxyURI,
+			)
 		}
 
 		// 传递 Transport 配置和 Lua 引擎
@@ -1122,7 +1130,15 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 		// 转换目标
 		targets := make([]*loadbalance.Target, len(proxyCfg.Targets))
 		for j, t := range proxyCfg.Targets {
-			targets[j] = loadbalance.NewTargetFromConfig(t.URL, t.Weight)
+			failTimeout := t.FailTimeout
+			if t.MaxFails > 0 && failTimeout == 0 {
+				failTimeout = 10 * time.Second
+			}
+			targets[j] = loadbalance.NewTargetFromConfig(
+				t.URL, t.Weight,
+				int64(t.MaxConns), int64(t.MaxFails), failTimeout,
+				t.Backup, t.Down, t.ProxyURI,
+			)
 		}
 
 		// 传递 Transport 配置和 Lua 引擎

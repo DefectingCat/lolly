@@ -210,33 +210,21 @@ func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 // 此方法用于被动健康检查，代理根据请求处理过程中
 // 观察到的失败将目标标记为不健康。
 //
-// 在代理错误处理中的使用示例：
-//
-//	if err := forwardRequest(target, req, resp); err != nil {
-//	    healthChecker.MarkUnhealthy(target)
-//	    // 尝试其他目标或返回错误
-//	}
-//
-// 注意：要再次将目标标记为健康，主动健康检查
-// 必须成功。没有 MarkHealthy 方法 - 健康状态只能通过
-// 成功的健康检查积极恢复。
+// 同时调用 RecordFailure 记录软失败状态，配合 MaxFails/FailTimeout
+// 实现失败计数和冷却机制。
 func (h *HealthChecker) MarkUnhealthy(target *loadbalance.Target) {
 	target.Healthy.Store(false)
+	target.RecordFailure()
 }
 
 // MarkHealthy 将目标标记为健康。
 // 此方法用于故障转移成功后，将之前失败的目标恢复为健康状态。
 //
-// 在故障转移成功后的使用示例：
-//
-//	if err := retryRequest(target, req, resp); err == nil {
-//	    healthChecker.MarkHealthy(target)
-//	}
-//
-// 注意：此方法与主动健康检查独立运作，用于快速恢复
-// 故障转移场景中已恢复的目标。
+// 同时调用 RecordSuccess 重置软失败状态（failCount/failedUntil），
+// 但不修改 Healthy 标志——健康检查器对 Healthy 拥有权威。
 func (h *HealthChecker) MarkHealthy(target *loadbalance.Target) {
 	target.Healthy.Store(true)
+	target.RecordSuccess()
 }
 
 // IsRunning 如果健康检查器当前正在运行，则返回 true。
