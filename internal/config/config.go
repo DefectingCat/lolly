@@ -340,6 +340,7 @@ type ProxyConfig struct {
 	RedirectRewrite *RedirectRewriteConfig `yaml:"redirect_rewrite"`
 	ProxySSL        *ProxySSLConfig        `yaml:"proxy_ssl"`
 	CacheValid      *ProxyCacheValidConfig `yaml:"cache_valid"`
+	Buffering       *ProxyBufferingConfig  `yaml:"buffering"`
 	// 切片字段
 	Targets []ProxyTarget `yaml:"targets"`
 	// 字符串字段
@@ -347,6 +348,7 @@ type ProxyConfig struct {
 	LoadBalance       string `yaml:"load_balance"`
 	HashKey           string `yaml:"hash_key"`
 	ClientMaxBodySize string `yaml:"client_max_body_size"`
+	ProxyBind         string `yaml:"proxy_bind"`
 	// 结构体字段
 	Headers       ProxyHeaders        `yaml:"headers"`
 	BalancerByLua BalancerByLuaConfig `yaml:"balancer_by_lua"`
@@ -368,6 +370,26 @@ type ProxyConfig struct {
 	// Internal 仅允许内部访问
 	// 设置为 true 时，该位置仅允许内部重定向访问
 	Internal bool `yaml:"internal"`
+}
+
+// ProxyBufferingConfig 代理缓冲配置。
+//
+// 控制代理响应的缓冲行为：
+//   - "default" 或 "on": 缓冲响应到内存/临时文件
+//   - "off": 流式转发响应，不缓冲
+//
+// 使用示例：
+//
+//	buffering:
+//	  mode: "off"
+type ProxyBufferingConfig struct {
+	// Mode 缓冲模式
+	// 可选值："default"（默认缓冲）, "on"（强制缓冲）, "off"（关闭缓冲）
+	Mode string `yaml:"mode"`
+
+	// BufferSize 响应缓冲区大小（字节）
+	// 0 表示使用默认值
+	BufferSize int `yaml:"buffer_size"`
 }
 
 // BalancerByLuaConfig Lua 负载均衡配置
@@ -425,6 +447,30 @@ type ProxyTarget struct {
 	// Weight 权重
 	// 用于加权轮询算法，值越大分配的请求越多
 	Weight int `yaml:"weight"`
+
+	// MaxConns 最大并发连接数
+	// 0 表示不限制
+	MaxConns int `yaml:"max_conns"`
+
+	// MaxFails 最大失败次数
+	// 在 FailTimeout 期间失败次数达到此值后标记为不可用
+	// 0 表示不进行被动失败检测
+	MaxFails int `yaml:"max_fails"`
+
+	// FailTimeout 失败超时时间
+	// 达到 MaxFails 后，目标在此时间内被视为不可用
+	FailTimeout time.Duration `yaml:"fail_timeout"`
+
+	// Backup 备份服务器
+	// 仅当所有非备份服务器不可用时才使用
+	Backup bool `yaml:"backup"`
+
+	// Down 标记服务器为永久不可用
+	Down bool `yaml:"down"`
+
+	// ProxyURI 代理传递的 URI 路径
+	// 设置后替换请求路径，支持 nginx proxy_pass URI 语义
+	ProxyURI string `yaml:"proxy_uri"`
 }
 
 // HealthCheckConfig 健康检查配置。
@@ -508,6 +554,26 @@ type ProxyHeaders struct {
 	// Remove 移除的头部
 	// 从发送到后端的请求中移除的头部列表
 	Remove []string `yaml:"remove"`
+
+	// HideResponse 隐藏的响应头
+	// 从返回给客户端的响应中移除的头部列表
+	HideResponse []string `yaml:"hide_response"`
+
+	// PassResponse 允许传递的响应头
+	// 仅传递列出的头部，其他全部隐藏（白名单模式）
+	PassResponse []string `yaml:"pass_response"`
+
+	// IgnoreHeaders 忽略的头部
+	// 代理时完全忽略这些头部，不转发到后端也不返回给客户端
+	IgnoreHeaders []string `yaml:"ignore_headers"`
+
+	// CookieDomain Cookie 域重写
+	// 将响应中 Set-Cookie 的 domain 替换为此值
+	CookieDomain string `yaml:"cookie_domain"`
+
+	// CookiePath Cookie 路径重写
+	// 将响应中 Set-Cookie 的 path 替换为此值
+	CookiePath string `yaml:"cookie_path"`
 }
 
 // ProxyCacheConfig 代理缓存配置。

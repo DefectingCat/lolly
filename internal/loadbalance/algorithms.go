@@ -31,6 +31,7 @@ var ValidAlgorithms = []string{
 	"least_conn",
 	"ip_hash",
 	"consistent_hash",
+	"random",
 }
 
 // IsValidAlgorithm 检查给定的算法名称是否有效。
