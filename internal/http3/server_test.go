@@ -11,7 +11,14 @@
 package http3
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
+	"net"
 	"testing"
 	"time"
 
@@ -447,4 +454,244 @@ func TestGetAltSvcHeader_NilConfig(t *testing.T) {
 	if header == "" {
 		t.Error("Expected non-empty Alt-Svc header with valid config")
 	}
+}
+
+// TestStart_AlreadyRunning 测试启动已运行的服务器
+func TestStart_AlreadyRunning(t *testing.T) {
+	cfg := &config.HTTP3Config{
+		Enabled:    true,
+		Listen:     ":0", // 使用随机端口避免冲突
+		MaxStreams: 100,
+	}
+	handler := func(_ *fasthttp.RequestCtx) {}
+
+	cert := generateTestCertificate(t)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	server, err := NewServer(cfg, handler, tlsConfig)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	// 启动服务器
+	err = server.Start()
+	if err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	// 再次启动应该失败
+	err = server.Start()
+	if err == nil {
+		t.Error("Expected error when starting already running server")
+	}
+	if err.Error() != "server already running" {
+		t.Errorf("Expected 'server already running' error, got: %v", err)
+	}
+}
+
+// TestStart_InvalidListenAddress 测试无效监听地址
+func TestStart_InvalidListenAddress(t *testing.T) {
+	cfg := &config.HTTP3Config{
+		Enabled:    true,
+		Listen:     "invalid:address:format", // 无效地址
+		MaxStreams: 100,
+	}
+	handler := func(_ *fasthttp.RequestCtx) {}
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{},
+	}
+
+	server, err := NewServer(cfg, handler, tlsConfig)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	err = server.Start()
+	if err == nil {
+		t.Error("Expected error for invalid listen address")
+		server.Stop()
+	}
+}
+
+// TestStop_RunningServer 测试停止运行中的服务器
+func TestStop_RunningServer(t *testing.T) {
+	cfg := &config.HTTP3Config{
+		Enabled:    true,
+		Listen:     ":0",
+		MaxStreams: 100,
+	}
+	handler := func(_ *fasthttp.RequestCtx) {}
+
+	cert := generateTestCertificate(t)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	server, err := NewServer(cfg, handler, tlsConfig)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	// 启动服务器
+	err = server.Start()
+	if err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	if !server.IsRunning() {
+		t.Error("Server should be running after Start()")
+	}
+
+	// 停止服务器
+	err = server.Stop()
+	if err != nil {
+		t.Errorf("Unexpected error stopping server: %v", err)
+	}
+
+	if server.IsRunning() {
+		t.Error("Server should not be running after Stop()")
+	}
+}
+
+// TestGracefulStop_RunningServer 测试优雅停止运行中的服务器
+func TestGracefulStop_RunningServer(t *testing.T) {
+	cfg := &config.HTTP3Config{
+		Enabled:    true,
+		Listen:     ":0",
+		MaxStreams: 100,
+	}
+	handler := func(_ *fasthttp.RequestCtx) {}
+
+	cert := generateTestCertificate(t)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	server, err := NewServer(cfg, handler, tlsConfig)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	// 启动服务器
+	err = server.Start()
+	if err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	if !server.IsRunning() {
+		t.Error("Server should be running after Start()")
+	}
+
+	// 优雅停止服务器
+	err = server.GracefulStop(5 * time.Second)
+	if err != nil {
+		t.Errorf("Unexpected error graceful stopping server: %v", err)
+	}
+
+	if server.IsRunning() {
+		t.Error("Server should not be running after GracefulStop()")
+	}
+}
+
+// TestStart_Enable0RTT 测试启用 0-RTT 时的警告日志
+func TestStart_Enable0RTT(t *testing.T) {
+	cfg := &config.HTTP3Config{
+		Enabled:    true,
+		Listen:     ":0",
+		Enable0RTT: true,
+		MaxStreams: 100,
+	}
+	handler := func(_ *fasthttp.RequestCtx) {}
+
+	cert := generateTestCertificate(t)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	server, err := NewServer(cfg, handler, tlsConfig)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	err = server.Start()
+	if err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	// 验证服务器已启动
+	if !server.IsRunning() {
+		t.Error("Server should be running")
+	}
+}
+
+// TestStart_DefaultValues 测试默认值设置
+func TestStart_DefaultValues(t *testing.T) {
+	cfg := &config.HTTP3Config{
+		Enabled:    true,
+		Listen:     ":0",
+		MaxStreams: 0, // 使用默认值
+	}
+	handler := func(_ *fasthttp.RequestCtx) {}
+
+	cert := generateTestCertificate(t)
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	server, err := NewServer(cfg, handler, tlsConfig)
+	if err != nil {
+		t.Fatalf("Failed to create server: %v", err)
+	}
+
+	err = server.Start()
+	if err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+	defer server.Stop()
+
+	if !server.IsRunning() {
+		t.Error("Server should be running")
+	}
+}
+
+// generateTestCertificate 生成用于测试的自签名证书
+func generateTestCertificate(t *testing.T) tls.Certificate {
+	t.Helper()
+
+	// 使用 RSA 密钥生成自签名证书
+	tmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "localhost"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              []string{"localhost"},
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+	}
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Failed to generate RSA key: %v", err)
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("Failed to create certificate: %v", err)
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		t.Fatalf("Failed to load certificate: %v", err)
+	}
+
+	return cert
 }

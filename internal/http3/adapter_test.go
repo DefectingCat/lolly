@@ -377,3 +377,237 @@ func (m *mockResponseWriter) Write(data []byte) (int, error) {
 	}
 	return len(data), nil
 }
+
+// TestStreamRequestBody_LargeBody 测试大请求体的流式处理
+func TestStreamRequestBody_LargeBody(t *testing.T) {
+	adapter := NewAdapter()
+
+	// 创建大于 64KB 的请求体
+	largeBody := make([]byte, 100*1024) // 100KB
+	for i := range largeBody {
+		largeBody[i] = byte(i % 256)
+	}
+
+	req := &http.Request{
+		Method:        "POST",
+		URL:           &url.URL{Path: "/test"},
+		Host:          "localhost",
+		Body:          io.NopCloser(bytes.NewReader(largeBody)),
+		ContentLength: int64(len(largeBody)),
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	adapter.convertRequest(req, ctx)
+
+	if !bytes.Equal(ctx.Request.Body(), largeBody) {
+		t.Errorf("Large body mismatch: expected %d bytes, got %d bytes", len(largeBody), len(ctx.Request.Body()))
+	}
+}
+
+// TestStreamRequestBody_UnknownContentLength 测试未知内容长度的请求体
+func TestStreamRequestBody_UnknownContentLength(t *testing.T) {
+	adapter := NewAdapter()
+
+	bodyContent := []byte("test body with unknown length")
+	req := &http.Request{
+		Method:        "POST",
+		URL:           &url.URL{Path: "/test"},
+		Host:          "localhost",
+		Body:          io.NopCloser(bytes.NewReader(bodyContent)),
+		ContentLength: -1, // 未知长度
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	adapter.convertRequest(req, ctx)
+
+	if !bytes.Equal(ctx.Request.Body(), bodyContent) {
+		t.Errorf("Body mismatch: expected %s, got %s", bodyContent, ctx.Request.Body())
+	}
+}
+
+// TestStreamRequestBody_NoBody 测试无请求体的情况
+func TestStreamRequestBody_NoBody(t *testing.T) {
+	adapter := NewAdapter()
+
+	req := &http.Request{
+		Method: "GET",
+		URL:    &url.URL{Path: "/test"},
+		Host:   "localhost",
+		Body:   nil,
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	adapter.convertRequest(req, ctx)
+
+	if len(ctx.Request.Body()) != 0 {
+		t.Errorf("Expected empty body, got %d bytes", len(ctx.Request.Body()))
+	}
+}
+
+// TestStreamRequestBody_NoBodyConstant 测试 http.NoBody 的情况
+func TestStreamRequestBody_NoBodyConstant(t *testing.T) {
+	adapter := NewAdapter()
+
+	req := &http.Request{
+		Method: "GET",
+		URL:    &url.URL{Path: "/test"},
+		Host:   "localhost",
+		Body:   http.NoBody,
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	adapter.convertRequest(req, ctx)
+
+	if len(ctx.Request.Body()) != 0 {
+		t.Errorf("Expected empty body with http.NoBody, got %d bytes", len(ctx.Request.Body()))
+	}
+}
+
+// TestConvertRequest_EmptyRemoteAddr 测试空远程地址
+func TestConvertRequest_EmptyRemoteAddr(t *testing.T) {
+	adapter := NewAdapter()
+
+	req := &http.Request{
+		Method:     "GET",
+		URL:        &url.URL{Path: "/test"},
+		Host:       "localhost",
+		RemoteAddr: "",
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	adapter.convertRequest(req, ctx)
+
+	// 空远程地址不应该导致错误
+	// fasthttp 会设置默认值，所以只需验证不会 panic
+}
+
+// TestConvertRequest_InvalidRemoteAddr 测试无效远程地址
+func TestConvertRequest_InvalidRemoteAddr(t *testing.T) {
+	adapter := NewAdapter()
+
+	req := &http.Request{
+		Method:     "GET",
+		URL:        &url.URL{Path: "/test"},
+		Host:       "localhost",
+		RemoteAddr: "invalid-address",
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	adapter.convertRequest(req, ctx)
+
+	// 无效远程地址应该被忽略，不应导致错误
+	// ctx.RemoteAddr() 可能为 nil 或默认值
+}
+
+// TestWrap_TypeAssertionFailure 测试类型断言失败的情况
+func TestWrap_TypeAssertionFailure(t *testing.T) {
+	adapter := NewAdapter()
+
+	// 创建一个会触发类型断言的 handler
+	handler := func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(200)
+		ctx.SetBodyString("OK")
+	}
+
+	httpHandler := adapter.Wrap(handler)
+
+	// 执行请求
+	req := &http.Request{
+		Method: "GET",
+		URL:    &url.URL{Path: "/test"},
+		Host:   "localhost",
+	}
+
+	rw := &mockResponseWriter{}
+	httpHandler.ServeHTTP(rw, req)
+
+	// 应该正常处理
+	if rw.status != 200 {
+		t.Errorf("Expected status 200, got %d", rw.status)
+	}
+}
+
+// TestConvertResponse_EmptyBody 测试空响应体
+func TestConvertResponse_EmptyBody(t *testing.T) {
+	adapter := NewAdapter()
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+	ctx.SetStatusCode(204) // No Content
+
+	rw := &mockResponseWriter{}
+
+	adapter.convertResponse(ctx, rw)
+
+	if rw.status != 204 {
+		t.Errorf("Expected status 204, got %d", rw.status)
+	}
+
+	if len(rw.body) != 0 {
+		t.Errorf("Expected empty body, got %d bytes", len(rw.body))
+	}
+}
+
+// TestConvertRequest_Protocol 测试协议版本设置
+func TestConvertRequest_Protocol(t *testing.T) {
+	adapter := NewAdapter()
+
+	req := &http.Request{
+		Method: "GET",
+		URL:    &url.URL{Path: "/test"},
+		Host:   "localhost",
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	adapter.convertRequest(req, ctx)
+
+	protocol := string(ctx.Request.Header.Protocol())
+	if protocol != "HTTP/3" {
+		t.Errorf("Expected protocol HTTP/3, got %s", protocol)
+	}
+}
+
+// errorReader 是一个会返回错误的 io.Reader
+type errorReader struct{}
+
+func (e *errorReader) Read(_ []byte) (n int, err error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+// TestStreamRequestBody_ReadError 测试读取请求体时的错误处理
+func TestStreamRequestBody_ReadError(t *testing.T) {
+	adapter := NewAdapter()
+
+	req := &http.Request{
+		Method:        "POST",
+		URL:           &url.URL{Path: "/test"},
+		Host:          "localhost",
+		Body:          io.NopCloser(&errorReader{}),
+		ContentLength: -1, // 强制使用流式读取
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	// 这不应该 panic，应该优雅处理错误
+	adapter.convertRequest(req, ctx)
+
+	// 错误读取时，body 应该为空
+	if len(ctx.Request.Body()) != 0 {
+		t.Errorf("Expected empty body on read error, got %d bytes", len(ctx.Request.Body()))
+	}
+}
