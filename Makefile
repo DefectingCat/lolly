@@ -245,7 +245,7 @@ lint:
 	fi
 
 # 代码检查
-check: fmt lint test
+check: fmt lint test-all
 	@echo "All checks passed."
 
 # ============================================
