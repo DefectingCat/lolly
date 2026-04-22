@@ -35,7 +35,7 @@ func TestGzipStaticServeFile_BrotliPriority(t *testing.T) {
 		t.Fatalf("创建 .gz 文件失败: %v", err)
 	}
 
-	g := NewGzipStatic(true, tmpDir, nil)
+	g := NewGzipStatic(true, tmpDir, nil, nil)
 
 	tests := []struct {
 		acceptEncoding string
@@ -119,7 +119,7 @@ func TestGzipStaticServeFile_GzipFallback(t *testing.T) {
 		t.Fatalf("创建 .gz 文件失败: %v", err)
 	}
 
-	g := NewGzipStatic(true, tmpDir, nil)
+	g := NewGzipStatic(true, tmpDir, nil, nil)
 
 	tests := []struct {
 		acceptEncoding string
@@ -177,7 +177,7 @@ func TestGzipStaticServeFile_AcceptEncodingParsing(t *testing.T) {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 
-	g := NewGzipStatic(true, tmpDir, nil)
+	g := NewGzipStatic(true, tmpDir, nil, nil)
 
 	tests := []struct {
 		name           string
@@ -241,7 +241,7 @@ func TestGzipStaticServeFile_Disabled(t *testing.T) {
 	}
 
 	// 禁用的 GzipStatic
-	g := NewGzipStatic(false, tmpDir, nil)
+	g := NewGzipStatic(false, tmpDir, nil, nil)
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.Header.Set("Accept-Encoding", "br")
@@ -263,7 +263,7 @@ func TestGzipStaticServeFile_InvalidExtension(t *testing.T) {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 
-	g := NewGzipStatic(true, tmpDir, nil)
+	g := NewGzipStatic(true, tmpDir, nil, nil)
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.Header.Set("Accept-Encoding", "br")
@@ -285,7 +285,7 @@ func TestGzipStaticServeFile_PathTraversal(t *testing.T) {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 
-	g := NewGzipStatic(true, tmpDir, nil)
+	g := NewGzipStatic(true, tmpDir, nil, nil)
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.Header.Set("Accept-Encoding", "br")
@@ -308,7 +308,7 @@ func TestGzipStaticServeFile_VaryHeader(t *testing.T) {
 		t.Fatalf("创建 .br 文件失败: %v", err)
 	}
 
-	g := NewGzipStatic(true, tmpDir, nil)
+	g := NewGzipStatic(true, tmpDir, nil, nil)
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.Header.Set("Accept-Encoding", "br")
@@ -323,7 +323,7 @@ func TestGzipStaticServeFile_VaryHeader(t *testing.T) {
 
 // TestNewGzipStatic_DefaultExtensions 测试默认扩展名
 func TestNewGzipStatic_DefaultExtensions(t *testing.T) {
-	g := NewGzipStatic(true, "/tmp", nil)
+	g := NewGzipStatic(true, "/tmp", nil, nil)
 
 	expected := []string{".html", ".css", ".js", ".json", ".xml", ".svg", ".txt"}
 	got := g.Extensions()
@@ -342,7 +342,7 @@ func TestNewGzipStatic_DefaultExtensions(t *testing.T) {
 // TestNewGzipStatic_CustomExtensions 测试自定义扩展名
 func TestNewGzipStatic_CustomExtensions(t *testing.T) {
 	custom := []string{".custom", ".ext"}
-	g := NewGzipStatic(true, "/tmp", custom)
+	g := NewGzipStatic(true, "/tmp", custom, nil)
 
 	got := g.Extensions()
 	if len(got) != 2 || got[0] != ".custom" || got[1] != ".ext" {
@@ -352,12 +352,12 @@ func TestNewGzipStatic_CustomExtensions(t *testing.T) {
 
 // TestGzipStatic_Enabled 测试 Enabled 方法
 func TestGzipStatic_Enabled(t *testing.T) {
-	g1 := NewGzipStatic(true, "/tmp", nil)
+	g1 := NewGzipStatic(true, "/tmp", nil, nil)
 	if !g1.Enabled() {
 		t.Error("Enabled() = false, want true")
 	}
 
-	g2 := NewGzipStatic(false, "/tmp", nil)
+	g2 := NewGzipStatic(false, "/tmp", nil, nil)
 	if g2.Enabled() {
 		t.Error("Enabled() = true, want false")
 	}
@@ -366,7 +366,7 @@ func TestGzipStatic_Enabled(t *testing.T) {
 // TestDefaultExtensions 测试默认扩展名（通过 NewGzipStatic 间接测试）
 func TestDefaultExtensions(t *testing.T) {
 	expected := []string{".html", ".css", ".js", ".json", ".xml", ".svg", ".txt"}
-	g := NewGzipStatic(true, "/tmp", nil)
+	g := NewGzipStatic(true, "/tmp", nil, nil)
 	got := g.Extensions()
 
 	if len(got) != len(expected) {
@@ -462,7 +462,7 @@ func TestTryServeFile(t *testing.T) {
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.Header.Set("Accept-Encoding", "br")
 
-	g := NewGzipStatic(true, tmpDir, nil)
+	g := NewGzipStatic(true, tmpDir, nil, nil)
 	served := g.ServeFile(ctx, "test.js")
 
 	if !served {
@@ -477,7 +477,7 @@ func TestTryServeFile(t *testing.T) {
 
 // TestGzipStatic_PrecompressedExtensions 测试预压缩扩展名优先级
 func TestGzipStatic_PrecompressedExtensions(t *testing.T) {
-	g := NewGzipStatic(true, "/tmp", nil)
+	g := NewGzipStatic(true, "/tmp", nil, nil)
 
 	// 验证默认预压缩扩展名顺序
 	expected := []string{".br", ".gz"}

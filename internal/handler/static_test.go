@@ -449,13 +449,13 @@ func TestStaticHandler_SetGzipStatic(t *testing.T) {
 	handler := NewStaticHandler("/var/www", "/", nil, false)
 
 	// 启用 gzip
-	handler.SetGzipStatic(true, []string{".gz", ".gzip"})
+	handler.SetGzipStatic(true, nil, []string{".gz", ".gzip"})
 	if handler.gzipStatic == nil {
 		t.Error("Expected gzipStatic to be non-nil")
 	}
 
 	// 禁用 gzip
-	handler.SetGzipStatic(false, nil)
+	handler.SetGzipStatic(false, nil, nil)
 	// gzipStatic 保持不变（SetGzipStatic 只在 enabled=true 时设置）
 }
 
@@ -525,7 +525,7 @@ func TestStaticHandler_Handle_Precompressed(t *testing.T) {
 	}
 
 	handler := NewStaticHandler(tmpDir, "/", nil, false)
-	handler.SetGzipStatic(true, []string{".gz"})
+	handler.SetGzipStatic(true, nil, []string{".gz"})
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.SetRequestURI("/test.txt")

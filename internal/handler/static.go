@@ -164,18 +164,19 @@ func (h *StaticHandler) SetFileCache(fc *cache.FileCache) {
 
 // SetGzipStatic 设置预压缩文件支持。
 //
-// 启用后，对于匹配扩展名的请求，优先发送 .gz 预压缩文件。
+// 启用后，对于匹配扩展名的请求，优先发送预压缩文件。
 //
 // 参数：
 //   - enabled: 是否启用预压缩支持
-//   - extensions: 需要支持预压缩的文件扩展名列表（如 [".html", ".css", ".js"]）
+//   - extensions: 支持预压缩的源文件扩展名列表（如 [".html", ".css", ".js"]），为空使用默认值
+//   - precompressedExtensions: 预压缩文件扩展名列表（如 [".br", ".gz"]），为空使用默认值
 //
 // 使用示例：
 //
-//	handler.SetGzipStatic(true, []string{".html", ".css", ".js"})
-func (h *StaticHandler) SetGzipStatic(enabled bool, extensions []string) {
+//	handler.SetGzipStatic(true, nil, []string{".gz", ".br"})
+func (h *StaticHandler) SetGzipStatic(enabled bool, extensions, precompressedExtensions []string) {
 	if enabled {
-		h.gzipStatic = compression.NewGzipStatic(true, h.root, extensions)
+		h.gzipStatic = compression.NewGzipStatic(true, h.root, extensions, precompressedExtensions)
 	}
 }
 

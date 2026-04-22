@@ -1083,7 +1083,9 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 			staticHandler.SetCacheTTL(5 * time.Second)
 		}
 		if cfg.Compression.GzipStatic {
-			staticHandler.SetGzipStatic(true, cfg.Compression.GzipStaticExtensions)
+			// extensions: 源文件类型，为空使用默认值
+			// GzipStaticExtensions: 预压缩文件扩展名（如 .br, .gz）
+			staticHandler.SetGzipStatic(true, nil, cfg.Compression.GzipStaticExtensions)
 		}
 
 		// 设置符号链接安全检查
@@ -1446,7 +1448,9 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 			staticHandler.SetCacheTTL(5 * time.Second)
 		}
 		if cfg.Compression.GzipStatic {
-			staticHandler.SetGzipStatic(true, cfg.Compression.GzipStaticExtensions)
+			// extensions: 源文件类型，为空使用默认值
+			// GzipStaticExtensions: 预压缩文件扩展名（如 .br, .gz）
+			staticHandler.SetGzipStatic(true, nil, cfg.Compression.GzipStaticExtensions)
 		}
 
 		// 设置符号链接安全检查

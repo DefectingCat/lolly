@@ -55,19 +55,23 @@ type GzipStatic struct {
 // 参数：
 //   - enabled: 是否启用预压缩支持
 //   - root: 静态文件根目录路径
-//   - extensions: 支持预压缩的文件扩展名列表，为空则使用默认值
+//   - extensions: 支持预压缩的源文件扩展名列表（如 .html, .css），为空则使用默认值
+//   - precompressedExtensions: 预压缩文件扩展名列表（如 .br, .gz），为空则使用默认值
 //
 // 返回值：
 //   - *GzipStatic: 创建的预压缩文件处理器
-func NewGzipStatic(enabled bool, root string, extensions []string) *GzipStatic {
+func NewGzipStatic(enabled bool, root string, extensions, precompressedExtensions []string) *GzipStatic {
 	if len(extensions) == 0 {
 		extensions = []string{".html", ".css", ".js", ".json", ".xml", ".svg", ".txt"}
+	}
+	if len(precompressedExtensions) == 0 {
+		precompressedExtensions = []string{".br", ".gz"}
 	}
 	return &GzipStatic{
 		enabled:                 enabled,
 		root:                    root,
 		extensions:              extensions,
-		precompressedExtensions: []string{".br", ".gz"},
+		precompressedExtensions: precompressedExtensions,
 	}
 }
 
