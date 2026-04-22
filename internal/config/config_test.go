@@ -414,3 +414,80 @@ func TestConfigMethods(t *testing.T) {
 		}
 	})
 }
+
+func TestProxyBufferingConfig_ParseBuffers(t *testing.T) {
+	tests := []struct {
+		name         string
+		buffers      string
+		bufferSize   int
+		wantCount    int
+		wantSizeEach int
+	}{
+		{
+			name:         "empty uses buffer_size",
+			buffers:      "",
+			bufferSize:   4096,
+			wantCount:    1,
+			wantSizeEach: 4096,
+		},
+		{
+			name:         "8 16k format",
+			buffers:      "8 16k",
+			wantCount:    8,
+			wantSizeEach: 16 * 1024,
+		},
+		{
+			name:         "4 4k format",
+			buffers:      "4 4k",
+			wantCount:    4,
+			wantSizeEach: 4 * 1024,
+		},
+		{
+			name:         "2 1m format",
+			buffers:      "2 1m",
+			wantCount:    2,
+			wantSizeEach: 1024 * 1024,
+		},
+		{
+			name:         "bytes without unit",
+			buffers:      "4 8192",
+			wantCount:    4,
+			wantSizeEach: 8192,
+		},
+		{
+			name:         "uppercase K",
+			buffers:      "8 16K",
+			wantCount:    8,
+			wantSizeEach: 16 * 1024,
+		},
+		{
+			name:         "invalid format",
+			buffers:      "invalid",
+			wantCount:    0,
+			wantSizeEach: 0,
+		},
+		{
+			name:         "missing size",
+			buffers:      "8",
+			wantCount:    0,
+			wantSizeEach: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &ProxyBufferingConfig{
+				Buffers:    tt.buffers,
+				BufferSize: tt.bufferSize,
+			}
+			cfg.ParseBuffers()
+
+			if cfg.BufferCount != tt.wantCount {
+				t.Errorf("BufferCount = %d, want %d", cfg.BufferCount, tt.wantCount)
+			}
+			if cfg.BufferSizeEach != tt.wantSizeEach {
+				t.Errorf("BufferSizeEach = %d, want %d", cfg.BufferSizeEach, tt.wantSizeEach)
+			}
+		})
+	}
+}

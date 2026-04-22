@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -72,17 +74,18 @@ const (
 //	    // 处理每个服务器配置
 //	}
 type Config struct {
-	Mode        ServerMode        `yaml:"mode"`
-	Variables   VariablesConfig   `yaml:"variables"`
-	Logging     LoggingConfig     `yaml:"logging"`
-	Servers     []ServerConfig    `yaml:"servers"`
-	Stream      []StreamConfig    `yaml:"stream"`
-	Monitoring  MonitoringConfig  `yaml:"monitoring"`
-	HTTP3       HTTP3Config       `yaml:"http3"`
-	Resolver    ResolverConfig    `yaml:"resolver"`
-	Performance PerformanceConfig `yaml:"performance"`
-	Shutdown    ShutdownConfig    `yaml:"shutdown"`
-	Include     []IncludeConfig   `yaml:"include"` // 配置引入，支持从其他文件引入配置片段
+	Mode        ServerMode            `yaml:"mode"`
+	Variables   VariablesConfig       `yaml:"variables"`
+	Logging     LoggingConfig         `yaml:"logging"`
+	Servers     []ServerConfig        `yaml:"servers"`
+	Stream      []StreamConfig        `yaml:"stream"`
+	Monitoring  MonitoringConfig      `yaml:"monitoring"`
+	HTTP3       HTTP3Config           `yaml:"http3"`
+	Resolver    ResolverConfig        `yaml:"resolver"`
+	Performance PerformanceConfig     `yaml:"performance"`
+	Shutdown    ShutdownConfig        `yaml:"shutdown"`
+	Include     []IncludeConfig       `yaml:"include"`    // 配置引入，支持从其他文件引入配置片段
+	CachePath   *ProxyCachePathConfig `yaml:"cache_path"` // 缓存路径配置（磁盘持久化）
 }
 
 // IncludeConfig 配置引入配置。
@@ -390,6 +393,85 @@ type ProxyBufferingConfig struct {
 	// BufferSize 响应缓冲区大小（字节）
 	// 0 表示使用默认值
 	BufferSize int `yaml:"buffer_size"`
+
+	// Buffers 多缓冲区配置字符串
+	// 格式："数量 大小" 或 "数量1 大小1 数量2 大小2 ..."
+	// 例如："8 16k" 表示 8 个 16KB 缓冲区
+	// 例如："4 4k 8 16k" 表示 4 个 4KB + 8 个 16KB 缓冲区
+	Buffers string `yaml:"buffers"`
+
+	// BufferCount 缓冲区数量（解析后）
+	BufferCount int `yaml:"-"`
+
+	// BufferSizeEach 每个缓冲区大小（字节，解析后）
+	BufferSizeEach int `yaml:"-"`
+}
+
+// ParseBuffers 解析 Buffers 配置字符串。
+//
+// 支持格式：
+//   - "8 16k" → 8 个 16KB 缓冲区
+//   - "4 4k" → 4 个 4KB 缓冲区
+//
+// 大小单位：
+//   - k 或 K: KB (1024 字节)
+//   - m 或 M: MB (1024 * 1024 字节)
+//   - 无单位: 字节
+func (c *ProxyBufferingConfig) ParseBuffers() {
+	if c.Buffers == "" {
+		// 向后兼容：使用 BufferSize
+		if c.BufferSize > 0 {
+			c.BufferCount = 1
+			c.BufferSizeEach = c.BufferSize
+		}
+		return
+	}
+
+	parts := strings.Fields(c.Buffers)
+	if len(parts) < 2 {
+		return // 无效格式
+	}
+
+	count, err := strconv.Atoi(parts[0])
+	if err != nil || count <= 0 {
+		return // 无效数量
+	}
+
+	sizeEach, err := parseSize(parts[1])
+	if err != nil || sizeEach <= 0 {
+		return // 无效大小
+	}
+
+	c.BufferCount = count
+	c.BufferSizeEach = sizeEach
+}
+
+// parseSize 解析大小字符串（支持 k, m 单位）。
+func parseSize(s string) (int, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, strconv.ErrSyntax
+	}
+
+	// 提取单位
+	unit := strings.ToLower(s[len(s)-1:])
+	var multiplier int = 1
+	numStr := s
+
+	if unit == "k" {
+		multiplier = 1024
+		numStr = s[:len(s)-1]
+	} else if unit == "m" {
+		multiplier = 1024 * 1024
+		numStr = s[:len(s)-1]
+	}
+
+	value, err := strconv.Atoi(numStr)
+	if err != nil {
+		return 0, err
+	}
+
+	return value * multiplier, nil
 }
 
 // BalancerByLuaConfig Lua 负载均衡配置
@@ -489,9 +571,18 @@ type ProxyTarget struct {
 //	  path: "/health"
 //	  timeout: 5s
 type HealthCheckConfig struct {
-	Path     string        `yaml:"path"`
-	Interval time.Duration `yaml:"interval"`
-	Timeout  time.Duration `yaml:"timeout"`
+	Path      string             `yaml:"path"`
+	Interval  time.Duration      `yaml:"interval"`
+	Timeout   time.Duration      `yaml:"timeout"`
+	Match     *HealthMatchConfig `yaml:"match"`      // 健康检查匹配配置
+	SlowStart time.Duration      `yaml:"slow_start"` // 慢启动时间
+}
+
+// HealthMatchConfig 健康检查匹配配置。
+type HealthMatchConfig struct {
+	Status  []string          `yaml:"status"`  // 状态码范围列表
+	Body    string            `yaml:"body"`    // 响应体正则表达式
+	Headers map[string]string `yaml:"headers"` // 响应头匹配
 }
 
 // ProxyTimeout 代理超时配置。
@@ -576,6 +667,54 @@ type ProxyHeaders struct {
 	CookiePath string `yaml:"cookie_path"`
 }
 
+// ProxyCachePathConfig 缓存路径配置（磁盘持久化）。
+//
+// 配置磁盘缓存路径和相关参数，支持 L1/L2 分层缓存架构。
+// 配置后，代理缓存将持久化到磁盘，服务重启后可恢复。
+//
+// 注意事项：
+//   - Path 为必填项，指定缓存根目录
+//   - Levels 支持最多 3 级目录（如 "1:2:2"）
+//   - MaxSize 为 0 表示不限制大小
+//   - L1MaxEntries/L1MaxSize 为 0 时使用默认值
+//
+// 使用示例：
+//
+//	cache_path:
+//	  path: "/var/cache/lolly"
+//	  levels: "1:2"
+//	  max_size: "1GB"
+//	  inactive: "60m"
+//	  l1_max_entries: 10000
+type ProxyCachePathConfig struct {
+	// Path 缓存根目录
+	Path string `yaml:"path"`
+
+	// Levels 目录层级，如 "1:2" 表示两级目录
+	Levels string `yaml:"levels"`
+
+	// MaxSize 最大缓存大小（字节）
+	MaxSize int64 `yaml:"max_size"`
+
+	// Inactive 未访问淘汰时间
+	Inactive time.Duration `yaml:"inactive"`
+
+	// Purger 是否启用后台清理
+	Purger bool `yaml:"purger"`
+
+	// PurgerInterval 清理间隔
+	PurgerInterval time.Duration `yaml:"purger_interval"`
+
+	// L1MaxEntries L1 最大条目数
+	L1MaxEntries int64 `yaml:"l1_max_entries"`
+
+	// L1MaxSize L1 最大内存大小
+	L1MaxSize int64 `yaml:"l1_max_size"`
+
+	// PromoteThreshold 提升到 L1 的访问阈值
+	PromoteThreshold int `yaml:"promote_threshold"`
+}
+
 // ProxyCacheConfig 代理缓存配置。
 //
 // 缓存后端响应，减少重复请求，提高响应速度。
@@ -596,6 +735,8 @@ type ProxyHeaders struct {
 type ProxyCacheConfig struct {
 	MaxAge                  time.Duration `yaml:"max_age"`
 	StaleWhileRevalidate    time.Duration `yaml:"stale_while_revalidate"`
+	StaleIfError            time.Duration `yaml:"stale_if_error"`   // 错误时使用过期缓存
+	StaleIfTimeout          time.Duration `yaml:"stale_if_timeout"` // 超时时使用过期缓存
 	Enabled                 bool          `yaml:"enabled"`
 	CacheLock               bool          `yaml:"cache_lock"`
 	Methods                 []string      `yaml:"methods"`

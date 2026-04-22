@@ -56,13 +56,15 @@ const healthPath = "/health"
 //	checker.Start()
 //	defer checker.Stop()
 type HealthChecker struct {
-	stopCh   chan struct{}
-	client   *fasthttp.Client
-	path     string
-	targets  []*loadbalance.Target
-	interval time.Duration
-	timeout  time.Duration
-	running  atomic.Bool
+	stopCh           chan struct{}
+	client           *fasthttp.Client
+	path             string
+	targets          []*loadbalance.Target
+	interval         time.Duration
+	timeout          time.Duration
+	running          atomic.Bool
+	matcher          HealthMatch                   // 健康检查匹配器
+	slowStartManager *loadbalance.SlowStartManager // 慢启动管理器
 }
 
 // NewHealthChecker 使用指定的目标和配置创建一个新的 HealthChecker。
@@ -90,12 +92,33 @@ func NewHealthChecker(targets []*loadbalance.Target, cfg *config.HealthCheckConf
 		path = healthPath
 	}
 
+	// 创建健康检查匹配器
+	var matcher HealthMatch
+	if cfg.Match != nil {
+		matcher = NewHealthMatch(&HealthMatchConfig{
+			Status:  cfg.Match.Status,
+			Body:    cfg.Match.Body,
+			Headers: cfg.Match.Headers,
+		})
+	}
+	if matcher == nil {
+		matcher = DefaultHealthMatch()
+	}
+
+	// 创建慢启动管理器
+	var slowStartManager *loadbalance.SlowStartManager
+	if cfg.SlowStart > 0 {
+		slowStartManager = loadbalance.NewSlowStartManager(cfg.SlowStart)
+	}
+
 	return &HealthChecker{
-		targets:  targets,
-		interval: interval,
-		timeout:  timeout,
-		path:     path,
-		stopCh:   make(chan struct{}),
+		targets:          targets,
+		interval:         interval,
+		timeout:          timeout,
+		path:             path,
+		stopCh:           make(chan struct{}),
+		matcher:          matcher,
+		slowStartManager: slowStartManager,
 		client: &fasthttp.Client{
 			ReadTimeout:  timeout,
 			WriteTimeout: timeout,
@@ -114,6 +137,9 @@ func (h *HealthChecker) Start() {
 	}
 
 	h.running.Store(true)
+	if h.slowStartManager != nil {
+		h.slowStartManager.Start()
+	}
 	go h.run()
 }
 
@@ -124,6 +150,9 @@ func (h *HealthChecker) Start() {
 func (h *HealthChecker) Stop() {
 	if !h.running.CompareAndSwap(true, false) {
 		return // 已经停止，直接返回
+	}
+	if h.slowStartManager != nil {
+		h.slowStartManager.Stop()
 	}
 	close(h.stopCh)
 	// 重新创建 stopCh 以支持后续 Start
@@ -172,12 +201,12 @@ func (h *HealthChecker) checkAll() {
 //
 // 目标被认为健康，如果满足以下条件：
 //   - HTTP 请求成功
-//   - 响应状态码在 200 到 299 之间
+//   - matcher.Match 返回 true
 //
 // 目标被标记为不健康，如果满足以下条件：
 //   - 连接失败
 //   - 请求超时
-//   - 响应状态码不是 2xx
+//   - matcher.Match 返回 false
 func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 	// 构建健康检查 URL
 	url := target.URL + h.path
@@ -196,16 +225,23 @@ func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 	err := h.client.DoTimeout(req, resp, h.timeout)
 	if err != nil {
 		// 连接失败或超时 - 标记为不健康
-		target.Healthy.Store(false)
+		h.MarkUnhealthy(target)
 		return
 	}
 
-	// 检查状态码 - 2xx 为健康
+	// 提取响应头（小写 key）
+	headers := make(map[string]string)
+	for key, value := range resp.Header.All() {
+		headers[string(key)] = string(value)
+	}
+
+	// 使用 matcher 判断健康状态
 	statusCode := resp.StatusCode()
-	if statusCode >= 200 && statusCode < 300 {
-		target.Healthy.Store(true)
+	body := resp.Body()
+	if h.matcher.Match(statusCode, body, headers) {
+		h.MarkHealthy(target)
 	} else {
-		target.Healthy.Store(false)
+		h.MarkUnhealthy(target)
 	}
 }
 
@@ -215,9 +251,13 @@ func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 //
 // 同时调用 RecordFailure 记录软失败状态，配合 MaxFails/FailTimeout
 // 实现失败计数和冷却机制。
+// 同时通知 SlowStartManager 清除慢启动状态。
 func (h *HealthChecker) MarkUnhealthy(target *loadbalance.Target) {
 	target.Healthy.Store(false)
 	target.RecordFailure()
+	if h.slowStartManager != nil {
+		h.slowStartManager.OnTargetUnhealthy(target)
+	}
 }
 
 // MarkHealthy 将目标标记为健康。
@@ -225,9 +265,13 @@ func (h *HealthChecker) MarkUnhealthy(target *loadbalance.Target) {
 //
 // 同时调用 RecordSuccess 重置软失败状态（failCount/failedUntil），
 // 但不修改 Healthy 标志——健康检查器对 Healthy 拥有权威。
+// 同时通知 SlowStartManager 开始慢启动。
 func (h *HealthChecker) MarkHealthy(target *loadbalance.Target) {
 	target.Healthy.Store(true)
 	target.RecordSuccess()
+	if h.slowStartManager != nil {
+		h.slowStartManager.OnTargetHealthy(target)
+	}
 }
 
 // IsRunning 如果健康检查器当前正在运行，则返回 true。
