@@ -339,7 +339,7 @@ func (rl *RateLimiter) getRetryAfter(key string) int64 {
 func keyByIP(ctx *fasthttp.RequestCtx) string {
 	ip := netutil.ExtractClientIPNet(ctx)
 	if ip == nil {
-		return "unknown"
+		return accessUnknown
 	}
 	return ip.String()
 }

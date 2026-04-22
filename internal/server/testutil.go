@@ -12,6 +12,9 @@ import (
 	"rua.plus/lolly/internal/ssl"
 )
 
+// testListenAddr 是测试用的随机端口监听地址
+const testListenAddr = "127.0.0.1:0"
+
 // MockFastServer 是 fasthttp.Server 的 Mock 包装
 // 定义在此文件以便 TestServerOptions 可以引用
 type MockFastServer struct {
@@ -108,7 +111,7 @@ func MustStartTestServer(cfg *config.Config) *Server {
 	}
 	if listenAddr == "" || listenAddr == ":80" {
 		if len(cfg.Servers) > 0 {
-			cfg.Servers[0].Listen = "127.0.0.1:0"
+			cfg.Servers[0].Listen = testListenAddr
 		}
 	}
 
