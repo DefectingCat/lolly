@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -114,9 +115,9 @@ func TestHealthChecker_Run(t *testing.T) {
 	})
 
 	t.Run("定时检查执行", func(t *testing.T) {
-		requestCount := 0
+		var requestCount atomic.Int32
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount++
+			requestCount.Add(1)
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer server.Close()
@@ -135,15 +136,15 @@ func TestHealthChecker_Run(t *testing.T) {
 		checker.Stop()
 
 		// 应该至少执行初始检查 + 2 次定时检查
-		if requestCount < 2 {
-			t.Errorf("期望至少 2 次检查，实际 %d 次", requestCount)
+		if requestCount.Load() < 2 {
+			t.Errorf("期望至少 2 次检查，实际 %d 次", requestCount.Load())
 		}
 	})
 
 	t.Run("停止后不再检查", func(t *testing.T) {
-		requestCount := 0
+		var requestCount atomic.Int32
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			requestCount++
+			requestCount.Add(1)
 			w.WriteHeader(http.StatusOK)
 		}))
 		defer server.Close()
@@ -159,12 +160,12 @@ func TestHealthChecker_Run(t *testing.T) {
 		checker.Start()
 		time.Sleep(60 * time.Millisecond)
 		checker.Stop()
-		countAfterStop := requestCount
+		countAfterStop := requestCount.Load()
 
 		// 等待一段时间，确认不再有检查
 		time.Sleep(100 * time.Millisecond)
 
-		if requestCount != countAfterStop {
+		if requestCount.Load() != countAfterStop {
 			t.Error("停止后不应再执行检查")
 		}
 	})

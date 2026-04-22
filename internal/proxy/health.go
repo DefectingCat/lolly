@@ -65,6 +65,7 @@ type HealthChecker struct {
 	running          atomic.Bool
 	matcher          HealthMatch                   // 健康检查匹配器
 	slowStartManager *loadbalance.SlowStartManager // 慢启动管理器
+	wg               sync.WaitGroup                // 等待 run goroutine 退出
 }
 
 // NewHealthChecker 使用指定的目标和配置创建一个新的 HealthChecker。
@@ -140,6 +141,7 @@ func (h *HealthChecker) Start() {
 	if h.slowStartManager != nil {
 		h.slowStartManager.Start()
 	}
+	h.wg.Add(1)
 	go h.run()
 }
 
@@ -151,10 +153,11 @@ func (h *HealthChecker) Stop() {
 	if !h.running.CompareAndSwap(true, false) {
 		return // 已经停止，直接返回
 	}
+	close(h.stopCh)
+	h.wg.Wait() // 等待 run goroutine 退出
 	if h.slowStartManager != nil {
 		h.slowStartManager.Stop()
 	}
-	close(h.stopCh)
 	// 重新创建 stopCh 以支持后续 Start
 	h.stopCh = make(chan struct{})
 }
@@ -163,6 +166,8 @@ func (h *HealthChecker) Stop() {
 // 它对所有目标执行初始检查，然后进入循环，
 // 以固定间隔检查目标，直到被停止。
 func (h *HealthChecker) run() {
+	defer h.wg.Done()
+
 	// 执行初始健康检查
 	h.checkAll()
 

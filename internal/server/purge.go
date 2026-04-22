@@ -204,7 +204,7 @@ func (h *PurgeHandler) purgeByPath(path string, method string) int {
 
 	for _, p := range h.server.proxies {
 		if pcache := p.GetCache(); pcache != nil {
-			pcache.Delete(hashKey)
+			_ = pcache.Delete(hashKey)
 			deleted++
 		}
 	}

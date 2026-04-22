@@ -42,7 +42,7 @@ type HealthMatch interface {
 type defaultHealthMatch struct{}
 
 // Match 实现 HealthMatch 接口。
-func (m *defaultHealthMatch) Match(status int, body []byte, headers map[string]string) bool {
+func (m *defaultHealthMatch) Match(status int, _ []byte, _ map[string]string) bool {
 	return status >= 200 && status < 300
 }
 
@@ -121,7 +121,7 @@ func NewHealthMatch(cfg *HealthMatchConfig) HealthMatch {
 	}
 
 	// 解析状态码范围
-	var ranges []statusRange
+	ranges := make([]statusRange, 0, len(cfg.Status))
 	for _, s := range cfg.Status {
 		r, err := parseStatusRange(s)
 		if err != nil {
@@ -142,7 +142,7 @@ func NewHealthMatch(cfg *HealthMatchConfig) HealthMatch {
 	}
 
 	// 解析响应头匹配
-	var headerMatches []headerMatch
+	headerMatches := make([]headerMatch, 0, len(cfg.Headers))
 	for k, v := range cfg.Headers {
 		headerMatches = append(headerMatches, headerMatch{
 			key:   strings.ToLower(k), // 统一小写
