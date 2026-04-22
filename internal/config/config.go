@@ -455,7 +455,7 @@ func parseSize(s string) (int, error) {
 
 	// 提取单位
 	unit := strings.ToLower(s[len(s)-1:])
-	var multiplier int = 1
+	multiplier := 1
 	numStr := s
 
 	if unit == "k" {

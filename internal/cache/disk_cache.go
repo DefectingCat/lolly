@@ -134,7 +134,7 @@ func (dc *DiskCache) lazyLoad() {
 	defer close(dc.loadCh)
 
 	// 扫描目录加载元数据（不加载实际数据）
-	filepath.Walk(dc.basePath, func(path string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(dc.basePath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
@@ -214,7 +214,7 @@ func (dc *DiskCache) Get(hashKey uint64, origKey string) (*ProxyCacheEntry, bool
 	if meta.CRC32 != 0 {
 		if crc32.ChecksumIEEE(data) != meta.CRC32 {
 			// 数据损坏，删除条目
-			dc.Delete(hashKey)
+			_ = dc.Delete(hashKey)
 			dc.missCount.Add(1)
 			return nil, false, false
 		}

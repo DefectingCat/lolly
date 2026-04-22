@@ -134,7 +134,7 @@ func (tc *TieredCache) Set(hashKey uint64, origKey string, data []byte, headers 
 
 // Delete 删除缓存条目（实现 CacheBackend 接口）。
 func (tc *TieredCache) Delete(hashKey uint64) error {
-	tc.l1.Delete(hashKey)
+	_ = tc.l1.Delete(hashKey)
 	return tc.l2.Delete(hashKey)
 }
 
@@ -237,16 +237,4 @@ func (tc *TieredCache) checkAndPromote() {
 			info.count = 0
 		}
 	}
-}
-
-// revalidate 重新验证过期缓存。
-func (tc *TieredCache) revalidate(hashKey uint64, origKey string, entry *ProxyCacheEntry) {
-	// 标记为正在更新
-	entry.Updating.Store(true)
-
-	// 删除 L1 中的过期条目（如果存在）
-	tc.l1.Delete(hashKey)
-
-	// 注意：实际的重新验证逻辑需要在 proxy 层实现
-	// 这里只是标记和清理，真正的重新获取由 proxy 层触发
 }
