@@ -88,6 +88,130 @@ func TestFileCacheLRUEviction(t *testing.T) {
 	}
 }
 
+func TestAcquireLockWithTimeout(t *testing.T) {
+	pc := NewProxyCache(nil, true, 0)
+	key := hashKey("timeout-test")
+
+	// 测试获取锁
+	waitCh, timedOut := pc.AcquireLockWithTimeout(key, 100*time.Millisecond)
+	if waitCh != nil || timedOut {
+		t.Error("Expected to acquire lock immediately")
+	}
+
+	// 测试等待超时
+	done := make(chan struct{})
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		pc.ReleaseLock(key, nil)
+		close(done)
+	}()
+
+	_, timedOut = pc.AcquireLockWithTimeout(key, 50*time.Millisecond)
+	if !timedOut {
+		t.Error("Expected timeout when waiting for lock")
+	}
+	<-done
+}
+
+func TestRefreshTTL(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0)
+	key := hashKey("refresh-test")
+	origKey := "refresh-test"
+
+	pc.Set(key, origKey, []byte("data"), nil, 200, 10*time.Minute)
+
+	newHeaders := map[string]string{
+		"Last-Modified": "Wed, 21 Oct 2015 07:28:00 GMT",
+		"ETag":          "\"abc123\"",
+	}
+
+	ok := pc.RefreshTTL(key, origKey, newHeaders)
+	if !ok {
+		t.Error("Expected RefreshTTL to succeed")
+	}
+
+	entry, _, _ := pc.Get(key, origKey)
+	if entry.LastModified != newHeaders["Last-Modified"] {
+		t.Errorf("Expected Last-Modified to be updated")
+	}
+	if entry.ETag != newHeaders["ETag"] {
+		t.Errorf("Expected ETag to be updated")
+	}
+}
+
+func TestSetValidationHeaders(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0)
+	key := hashKey("validation-test")
+	origKey := "validation-test"
+
+	pc.Set(key, origKey, []byte("data"), nil, 200, 10*time.Minute)
+
+	ok := pc.SetValidationHeaders(key, origKey, "Mon, 01 Jan 2024 00:00:00 GMT", "\"xyz789\"")
+	if !ok {
+		t.Error("Expected SetValidationHeaders to succeed")
+	}
+
+	entry, _, _ := pc.Get(key, origKey)
+	if entry.LastModified != "Mon, 01 Jan 2024 00:00:00 GMT" {
+		t.Errorf("Expected LastModified to be set")
+	}
+	if entry.ETag != "\"xyz789\"" {
+		t.Errorf("Expected ETag to be set")
+	}
+}
+
+func TestMatchRulePathVariants(t *testing.T) {
+	tests := []struct {
+		name     string
+		rulePath string
+		reqPath  string
+		want     bool
+	}{
+		{"prefix_match", "/api/", "/api/users", true},
+		{"prefix_no_match", "/api/", "/other", false},
+		{"wildcard_match", "/static/*", "/static/css/style.css", true},
+		{"wildcard_no_match", "/static/*", "/api/users", false},
+		{"exact_match", "/api", "/api", true},
+		{"prefix_with_slash", "/api", "/api/users", true},
+		{"prefix_with_query", "/api", "/api?query=value", true},
+		{"no_match_similar", "/api", "/apiother", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rules := []ProxyCacheRule{
+				{Path: tt.rulePath, Methods: []string{"GET"}, MaxAge: time.Minute},
+			}
+			pc := NewProxyCache(rules, false, 0)
+			rule := pc.MatchRule(tt.reqPath, "GET", 0)
+			if (rule != nil) != tt.want {
+				t.Errorf("MatchRule(%s, %s) = %v, want %v", tt.rulePath, tt.reqPath, rule != nil, tt.want)
+			}
+		})
+	}
+}
+
+func TestMinUsesThreshold(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0)
+	key := hashKey("minuses-test")
+	origKey := "minuses-test"
+
+	// 首次设置
+	pc.Set(key, origKey, []byte("data"), nil, 200, 10*time.Minute)
+
+	// 首次 Get，Uses = 1
+	entry, _, _ := pc.Get(key, origKey)
+	if entry.Uses.Load() != 1 {
+		t.Errorf("Expected Uses=1 after first Get, got %d", entry.Uses.Load())
+	}
+
+	// 第二次 Get，Uses = 2
+	pc.Get(key, origKey)
+	if entry.Uses.Load() != 2 {
+		t.Errorf("Expected Uses=2 after second Get, got %d", entry.Uses.Load())
+	}
+}
+
 func TestFileCacheSizeEviction(t *testing.T) {
 	// 最大 10 字节
 	fc := NewFileCache(0, 10, 1*time.Hour)

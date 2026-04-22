@@ -493,42 +493,64 @@ func (c *ProxyCache) ReleaseLock(hashKey uint64, err error) {
 }
 
 // MatchRule 检查请求是否匹配缓存规则。
+// 路径匹配规则：
+//   - 以 "/" 结尾：前缀匹配（如 "/api/" 匹配 "/api/users"）
+//   - 包含 "*"：通配符匹配（如 "/static/*" 匹配 "/static/css/style.css"）
+//   - 其他：精确匹配或带分隔符的前缀匹配（如 "/api" 匹配 "/api"、"/api/users"、"/api?query"）
 func (c *ProxyCache) MatchRule(path, method string, status int) *ProxyCacheRule {
 	for _, rule := range c.rules {
-		// 检查路径匹配
-		if rule.Path != "" {
-			// 如果路径以 / 结尾，使用前缀匹配
-			// 如果路径包含 *，使用通配符匹配
-			// 否则使用前缀匹配（允许 /api 匹配 /api/users）
-			if strings.HasSuffix(rule.Path, "/") {
-				if !strings.HasPrefix(path, rule.Path) {
-					continue
-				}
-			} else if strings.Contains(rule.Path, "*") {
-				if !MatchPattern(rule.Path, path) {
-					continue
-				}
-			} else {
-				// 精确匹配或前缀匹配
-				if path != rule.Path && !strings.HasPrefix(path, rule.Path+"/") && !strings.HasPrefix(path, rule.Path+"?") && len(path) <= len(rule.Path) {
-					continue
-				}
-			}
-		}
-
-		// 检查方法
-		if len(rule.Methods) > 0 && !slices.Contains(rule.Methods, method) {
+		if !c.matchPath(rule.Path, path) {
 			continue
 		}
-
-		// 检查状态码
-		if len(rule.Statuses) > 0 && !slices.Contains(rule.Statuses, status) {
+		if !c.matchMethod(rule.Methods, method) {
 			continue
 		}
-
+		if !c.matchStatus(rule.Statuses, status) {
+			continue
+		}
 		return &rule
 	}
 	return nil
+}
+
+// matchPath 检查路径是否匹配规则路径。
+func (c *ProxyCache) matchPath(rulePath, path string) bool {
+	if rulePath == "" {
+		return true
+	}
+
+	switch {
+	case strings.HasSuffix(rulePath, "/"):
+		// 前缀匹配："/api/" 匹配 "/api/users"
+		return strings.HasPrefix(path, rulePath)
+	case strings.Contains(rulePath, "*"):
+		// 通配符匹配："/static/*" 匹配 "/static/css/style.css"
+		return MatchPattern(rulePath, path)
+	default:
+		// 精确匹配或带分隔符的前缀匹配
+		// "/api" 匹配 "/api"、"/api/users"、"/api?query"
+		// 但不匹配 "/apiother"
+		if path == rulePath {
+			return true
+		}
+		return strings.HasPrefix(path, rulePath+"/") || strings.HasPrefix(path, rulePath+"?")
+	}
+}
+
+// matchMethod 检查方法是否在允许列表中。
+func (c *ProxyCache) matchMethod(methods []string, method string) bool {
+	if len(methods) == 0 {
+		return true
+	}
+	return slices.Contains(methods, method)
+}
+
+// matchStatus 检查状态码是否在允许列表中。
+func (c *ProxyCache) matchStatus(statuses []int, status int) bool {
+	if len(statuses) == 0 {
+		return true
+	}
+	return slices.Contains(statuses, status)
 }
 
 // Delete 删除缓存条目。
