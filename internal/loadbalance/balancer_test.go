@@ -1508,27 +1508,6 @@ func TestConsistentHash_PrecomputeHashes(t *testing.T) {
 	})
 }
 
-// TestConsistentHash_SelectExcluding 测试一致性哈希SelectExcluding方法。
-func TestConsistentHash_SelectExcluding(t *testing.T) {
-	t.Run("委托给SelectExcludingByKey", func(_ *testing.T) {
-		ch := NewConsistentHash(100, "ip")
-		targets := []*Target{
-			createHealthyTarget("http://backend1:8080", true),
-			createHealthyTarget("http://backend2:8080", true),
-		}
-		ch.Rebuild(targets)
-
-		excluded := []*Target{targets[0]}
-		got := ch.SelectExcluding(targets, excluded)
-		if got == nil {
-			t.Fatal("SelectExcluding() = nil, want non-nil")
-		}
-		if got.URL == targets[0].URL {
-			t.Errorf("选中了被排除的目标: %q", got.URL)
-		}
-	})
-}
-
 // TestLeastConnections_ConcurrentSelection 测试最少连接并发选择。
 func TestLeastConnections_ConcurrentSelection(t *testing.T) {
 	targets := []*Target{
@@ -1857,6 +1836,102 @@ func TestFilterHealthyBackup(t *testing.T) {
 	})
 }
 
+// TestConsistentHash_Select 测试一致性哈希 Select 方法（委托给 SelectByKey）。
+func TestConsistentHash_Select(t *testing.T) {
+	t.Run("委托给SelectByKey", func(_ *testing.T) {
+		ch := NewConsistentHash(100, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+
+		// Select 内部调用 SelectByKey(targets, "")
+		got := ch.Select(targets)
+		if got == nil {
+			t.Fatal("Select() = nil, want non-nil")
+		}
+	})
+
+	t.Run("空目标返回nil", func(_ *testing.T) {
+		ch := NewConsistentHash(100, "ip")
+		got := ch.Select([]*Target{})
+		if got != nil {
+			t.Errorf("Select() = %v, want nil", got)
+		}
+	})
+
+	t.Run("单目标直接返回", func(_ *testing.T) {
+		ch := NewConsistentHash(100, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+		}
+
+		got := ch.Select(targets)
+		if got == nil {
+			t.Fatal("Select() = nil, want non-nil")
+		}
+		if got.URL != "http://backend1:8080" {
+			t.Errorf("Select() = %q, want %q", got.URL, "http://backend1:8080")
+		}
+	})
+
+	t.Run("多目标一致性", func(_ *testing.T) {
+		ch := NewConsistentHash(100, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+			createHealthyTarget("http://backend3:8080", true),
+		}
+
+		// 多次调用应该返回相同结果（空键的一致性）
+		first := ch.Select(targets)
+		for i := 0; i < 10; i++ {
+			got := ch.Select(targets)
+			if got == nil {
+				t.Fatal("Select() = nil, want non-nil")
+			}
+			if got.URL != first.URL {
+				t.Errorf("Select() 不一致: first=%q, got=%q", first.URL, got.URL)
+			}
+		}
+	})
+}
+
+// TestConsistentHash_SelectExcluding 测试一致性哈希 SelectExcluding 方法。
+func TestConsistentHash_SelectExcluding(t *testing.T) {
+	t.Run("委托给SelectExcludingByKey", func(_ *testing.T) {
+		ch := NewConsistentHash(100, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+			createHealthyTarget("http://backend2:8080", true),
+		}
+		ch.Rebuild(targets)
+
+		excluded := []*Target{targets[0]}
+		got := ch.SelectExcluding(targets, excluded)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+		if got.URL == targets[0].URL {
+			t.Errorf("选中了被排除的目标: %q", got.URL)
+		}
+	})
+
+	t.Run("空排除列表", func(_ *testing.T) {
+		ch := NewConsistentHash(100, "ip")
+		targets := []*Target{
+			createHealthyTarget("http://backend1:8080", true),
+		}
+		ch.Rebuild(targets)
+
+		got := ch.SelectExcluding(targets, nil)
+		if got == nil {
+			t.Fatal("SelectExcluding() = nil, want non-nil")
+		}
+	})
+}
+
+// TestRandomBalancer 测试随机负载均衡器。
 func TestRandomBalancer(t *testing.T) {
 	t.Run("selects from available targets", func(t *testing.T) {
 		targets := []*Target{
@@ -1890,6 +1965,87 @@ func TestRandomBalancer(t *testing.T) {
 		selected := b.SelectExcluding(targets, targets[:1])
 		if selected == nil || selected.URL == "http://a:8080" {
 			t.Error("should exclude first target")
+		}
+	})
+
+	t.Run("select excluding all targets returns nil", func(t *testing.T) {
+		targets := []*Target{
+			NewTargetFromConfig("http://a:8080", 1, 0, 0, 0, false, false, ""),
+			NewTargetFromConfig("http://b:8080", 1, 0, 0, 0, false, false, ""),
+		}
+		b := NewRandom()
+		selected := b.SelectExcluding(targets, targets)
+		if selected != nil {
+			t.Error("should return nil when all targets excluded")
+		}
+	})
+
+	t.Run("select excluding empty list", func(t *testing.T) {
+		targets := []*Target{
+			NewTargetFromConfig("http://a:8080", 1, 0, 0, 0, false, false, ""),
+		}
+		b := NewRandom()
+		selected := b.SelectExcluding(targets, nil)
+		if selected == nil {
+			t.Error("should select a target with empty exclusion")
+		}
+	})
+
+	t.Run("select excluding with nil in excluded list", func(t *testing.T) {
+		targets := []*Target{
+			NewTargetFromConfig("http://a:8080", 1, 0, 0, 0, false, false, ""),
+			NewTargetFromConfig("http://b:8080", 1, 0, 0, 0, false, false, ""),
+		}
+		b := NewRandom()
+		selected := b.SelectExcluding(targets, []*Target{nil})
+		if selected == nil {
+			t.Error("should select a target even with nil in excluded list")
+		}
+	})
+
+	t.Run("power of two choices prefers fewer connections", func(t *testing.T) {
+		targets := []*Target{
+			NewTargetFromConfig("http://a:8080", 1, 0, 0, 0, false, false, ""),
+			NewTargetFromConfig("http://b:8080", 1, 0, 0, 0, false, false, ""),
+		}
+		targets[0].Connections = 100
+		targets[1].Connections = 1
+		b := NewRandom()
+
+		// 多次选择，验证总是选择连接数少的目标
+		for i := 0; i < 100; i++ {
+			selected := b.Select(targets)
+			if selected == nil {
+				t.Error("should select a target")
+				continue
+			}
+			// Power of Two Choices 总是选择连接数少的
+			if selected.URL != "http://b:8080" {
+				t.Errorf("should prefer target with fewer connections, got %q", selected.URL)
+			}
+		}
+	})
+
+	t.Run("power of two choices with equal connections", func(t *testing.T) {
+		targets := []*Target{
+			NewTargetFromConfig("http://a:8080", 1, 0, 0, 0, false, false, ""),
+			NewTargetFromConfig("http://b:8080", 1, 0, 0, 0, false, false, ""),
+		}
+		targets[0].Connections = 10
+		targets[1].Connections = 10
+		b := NewRandom()
+
+		// 连接数相等时，两个目标都应该被选中
+		counts := make(map[string]int)
+		for i := 0; i < 100; i++ {
+			selected := b.Select(targets)
+			if selected != nil {
+				counts[selected.URL]++
+			}
+		}
+
+		if counts["http://a:8080"] == 0 || counts["http://b:8080"] == 0 {
+			t.Error("both targets should be selected when connections are equal")
 		}
 	})
 }

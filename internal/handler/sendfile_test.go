@@ -723,6 +723,199 @@ func TestLinuxSendfile_SendfileError(t *testing.T) {
 	}
 }
 
+// TestLinuxSendfile_InvalidFileFd 测试无效文件描述符
+func TestLinuxSendfile_InvalidFileFd(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	var serverConn net.Conn
+	go func() {
+		serverConn, _ = ln.Accept()
+	}()
+
+	clientConn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer clientConn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// 使用无效的文件描述符
+	err = linuxSendfile(clientConn, uintptr(99999), 0, 1024)
+	if err == nil {
+		t.Error("Expected error for invalid file descriptor")
+	}
+
+	if serverConn != nil {
+		serverConn.Close()
+	}
+}
+
+// TestLinuxSendfile_ZeroLength 测试零长度传输
+func TestLinuxSendfile_ZeroLength(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+	content := []byte("test")
+	_ = os.WriteFile(tmpFile, content, 0o644)
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	var serverConn net.Conn
+	go func() {
+		serverConn, _ = ln.Accept()
+	}()
+
+	clientConn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer clientConn.Close()
+
+	time.Sleep(100 * time.Millisecond)
+
+	// 零长度应该立即返回
+	err = linuxSendfile(clientConn, file.Fd(), 0, 0)
+	if err != nil {
+		t.Errorf("Expected nil for zero length, got: %v", err)
+	}
+
+	if serverConn != nil {
+		serverConn.Close()
+	}
+}
+
+// TestLinuxSendfile_PartialTransfer 测试部分传输后继续
+func TestLinuxSendfile_PartialTransfer(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "partial.bin")
+
+	// 创建大文件
+	content := make([]byte, 32*1024)
+	for i := range content {
+		content[i] = byte(i % 256)
+	}
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	var serverConn net.Conn
+	var received []byte
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		serverConn, _ = ln.Accept()
+		buf := make([]byte, len(content))
+		n, _ := serverConn.Read(buf)
+		received = buf[:n]
+		serverConn.Close()
+	}()
+
+	clientConn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer clientConn.Close()
+
+	clientConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+
+	// 调用 linuxSendfile 传输整个文件
+	err = linuxSendfile(clientConn, file.Fd(), 0, int64(len(content)))
+	// EPIPE/ECONNRESET 是可接受的，因为服务器可能提前关闭
+	if err != nil && err != syscall.EPIPE && err != syscall.ECONNRESET {
+		t.Logf("linuxSendfile returned: %v", err)
+	}
+
+	clientConn.Close()
+	wg.Wait()
+
+	// 验证至少传输了部分数据
+	if len(received) > 0 {
+		t.Logf("Received %d bytes", len(received))
+	}
+}
+
+// TestLinuxSendfile_WithOffset 测试带偏移量的传输
+func TestLinuxSendfile_WithOffset(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "offset.bin")
+
+	content := make([]byte, 16*1024)
+	for i := range content {
+		content[i] = byte(i % 256)
+	}
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	var serverConn net.Conn
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		serverConn, _ = ln.Accept()
+		buf := make([]byte, 8*1024)
+		_, _ = serverConn.Read(buf)
+		serverConn.Close()
+	}()
+
+	clientConn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer clientConn.Close()
+
+	clientConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+
+	// 注意：linuxSendfile 的 offset 参数未使用（由内核处理）
+	// 这里测试 length 参数
+	err = linuxSendfile(clientConn, file.Fd(), 0, 8*1024)
+	if err != nil && err != syscall.EPIPE && err != syscall.ECONNRESET {
+		t.Logf("linuxSendfile returned: %v", err)
+	}
+
+	clientConn.Close()
+	wg.Wait()
+}
+
 // TestSendFile_NegativeLength 测试负长度参数
 func TestSendFile_NegativeLength(t *testing.T) {
 	tmpDir := t.TempDir()

@@ -1371,3 +1371,523 @@ func TestValidateStaticsWithTryFiles(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRewrite(t *testing.T) {
+	tests := []struct {
+		name    string
+		errMsg  string
+		config  RewriteRule
+		wantErr bool
+	}{
+		{
+			name: "有效重写规则",
+			config: RewriteRule{
+				Pattern:     "^/old/(.*)$",
+				Replacement: "/new/$1",
+				Flag:        "last",
+			},
+			wantErr: false,
+		},
+		{
+			name: "有效redirect标志",
+			config: RewriteRule{
+				Pattern:     "^/old$",
+				Replacement: "/new",
+				Flag:        "redirect",
+			},
+			wantErr: false,
+		},
+		{
+			name: "有效permanent标志",
+			config: RewriteRule{
+				Pattern:     "^/old$",
+				Replacement: "/new",
+				Flag:        "permanent",
+			},
+			wantErr: false,
+		},
+		{
+			name: "有效break标志",
+			config: RewriteRule{
+				Pattern:     "^/api/(.*)$",
+				Replacement: "/backend/$1",
+				Flag:        "break",
+			},
+			wantErr: false,
+		},
+		{
+			name: "空标志有效",
+			config: RewriteRule{
+				Pattern:     "^/old$",
+				Replacement: "/new",
+			},
+			wantErr: false,
+		},
+		{
+			name: "Pattern缺失",
+			config: RewriteRule{
+				Replacement: "/new",
+			},
+			wantErr: true,
+			errMsg:  "pattern 必填",
+		},
+		{
+			name: "无效flag",
+			config: RewriteRule{
+				Pattern:     "^/old$",
+				Replacement: "/new",
+				Flag:        "invalid",
+			},
+			wantErr: true,
+			errMsg:  "无效的 flag",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRewrite(&tt.config)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateRewrite() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateRewrite() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateRewrite() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateNextUpstream(t *testing.T) {
+	tests := []struct {
+		name    string
+		errMsg  string
+		config  NextUpstreamConfig
+		wantErr bool
+	}{
+		{
+			name:    "空配置有效",
+			config:  NextUpstreamConfig{},
+			wantErr: false,
+		},
+		{
+			name: "有效重试配置",
+			config: NextUpstreamConfig{
+				Tries:     3,
+				HTTPCodes: []int{500, 502, 503, 504},
+			},
+			wantErr: false,
+		},
+		{
+			name: "仅Tries配置",
+			config: NextUpstreamConfig{
+				Tries: 2,
+			},
+			wantErr: false,
+		},
+		{
+			name: "仅HTTPCodes配置",
+			config: NextUpstreamConfig{
+				HTTPCodes: []int{500, 502},
+			},
+			wantErr: false,
+		},
+		{
+			name: "负数Tries",
+			config: NextUpstreamConfig{
+				Tries: -1,
+			},
+			wantErr: true,
+			errMsg:  "tries 不能为负数",
+		},
+		{
+			name: "无效HTTP状态码-过低",
+			config: NextUpstreamConfig{
+				HTTPCodes: []int{99},
+			},
+			wantErr: true,
+			errMsg:  "无效的 HTTP 状态码",
+		},
+		{
+			name: "无效HTTP状态码-过高",
+			config: NextUpstreamConfig{
+				HTTPCodes: []int{600},
+			},
+			wantErr: true,
+			errMsg:  "无效的 HTTP 状态码",
+		},
+		{
+			name: "有效边界状态码100",
+			config: NextUpstreamConfig{
+				HTTPCodes: []int{100},
+			},
+			wantErr: false,
+		},
+		{
+			name: "有效边界状态码599",
+			config: NextUpstreamConfig{
+				HTTPCodes: []int{599},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateNextUpstream(&tt.config)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateNextUpstream() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateNextUpstream() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateNextUpstream() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateDefaultServer(t *testing.T) {
+	tests := []struct {
+		name    string
+		errMsg  string
+		servers []ServerConfig
+		wantErr bool
+	}{
+		{
+			name:    "空服务器列表",
+			servers: []ServerConfig{},
+			wantErr: false,
+		},
+		{
+			name: "无默认服务器",
+			servers: []ServerConfig{
+				{Listen: ":8080"},
+				{Listen: ":8081"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "单个默认服务器",
+			servers: []ServerConfig{
+				{Listen: ":8080", Default: true},
+				{Listen: ":8081"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "多个默认服务器",
+			servers: []ServerConfig{
+				{Listen: ":8080", Default: true},
+				{Listen: ":8081", Default: true},
+			},
+			wantErr: true,
+			errMsg:  "只能有一个 default: true 服务器",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateDefaultServer(tt.servers)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateDefaultServer() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateDefaultServer() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateDefaultServer() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateMode(t *testing.T) {
+	tests := []struct {
+		name    string
+		errMsg  string
+		mode    ServerMode
+		wantErr bool
+	}{
+		{name: "空模式有效", mode: "", wantErr: false},
+		{name: "auto模式有效", mode: ServerModeAuto, wantErr: false},
+		{name: "single模式有效", mode: ServerModeSingle, wantErr: false},
+		{name: "vhost模式有效", mode: ServerModeVHost, wantErr: false},
+		{name: "multi_server模式有效", mode: ServerModeMultiServer, wantErr: false},
+		{name: "无效模式", mode: "invalid", wantErr: true, errMsg: "无效的 mode"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateMode(tt.mode)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateMode() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateMode() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateMode() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateListenConflicts(t *testing.T) {
+	tests := []struct {
+		name    string
+		errMsg  string
+		servers []ServerConfig
+		mode    ServerMode
+		wantErr bool
+	}{
+		{
+			name:    "非multi_server模式跳过验证",
+			servers: []ServerConfig{{Listen: ":8080"}},
+			mode:    ServerModeSingle,
+			wantErr: false,
+		},
+		{
+			name: "multi_server模式有效配置",
+			servers: []ServerConfig{
+				{Listen: ":8080"},
+				{Listen: ":8081"},
+			},
+			mode:    ServerModeMultiServer,
+			wantErr: false,
+		},
+		{
+			name:    "multi_server模式缺少listen",
+			servers: []ServerConfig{{Listen: ""}},
+			mode:    ServerModeMultiServer,
+			wantErr: true,
+			errMsg:  "multi_server 模式下每个 server 必须配置 listen 地址",
+		},
+		{
+			name: "multi_server模式监听地址冲突",
+			servers: []ServerConfig{
+				{Listen: ":8080"},
+				{Listen: ":8080"},
+			},
+			mode:    ServerModeMultiServer,
+			wantErr: true,
+			errMsg:  "监听地址冲突",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateListenConflicts(tt.servers, tt.mode)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateListenConflicts() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateListenConflicts() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateListenConflicts() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateHTTP2(t *testing.T) {
+	tests := []struct {
+		name    string
+		errMsg  string
+		config  HTTP2Config
+		hasSSL  bool
+		wantErr bool
+	}{
+		{
+			name:    "未启用HTTP2",
+			config:  HTTP2Config{Enabled: false},
+			hasSSL:  false,
+			wantErr: false,
+		},
+		{
+			name:    "启用HTTP2且有SSL",
+			config:  HTTP2Config{Enabled: true},
+			hasSSL:  true,
+			wantErr: false,
+		},
+		{
+			name:    "启用HTTP2但无SSL",
+			config:  HTTP2Config{Enabled: true},
+			hasSSL:  false,
+			wantErr: true,
+			errMsg:  "HTTP/2 需要配置 SSL/TLS 证书",
+		},
+		{
+			name:    "启用H2C但无SSL",
+			config:  HTTP2Config{Enabled: true, H2CEnabled: true},
+			hasSSL:  false,
+			wantErr: false,
+		},
+		{
+			name:    "负数MaxConcurrentStreams",
+			config:  HTTP2Config{MaxConcurrentStreams: -1},
+			hasSSL:  false,
+			wantErr: true,
+			errMsg:  "max_concurrent_streams 不能为负数",
+		},
+		{
+			name:    "负数MaxHeaderListSize",
+			config:  HTTP2Config{MaxHeaderListSize: -1},
+			hasSSL:  false,
+			wantErr: true,
+			errMsg:  "max_header_list_size 不能为负数",
+		},
+		{
+			name:    "负数IdleTimeout",
+			config:  HTTP2Config{IdleTimeout: -1},
+			hasSSL:  false,
+			wantErr: true,
+			errMsg:  "idle_timeout 不能为负数",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateHTTP2(&tt.config, tt.hasSSL)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateHTTP2() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateHTTP2() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateHTTP2() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateRedirectRewrite(t *testing.T) {
+	tests := []struct {
+		name    string
+		errMsg  string
+		config  *RedirectRewriteConfig
+		wantErr bool
+	}{
+		{
+			name:    "nil配置有效",
+			config:  nil,
+			wantErr: false,
+		},
+		{
+			name:    "空配置有效",
+			config:  &RedirectRewriteConfig{},
+			wantErr: false,
+		},
+		{
+			name:    "default模式有效",
+			config:  &RedirectRewriteConfig{Mode: "default"},
+			wantErr: false,
+		},
+		{
+			name:    "off模式有效",
+			config:  &RedirectRewriteConfig{Mode: "off"},
+			wantErr: false,
+		},
+		{
+			name: "custom模式有规则",
+			config: &RedirectRewriteConfig{
+				Mode: "custom",
+				Rules: []RedirectRewriteRule{
+					{Pattern: "^/old$", Replacement: "/new"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "custom模式无规则",
+			config:  &RedirectRewriteConfig{Mode: "custom"},
+			wantErr: true,
+			errMsg:  "rules required when mode is custom",
+		},
+		{
+			name:    "无效模式",
+			config:  &RedirectRewriteConfig{Mode: "invalid"},
+			wantErr: true,
+			errMsg:  "must be one of",
+		},
+		{
+			name: "规则pattern为空",
+			config: &RedirectRewriteConfig{
+				Mode: "custom",
+				Rules: []RedirectRewriteRule{
+					{Pattern: "", Replacement: "/new"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "pattern cannot be empty",
+		},
+		{
+			name: "正则模式有效",
+			config: &RedirectRewriteConfig{
+				Mode: "custom",
+				Rules: []RedirectRewriteRule{
+					{Pattern: "~^/old/(.*)$", Replacement: "/new/$1"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "正则模式无效",
+			config: &RedirectRewriteConfig{
+				Mode: "custom",
+				Rules: []RedirectRewriteRule{
+					{Pattern: "~[invalid(regex", Replacement: "/new"},
+				},
+			},
+			wantErr: true,
+			errMsg:  "invalid regex",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRedirectRewrite(tt.config)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("validateRedirectRewrite() 期望返回错误，但返回 nil")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("validateRedirectRewrite() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("validateRedirectRewrite() 期望返回 nil，但返回错误: %v", err)
+				}
+			}
+		})
+	}
+}
