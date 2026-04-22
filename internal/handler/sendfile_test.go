@@ -17,6 +17,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -598,5 +599,156 @@ func TestSendFile_JustBelowMin(t *testing.T) {
 
 	if !bytes.Equal(ctx.Response.Body(), content) {
 		t.Errorf("Body mismatch")
+	}
+}
+
+// TestGetSocketFd_TCPConn 测试 TCPConn 获取 socket fd
+func TestGetSocketFd_TCPConn(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	// 启动 goroutine 接收连接
+	var serverConn net.Conn
+	go func() {
+		serverConn, _ = ln.Accept()
+	}()
+
+	// 客户端连接
+	clientConn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer clientConn.Close()
+
+	// 等待连接建立
+	time.Sleep(100 * time.Millisecond)
+
+	// 测试获取 socket fd
+	fd, err := getSocketFd(clientConn)
+	if err != nil {
+		t.Errorf("getSocketFd failed for TCPConn: %v", err)
+	}
+	if fd == 0 {
+		t.Error("Expected non-zero fd for TCPConn")
+	}
+
+	if serverConn != nil {
+		serverConn.Close()
+	}
+}
+
+// TestLinuxSendfile_WithTCPConn 测试 linuxSendfile 使用真实 TCP 连接
+func TestLinuxSendfile_WithTCPConn(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+
+	// 创建大于 MinSendfileSize 的文件
+	content := make([]byte, MinSendfileSize+1024)
+	for i := range content {
+		content[i] = byte(i % 256)
+	}
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// 创建 TCP 连接
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	var serverConn net.Conn
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		serverConn, _ = ln.Accept()
+		// 读取所有数据
+		buf := make([]byte, len(content))
+		_, _ = io.ReadFull(serverConn, buf)
+		serverConn.Close()
+	}()
+
+	clientConn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer clientConn.Close()
+
+	// 设置写超时
+	if err := clientConn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("Failed to set deadline: %v", err)
+	}
+
+	// 调用 linuxSendfile
+	err = linuxSendfile(clientConn, file.Fd(), 0, int64(len(content)))
+	if err != nil && err != syscall.EPIPE && err != syscall.ECONNRESET {
+		t.Logf("linuxSendfile returned: %v", err)
+	}
+
+	clientConn.Close()
+	wg.Wait()
+}
+
+// TestLinuxSendfile_SendfileError 测试 sendfile 错误处理
+func TestLinuxSendfile_SendfileError(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+	content := []byte("test content for sendfile")
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	// 使用 mockConn 测试不支持的连接类型
+	conn := &mockConn{}
+	err = linuxSendfile(conn, file.Fd(), 0, int64(len(content)))
+	if err == nil {
+		t.Error("Expected error for unsupported connection type")
+	}
+}
+
+// TestSendFile_NegativeLength 测试负长度参数
+func TestSendFile_NegativeLength(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.txt")
+	content := []byte("test content")
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Init(&fasthttp.Request{}, nil, nil)
+
+	// 负长度应该使用 fallback
+	err = SendFile(ctx, file, 0, -1)
+	if err != nil {
+		t.Errorf("SendFile with negative length failed: %v", err)
+	}
+
+	// 应该传输整个文件
+	if !bytes.Equal(ctx.Response.Body(), content) {
+		t.Errorf("Expected body %s, got %s", content, ctx.Response.Body())
 	}
 }

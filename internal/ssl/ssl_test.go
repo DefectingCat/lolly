@@ -884,3 +884,412 @@ func TestGetOCSPStatus_NoManager(t *testing.T) {
 		t.Errorf("Expected empty status, got %d entries", len(status))
 	}
 }
+
+// TestParsePEMChain 测试 PEM 证书链解析
+func TestParsePEMChain(t *testing.T) {
+	// 测试有效的 PEM 数据
+	certPEM, _ := generateTestCert(t)
+	certs := parsePEMChain(certPEM)
+	if len(certs) == 0 {
+		t.Error("Expected at least one certificate from valid PEM")
+	}
+
+	// 测试空数据
+	emptyCerts := parsePEMChain([]byte{})
+	if len(emptyCerts) != 0 {
+		t.Error("Expected no certificates from empty data")
+	}
+
+	// 测试无效 PEM 数据
+	invalidCerts := parsePEMChain([]byte("not valid pem"))
+	if len(invalidCerts) != 0 {
+		t.Error("Expected no certificates from invalid PEM")
+	}
+}
+
+// TestExtractPEMBlock 测试 PEM 块提取
+func TestExtractPEMBlock(t *testing.T) {
+	// 测试有效的证书块
+	certPEM, _ := generateTestCert(t)
+	block, rest := extractPEMBlock(certPEM)
+	if block == nil {
+		t.Error("Expected non-nil block from valid PEM")
+	}
+	if len(block) == 0 {
+		t.Error("Expected non-empty block")
+	}
+	_ = rest
+
+	// 测试空数据
+	block, _ = extractPEMBlock([]byte{})
+	if block != nil {
+		t.Error("Expected nil block from empty data")
+	}
+
+	// 测试无结束标记的数据
+	invalidData := []byte("-----BEGIN CERTIFICATE-----\nsome data without end")
+	block, _ = extractPEMBlock(invalidData)
+	if block != nil {
+		t.Error("Expected nil block from incomplete PEM")
+	}
+
+	// 测试无开始标记的数据
+	noStartData := []byte("some data\n-----END CERTIFICATE-----")
+	block, _ = extractPEMBlock(noStartData)
+	if block != nil {
+		t.Error("Expected nil block from data without start marker")
+	}
+}
+
+// TestFindMarker 测试标记查找
+func TestFindMarker(t *testing.T) {
+	data := []byte("prefix-----BEGIN CERTIFICATE-----suffix")
+	marker := []byte("-----BEGIN CERTIFICATE-----")
+
+	idx := findMarker(data, marker)
+	if idx != 6 {
+		t.Errorf("Expected index 6, got %d", idx)
+	}
+
+	// 测试不存在的标记
+	idx = findMarker(data, []byte("NOTFOUND"))
+	if idx != -1 {
+		t.Errorf("Expected -1 for not found marker, got %d", idx)
+	}
+
+	// 测试空数据
+	idx = findMarker([]byte{}, marker)
+	if idx != -1 {
+		t.Errorf("Expected -1 for empty data, got %d", idx)
+	}
+}
+
+// TestMatchMarker 测试标记匹配
+func TestMatchMarker(t *testing.T) {
+	data := []byte("-----BEGIN CERTIFICATE-----suffix")
+	marker := []byte("-----BEGIN CERTIFICATE-----")
+
+	if !matchMarker(data, marker) {
+		t.Error("Expected true for matching marker")
+	}
+
+	// 测试不匹配
+	if matchMarker(data, []byte("-----END CERTIFICATE-----")) {
+		t.Error("Expected false for non-matching marker")
+	}
+
+	// 测试数据长度小于标记
+	shortData := []byte("short")
+	if matchMarker(shortData, marker) {
+		t.Error("Expected false when data is shorter than marker")
+	}
+}
+
+// TestGetCertificate_NoCertificate 测试无证书时的错误情况
+func TestGetCertificate_NoCertificate(t *testing.T) {
+	manager := &TLSManager{
+		configs: make(map[string]*tls.Config),
+	}
+
+	getCert := manager.GetCertificate()
+	if getCert == nil {
+		t.Fatal("Expected non-nil GetCertificate function")
+	}
+
+	// 测试未知服务器名且无默认证书
+	testHello := &tls.ClientHelloInfo{
+		ServerName: "unknown.com",
+	}
+	certResult, err := getCert(testHello)
+	if err == nil {
+		t.Error("Expected error when no certificate available")
+	}
+	if certResult != nil {
+		t.Error("Expected nil certificate")
+	}
+}
+
+// TestGetConfigForClientWithOCSP 测试 OCSP 配置回调
+func TestGetConfigForClientWithOCSP(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	// 生成带有 OCSP 服务器的证书
+	certPEM, keyPEM := generateTestCertWithOCSP(t, []string{"http://ocsp.example.com"})
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert:         certPath,
+		Key:          keyPath,
+		OCSPStapling: true,
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	// 测试 GetConfigForClient 回调
+	testHello := &tls.ClientHelloInfo{
+		ServerName: "localhost",
+	}
+	tlsCfg, err := manager.getConfigForClientWithOCSP(testHello)
+	if err != nil {
+		t.Errorf("getConfigForClientWithOCSP() error = %v", err)
+	}
+	if tlsCfg == nil {
+		t.Error("Expected non-nil TLS config")
+	}
+
+	// 测试空 ServerName
+	emptyHello := &tls.ClientHelloInfo{
+		ServerName: "",
+	}
+	if _, err := manager.getConfigForClientWithOCSP(emptyHello); err != nil {
+		t.Errorf("getConfigForClientWithOCSP() error with empty ServerName = %v", err)
+	}
+}
+
+// TestLoadCertificate_WithCertChain 测试带证书链的加载
+func TestLoadCertificate_WithCertChain(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+	chainPath := filepath.Join(tmpDir, "chain.pem")
+
+	// 生成主证书
+	certPEM, keyPEM := generateTestCert(t)
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	// 生成证书链（使用另一个测试证书）
+	chainCert, _ := generateTestCert(t)
+	if err := os.WriteFile(chainPath, chainCert, 0o644); err != nil {
+		t.Fatalf("Failed to write chain: %v", err)
+	}
+
+	// 测试加载带证书链的证书
+	cert, err := loadCertificate(certPath, keyPath, chainPath)
+	if err != nil {
+		t.Fatalf("loadCertificate() error = %v", err)
+	}
+	if len(cert.Certificate) < 2 {
+		t.Errorf("Expected at least 2 certificates in chain, got %d", len(cert.Certificate))
+	}
+}
+
+// TestLoadCertificate_InvalidChain 测试无效证书链
+func TestLoadCertificate_InvalidChain(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	certPEM, keyPEM := generateTestCert(t)
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	// 测试不存在的证书链文件
+	_, err := loadCertificate(certPath, keyPath, "/nonexistent/chain.pem")
+	if err == nil {
+		t.Error("Expected error for non-existent chain file")
+	}
+}
+
+// TestCreateTLSConfig_NilConfig 测试 nil 配置
+func TestCreateTLSConfig_NilConfig(t *testing.T) {
+	_, err := createTLSConfig(nil)
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+}
+
+// TestNewTLSManager_WithSessionTickets 测试启用 Session Tickets
+func TestNewTLSManager_WithSessionTickets(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+	ticketKeyPath := filepath.Join(tmpDir, "ticket.key")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert: certPath,
+		Key:  keyPath,
+		SessionTickets: config.SessionTicketsConfig{
+			Enabled:        true,
+			KeyFile:        ticketKeyPath,
+			RotateInterval: time.Hour,
+			RetainKeys:     3,
+		},
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	// 验证 Session Ticket 管理器已初始化
+	manager.mu.RLock()
+	stm := manager.sessionTicketMgr
+	manager.mu.RUnlock()
+
+	if stm == nil {
+		t.Error("Expected session ticket manager to be initialized")
+	}
+}
+
+// TestNewTLSManager_WithClientVerify 测试启用客户端验证
+func TestNewTLSManager_WithClientVerify(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+	caPath := filepath.Join(tmpDir, "ca.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	// 创建 CA 证书
+	_, _, caPEM := generateTestCA(t)
+	if err := os.WriteFile(caPath, caPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write CA: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert: certPath,
+		Key:  keyPath,
+		ClientVerify: config.ClientVerifyConfig{
+			Enabled:     true,
+			Mode:        "on",
+			ClientCA:    caPath,
+			VerifyDepth: 3,
+		},
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	// 验证客户端验证器已初始化
+	manager.mu.RLock()
+	cv := manager.clientVerifier
+	manager.mu.RUnlock()
+
+	if cv == nil {
+		t.Error("Expected client verifier to be initialized")
+	}
+}
+
+// TestNewTLSManager_WithInvalidClientCA 测试无效的客户端 CA
+func TestNewTLSManager_WithInvalidClientCA(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+
+	cert, key := generateTestCert(t)
+	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert: certPath,
+		Key:  keyPath,
+		ClientVerify: config.ClientVerifyConfig{
+			Enabled:  true,
+			Mode:     "on",
+			ClientCA: "/nonexistent/ca.pem",
+		},
+	}
+
+	// 客户端验证配置失败不阻止 TLS 工作
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() should not fail for invalid client CA: %v", err)
+	}
+	defer manager.Close()
+
+	// 客户端验证器应未初始化
+	manager.mu.RLock()
+	cv := manager.clientVerifier
+	manager.mu.RUnlock()
+
+	if cv != nil {
+		t.Error("Expected client verifier to be nil for invalid CA")
+	}
+}
+
+// TestNewTLSManager_WithOCSPAndIssuer 测试带颁发者证书的 OCSP
+func TestNewTLSManager_WithOCSPAndIssuer(t *testing.T) {
+	tmpDir := t.TempDir()
+	certPath := filepath.Join(tmpDir, "cert.pem")
+	keyPath := filepath.Join(tmpDir, "key.pem")
+	chainPath := filepath.Join(tmpDir, "chain.pem")
+
+	// 生成带 OCSP 服务器的证书
+	certPEM, keyPEM := generateTestCertWithOCSP(t, []string{"http://ocsp.example.com"})
+	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write cert: %v", err)
+	}
+	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
+		t.Fatalf("Failed to write key: %v", err)
+	}
+
+	// 生成证书链（颁发者证书）
+	chainCert, _ := generateTestCert(t)
+	if err := os.WriteFile(chainPath, chainCert, 0o644); err != nil {
+		t.Fatalf("Failed to write chain: %v", err)
+	}
+
+	cfg := &config.SSLConfig{
+		Cert:         certPath,
+		Key:          keyPath,
+		CertChain:    chainPath,
+		OCSPStapling: true,
+	}
+
+	manager, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager() failed: %v", err)
+	}
+	defer manager.Close()
+
+	// 验证 OCSP 管理器已初始化
+	manager.mu.RLock()
+	om := manager.ocspManager
+	manager.mu.RUnlock()
+
+	if om == nil {
+		t.Error("Expected OCSP manager to be initialized")
+	}
+}

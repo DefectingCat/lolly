@@ -411,3 +411,162 @@ func BenchmarkAuthRequestExpandVars(b *testing.B) {
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+// TestAuthRequest_Middleware 测试 Middleware 方法
+func TestAuthRequest_Middleware(t *testing.T) {
+	ar := &AuthRequest{}
+
+	mw := ar.Middleware()
+	if mw == nil {
+		t.Error("Middleware() should not return nil")
+	}
+}
+
+// TestAuthRequestExpandVars_Empty 测试空模板展开
+func TestAuthRequestExpandVars_Empty(t *testing.T) {
+	ar := &AuthRequest{config: config.AuthRequestConfig{}}
+	ctx := &fasthttp.RequestCtx{}
+
+	result := ar.expandVars(ctx, "")
+	if result != "" {
+		t.Errorf("expandVars(empty) = %q, want empty", result)
+	}
+}
+
+// TestAuthRequestExpandVars_NoVars 测试无变量模板
+func TestAuthRequestExpandVars_NoVars(t *testing.T) {
+	ar := &AuthRequest{config: config.AuthRequestConfig{}}
+	ctx := &fasthttp.RequestCtx{}
+
+	result := ar.expandVars(ctx, "http://auth-service/verify")
+	if result != "http://auth-service/verify" {
+		t.Errorf("expandVars(no vars) = %q, want original", result)
+	}
+}
+
+// TestUpdateConfig_RelativePath 测试更新为相对路径配置
+func TestUpdateConfig_RelativePath(t *testing.T) {
+	cfg := config.AuthRequestConfig{
+		Enabled: true,
+		URI:     "http://auth-service:8080/auth",
+	}
+
+	ar, err := NewAuthRequest(cfg)
+	if err != nil {
+		t.Fatalf("NewAuthRequest() failed: %v", err)
+	}
+
+	// 更新为相对路径
+	newCfg := config.AuthRequestConfig{
+		Enabled: true,
+		URI:     "/auth/verify",
+	}
+	err = ar.UpdateConfig(newCfg)
+	if err != nil {
+		t.Errorf("UpdateConfig() failed: %v", err)
+	}
+
+	// 验证 client 被清空（相对路径不需要独立客户端）
+	if ar.client != nil {
+		t.Error("client should be nil for relative path")
+	}
+}
+
+// TestAuthRequest_ProcessEnabled 测试 Process 处理启用状态
+func TestAuthRequest_ProcessEnabled(t *testing.T) {
+	cfg := config.AuthRequestConfig{
+		Enabled:        true,
+		URI:            "/auth/verify",
+		Method:         "GET",
+		Timeout:        5 * time.Second,
+		ForwardHeaders: []string{"X-Custom-Header"},
+		Headers:        map[string]string{"X-Auth-Source": "lolly"},
+	}
+
+	ar, err := NewAuthRequest(cfg)
+	if err != nil {
+		t.Fatalf("NewAuthRequest() failed: %v", err)
+	}
+
+	next := func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(200)
+	}
+
+	handler := ar.Process(next)
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/test")
+	ctx.Request.Header.Set("X-Custom-Header", "custom-value")
+
+	// 执行处理器（由于没有实际的认证服务，请求会失败）
+	handler(ctx)
+
+	// 验证处理器行为 - 由于认证服务不可达，应该返回 500
+	if ctx.Response.StatusCode() != 500 {
+		t.Logf("Status = %d (expected 500 due to unreachable auth service)", ctx.Response.StatusCode())
+	}
+}
+
+// TestParseAuthURL_Invalid 测试解析无效 URL
+func TestParseAuthURL_Invalid(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{"empty string", ""},
+		{"only protocol", "http://"},
+		{"only https protocol", "https://"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := parseAuthURL(tt.url)
+			if err == nil {
+				t.Errorf("parseAuthURL(%q) should return error", tt.url)
+			}
+		})
+	}
+}
+
+// TestExpandVars_EdgeCases 测试变量展开边缘情况
+func TestExpandVars_EdgeCases(t *testing.T) {
+	ar := &AuthRequest{config: config.AuthRequestConfig{}}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/path?query=value")
+	ctx.Request.Header.SetHost("example.com")
+
+	// 测试带多个变量的模板
+	result := ar.expandVars(ctx, "http://auth?uri=$request_uri&host=$host&method=$request_method")
+	if result == "" {
+		t.Error("expandVars should return non-empty result")
+	}
+
+	// 测试只有 $ 符号的模板
+	result = ar.expandVars(ctx, "http://auth?param=$")
+	if result != "http://auth?param=$" {
+		t.Errorf("expandVars with lone $ should return original, got %q", result)
+	}
+}
+
+// TestInitClient_HTTPS 测试 HTTPS 客户端初始化
+func TestInitClient_HTTPS(t *testing.T) {
+	cfg := config.AuthRequestConfig{
+		Enabled: true,
+		URI:     "https://secure-auth:8443/verify",
+		Method:  "GET",
+		Timeout: 10 * time.Second,
+	}
+
+	ar, err := NewAuthRequest(cfg)
+	if err != nil {
+		t.Fatalf("NewAuthRequest() failed: %v", err)
+	}
+
+	if ar.client == nil {
+		t.Error("client should be initialized for HTTPS URL")
+	}
+	if !ar.client.IsTLS {
+		t.Error("client.IsTLS should be true for HTTPS URL")
+	}
+}

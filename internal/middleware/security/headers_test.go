@@ -254,3 +254,137 @@ func TestFormatHSTSValue(t *testing.T) {
 		})
 	}
 }
+
+// TestNewHeadersWithHSTS 测试带 HSTS 配置的创建
+func TestNewHeadersWithHSTS(t *testing.T) {
+	cfg := &config.SecurityHeaders{
+		XFrameOptions: "DENY",
+	}
+
+	hstsCfg := &config.HSTSConfig{
+		MaxAge:            86400,
+		IncludeSubDomains: true,
+		Preload:           false,
+	}
+
+	sh := NewHeadersWithHSTS(cfg, hstsCfg)
+	if sh == nil {
+		t.Error("NewHeadersWithHSTS() should not return nil")
+	}
+	if sh.hsts != "max-age=86400; includeSubDomains" {
+		t.Errorf("HSTS = %q, want 'max-age=86400; includeSubDomains'", sh.hsts)
+	}
+}
+
+// TestNewHeadersWithHSTS_NilConfig 测试 nil HSTS 配置
+func TestNewHeadersWithHSTS_NilConfig(t *testing.T) {
+	sh := NewHeadersWithHSTS(nil, nil)
+	if sh == nil {
+		t.Error("NewHeadersWithHSTS() should not return nil")
+	}
+	// 应该使用默认配置
+	if sh.config == nil {
+		t.Error("Should use default config when nil is passed")
+	}
+}
+
+// TestNewHeadersWithHSTS_ZeroMaxAge 测试 MaxAge 为 0 时使用默认值
+func TestNewHeadersWithHSTS_ZeroMaxAge(t *testing.T) {
+	cfg := &config.SecurityHeaders{
+		XFrameOptions: "DENY",
+	}
+
+	hstsCfg := &config.HSTSConfig{
+		MaxAge:            0, // 应该使用默认值 31536000
+		IncludeSubDomains: true,
+		Preload:           false,
+	}
+
+	sh := NewHeadersWithHSTS(cfg, hstsCfg)
+	if sh.hsts != "max-age=31536000; includeSubDomains" {
+		t.Errorf("HSTS with zero maxAge should use default: %q", sh.hsts)
+	}
+}
+
+// TestHeadersProcess_NilConfig 测试 Process 处理 nil config
+func TestHeadersProcess_NilConfig(t *testing.T) {
+	sh := NewHeadersWithHSTS(nil, nil)
+
+	nextCalled := false
+	nextHandler := func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	}
+
+	handler := sh.Process(nextHandler)
+	ctx := &fasthttp.RequestCtx{}
+	handler(ctx)
+
+	if !nextCalled {
+		t.Error("Next handler should be called")
+	}
+
+	// 验证默认安全头被设置
+	if string(ctx.Response.Header.Peek("X-Content-Type-Options")) != "nosniff" {
+		t.Error("Default X-Content-Type-Options should be set")
+	}
+}
+
+// TestHeadersProcess_TLS 测试 TLS 情况下 HSTS 头设置
+func TestHeadersProcess_TLS(t *testing.T) {
+	cfg := &config.SecurityHeaders{
+		XFrameOptions: "DENY",
+	}
+
+	hstsCfg := &config.HSTSConfig{
+		MaxAge:            31536000,
+		IncludeSubDomains: true,
+		Preload:           true,
+	}
+
+	sh := NewHeadersWithHSTS(cfg, hstsCfg)
+
+	nextHandler := func(ctx *fasthttp.RequestCtx) {}
+
+	handler := sh.Process(nextHandler)
+	ctx := &fasthttp.RequestCtx{}
+	// 注意：在测试环境中无法真正模拟 TLS 连接
+	// 这个测试验证 handler 不会 panic
+	handler(ctx)
+}
+
+// TestAddHeaders_AllHeaders 测试所有安全头设置
+func TestAddHeaders_AllHeaders(t *testing.T) {
+	cfg := &config.SecurityHeaders{
+		XFrameOptions:         "SAMEORIGIN",
+		XContentTypeOptions:   "nosniff",
+		ContentSecurityPolicy: "default-src 'self'",
+		ReferrerPolicy:        "strict-origin",
+		PermissionsPolicy:     "camera=(), microphone=()",
+	}
+
+	sh := NewHeaders(cfg)
+
+	nextHandler := func(ctx *fasthttp.RequestCtx) {}
+	handler := sh.Process(nextHandler)
+
+	ctx := &fasthttp.RequestCtx{}
+	handler(ctx)
+
+	headers := &ctx.Response.Header
+
+	if string(headers.Peek("X-Frame-Options")) != "SAMEORIGIN" {
+		t.Error("X-Frame-Options not set correctly")
+	}
+	if string(headers.Peek("X-Content-Type-Options")) != "nosniff" {
+		t.Error("X-Content-Type-Options not set correctly")
+	}
+	if string(headers.Peek("Content-Security-Policy")) != "default-src 'self'" {
+		t.Error("Content-Security-Policy not set correctly")
+	}
+	if string(headers.Peek("Referrer-Policy")) != "strict-origin" {
+		t.Error("Referrer-Policy not set correctly")
+	}
+	if string(headers.Peek("Permissions-Policy")) != "camera=(), microphone=()" {
+		t.Error("Permissions-Policy not set correctly")
+	}
+}

@@ -338,3 +338,131 @@ func TestUpdateDenyListError(t *testing.T) {
 		t.Error("UpdateDenyList() should return error for invalid CIDR")
 	}
 }
+
+// TestNewAccessControl_TrustedProxiesError 测试可信代理 CIDR 解析错误
+func TestNewAccessControl_TrustedProxiesError(t *testing.T) {
+	_, err := NewAccessControl(&config.AccessConfig{
+		TrustedProxies: []string{"invalid-cidr"},
+	})
+	if err == nil {
+		t.Error("NewAccessControl() should return error for invalid trusted proxy CIDR")
+	}
+}
+
+// TestNewAccessControl_DenyListError 测试拒绝列表 CIDR 解析错误
+func TestNewAccessControl_DenyListError(t *testing.T) {
+	_, err := NewAccessControl(&config.AccessConfig{
+		Deny: []string{"not-a-cidr"},
+	})
+	if err == nil {
+		t.Error("NewAccessControl() should return error for invalid deny CIDR")
+	}
+}
+
+// TestCheck_AllowListHit 测试允许列表命中
+func TestCheck_AllowListHit(t *testing.T) {
+	ac, err := NewAccessControl(&config.AccessConfig{
+		Allow:   []string{"192.168.1.0/24"},
+		Default: "deny",
+	})
+	if err != nil {
+		t.Fatalf("NewAccessControl() error: %v", err)
+	}
+
+	// 允许列表中的 IP
+	if !ac.Check(net.ParseIP("192.168.1.50")) {
+		t.Error("Check() should return true for IP in allow list")
+	}
+
+	// 不在允许列表中的 IP
+	if ac.Check(net.ParseIP("10.0.0.1")) {
+		t.Error("Check() should return false for IP not in allow list")
+	}
+}
+
+// TestCheck_DenyListHit 测试拒绝列表命中
+func TestCheck_DenyListHit(t *testing.T) {
+	ac, err := NewAccessControl(&config.AccessConfig{
+		Deny:    []string{"10.0.0.100"},
+		Allow:   []string{"10.0.0.0/8"},
+		Default: "allow",
+	})
+	if err != nil {
+		t.Fatalf("NewAccessControl() error: %v", err)
+	}
+
+	// 拒绝列表优先
+	if ac.Check(net.ParseIP("10.0.0.100")) {
+		t.Error("Check() should return false for IP in deny list even if in allow list")
+	}
+
+	// 在允许列表但不在拒绝列表
+	if !ac.Check(net.ParseIP("10.0.0.50")) {
+		t.Error("Check() should return true for IP in allow list but not in deny list")
+	}
+}
+
+// TestCheck_DefaultAction 测试默认操作
+func TestCheck_DefaultAction(t *testing.T) {
+	// 默认允许
+	acAllow, err := NewAccessControl(&config.AccessConfig{
+		Default: "allow",
+	})
+	if err != nil {
+		t.Fatalf("NewAccessControl() error: %v", err)
+	}
+	if !acAllow.Check(net.ParseIP("1.2.3.4")) {
+		t.Error("Check() should return true with default allow")
+	}
+
+	// 默认拒绝
+	acDeny, err := NewAccessControl(&config.AccessConfig{
+		Default: "deny",
+	})
+	if err != nil {
+		t.Fatalf("NewAccessControl() error: %v", err)
+	}
+	if acDeny.Check(net.ParseIP("1.2.3.4")) {
+		t.Error("Check() should return false with default deny")
+	}
+}
+
+// TestCheck_EmptyDefault 测试空默认值（应默认为 allow）
+func TestCheck_EmptyDefault(t *testing.T) {
+	ac, err := NewAccessControl(&config.AccessConfig{
+		Default: "",
+	})
+	if err != nil {
+		t.Fatalf("NewAccessControl() error: %v", err)
+	}
+	if !ac.Check(net.ParseIP("1.2.3.4")) {
+		t.Error("Check() should return true with empty default (should be allow)")
+	}
+}
+
+// TestAccessControl_ProcessDenied 测试 Process 拒绝请求
+func TestAccessControl_ProcessDenied(t *testing.T) {
+	ac, err := NewAccessControl(&config.AccessConfig{
+		Deny:    []string{"192.168.1.0/24"},
+		Default: "allow",
+	})
+	if err != nil {
+		t.Fatalf("NewAccessControl() error: %v", err)
+	}
+
+	nextCalled := false
+	handler := ac.Process(func(ctx *fasthttp.RequestCtx) {
+		nextCalled = true
+	})
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("192.168.1.50"), Port: 12345})
+	handler(ctx)
+
+	if nextCalled {
+		t.Error("Process() should not call next handler for denied IP")
+	}
+	if ctx.Response.StatusCode() != fasthttp.StatusForbidden {
+		t.Errorf("Process() status = %d, want 403", ctx.Response.StatusCode())
+	}
+}

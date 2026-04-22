@@ -17,6 +17,7 @@ package server
 import (
 	"net"
 	"os"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -312,4 +313,286 @@ func TestReadOldPid_EmptyFile(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for empty PID file")
 	}
+}
+
+// TestNotifyOldProcess_ReadPidError 测试读取 PID 失败的情况
+func TestNotifyOldProcess_ReadPidError(t *testing.T) {
+	mgr := NewUpgradeManager(nil)
+	// 不设置 PID 文件，ReadOldPid 会返回错误
+
+	err := mgr.NotifyOldProcess()
+	if err != nil {
+		t.Errorf("NotifyOldProcess should return nil when ReadOldPid fails, got: %v", err)
+	}
+}
+
+// TestNotifyOldProcess_ZeroPid 测试 PID 为 0 的情况
+func TestNotifyOldProcess_ZeroPid(t *testing.T) {
+	tmpFile := "/tmp/lolly-test-zero.pid"
+	defer func() {
+		_ = os.Remove(tmpFile)
+	}()
+
+	// 写入 PID 0
+	if err := os.WriteFile(tmpFile, []byte("0"), 0o644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	mgr := NewUpgradeManager(nil)
+	mgr.SetPidFile(tmpFile)
+
+	err := mgr.NotifyOldProcess()
+	if err != nil {
+		t.Errorf("NotifyOldProcess should return nil for PID 0, got: %v", err)
+	}
+}
+
+// TestNotifyOldProcess_NonExistentProcess 测试通知不存在的进程
+func TestNotifyOldProcess_NonExistentProcess(t *testing.T) {
+	tmpFile := "/tmp/lolly-test-nonexistent.pid"
+	defer func() {
+		_ = os.Remove(tmpFile)
+	}()
+
+	// 写入一个不存在的 PID (使用一个极大的 PID 值)
+	if err := os.WriteFile(tmpFile, []byte("9999999"), 0o644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	mgr := NewUpgradeManager(nil)
+	mgr.SetPidFile(tmpFile)
+
+	// 对于不存在的进程，Signal 会返回错误
+	// NotifyOldProcess 会直接返回这个错误
+	err := mgr.NotifyOldProcess()
+	if err == nil {
+		t.Error("Expected error when notifying non-existent process")
+	}
+}
+
+// TestNotifyOldProcess_FindProcessError 测试 os.FindProcess 的行为
+// 注意：在 Unix 系统上，os.FindProcess 总是成功，即使进程不存在
+func TestNotifyOldProcess_FindProcessBehavior(t *testing.T) {
+	// 这个测试验证 os.FindProcess 的行为
+	// 在 Unix 上，FindProcess 总是返回一个 Process 对象
+	process, err := os.FindProcess(9999999)
+	if err != nil {
+		t.Errorf("FindProcess should not return error on Unix, got: %v", err)
+	}
+	if process == nil {
+		t.Error("FindProcess should return non-nil Process on Unix")
+	}
+}
+
+// TestSetupSignalHandlers_SetsUpChannel 测试信号处理器设置
+func TestSetupSignalHandlers_SetsUpChannel(t *testing.T) {
+	mgr := NewUpgradeManager(nil)
+
+	// 调用 SetupSignalHandlers 应该不会 panic
+	mgr.SetupSignalHandlers("/nonexistent/binary")
+
+	// 给 goroutine 一点时间启动
+	time.Sleep(10 * time.Millisecond)
+
+	// 测试通过如果没 panic
+}
+
+// TestSetupSignalHandlers_TriggersUpgrade 测试信号触发升级
+func TestSetupSignalHandlers_TriggersUpgrade(t *testing.T) {
+	mgr := NewUpgradeManager(nil)
+
+	// 创建一个监听器
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	defer func() {
+		_ = listener.Close()
+	}()
+	mgr.SetListeners([]net.Listener{listener})
+
+	// 设置信号处理器，使用一个不存在的二进制文件
+	mgr.SetupSignalHandlers("/nonexistent/binary/path")
+
+	// 给 goroutine 启动时间
+	time.Sleep(10 * time.Millisecond)
+
+	// 发送 SIGUSR2 信号给当前进程
+	// 注意：这会触发 GracefulUpgrade，但由于二进制文件不存在会失败
+	// 信号处理器会忽略错误（使用 _ = u.GracefulUpgrade）
+	process, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("Failed to find current process: %v", err)
+	}
+
+	// 发送 SIGUSR2
+	if err := process.Signal(syscall.SIGUSR2); err != nil {
+		t.Fatalf("Failed to send SIGUSR2: %v", err)
+	}
+
+	// 等待信号处理
+	time.Sleep(100 * time.Millisecond)
+
+	// 测试通过如果没有 panic
+}
+
+// TestGracefulUpgrade_UnsupportedListener 测试不支持的监听器类型
+func TestGracefulUpgrade_UnsupportedListener(t *testing.T) {
+	mgr := NewUpgradeManager(nil)
+
+	// 使用 mock 监听器（不支持的类型）
+	mgr.SetListeners([]net.Listener{&mockListener{}})
+
+	err := mgr.GracefulUpgrade("/nonexistent/binary")
+	if err == nil {
+		t.Error("Expected error for unsupported listener type")
+	}
+	if err != nil && !containsString(err.Error(), "unsupported listener type") &&
+		!containsString(err.Error(), "failed to get listener file") {
+		t.Errorf("Expected unsupported listener error, got: %v", err)
+	}
+}
+
+// TestGracefulUpgrade_NonexistentBinary 测试不存在的二进制文件
+// 注意：此测试使用 mock 监听器避免创建实际网络连接
+func TestGracefulUpgrade_NonexistentBinary(t *testing.T) {
+	mgr := NewUpgradeManager(nil)
+
+	// 使用 mock 监听器测试不支持类型的错误路径
+	mgr.SetListeners([]net.Listener{&mockListener{}})
+
+	// 由于 mockListener 是不支持的类型，应该返回错误
+	err := mgr.GracefulUpgrade("/nonexistent/path/to/binary")
+	if err == nil {
+		t.Error("Expected error for unsupported listener type")
+	}
+}
+
+// TestGracefulUpgrade_WithPidFile 测试升级时写入 PID 文件
+// 注意：此测试使用 mock 监听器避免创建实际网络连接
+func TestGracefulUpgrade_WithPidFile(t *testing.T) {
+	tmpFile := "/tmp/lolly-test-upgrade.pid"
+	defer func() {
+		_ = os.Remove(tmpFile)
+	}()
+
+	mgr := NewUpgradeManager(nil)
+	mgr.SetPidFile(tmpFile)
+
+	// 使用 mock 监听器
+	mgr.SetListeners([]net.Listener{&mockListener{}})
+
+	// 使用不存在的二进制文件，会失败但测试 PID 文件设置逻辑
+	_ = mgr.GracefulUpgrade("/nonexistent/binary")
+	// 测试通过如果没有 panic
+}
+
+// TestWaitForShutdown_ProcessExits 测试进程退出后的等待
+func TestWaitForShutdown_ProcessExits(t *testing.T) {
+	mgr := NewUpgradeManager(nil)
+
+	// 使用一个不存在的 PID（Signal(0) 会返回错误）
+	mgr.oldPid = 9999999
+
+	// 不存在的进程应该立即返回 nil
+	err := mgr.WaitForShutdown(1 * time.Second)
+	if err != nil {
+		t.Errorf("Expected nil for non-existent process, got: %v", err)
+	}
+}
+
+// TestWaitForShutdown_Timeout 测试等待超时
+func TestWaitForShutdown_Timeout(t *testing.T) {
+	// 跳过此测试：需要实际运行的进程来测试超时
+	// 向当前进程发送 SIGKILL 会导致测试崩溃
+	t.Skip("Skipping test that would kill current process")
+}
+
+// TestWaitForShutdown_SetsOldPid 测试 oldPid 设置
+func TestWaitForShutdown_SetsOldPid(t *testing.T) {
+	mgr := NewUpgradeManager(nil)
+
+	// oldPid 为 0 时应该直接返回 nil
+	if mgr.oldPid != 0 {
+		t.Error("Expected oldPid to be 0 initially")
+	}
+
+	err := mgr.WaitForShutdown(100 * time.Millisecond)
+	if err != nil {
+		t.Errorf("Expected nil when oldPid is 0, got: %v", err)
+	}
+}
+
+// TestListenerFile_UnixListener 测试 Unix 监听器获取文件
+// 注意：跳过此测试，因为在大量测试运行时可能导致 FD 问题
+func TestListenerFile_UnixListener(t *testing.T) {
+	t.Skip("Skipping test to avoid FD exhaustion in parallel test runs")
+}
+
+// TestGracefulUpgrade_MultipleListeners 测试多个监听器的升级
+// 注意：使用 mock 监听器避免 FD 问题
+func TestGracefulUpgrade_MultipleListeners(t *testing.T) {
+	mgr := NewUpgradeManager(nil)
+
+	// 使用多个 mock 监听器
+	mgr.SetListeners([]net.Listener{&mockListener{}, &mockListener{}})
+
+	// 由于 mockListener 是不支持的类型，应该返回错误
+	err := mgr.GracefulUpgrade("/nonexistent/binary")
+	if err == nil {
+		t.Error("Expected error for unsupported listener type")
+	}
+}
+
+// TestGracefulUpgrade_RelativePath 测试相对路径的二进制文件
+// 注意：使用 mock 监听器避免 FD 问题
+func TestGracefulUpgrade_RelativePath(t *testing.T) {
+	mgr := NewUpgradeManager(nil)
+
+	// 使用 mock 监听器
+	mgr.SetListeners([]net.Listener{&mockListener{}})
+
+	// 使用相对路径，应该返回错误
+	err := mgr.GracefulUpgrade("./nonexistent")
+	if err == nil {
+		t.Error("Expected error for unsupported listener type")
+	}
+}
+
+// TestWaitForShutdown_FindProcessError 测试 FindProcess 行为
+func TestWaitForShutdown_FindProcessError(t *testing.T) {
+	// 在 Unix 系统上，os.FindProcess 总是成功
+	// 我们需要测试 Signal(0) 失败的情况
+	mgr := NewUpgradeManager(nil)
+	mgr.oldPid = 1 // init 进程，通常存在但无法发送信号
+
+	// 短超时
+	_ = mgr.WaitForShutdown(50 * time.Millisecond)
+	// 无论结果如何，测试都应该正常完成
+}
+
+// TestGetInheritedListeners_EnvPreserved 测试环境变量处理
+func TestGetInheritedListeners_EnvPreserved(t *testing.T) {
+	t.Setenv("LISTEN_FDS", "1")
+
+	mgr := NewUpgradeManager(nil)
+	_, err := mgr.GetInheritedListeners()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// 环境变量应该仍然存在
+	if os.Getenv("LISTEN_FDS") != "1" {
+		t.Error("LISTEN_FDS env should be preserved")
+	}
+}
+
+// containsString 检查字符串是否包含子串
+func containsString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }

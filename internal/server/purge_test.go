@@ -17,10 +17,13 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/loadbalance"
+	"rua.plus/lolly/internal/proxy"
 )
 
 func TestPurgeHandler_Path(t *testing.T) {
@@ -780,4 +783,608 @@ func TestPurgeHandler_checkAccess_WithAllowedIP(t *testing.T) {
 			t.Error("expected checkAccess to return false with no client IP")
 		}
 	})
+}
+
+// mockProxyWithCache 是一个用于测试的 mock Proxy，可以返回指定的缓存。
+type mockProxyWithCache struct {
+	cache *cache.ProxyCache
+}
+
+func (m *mockProxyWithCache) GetCache() *cache.ProxyCache {
+	return m.cache
+}
+
+// TestPurgeHandler_PurgeByPath_WithRealCache 测试 purgeByPath 在有真实缓存时的行为。
+func TestPurgeHandler_PurgeByPath_WithRealCache(t *testing.T) {
+	// 创建启用缓存的代理
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
+		Cache: config.ProxyCacheConfig{
+			Enabled: true,
+			MaxAge:  10 * time.Second,
+		},
+	}
+	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	// 获取缓存并添加测试数据
+	pcache := p.GetCache()
+	if pcache == nil {
+		t.Fatal("GetCache() should return non-nil when cache enabled")
+	}
+
+	// 添加测试缓存条目
+	hashKey1 := cache.HashPathWithMethod("/api/users", "GET")
+	pcache.Set(hashKey1, "GET:/api/users", []byte("test data 1"), nil, 200, time.Minute)
+
+	hashKey2 := cache.HashPathWithMethod("/api/posts", "GET")
+	pcache.Set(hashKey2, "GET:/api/posts", []byte("test data 2"), nil, 200, time.Minute)
+
+	hashKey3 := cache.HashPathWithMethod("/api/users", "POST")
+	pcache.Set(hashKey3, "POST:/api/users", []byte("test data 3"), nil, 200, time.Minute)
+
+	// 创建带有代理的 handler
+	h, err := NewPurgeHandler(&Server{
+		proxies: []*proxy.Proxy{p},
+	}, &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	t.Run("delete existing entry", func(t *testing.T) {
+		deleted := h.PurgeByPathForTest("/api/users", "GET")
+		if deleted != 1 {
+			t.Errorf("expected 1 deletion, got %d", deleted)
+		}
+	})
+
+	t.Run("delete different method", func(t *testing.T) {
+		deleted := h.PurgeByPathForTest("/api/users", "POST")
+		if deleted != 1 {
+			t.Errorf("expected 1 deletion, got %d", deleted)
+		}
+	})
+
+	t.Run("delete non-existing path", func(t *testing.T) {
+		deleted := h.PurgeByPathForTest("/api/nonexistent", "GET")
+		if deleted != 1 {
+			t.Errorf("expected 1 (proxy count), got %d", deleted)
+		}
+	})
+
+	t.Run("multiple proxies", func(t *testing.T) {
+		// 创建第二个代理
+		p2, err := proxy.NewProxy(cfg, targets, nil, nil)
+		if err != nil {
+			t.Fatalf("NewProxy() error: %v", err)
+		}
+		pcache2 := p2.GetCache()
+		hashKey := cache.HashPathWithMethod("/test", "GET")
+		pcache2.Set(hashKey, "GET:/test", []byte("test"), nil, 200, time.Minute)
+
+		h2, err := NewPurgeHandler(&Server{
+			proxies: []*proxy.Proxy{p, p2},
+		}, &config.CacheAPIConfig{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		deleted := h2.PurgeByPathForTest("/test", "GET")
+		if deleted != 2 {
+			t.Errorf("expected 2 deletions (2 proxies), got %d", deleted)
+		}
+	})
+}
+
+// TestPurgeHandler_PurgeByPattern_WithRealCache 测试 purgeByPattern 在有真实缓存时的行为。
+func TestPurgeHandler_PurgeByPattern_WithRealCache(t *testing.T) {
+	// 创建启用缓存的代理
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
+		Cache: config.ProxyCacheConfig{
+			Enabled: true,
+			MaxAge:  10 * time.Second,
+		},
+	}
+	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	// 获取缓存并添加测试数据
+	pcache := p.GetCache()
+	if pcache == nil {
+		t.Fatal("GetCache() should return non-nil when cache enabled")
+	}
+
+	// 添加多个测试缓存条目
+	pcache.Set(cache.HashPathWithMethod("/api/users", "GET"), "GET:/api/users", []byte("data"), nil, 200, time.Minute)
+	pcache.Set(cache.HashPathWithMethod("/api/users/1", "GET"), "GET:/api/users/1", []byte("data"), nil, 200, time.Minute)
+	pcache.Set(cache.HashPathWithMethod("/api/posts", "GET"), "GET:/api/posts", []byte("data"), nil, 200, time.Minute)
+	pcache.Set(cache.HashPathWithMethod("/api/posts/1", "GET"), "GET:/api/posts/1", []byte("data"), nil, 200, time.Minute)
+	pcache.Set(cache.HashPathWithMethod("/api/users", "POST"), "POST:/api/users", []byte("data"), nil, 200, time.Minute)
+
+	// 创建带有代理的 handler
+	h, err := NewPurgeHandler(&Server{
+		proxies: []*proxy.Proxy{p},
+	}, &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	t.Run("wildcard pattern matches multiple", func(t *testing.T) {
+		// 重新添加数据
+		pcache.Set(cache.HashPathWithMethod("/api/users", "GET"), "GET:/api/users", []byte("data"), nil, 200, time.Minute)
+		pcache.Set(cache.HashPathWithMethod("/api/users/1", "GET"), "GET:/api/users/1", []byte("data"), nil, 200, time.Minute)
+		pcache.Set(cache.HashPathWithMethod("/api/posts", "GET"), "GET:/api/posts", []byte("data"), nil, 200, time.Minute)
+
+		// 注意：OrigKey 格式为 "METHOD:/path"，所以模式需要匹配完整路径
+		deleted := h.PurgeByPatternForTest("GET:/api/*", "GET")
+		if deleted < 1 {
+			t.Errorf("expected at least 1 deletion, got %d", deleted)
+		}
+	})
+
+	t.Run("empty method matches all methods", func(t *testing.T) {
+		// 重新添加数据
+		pcache.Set(cache.HashPathWithMethod("/api/users", "GET"), "GET:/api/users", []byte("data"), nil, 200, time.Minute)
+		pcache.Set(cache.HashPathWithMethod("/api/users", "POST"), "POST:/api/users", []byte("data"), nil, 200, time.Minute)
+
+		// 使用 * 通配符匹配所有方法
+		deleted := h.PurgeByPatternForTest("*:/api/users", "")
+		if deleted < 1 {
+			t.Errorf("expected at least 1 deletion (all methods), got %d", deleted)
+		}
+	})
+
+	t.Run("specific method only", func(t *testing.T) {
+		// 重新添加数据
+		pcache.Set(cache.HashPathWithMethod("/api/users", "GET"), "GET:/api/users", []byte("data"), nil, 200, time.Minute)
+		pcache.Set(cache.HashPathWithMethod("/api/users", "POST"), "POST:/api/users", []byte("data"), nil, 200, time.Minute)
+
+		// 模式匹配 POST 方法的路径
+		deleted := h.PurgeByPatternForTest("POST:/api/users", "POST")
+		if deleted < 1 {
+			t.Errorf("expected at least 1 deletion (POST only), got %d", deleted)
+		}
+	})
+}
+
+// TestPurgeHandler_PurgeByPath_WithProxyNoCache 测试代理没有缓存时的情况。
+func TestPurgeHandler_PurgeByPath_WithProxyNoCache(t *testing.T) {
+	// 创建禁用缓存的代理
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
+		// Cache 未启用
+	}
+	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	// 确认缓存为 nil
+	if p.GetCache() != nil {
+		t.Fatal("GetCache() should return nil when cache disabled")
+	}
+
+	// 创建带有代理的 handler
+	h, err := NewPurgeHandler(&Server{
+		proxies: []*proxy.Proxy{p},
+	}, &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 没有缓存的代理应该返回 0
+	deleted := h.PurgeByPathForTest("/api/users", "GET")
+	if deleted != 0 {
+		t.Errorf("expected 0 deletions for proxy without cache, got %d", deleted)
+	}
+}
+
+// TestPurgeHandler_PurgeByPattern_WithProxyNoCache 测试代理没有缓存时的情况。
+func TestPurgeHandler_PurgeByPattern_WithProxyNoCache(t *testing.T) {
+	// 创建禁用缓存的代理
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
+	}
+	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	// 创建带有代理的 handler
+	h, err := NewPurgeHandler(&Server{
+		proxies: []*proxy.Proxy{p},
+	}, &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 没有缓存的代理应该返回 0
+	deleted := h.PurgeByPatternForTest("/api/*", "GET")
+	if deleted != 0 {
+		t.Errorf("expected 0 deletions for proxy without cache, got %d", deleted)
+	}
+}
+
+// TestPurgeHandler_PurgeByPath_WithCache 测试 purgeByPath 在有缓存时的行为。
+func TestPurgeHandler_PurgeByPath_WithCache(t *testing.T) {
+	t.Run("server with empty proxies", func(t *testing.T) {
+		// 创建带有空 proxies 列表的 handler
+		h, err := NewPurgeHandler(&Server{
+			proxies: []*proxy.Proxy{},
+		}, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// 空 proxies 列表应该返回 0
+		deleted := h.PurgeByPathForTest("/api/users", "GET")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for empty proxies, got %d", deleted)
+		}
+	})
+
+	t.Run("empty path", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// 空路径仍然会执行删除逻辑，只是哈希值为默认 GET 的哈希
+		deleted := h.PurgeByPathForTest("", "")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+		}
+	})
+
+	t.Run("path with special characters", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// 特殊字符路径
+		deleted := h.PurgeByPathForTest("/api/users?id=1&name=test", "GET")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+		}
+	})
+
+	t.Run("path with unicode", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// Unicode 路径
+		deleted := h.PurgeByPathForTest("/api/用户/列表", "GET")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+		}
+	})
+
+	t.Run("different methods", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"}
+		for _, method := range methods {
+			deleted := h.PurgeByPathForTest("/api/users", method)
+			if deleted != 0 {
+				t.Errorf("expected 0 deletions for nil server with method %s, got %d", method, deleted)
+			}
+		}
+	})
+}
+
+// TestPurgeHandler_PurgeByPattern_WithCache 测试 purgeByPattern 在有缓存时的行为。
+func TestPurgeHandler_PurgeByPattern_WithCache(t *testing.T) {
+	t.Run("empty pattern", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// 空模式
+		deleted := h.PurgeByPatternForTest("", "GET")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+		}
+	})
+
+	t.Run("wildcard pattern", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// 通配符模式
+		deleted := h.PurgeByPatternForTest("/api/*", "GET")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+		}
+	})
+
+	t.Run("double wildcard pattern", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// 双通配符模式
+		deleted := h.PurgeByPatternForTest("/api/**", "GET")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+		}
+	})
+
+	t.Run("pattern with special characters", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// 特殊字符模式
+		deleted := h.PurgeByPatternForTest("/api/users?id=*", "GET")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+		}
+	})
+
+	t.Run("exact pattern (no wildcard)", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// 精确模式（无通配符）
+		deleted := h.PurgeByPatternForTest("/api/users", "GET")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+		}
+	})
+
+	t.Run("different methods", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
+		for _, method := range methods {
+			deleted := h.PurgeByPatternForTest("/api/*", method)
+			if deleted != 0 {
+				t.Errorf("expected 0 deletions for nil server with method %s, got %d", method, deleted)
+			}
+		}
+	})
+
+	t.Run("empty method matches all", func(t *testing.T) {
+		h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+			Path:  "/_cache/purge",
+			Allow: []string{},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		// 空方法应该匹配所有条目
+		deleted := h.PurgeByPatternForTest("/api/*", "")
+		if deleted != 0 {
+			t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+		}
+	})
+}
+
+// TestPurgeHandler_PurgeByPath_HashConsistency 测试哈希一致性。
+func TestPurgeHandler_PurgeByPath_HashConsistency(t *testing.T) {
+	// 验证相同路径和方法产生相同哈希
+	path := "/api/users"
+	method := "GET"
+
+	hash1 := cache.HashPathWithMethod(path, method)
+	hash2 := cache.HashPathWithMethod(path, method)
+
+	if hash1 != hash2 {
+		t.Errorf("hash not consistent: %d != %d", hash1, hash2)
+	}
+
+	// 验证不同路径产生不同哈希
+	hash3 := cache.HashPathWithMethod("/api/posts", method)
+	if hash1 == hash3 {
+		t.Error("expected different hashes for different paths")
+	}
+
+	// 验证不同方法产生不同哈希
+	hash4 := cache.HashPathWithMethod(path, "POST")
+	if hash1 == hash4 {
+		t.Error("expected different hashes for different methods")
+	}
+}
+
+// TestPurgeHandler_PurgeByPattern_PatternMatching 测试模式匹配逻辑。
+func TestPurgeHandler_PurgeByPattern_PatternMatching(t *testing.T) {
+	tests := []struct {
+		pattern string
+		path    string
+		want    bool
+	}{
+		// 通配符结尾 - 前缀匹配
+		{"/api/*", "/api/users", true},
+		{"/api/*", "/api/posts", true},
+		{"/api/*", "/api/users/123", true}, // * 匹配剩余所有内容
+		{"/api/*", "/other/path", false},
+
+		// 单个 * 匹配所有
+		{"*", "/api/users", true},
+		{"*", "/any/path", true},
+
+		// 中间通配符
+		{"/api/*/users", "/api/v1/users", true},
+		{"/api/*/users", "/api/v2/users", true},
+		{"/api/*/users", "/api/users", true}, // 前缀和后缀都匹配
+		{"/api/*/users", "/api/v1/posts", false},
+
+		// 精确匹配
+		{"/api/users", "/api/users", true},
+		{"/api/users", "/api/posts", false},
+
+		// 空模式
+		{"", "", true},
+		{"", "/api", false},
+
+		// 目录前缀匹配（以 / 结尾）
+		{"/api/", "/api/users", true},
+		{"/api/", "/api/users/123", true},
+		{"/api/", "/other/path", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.pattern+"_"+tt.path, func(t *testing.T) {
+			got := cache.MatchPattern(tt.pattern, tt.path)
+			if got != tt.want {
+				t.Errorf("MatchPattern(%q, %q) = %v, want %v", tt.pattern, tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestPurgeHandler_PurgeByPath_VariousInputs 测试各种输入。
+func TestPurgeHandler_PurgeByPath_VariousInputs(t *testing.T) {
+	h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		path   string
+		method string
+	}{
+		{"empty path and method", "", ""},
+		{"empty path with method", "", "GET"},
+		{"path with empty method", "/test", ""},
+		{"root path", "/", "GET"},
+		{"nested path", "/a/b/c/d/e", "GET"},
+		{"path with trailing slash", "/api/users/", "GET"},
+		{"path with query", "/api?key=value", "GET"},
+		{"path with fragment", "/api#section", "GET"},
+		{"path with encoded chars", "/api%2Fusers", "GET"},
+		{"long path", strings.Repeat("/a", 100), "GET"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 应该不会 panic
+			deleted := h.PurgeByPathForTest(tt.path, tt.method)
+			if deleted != 0 {
+				t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+			}
+		})
+	}
+}
+
+// TestPurgeHandler_PurgeByPattern_VariousInputs 测试各种模式输入。
+func TestPurgeHandler_PurgeByPattern_VariousInputs(t *testing.T) {
+	h, err := NewPurgeHandler(nil, &config.CacheAPIConfig{
+		Path:  "/_cache/purge",
+		Allow: []string{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		pattern string
+		method  string
+	}{
+		{"empty pattern and method", "", ""},
+		{"empty pattern with method", "", "GET"},
+		{"pattern with empty method", "/api/*", ""},
+		{"single wildcard only", "*", "GET"},
+		{"double wildcard only", "**", "GET"},
+		{"multiple single wildcards", "/api/*/users/*", "GET"},
+		{"mixed wildcards", "/api/**/users/*", "GET"},
+		{"wildcard at start", "*/users", "GET"},
+		{"wildcard at end", "/api/*", "GET"},
+		{"consecutive wildcards", "/api/**/*", "GET"},
+		{"long pattern", strings.Repeat("/a*", 20), "GET"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 应该不会 panic
+			deleted := h.PurgeByPatternForTest(tt.pattern, tt.method)
+			if deleted != 0 {
+				t.Errorf("expected 0 deletions for nil server, got %d", deleted)
+			}
+		})
+	}
 }

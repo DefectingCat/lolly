@@ -748,3 +748,54 @@ func TestName(t *testing.T) {
 		t.Errorf("Expected name 'basic_auth', got %s", auth.Name())
 	}
 }
+
+// TestAuthenticate_UnknownAlgorithm 测试未知算法
+func TestAuthenticate_UnknownAlgorithm(t *testing.T) {
+	auth := &BasicAuth{
+		users:     map[string]string{"admin": "$2b$12$hash"},
+		algorithm: HashAlgorithm(99), // 未知算法
+	}
+
+	result := auth.Authenticate("admin", "password")
+	if result {
+		t.Error("Authenticate() should return false for unknown algorithm")
+	}
+}
+
+// TestAuthenticateBcrypt_Error 测试 bcrypt 验证错误路径
+func TestAuthenticateBcrypt_Error(t *testing.T) {
+	// 测试无效的 bcrypt 哈希
+	result := authenticateBcrypt("password", "invalid_hash")
+	if result {
+		t.Error("authenticateBcrypt() should return false for invalid hash")
+	}
+}
+
+// TestParseArgon2idHash_InvalidParts 测试无效的 argon2id 哈希格式
+func TestParseArgon2idHash_InvalidParts(t *testing.T) {
+	tests := []struct {
+		name string
+		hash string
+	}{
+		{"too few parts", "$argon2id$v=19$m=32,t=2,p=2"},
+		{"wrong algorithm", "$bcrypt$v=19$m=32,t=2,p=2$salt$hash"},
+		{"wrong version", "$argon2id$v=18$m=32,t=2,p=2$salt$hash"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, _, err := parseArgon2idHash(tt.hash)
+			if err == nil {
+				t.Errorf("parseArgon2idHash(%q) should return error", tt.hash)
+			}
+		})
+	}
+}
+
+// TestValidatePasswordHash_UnknownAlgorithm 测试未知算法的密码哈希验证
+func TestValidatePasswordHash_UnknownAlgorithm(t *testing.T) {
+	err := validatePasswordHash("hash", HashAlgorithm(99))
+	if err == nil {
+		t.Error("validatePasswordHash() should return error for unknown algorithm")
+	}
+}

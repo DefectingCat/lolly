@@ -556,3 +556,232 @@ func TestOCSPManager_GetStatus_EdgeCases(t *testing.T) {
 		t.Error("Expected no response for empty response data")
 	}
 }
+
+// TestOCSPManager_RegisterCertificate_NilCert 测试注册空证书
+func TestOCSPManager_RegisterCertificate_NilCert(t *testing.T) {
+	mgr := NewOCSPManager(nil)
+	defer mgr.Stop()
+
+	err := mgr.RegisterCertificate(nil, nil)
+	if err == nil {
+		t.Error("Expected error for nil certificate")
+	}
+	if err.Error() != "certificate is nil" {
+		t.Errorf("Expected 'certificate is nil' error, got: %v", err)
+	}
+}
+
+// TestOCSPManager_RegisterCertificate_NoOCSPServer 测试无 OCSP 服务器的证书
+func TestOCSPManager_RegisterCertificate_NoOCSPServer(t *testing.T) {
+	mgr := NewOCSPManager(nil)
+	defer mgr.Stop()
+
+	// 创建无 OCSP 服务器的证书
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("Failed to generate key: %v", err)
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(12345),
+		Subject:      pkix.Name{CommonName: "test"},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(1 * time.Hour),
+		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{"localhost"},
+		// 无 OCSPServer
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("Failed to create certificate: %v", err)
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		t.Fatalf("Failed to parse certificate: %v", err)
+	}
+
+	err = mgr.RegisterCertificate(cert, cert)
+	if err == nil {
+		t.Error("Expected error for certificate without OCSP server")
+	}
+	if err.Error() != "certificate has no OCSP server URL" {
+		t.Errorf("Expected 'certificate has no OCSP server URL' error, got: %v", err)
+	}
+}
+
+// TestOCSPManager_SendOCSPRequest_Error 测试 OCSP 请求错误
+func TestOCSPManager_SendOCSPRequest_Error(t *testing.T) {
+	cfg := &OCSPConfig{
+		Enabled:         true,
+		RefreshInterval: 1 * time.Hour,
+		Timeout:         100 * time.Millisecond,
+		MaxRetries:      1,
+	}
+	mgr := NewOCSPManager(cfg)
+
+	// 测试无效 URL
+	_, err := mgr.sendOCSPRequest("://invalid-url", []byte("test"))
+	if err == nil {
+		t.Error("Expected error for invalid URL")
+	}
+
+	// 测试连接失败
+	_, err = mgr.sendOCSPRequest("http://127.0.0.1:9999/ocsp", []byte("test"))
+	if err == nil {
+		t.Error("Expected error for connection failure")
+	}
+}
+
+// TestOCSPManager_RefreshResponse_WithExistingEntry 测试刷新已有条目的响应
+func TestOCSPManager_RefreshResponse_WithExistingEntry(t *testing.T) {
+	cfg := &OCSPConfig{
+		Enabled:         true,
+		RefreshInterval: 1 * time.Hour,
+		Timeout:         100 * time.Millisecond,
+		MaxRetries:      1,
+	}
+	mgr := NewOCSPManager(cfg)
+
+	serial := big.NewInt(12345)
+	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+		OCSPServer:   []string{"http://invalid.ocsp.server.example.com"},
+	}
+	certDER, _ := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
+	cert, _ := x509.ParseCertificate(certDER)
+
+	// 预先添加一个条目
+	mgr.mu.Lock()
+	mgr.responses[serial.String()] = &ocspResponse{
+		status:     statusValid,
+		response:   []byte("test-response"),
+		fetchedAt:  time.Now(),
+		nextUpdate: time.Now().Add(1 * time.Hour),
+		errors:     0,
+	}
+	mgr.mu.Unlock()
+
+	// 刷新会失败，但应该增加错误计数
+	_ = mgr.RefreshResponse(cert, cert)
+
+	// 验证错误计数增加
+	mgr.mu.RLock()
+	entry := mgr.responses[serial.String()]
+	mgr.mu.RUnlock()
+
+	if entry.errors != 1 {
+		t.Errorf("Expected errors=1, got %d", entry.errors)
+	}
+}
+
+// TestOCSPManager_RefreshResponse_StatusFailed 测试刷新失败后状态变化
+func TestOCSPManager_RefreshResponse_StatusFailed(t *testing.T) {
+	cfg := &OCSPConfig{
+		Enabled:         true,
+		RefreshInterval: 1 * time.Hour,
+		Timeout:         100 * time.Millisecond,
+		MaxRetries:      1,
+	}
+	mgr := NewOCSPManager(cfg)
+
+	serial := big.NewInt(99999)
+	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+		OCSPServer:   []string{"http://invalid.ocsp.server.example.com"},
+	}
+	certDER, _ := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
+	cert, _ := x509.ParseCertificate(certDER)
+
+	// 预先添加一个条目，错误计数接近阈值
+	mgr.mu.Lock()
+	mgr.responses[serial.String()] = &ocspResponse{
+		status:     statusValid,
+		response:   []byte("test-response"),
+		fetchedAt:  time.Now(),
+		nextUpdate: time.Now().Add(1 * time.Hour),
+		errors:     2, // 接近 maxRetries=1, 下次失败会变成 statusFailed
+	}
+	mgr.mu.Unlock()
+
+	// 刷新会失败
+	_ = mgr.RefreshResponse(cert, cert)
+
+	// 验证状态变为 failed（因为 errors >= maxRetries）
+	mgr.mu.RLock()
+	entry := mgr.responses[serial.String()]
+	mgr.mu.RUnlock()
+
+	if entry.status != statusFailed {
+		t.Errorf("Expected statusFailed, got %v", entry.status)
+	}
+}
+
+// TestOCSPManager_FetchOCSP_NoServer 测试无 OCSP 服务器时的 fetchOCSP
+func TestOCSPManager_FetchOCSP_NoServer(t *testing.T) {
+	mgr := NewOCSPManager(nil)
+
+	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+		// 无 OCSPServer
+	}
+	certDER, _ := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
+	cert, _ := x509.ParseCertificate(certDER)
+
+	_, err := mgr.fetchOCSP(cert, cert)
+	if err == nil {
+		t.Error("Expected error for certificate without OCSP server")
+	}
+	if err.Error() != "no OCSP server in certificate" {
+		t.Errorf("Expected 'no OCSP server in certificate' error, got: %v", err)
+	}
+}
+
+// TestOCSPManager_StartTwice 测试重复启动
+func TestOCSPManager_StartTwice(t *testing.T) {
+	mgr := NewOCSPManager(nil)
+
+	mgr.Start()
+	defer mgr.Stop()
+
+	// 第二次启动应该无效果
+	mgr.Start()
+
+	mgr.mu.RLock()
+	running := mgr.running
+	mgr.mu.RUnlock()
+
+	if !running {
+		t.Error("Expected manager to be running")
+	}
+}
+
+// TestOCSPManager_StopTwice 测试重复停止
+func TestOCSPManager_StopTwice(t *testing.T) {
+	mgr := NewOCSPManager(nil)
+
+	mgr.Start()
+	mgr.Stop()
+
+	// 第二次停止应该无效果
+	mgr.Stop()
+
+	mgr.mu.RLock()
+	running := mgr.running
+	mgr.mu.RUnlock()
+
+	if running {
+		t.Error("Expected manager to be stopped")
+	}
+}

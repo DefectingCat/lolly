@@ -1211,3 +1211,1072 @@ func TestStatusHandler_ServeHTTP_AccessAllowed_XForwardedFor(t *testing.T) {
 		t.Errorf("expected status 200 for allowed access via X-Forwarded-For, got %d", ctx.Response.StatusCode())
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Direct serve* method tests with full Status data
+// ---------------------------------------------------------------------------
+
+func TestServePrometheus_WithUpstreams(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "prometheus",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		Upstreams: []UpstreamStatus{
+			{
+				Name:           "backend",
+				HealthyCount:   3,
+				UnhealthyCount: 1,
+				LatencyP50:     10.5,
+				LatencyP95:     25.3,
+				LatencyP99:     50.1,
+			},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.servePrometheus(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	// 验证 upstream 指标
+	if !strings.Contains(body, "lolly_upstream_healthy_count") {
+		t.Error("expected prometheus output to contain lolly_upstream_healthy_count")
+	}
+	if !strings.Contains(body, `name="backend"`) {
+		t.Error("expected prometheus output to contain upstream name label")
+	}
+	if !strings.Contains(body, "lolly_upstream_healthy_count{name=\"backend\"} 3") {
+		t.Error("expected prometheus output to contain upstream healthy count")
+	}
+	if !strings.Contains(body, "lolly_upstream_unhealthy_count{name=\"backend\"} 1") {
+		t.Error("expected prometheus output to contain upstream unhealthy count")
+	}
+	if !strings.Contains(body, "lolly_upstream_latency_ms{name=\"backend\",quantile=\"0.5\"}") {
+		t.Error("expected prometheus output to contain upstream P50 latency")
+	}
+	if !strings.Contains(body, "lolly_upstream_latency_ms{name=\"backend\",quantile=\"0.95\"}") {
+		t.Error("expected prometheus output to contain upstream P95 latency")
+	}
+	if !strings.Contains(body, "lolly_upstream_latency_ms{name=\"backend\",quantile=\"0.99\"}") {
+		t.Error("expected prometheus output to contain upstream P99 latency")
+	}
+}
+
+func TestServePrometheus_WithSSL(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "prometheus",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		SSL: &SSLStatus{
+			Handshakes:    500,
+			SessionReused: 200,
+			ReuseRate:     40.0,
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.servePrometheus(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	if !strings.Contains(body, "lolly_ssl_handshakes_total 500") {
+		t.Error("expected prometheus output to contain lolly_ssl_handshakes_total")
+	}
+	if !strings.Contains(body, "lolly_ssl_session_reused_total 200") {
+		t.Error("expected prometheus output to contain lolly_ssl_session_reused_total")
+	}
+	if !strings.Contains(body, "lolly_ssl_session_reuse_rate 40.00") {
+		t.Error("expected prometheus output to contain lolly_ssl_session_reuse_rate")
+	}
+}
+
+func TestServePrometheus_WithRateLimits(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "prometheus",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		RateLimits: []RateLimitStatus{
+			{
+				ZoneName: "api",
+				Requests: 1000,
+				Limit:    500,
+				Rejected: 50,
+			},
+			{
+				ZoneName: "login",
+				Requests: 100,
+				Limit:    10,
+				Rejected: 5,
+			},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.servePrometheus(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	if !strings.Contains(body, "lolly_rate_limit_requests{zone=\"api\"} 1000") {
+		t.Error("expected prometheus output to contain lolly_rate_limit_requests for api zone")
+	}
+	if !strings.Contains(body, "lolly_rate_limit_limit{zone=\"api\"} 500") {
+		t.Error("expected prometheus output to contain lolly_rate_limit_limit for api zone")
+	}
+	if !strings.Contains(body, "lolly_rate_limit_rejected_total{zone=\"api\"} 50") {
+		t.Error("expected prometheus output to contain lolly_rate_limit_rejected_total for api zone")
+	}
+	if !strings.Contains(body, "lolly_rate_limit_requests{zone=\"login\"} 100") {
+		t.Error("expected prometheus output to contain lolly_rate_limit_requests for login zone")
+	}
+}
+
+func TestServePrometheus_WithProxyCache(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "prometheus",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		Cache: &CacheStats{
+			FileCache: FileCacheStats{
+				Entries:    50,
+				MaxEntries: 100,
+				Size:       10240,
+				MaxSize:    102400,
+			},
+			ProxyCache: ProxyCacheStats{
+				Entries: 25,
+				Pending: 5,
+			},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.servePrometheus(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	if !strings.Contains(body, `lolly_cache_entries{type="file"} 50`) {
+		t.Error("expected prometheus output to contain file cache entries")
+	}
+	if !strings.Contains(body, `lolly_cache_entries{type="proxy"} 25`) {
+		t.Error("expected prometheus output to contain proxy cache entries")
+	}
+	if !strings.Contains(body, "lolly_cache_size_bytes 10240") {
+		t.Error("expected prometheus output to contain cache size bytes")
+	}
+	if !strings.Contains(body, "lolly_cache_pending 5") {
+		t.Error("expected prometheus output to contain cache pending")
+	}
+}
+
+func TestServeJSON_WithFullStatus(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "json",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		Cache: &CacheStats{
+			FileCache: FileCacheStats{
+				Entries:    50,
+				MaxEntries: 100,
+				Size:       10240,
+				MaxSize:    102400,
+			},
+			ProxyCache: ProxyCacheStats{
+				Entries: 25,
+				Pending: 5,
+			},
+		},
+		Pool: &PoolStats{
+			Workers:     10,
+			IdleWorkers: 5,
+			MaxWorkers:  20,
+			MinWorkers:  2,
+			QueueLen:    3,
+			QueueCap:    100,
+		},
+		Upstreams: []UpstreamStatus{
+			{
+				Name:           "backend",
+				HealthyCount:   3,
+				UnhealthyCount: 1,
+				LatencyP50:     10.5,
+				LatencyP95:     25.3,
+				LatencyP99:     50.1,
+			},
+		},
+		SSL: &SSLStatus{
+			Handshakes:    500,
+			SessionReused: 200,
+			ReuseRate:     40.0,
+		},
+		RateLimits: []RateLimitStatus{
+			{
+				ZoneName: "api",
+				Requests: 1000,
+				Limit:    500,
+				Rejected: 50,
+			},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.serveJSON(ctx, status)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200, got %d", ctx.Response.StatusCode())
+	}
+
+	ct := string(ctx.Response.Header.ContentType())
+	if !strings.Contains(ct, "application/json") {
+		t.Errorf("expected content-type application/json, got %s", ct)
+	}
+
+	// 验证 JSON 可解析并包含所有字段
+	var parsed Status
+	if err := json.Unmarshal(ctx.Response.Body(), &parsed); err != nil {
+		t.Fatalf("failed to parse JSON response: %v", err)
+	}
+
+	if parsed.Cache == nil {
+		t.Error("expected Cache to be populated")
+	} else if parsed.Cache.ProxyCache.Entries != 25 {
+		t.Errorf("expected ProxyCache Entries 25, got %d", parsed.Cache.ProxyCache.Entries)
+	}
+
+	if parsed.Pool == nil {
+		t.Error("expected Pool to be populated")
+	} else if parsed.Pool.QueueCap != 100 {
+		t.Errorf("expected Pool QueueCap 100, got %d", parsed.Pool.QueueCap)
+	}
+
+	if len(parsed.Upstreams) != 1 {
+		t.Errorf("expected 1 upstream, got %d", len(parsed.Upstreams))
+	} else if parsed.Upstreams[0].Name != "backend" {
+		t.Errorf("expected upstream name 'backend', got %s", parsed.Upstreams[0].Name)
+	}
+
+	if parsed.SSL == nil {
+		t.Error("expected SSL to be populated")
+	} else if parsed.SSL.Handshakes != 500 {
+		t.Errorf("expected SSL Handshakes 500, got %d", parsed.SSL.Handshakes)
+	}
+
+	if len(parsed.RateLimits) != 1 {
+		t.Errorf("expected 1 rate limit, got %d", len(parsed.RateLimits))
+	} else if parsed.RateLimits[0].ZoneName != "api" {
+		t.Errorf("expected rate limit zone 'api', got %s", parsed.RateLimits[0].ZoneName)
+	}
+}
+
+func TestServeText_WithAllSections(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "text",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		Cache: &CacheStats{
+			FileCache: FileCacheStats{
+				Entries:    50,
+				MaxEntries: 100,
+				Size:       10240,
+				MaxSize:    102400,
+			},
+			ProxyCache: ProxyCacheStats{
+				Entries: 25,
+				Pending: 5,
+			},
+		},
+		Pool: &PoolStats{
+			Workers:     10,
+			IdleWorkers: 5,
+			MaxWorkers:  20,
+			MinWorkers:  2,
+			QueueLen:    3,
+			QueueCap:    100,
+		},
+		Upstreams: []UpstreamStatus{
+			{
+				Name:           "backend",
+				HealthyCount:   3,
+				UnhealthyCount: 1,
+				LatencyP50:     10.5,
+				LatencyP95:     25.3,
+				LatencyP99:     50.1,
+			},
+		},
+		SSL: &SSLStatus{
+			Handshakes:    500,
+			SessionReused: 200,
+			ReuseRate:     40.0,
+		},
+		RateLimits: []RateLimitStatus{
+			{
+				ZoneName: "api",
+				Requests: 1000,
+				Limit:    500,
+				Rejected: 50,
+			},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.serveText(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	// 验证基础信息
+	if !strings.Contains(body, "Lolly Status") {
+		t.Error("expected text output to contain 'Lolly Status'")
+	}
+	if !strings.Contains(body, "Version:       1.0.0") {
+		t.Error("expected text output to contain Version")
+	}
+	if !strings.Contains(body, "Connections:   5") {
+		t.Error("expected text output to contain Connections")
+	}
+
+	// 验证 Cache section
+	if !strings.Contains(body, "Cache:") {
+		t.Error("expected text output to contain Cache section")
+	}
+	if !strings.Contains(body, "File Entries: 50 / 100") {
+		t.Error("expected text output to contain file cache entries")
+	}
+	if !strings.Contains(body, "Proxy Entries: 25") {
+		t.Error("expected text output to contain proxy cache entries")
+	}
+	if !strings.Contains(body, "Proxy Pending: 5") {
+		t.Error("expected text output to contain proxy cache pending")
+	}
+
+	// 验证 Pool section
+	if !strings.Contains(body, "Goroutine Pool:") {
+		t.Error("expected text output to contain Goroutine Pool section")
+	}
+	if !strings.Contains(body, "Workers:      10 (idle: 5)") {
+		t.Error("expected text output to contain Workers info")
+	}
+	if !strings.Contains(body, "Queue:        3 / 100") {
+		t.Error("expected text output to contain Queue info")
+	}
+
+	// 验证 Upstreams section
+	if !strings.Contains(body, "Upstreams:") {
+		t.Error("expected text output to contain Upstreams section")
+	}
+	if !strings.Contains(body, "backend: 3 healthy, 1 unhealthy") {
+		t.Error("expected text output to contain upstream info")
+	}
+	if !strings.Contains(body, "Latency: P50=10.50ms, P95=25.30ms, P99=50.10ms") {
+		t.Error("expected text output to contain latency info")
+	}
+
+	// 验证 SSL section
+	if !strings.Contains(body, "SSL:") {
+		t.Error("expected text output to contain SSL section")
+	}
+	if !strings.Contains(body, "Handshakes:    500") {
+		t.Error("expected text output to contain Handshakes")
+	}
+	if !strings.Contains(body, "Session Reused: 200") {
+		t.Error("expected text output to contain Session Reused")
+	}
+	if !strings.Contains(body, "Reuse Rate:    40.00%") {
+		t.Error("expected text output to contain Reuse Rate")
+	}
+
+	// 验证 Rate Limits section
+	if !strings.Contains(body, "Rate Limits:") {
+		t.Error("expected text output to contain Rate Limits section")
+	}
+	if !strings.Contains(body, "api: 1000 requests, limit=500, rejected=50") {
+		t.Error("expected text output to contain rate limit info")
+	}
+}
+
+func TestServeHTML_WithAllSections(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "html",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		Cache: &CacheStats{
+			FileCache: FileCacheStats{
+				Entries:    50,
+				MaxEntries: 100,
+				Size:       10240,
+				MaxSize:    102400,
+			},
+			ProxyCache: ProxyCacheStats{
+				Entries: 25,
+				Pending: 5,
+			},
+		},
+		Pool: &PoolStats{
+			Workers:     10,
+			IdleWorkers: 5,
+			MaxWorkers:  20,
+			MinWorkers:  2,
+			QueueLen:    3,
+			QueueCap:    100,
+		},
+		Upstreams: []UpstreamStatus{
+			{
+				Name:           "backend",
+				HealthyCount:   3,
+				UnhealthyCount: 1,
+				LatencyP50:     10.5,
+				LatencyP95:     25.3,
+				LatencyP99:     50.1,
+			},
+		},
+		SSL: &SSLStatus{
+			Handshakes:    500,
+			SessionReused: 200,
+			ReuseRate:     40.0,
+		},
+		RateLimits: []RateLimitStatus{
+			{
+				ZoneName: "api",
+				Requests: 1000,
+				Limit:    500,
+				Rejected: 50,
+			},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.serveHTML(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	// 验证 HTML 结构
+	if !strings.Contains(body, "<!DOCTYPE html>") {
+		t.Error("expected HTML output to contain DOCTYPE")
+	}
+
+	// 验证 Cache section
+	if !strings.Contains(body, "<h2>Cache</h2>") {
+		t.Error("expected HTML to contain Cache section heading")
+	}
+	if !strings.Contains(body, "<td>File</td>") {
+		t.Error("expected HTML to contain File cache row")
+	}
+	if !strings.Contains(body, "<td>Proxy</td>") {
+		t.Error("expected HTML to contain Proxy cache row")
+	}
+
+	// 验证 Goroutine Pool section
+	if !strings.Contains(body, "<h2>Goroutine Pool</h2>") {
+		t.Error("expected HTML to contain Goroutine Pool section heading")
+	}
+	if !strings.Contains(body, "<th>Workers</th>") {
+		t.Error("expected HTML to contain Workers header")
+	}
+	if !strings.Contains(body, "<th>Idle</th>") {
+		t.Error("expected HTML to contain Idle header")
+	}
+
+	// 验证 Upstreams section
+	if !strings.Contains(body, "<h2>Upstreams</h2>") {
+		t.Error("expected HTML to contain Upstreams section heading")
+	}
+	if !strings.Contains(body, "<th>Name</th>") {
+		t.Error("expected HTML to contain Name header in Upstreams")
+	}
+	if !strings.Contains(body, "<th>Healthy</th>") {
+		t.Error("expected HTML to contain Healthy header")
+	}
+	if !strings.Contains(body, "<th>Unhealthy</th>") {
+		t.Error("expected HTML to contain Unhealthy header")
+	}
+	if !strings.Contains(body, "class=\"healthy\"") {
+		t.Error("expected HTML to contain healthy class")
+	}
+	if !strings.Contains(body, "class=\"unhealthy\"") {
+		t.Error("expected HTML to contain unhealthy class")
+	}
+	if !strings.Contains(body, "<td>backend</td>") {
+		t.Error("expected HTML to contain backend name")
+	}
+
+	// 验证 SSL section
+	if !strings.Contains(body, "<h2>SSL</h2>") {
+		t.Error("expected HTML to contain SSL section heading")
+	}
+	if !strings.Contains(body, "<th>Handshakes</th>") {
+		t.Error("expected HTML to contain Handshakes header")
+	}
+	if !strings.Contains(body, "<th>Session Reused</th>") {
+		t.Error("expected HTML to contain Session Reused header")
+	}
+	if !strings.Contains(body, "<th>Reuse Rate</th>") {
+		t.Error("expected HTML to contain Reuse Rate header")
+	}
+
+	// 验证 Rate Limits section
+	if !strings.Contains(body, "<h2>Rate Limits</h2>") {
+		t.Error("expected HTML to contain Rate Limits section heading")
+	}
+	if !strings.Contains(body, "<th>Zone</th>") {
+		t.Error("expected HTML to contain Zone header")
+	}
+	if !strings.Contains(body, "<th>Requests</th>") {
+		t.Error("expected HTML to contain Requests header")
+	}
+	if !strings.Contains(body, "<th>Limit</th>") {
+		t.Error("expected HTML to contain Limit header")
+	}
+	if !strings.Contains(body, "<th>Rejected</th>") {
+		t.Error("expected HTML to contain Rejected header")
+	}
+	if !strings.Contains(body, "<td>api</td>") {
+		t.Error("expected HTML to contain api zone name")
+	}
+}
+
+func TestServeText_WithEmptyUpstreams(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "text",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		Upstreams:     []UpstreamStatus{}, // 空切片
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.serveText(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	// 空切片不应输出 Upstreams section
+	if strings.Contains(body, "Upstreams:") {
+		t.Error("expected text output to NOT contain Upstreams section when empty")
+	}
+}
+
+func TestServeHTML_WithEmptyRateLimits(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "html",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		RateLimits:    []RateLimitStatus{}, // 空切片
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.serveHTML(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	// 空切片不应输出 Rate Limits section
+	if strings.Contains(body, "<h2>Rate Limits</h2>") {
+		t.Error("expected HTML to NOT contain Rate Limits section when empty")
+	}
+}
+
+func TestServePrometheus_WithMultipleUpstreams(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "prometheus",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		Upstreams: []UpstreamStatus{
+			{
+				Name:           "backend",
+				HealthyCount:   3,
+				UnhealthyCount: 1,
+				LatencyP50:     10.5,
+				LatencyP95:     25.3,
+				LatencyP99:     50.1,
+			},
+			{
+				Name:           "api",
+				HealthyCount:   5,
+				UnhealthyCount: 0,
+				LatencyP50:     5.0,
+				LatencyP95:     15.0,
+				LatencyP99:     30.0,
+			},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.servePrometheus(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	// 验证两个 upstream 都有输出
+	if !strings.Contains(body, `name="backend"`) {
+		t.Error("expected prometheus output to contain backend upstream")
+	}
+	if !strings.Contains(body, `name="api"`) {
+		t.Error("expected prometheus output to contain api upstream")
+	}
+	if !strings.Contains(body, "lolly_upstream_healthy_count{name=\"api\"} 5") {
+		t.Error("expected prometheus output to contain api healthy count")
+	}
+}
+
+func TestServeText_WithCacheOnly(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "text",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		Cache: &CacheStats{
+			FileCache: FileCacheStats{
+				Entries:    50,
+				MaxEntries: 100,
+				Size:       10240,
+				MaxSize:    102400,
+			},
+			ProxyCache: ProxyCacheStats{
+				Entries: 0,
+				Pending: 0,
+			},
+		},
+		// Pool 为 nil
+		// Upstreams 为空
+		// SSL 为 nil
+		// RateLimits 为空
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.serveText(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	if !strings.Contains(body, "Cache:") {
+		t.Error("expected text output to contain Cache section")
+	}
+	if strings.Contains(body, "Goroutine Pool:") {
+		t.Error("expected text output to NOT contain Goroutine Pool section when nil")
+	}
+	if strings.Contains(body, "Upstreams:") {
+		t.Error("expected text output to NOT contain Upstreams section when empty")
+	}
+	if strings.Contains(body, "SSL:") {
+		t.Error("expected text output to NOT contain SSL section when nil")
+	}
+	if strings.Contains(body, "Rate Limits:") {
+		t.Error("expected text output to NOT contain Rate Limits section when empty")
+	}
+}
+
+func TestServeHTML_WithSSLAndRateLimits(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "html",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		SSL: &SSLStatus{
+			Handshakes:    100,
+			SessionReused: 50,
+			ReuseRate:     50.0,
+		},
+		RateLimits: []RateLimitStatus{
+			{
+				ZoneName: "global",
+				Requests: 5000,
+				Limit:    1000,
+				Rejected: 100,
+			},
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.serveHTML(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	// 验证 SSL section
+	if !strings.Contains(body, "<h2>SSL</h2>") {
+		t.Error("expected HTML to contain SSL section")
+	}
+	if !strings.Contains(body, "<td>100</td>") {
+		t.Error("expected HTML to contain Handshakes value")
+	}
+	if !strings.Contains(body, "<td>50</td>") {
+		t.Error("expected HTML to contain Session Reused value")
+	}
+	if !strings.Contains(body, "<td>50.00%</td>") {
+		t.Error("expected HTML to contain Reuse Rate value")
+	}
+
+	// 验证 Rate Limits section
+	if !strings.Contains(body, "<h2>Rate Limits</h2>") {
+		t.Error("expected HTML to contain Rate Limits section")
+	}
+	if !strings.Contains(body, "<td>global</td>") {
+		t.Error("expected HTML to contain zone name")
+	}
+	if !strings.Contains(body, "<td>5000</td>") {
+		t.Error("expected HTML to contain requests value")
+	}
+}
+
+func TestServePrometheus_WithPool(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "prometheus",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        10 * time.Second,
+		Connections:   5,
+		Requests:      100,
+		BytesSent:     1024,
+		BytesReceived: 512,
+		Pool: &PoolStats{
+			Workers:     10,
+			IdleWorkers: 5,
+			MaxWorkers:  20,
+			MinWorkers:  2,
+			QueueLen:    3,
+			QueueCap:    100,
+		},
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.servePrometheus(ctx, status)
+
+	body := string(ctx.Response.Body())
+
+	if !strings.Contains(body, `lolly_pool_workers{state="total"} 10`) {
+		t.Error("expected prometheus output to contain pool total workers")
+	}
+	if !strings.Contains(body, `lolly_pool_workers{state="idle"} 5`) {
+		t.Error("expected prometheus output to contain pool idle workers")
+	}
+	if !strings.Contains(body, "lolly_pool_queue_length 3") {
+		t.Error("expected prometheus output to contain pool queue length")
+	}
+}
+
+func TestServePrometheus_ZeroValues(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "prometheus",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        0,
+		Connections:   0,
+		Requests:      0,
+		BytesSent:     0,
+		BytesReceived: 0,
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.servePrometheus(ctx, status)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200, got %d", ctx.Response.StatusCode())
+	}
+
+	body := string(ctx.Response.Body())
+
+	// 零值也应该输出
+	if !strings.Contains(body, "lolly_connections 0") {
+		t.Error("expected prometheus output to contain lolly_connections 0")
+	}
+	if !strings.Contains(body, "lolly_requests_total 0") {
+		t.Error("expected prometheus output to contain lolly_requests_total 0")
+	}
+}
+
+func TestServeText_ZeroValues(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "text",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        0,
+		Connections:   0,
+		Requests:      0,
+		BytesSent:     0,
+		BytesReceived: 0,
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.serveText(ctx, status)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200, got %d", ctx.Response.StatusCode())
+	}
+
+	body := string(ctx.Response.Body())
+
+	if !strings.Contains(body, "Connections:   0") {
+		t.Error("expected text output to contain Connections 0")
+	}
+	if !strings.Contains(body, "Requests:      0") {
+		t.Error("expected text output to contain Requests 0")
+	}
+}
+
+func TestServeHTML_ZeroValues(t *testing.T) {
+	cfg := &config.StatusConfig{
+		Path:   "/_status",
+		Format: "html",
+		Allow:  []string{},
+	}
+
+	srv := New(nil)
+	srv.startTime = time.Now()
+
+	h, err := NewStatusHandler(srv, cfg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	status := &Status{
+		Version:       "1.0.0",
+		Uptime:        0,
+		Connections:   0,
+		Requests:      0,
+		BytesSent:     0,
+		BytesReceived: 0,
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	h.serveHTML(ctx, status)
+
+	if ctx.Response.StatusCode() != 200 {
+		t.Errorf("expected status 200, got %d", ctx.Response.StatusCode())
+	}
+
+	body := string(ctx.Response.Body())
+
+	if !strings.Contains(body, "<td>0</td>") {
+		t.Error("expected HTML output to contain zero values")
+	}
+}

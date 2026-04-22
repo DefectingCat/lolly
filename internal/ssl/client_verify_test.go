@@ -17,6 +17,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -697,5 +698,174 @@ func BenchmarkLoadCACertPool(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// TestFingerprint_Nil 测试 nil 证书的指纹。
+func TestFingerprint_Nil(t *testing.T) {
+	result := fingerprint(nil)
+	if result != "" {
+		t.Errorf("Expected empty string for nil cert, got: %s", result)
+	}
+}
+
+// TestFingerprint_Valid 测试有效证书的指纹。
+func TestFingerprint_Valid(t *testing.T) {
+	caCert, _, _ := generateTestCA(t)
+	result := fingerprint(caCert)
+	if result == "" {
+		t.Error("Expected non-empty fingerprint for valid cert")
+	}
+	// 指纹应该是证书 Raw 的十六进制表示
+	expected := fmt.Sprintf("%x", caCert.Raw)
+	if result != expected {
+		t.Error("Fingerprint should match certificate Raw hex")
+	}
+}
+
+// TestClientVerifyMode_String 测试验证模式字符串表示。
+func TestClientVerifyMode_String(t *testing.T) {
+	tests := []struct {
+		mode     ClientVerifyMode
+		expected string
+	}{
+		{VerifyOff, "off"},
+		{VerifyOn, "on"},
+		{VerifyOptional, "optional"},
+		{VerifyOptionalNoCA, "optional_no_ca"},
+		{ClientVerifyMode(99), "unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			if got := tt.mode.String(); got != tt.expected {
+				t.Errorf("String() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestNewClientVerifier_InvalidMode 测试无效验证模式。
+func TestNewClientVerifier_InvalidMode(t *testing.T) {
+	_, err := NewClientVerifier(config.ClientVerifyConfig{
+		Enabled: true,
+		Mode:    "invalid_mode",
+	})
+	if err == nil {
+		t.Error("Expected error for invalid verify mode")
+	}
+}
+
+// TestNewClientVerifier_WithCRL 测试带 CRL 的验证器。
+func TestNewClientVerifier_WithCRL(t *testing.T) {
+	tempDir := t.TempDir()
+	caFile := filepath.Join(tempDir, "ca.crt")
+	crlFile := filepath.Join(tempDir, "crl.pem")
+
+	caCert, caKey, caPEM := generateTestCA(t)
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write CA file: %v", err)
+	}
+
+	// 生成空 CRL
+	crlPEM := generateTestCRL(t, caCert, caKey, nil)
+	if err := os.WriteFile(crlFile, crlPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write CRL file: %v", err)
+	}
+
+	verifier, err := NewClientVerifier(config.ClientVerifyConfig{
+		Enabled:  true,
+		Mode:     "on",
+		ClientCA: caFile,
+		CRL:      crlFile,
+	})
+	if err != nil {
+		t.Fatalf("NewClientVerifier() failed: %v", err)
+	}
+	if !verifier.IsEnabled() {
+		t.Error("Verifier should be enabled")
+	}
+}
+
+// TestNewClientVerifier_InvalidCRL 测试无效 CRL 文件。
+func TestNewClientVerifier_InvalidCRL(t *testing.T) {
+	tempDir := t.TempDir()
+	caFile := filepath.Join(tempDir, "ca.crt")
+	crlFile := filepath.Join(tempDir, "invalid.crl")
+
+	_, _, caPEM := generateTestCA(t)
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write CA file: %v", err)
+	}
+	if err := os.WriteFile(crlFile, []byte("invalid crl data"), 0o644); err != nil {
+		t.Fatalf("Failed to write invalid CRL file: %v", err)
+	}
+
+	_, err := NewClientVerifier(config.ClientVerifyConfig{
+		Enabled:  true,
+		Mode:     "on",
+		ClientCA: caFile,
+		CRL:      crlFile,
+	})
+	if err == nil {
+		t.Error("Expected error for invalid CRL file")
+	}
+}
+
+// TestClientVerifier_ValidateClientCertificate_WithCRL 测试带 CRL 的证书验证。
+func TestClientVerifier_ValidateClientCertificate_WithCRL(t *testing.T) {
+	tempDir := t.TempDir()
+	caFile := filepath.Join(tempDir, "ca.crt")
+	crlFile := filepath.Join(tempDir, "crl.pem")
+
+	caCert, caKey, caPEM := generateTestCA(t)
+	if err := os.WriteFile(caFile, caPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write CA file: %v", err)
+	}
+
+	// 生成客户端证书
+	clientCert, _, _ := generateTestClientCert(t, caCert, caKey, 600)
+
+	// 生成包含吊销证书的 CRL
+	crlPEM := generateTestCRL(t, caCert, caKey, []*big.Int{clientCert.SerialNumber})
+	if err := os.WriteFile(crlFile, crlPEM, 0o644); err != nil {
+		t.Fatalf("Failed to write CRL file: %v", err)
+	}
+
+	verifier, err := NewClientVerifier(config.ClientVerifyConfig{
+		Enabled:  true,
+		Mode:     "on",
+		ClientCA: caFile,
+		CRL:      crlFile,
+	})
+	if err != nil {
+		t.Fatalf("NewClientVerifier() failed: %v", err)
+	}
+
+	// 验证吊销证书应失败
+	err = verifier.ValidateClientCertificate(clientCert)
+	if err == nil {
+		t.Error("Expected error for revoked certificate")
+	}
+}
+
+// TestGetClientCertInfo_WithEmail 测试带邮件地址的证书信息提取。
+func TestGetClientCertInfo_WithEmail(t *testing.T) {
+	caCert, caKey, _ := generateTestCA(t)
+	clientCert, _, _ := generateTestClientCert(t, caCert, caKey, 700)
+
+	cs := &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{clientCert},
+	}
+
+	info := GetClientCertInfo(cs)
+	if info == nil {
+		t.Fatal("GetClientCertInfo() returned nil")
+	}
+	if len(info.Email) == 0 {
+		t.Error("Expected email addresses in cert info")
+	}
+	if info.Email[0] != "test@example.com" {
+		t.Errorf("Expected email test@example.com, got %s", info.Email[0])
 	}
 }

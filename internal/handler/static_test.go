@@ -21,8 +21,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/testutil"
 )
 
@@ -1595,5 +1597,354 @@ func TestStaticHandler_TryFilesRootPathFallback(t *testing.T) {
 
 	if got := string(ctx.Response.Body()); got != "root fallback" {
 		t.Errorf("内容 = %q, want %q", got, "root fallback")
+	}
+}
+
+// TestStaticHandler_SetSymlinkCheck 测试 SetSymlinkCheck 方法
+func TestStaticHandler_SetSymlinkCheck(t *testing.T) {
+	handler := NewStaticHandler("/var/www", "/", nil, false)
+
+	if handler.symlinkCheck {
+		t.Error("初始 symlinkCheck 应为 false")
+	}
+
+	handler.SetSymlinkCheck(true)
+	if !handler.symlinkCheck {
+		t.Error("SetSymlinkCheck(true) 后 symlinkCheck 应为 true")
+	}
+
+	handler.SetSymlinkCheck(false)
+	if handler.symlinkCheck {
+		t.Error("SetSymlinkCheck(false) 后 symlinkCheck 应为 false")
+	}
+}
+
+// TestStaticHandler_SetInternal 测试 SetInternal 方法
+func TestStaticHandler_SetInternal(t *testing.T) {
+	handler := NewStaticHandler("/var/www", "/", nil, false)
+
+	if handler.internal {
+		t.Error("初始 internal 应为 false")
+	}
+
+	handler.SetInternal(true)
+	if !handler.internal {
+		t.Error("SetInternal(true) 后 internal 应为 true")
+	}
+
+	handler.SetInternal(false)
+	if handler.internal {
+		t.Error("SetInternal(false) 后 internal 应为 false")
+	}
+}
+
+// TestStaticHandler_SetCacheTTL 测试 SetCacheTTL 方法
+func TestStaticHandler_SetCacheTTL(t *testing.T) {
+	handler := NewStaticHandler("/var/www", "/", nil, false)
+
+	if handler.cacheTTL != 0 {
+		t.Error("初始 cacheTTL 应为 0")
+	}
+
+	handler.SetCacheTTL(5 * time.Second)
+	if handler.cacheTTL != 5*time.Second {
+		t.Errorf("SetCacheTTL 后 cacheTTL = %v, want %v", handler.cacheTTL, 5*time.Second)
+	}
+
+	handler.SetCacheTTL(0)
+	if handler.cacheTTL != 0 {
+		t.Error("SetCacheTTL(0) 后 cacheTTL 应为 0")
+	}
+}
+
+// TestStaticHandler_InternalRestriction 测试 internal 访问限制
+func TestStaticHandler_InternalRestriction(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := "internal content"
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte(content), 0o644); err != nil {
+		t.Fatalf("创建测试文件失败: %v", err)
+	}
+
+	handler := newTestHandler(t, tmpDir)
+	handler.SetInternal(true)
+
+	t.Run("外部请求返回 404", func(t *testing.T) {
+		ctx := newTestContext(t, "/test.txt")
+		handler.Handle(ctx)
+
+		if got := ctx.Response.StatusCode(); got != fasthttp.StatusNotFound {
+			t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusNotFound)
+		}
+	})
+
+	t.Run("内部重定向允许访问", func(t *testing.T) {
+		ctx := newTestContext(t, "/test.txt")
+		// 标记为内部重定向
+		ctx.SetUserValue("__internal_redirect__", "/test.txt")
+		handler.Handle(ctx)
+
+		if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+			t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+		}
+	})
+}
+
+// TestStaticHandler_ValidateSymlink 测试符号链接验证
+func TestStaticHandler_ValidateSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建目标文件和目录
+	targetDir := filepath.Join(tmpDir, "target")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatalf("创建目标目录失败: %v", err)
+	}
+	targetFile := filepath.Join(targetDir, "secret.txt")
+	if err := os.WriteFile(targetFile, []byte("secret content"), 0o644); err != nil {
+		t.Fatalf("创建目标文件失败: %v", err)
+	}
+
+	// 创建允许的根目录
+	allowedDir := filepath.Join(tmpDir, "allowed")
+	if err := os.MkdirAll(allowedDir, 0o755); err != nil {
+		t.Fatalf("创建允许目录失败: %v", err)
+	}
+
+	t.Run("安全符号链接 - 在允许范围内", func(t *testing.T) {
+		// 在允许目录内创建符号链接
+		linkFile := filepath.Join(allowedDir, "link.txt")
+		allowedTarget := filepath.Join(allowedDir, "actual.txt")
+		if err := os.WriteFile(allowedTarget, []byte("allowed content"), 0o644); err != nil {
+			t.Fatalf("创建实际文件失败: %v", err)
+		}
+		if err := os.Symlink(allowedTarget, linkFile); err != nil {
+			t.Fatalf("创建符号链接失败: %v", err)
+		}
+
+		handler := NewStaticHandler(allowedDir, "/", nil, false)
+		handler.SetSymlinkCheck(true)
+
+		ctx := newTestContext(t, "/link.txt")
+		handler.Handle(ctx)
+
+		if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+			t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+		}
+	})
+
+	t.Run("不安全符号链接 - 指向允许范围外", func(t *testing.T) {
+		// 创建指向允许目录外的符号链接
+		unsafeLink := filepath.Join(allowedDir, "unsafe.txt")
+		if err := os.Symlink(targetFile, unsafeLink); err != nil {
+			t.Fatalf("创建不安全符号链接失败: %v", err)
+		}
+
+		handler := NewStaticHandler(allowedDir, "/", nil, false)
+		handler.SetSymlinkCheck(true)
+
+		ctx := newTestContext(t, "/unsafe.txt")
+		handler.Handle(ctx)
+
+		if got := ctx.Response.StatusCode(); got != fasthttp.StatusForbidden {
+			t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusForbidden)
+		}
+	})
+
+	t.Run("普通文件 - 非符号链接", func(t *testing.T) {
+		normalFile := filepath.Join(allowedDir, "normal.txt")
+		if err := os.WriteFile(normalFile, []byte("normal content"), 0o644); err != nil {
+			t.Fatalf("创建普通文件失败: %v", err)
+		}
+
+		handler := NewStaticHandler(allowedDir, "/", nil, false)
+		handler.SetSymlinkCheck(true)
+
+		ctx := newTestContext(t, "/normal.txt")
+		handler.Handle(ctx)
+
+		if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+			t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+		}
+	})
+
+	t.Run("未启用符号链接检查", func(t *testing.T) {
+		// 创建指向允许目录外的符号链接
+		externalLink := filepath.Join(allowedDir, "external.txt")
+		if err := os.Symlink(targetFile, externalLink); err != nil {
+			t.Fatalf("创建外部符号链接失败: %v", err)
+		}
+
+		handler := NewStaticHandler(allowedDir, "/", nil, false)
+		// 不启用符号链接检查
+
+		ctx := newTestContext(t, "/external.txt")
+		handler.Handle(ctx)
+
+		// 未启用检查时，可以访问符号链接
+		if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+			t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+		}
+	})
+}
+
+// TestStaticHandler_ValidateSymlink_WithAlias 测试 alias 模式下的符号链接验证
+func TestStaticHandler_ValidateSymlink_WithAlias(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建 alias 目录
+	aliasDir := filepath.Join(tmpDir, "alias")
+	if err := os.MkdirAll(aliasDir, 0o755); err != nil {
+		t.Fatalf("创建 alias 目录失败: %v", err)
+	}
+
+	// 在 alias 目录内创建文件和符号链接
+	actualFile := filepath.Join(aliasDir, "actual.txt")
+	if err := os.WriteFile(actualFile, []byte("actual content"), 0o644); err != nil {
+		t.Fatalf("创建实际文件失败: %v", err)
+	}
+
+	linkFile := filepath.Join(aliasDir, "link.txt")
+	if err := os.Symlink(actualFile, linkFile); err != nil {
+		t.Fatalf("创建符号链接失败: %v", err)
+	}
+
+	handler := NewStaticHandlerWithAlias(aliasDir, "/static/", nil, false)
+	handler.SetSymlinkCheck(true)
+
+	ctx := newTestContext(t, "/static/link.txt")
+	handler.Handle(ctx)
+
+	if got := ctx.Response.StatusCode(); got != fasthttp.StatusOK {
+		t.Errorf("状态码 = %d, want %d", got, fasthttp.StatusOK)
+	}
+}
+
+// TestStaticHandler_ValidateSymlink_NoRootOrAlias 测试无 root/alias 时符号链接验证
+func TestStaticHandler_ValidateSymlink_NoRootOrAlias(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 创建文件和符号链接
+	targetFile := filepath.Join(tmpDir, "target.txt")
+	if err := os.WriteFile(targetFile, []byte("target"), 0o644); err != nil {
+		t.Fatalf("创建目标文件失败: %v", err)
+	}
+
+	linkFile := filepath.Join(tmpDir, "link.txt")
+	if err := os.Symlink(targetFile, linkFile); err != nil {
+		t.Fatalf("创建符号链接失败: %v", err)
+	}
+
+	// 创建无 root/alias 的处理器
+	handler := NewStaticHandler("", "/", nil, false)
+	handler.SetSymlinkCheck(true)
+
+	// 直接调用 validateSymlink
+	err := handler.validateSymlink(linkFile)
+	if err == nil {
+		t.Error("无 root/alias 时验证符号链接应返回错误")
+	}
+}
+
+// TestStaticHandler_Handle_WithCacheTTL 测试带 TTL 的缓存处理
+func TestStaticHandler_Handle_WithCacheTTL(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := "cached with ttl"
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("创建测试文件失败: %v", err)
+	}
+
+	// 创建带缓存的处理器
+	handler := newTestHandler(t, tmpDir)
+	handler.SetFileCache(cache.NewFileCache(100, 1024*1024, time.Hour))
+	handler.SetCacheTTL(5 * time.Second)
+
+	// 第一次请求，填充缓存
+	ctx1 := newTestContext(t, "/test.txt")
+	handler.Handle(ctx1)
+
+	if got := ctx1.Response.StatusCode(); got != fasthttp.StatusOK {
+		t.Errorf("第一次请求状态码 = %d, want %d", got, fasthttp.StatusOK)
+	}
+
+	// 第二次请求，应该命中缓存
+	ctx2 := newTestContext(t, "/test.txt")
+	handler.Handle(ctx2)
+
+	if got := ctx2.Response.StatusCode(); got != fasthttp.StatusOK {
+		t.Errorf("第二次请求状态码 = %d, want %d", got, fasthttp.StatusOK)
+	}
+
+	// 内容应该一致
+	if string(ctx1.Response.Body()) != string(ctx2.Response.Body()) {
+		t.Error("缓存内容不一致")
+	}
+}
+
+// TestStaticHandler_Handle_CacheTTLExpired 测试 TTL 过期后重新验证
+func TestStaticHandler_Handle_CacheTTLExpired(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := "initial content"
+	testFile := filepath.Join(tmpDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("创建测试文件失败: %v", err)
+	}
+
+	// 创建带缓存的处理器，TTL 设置很短
+	handler := newTestHandler(t, tmpDir)
+	handler.SetFileCache(cache.NewFileCache(100, 1024*1024, time.Hour))
+	handler.SetCacheTTL(100 * time.Millisecond)
+
+	// 第一次请求，填充缓存
+	ctx1 := newTestContext(t, "/test.txt")
+	handler.Handle(ctx1)
+
+	// 等待 TTL 过期
+	time.Sleep(150 * time.Millisecond)
+
+	// 修改文件
+	newContent := "updated content"
+	if err := os.WriteFile(testFile, []byte(newContent), 0o644); err != nil {
+		t.Fatalf("更新文件失败: %v", err)
+	}
+
+	// 第二次请求，TTL 过期后应该重新读取
+	ctx2 := newTestContext(t, "/test.txt")
+	handler.Handle(ctx2)
+
+	if got := string(ctx2.Response.Body()); got != newContent {
+		t.Errorf("TTL 过期后内容 = %q, want %q", got, newContent)
+	}
+}
+
+// TestStaticHandler_Handle_CacheModTimeChanged 测试文件修改后缓存更新
+func TestStaticHandler_Handle_CacheModTimeChanged(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	initialContent := "initial"
+	if err := os.WriteFile(testFile, []byte(initialContent), 0o644); err != nil {
+		t.Fatalf("创建测试文件失败: %v", err)
+	}
+
+	// 创建带缓存的处理器
+	handler := newTestHandler(t, tmpDir)
+	handler.SetFileCache(cache.NewFileCache(100, 1024*1024, time.Hour))
+
+	// 第一次请求，填充缓存
+	ctx1 := newTestContext(t, "/test.txt")
+	handler.Handle(ctx1)
+
+	// 修改文件
+	time.Sleep(10 * time.Millisecond) // 确保 ModTime 变化
+	newContent := "modified"
+	if err := os.WriteFile(testFile, []byte(newContent), 0o644); err != nil {
+		t.Fatalf("修改文件失败: %v", err)
+	}
+
+	// 第二次请求，应该检测到文件变化并更新缓存
+	ctx2 := newTestContext(t, "/test.txt")
+	handler.Handle(ctx2)
+
+	if got := string(ctx2.Response.Body()); got != newContent {
+		t.Errorf("修改后内容 = %q, want %q", got, newContent)
 	}
 }
