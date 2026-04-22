@@ -67,6 +67,12 @@ type Target struct {
 	failMu      sync.Mutex
 	failCount   int64
 	failedUntil int64
+
+	// 慢启动相关字段
+	// EffectiveWeight 当前有效权重（慢启动期间动态变化）
+	EffectiveWeight atomic.Int64
+	// SlowStart 慢启动时间（配置）
+	SlowStart time.Duration `yaml:"slow_start"`
 }
 
 // Balancer 是 HTTP 代理（L7 层）负载均衡算法的接口。
@@ -264,6 +270,18 @@ func (i *IPHash) SelectByIP(targets []*Target, clientIP string) *Target {
 
 	idx := hash % uint64(len(healthy))
 	return healthy[idx]
+}
+
+// GetEffectiveWeight 获取目标的有效权重。
+//
+// 如果未配置慢启动或不在慢启动状态，返回配置权重。
+// 慢启动期间，权重从 1 逐渐增加到配置权重。
+func (t *Target) GetEffectiveWeight() int {
+	ew := t.EffectiveWeight.Load()
+	if ew == 0 {
+		return t.Weight // 未配置慢启动时返回配置权重
+	}
+	return int(ew)
 }
 
 // IsAvailable 检查目标是否可用。
