@@ -601,59 +601,29 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			method := string(ctx.Request.Header.Method())
 			path := string(ctx.Request.URI().Path())
 			rule := p.cache.MatchRule(path, method, 0)
-			if rule == nil {
-				// 方法不在允许列表中，跳过缓存
-				goto proxyRequest
-			}
-
-			hashKey, origKey := p.buildCacheKeyHash(ctx)
-			if entry, ok, stale := p.cache.Get(hashKey, origKey); ok {
-				// 缓存命中
-				loadbalance.DecrementConnections(target)
-				if !stale {
-					// 新鲜缓存，直接返回
-					upstreamAddr = upstreamCache
-					upstreamStatus = entry.Status
-					p.writeCachedResponse(ctx, entry)
-					if p.redirectRewriter != nil {
-						p.redirectRewriter.RewriteRefreshOnly(&ctx.Response, ctx, upstreamCache, originalClientHost)
+			if rule != nil {
+				hashKey, origKey := p.buildCacheKeyHash(ctx)
+				if entry, ok, stale := p.cache.Get(hashKey, origKey); ok {
+					// 缓存命中
+					loadbalance.DecrementConnections(target)
+					if !stale {
+						// 新鲜缓存，直接返回
+						upstreamAddr = upstreamCache
+						upstreamStatus = entry.Status
+						p.writeCachedResponse(ctx, entry)
+						if p.redirectRewriter != nil {
+							p.redirectRewriter.RewriteRefreshOnly(&ctx.Response, ctx, upstreamCache, originalClientHost)
+						}
+						return
 					}
-					return
-				}
-				// 过期缓存，尝试后台刷新，同时返回旧数据
-				if !p.config.Cache.BackgroundUpdateDisable {
-					entry.Updating.Store(true)
-					go func() {
-						defer entry.Updating.Store(false)
-						p.backgroundRefresh(ctx, target, hashKey, origKey)
-					}()
-				}
-				upstreamAddr = "CACHE"
-				upstreamStatus = entry.Status
-
-				p.writeCachedResponse(ctx, entry)
-				if p.redirectRewriter != nil {
-					p.redirectRewriter.RewriteRefreshOnly(&ctx.Response, ctx, upstreamCache, originalClientHost)
-				}
-				return
-			}
-
-			// 检查是否需要缓存锁（防止缓存击穿）
-			timeout := p.config.Cache.CacheLockTimeout
-			if timeout == 0 && p.config.Cache.CacheLock {
-				timeout = 5 * time.Second // nginx 默认 5s
-			}
-			waitCh, timedOut := p.cache.AcquireLockWithTimeout(hashKey, timeout)
-			if timedOut {
-				// 超时，跳过缓存直接请求上游
-				// 不缓存响应（nginx 行为）
-			} else if waitCh != nil {
-				// 有其他请求正在生成缓存，等待
-				loadbalance.DecrementConnections(target)
-				<-waitCh
-				// 重新尝试获取缓存
-
-				if entry, ok, _ := p.cache.Get(hashKey, origKey); ok {
+					// 过期缓存，尝试后台刷新，同时返回旧数据
+					if !p.config.Cache.BackgroundUpdateDisable {
+						entry.Updating.Store(true)
+						go func() {
+							defer entry.Updating.Store(false)
+							p.backgroundRefresh(ctx, target, hashKey, origKey)
+						}()
+					}
 					upstreamAddr = upstreamCache
 					upstreamStatus = entry.Status
 
@@ -663,12 +633,36 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 					}
 					return
 				}
-				// 缓存未命中，需要重新选择目标
-				loadbalance.IncrementConnections(target)
+
+				// 检查是否需要缓存锁（防止缓存击穿）
+				timeout := p.config.Cache.CacheLockTimeout
+				if timeout == 0 && p.config.Cache.CacheLock {
+					timeout = 5 * time.Second // nginx 默认 5s
+				}
+				waitCh, timedOut := p.cache.AcquireLockWithTimeout(hashKey, timeout)
+				if !timedOut && waitCh != nil {
+					// 有其他请求正在生成缓存，等待
+					loadbalance.DecrementConnections(target)
+					<-waitCh
+					// 重新尝试获取缓存
+
+					if entry, ok, _ := p.cache.Get(hashKey, origKey); ok {
+						upstreamAddr = upstreamCache
+						upstreamStatus = entry.Status
+
+						p.writeCachedResponse(ctx, entry)
+						if p.redirectRewriter != nil {
+							p.redirectRewriter.RewriteRefreshOnly(&ctx.Response, ctx, upstreamCache, originalClientHost)
+						}
+						return
+					}
+					// 缓存未命中，需要重新选择目标
+					loadbalance.IncrementConnections(target)
+				}
+				// timedOut 或获得锁：继续执行代理请求
 			}
 		}
 
-	proxyRequest:
 		// 执行代理请求
 		timing.MarkConnectStart()
 		err := client.Do(req, &ctx.Response)
