@@ -554,10 +554,11 @@ func (c *ProxyCache) matchStatus(statuses []int, status int) bool {
 }
 
 // Delete 删除缓存条目。
-func (c *ProxyCache) Delete(hashKey uint64) {
+func (c *ProxyCache) Delete(hashKey uint64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.entries, hashKey)
+	return nil
 }
 
 // DeleteByPatternWithMethod 按通配符模式删除缓存条目。
@@ -647,4 +648,21 @@ type ProxyCacheStats struct {
 
 	// Pending 正在等待缓存生成的请求数量
 	Pending int
+}
+
+// ToCacheStats 转换为 CacheStats 格式。
+func (s ProxyCacheStats) ToCacheStats() CacheStats {
+	return CacheStats{
+		Entries: int64(s.Entries),
+	}
+}
+
+// CacheStats 返回缓存统计信息（实现 CacheBackend 接口）。
+func (c *ProxyCache) CacheStats() CacheStats {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return CacheStats{
+		Entries: int64(len(c.entries)),
+	}
 }
