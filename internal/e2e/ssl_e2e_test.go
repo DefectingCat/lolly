@@ -11,7 +11,6 @@ import (
 	"context"
 	"crypto/tls"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 	"testing"

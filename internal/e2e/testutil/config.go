@@ -257,7 +257,7 @@ type SSLOption func(*config.SSLConfig)
 func WithHTTP2(enabled bool, maxConcurrentStreams int) SSLOption {
 	return func(s *config.SSLConfig) {
 		s.HTTP2 = config.HTTP2Config{
-			Enabled:             enabled,
+			Enabled:              enabled,
 			MaxConcurrentStreams: maxConcurrentStreams,
 		}
 	}
@@ -368,8 +368,8 @@ func WithRateLimit(requestRate, burst int) SecurityOption {
 func WithAccessControl(allow, deny []string, defaultAction string) SecurityOption {
 	return func(s *config.SecurityConfig) {
 		s.Access = config.AccessConfig{
-			Allow:  allow,
-			Deny:   deny,
+			Allow:   allow,
+			Deny:    deny,
 			Default: defaultAction,
 		}
 	}

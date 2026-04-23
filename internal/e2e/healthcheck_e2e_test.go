@@ -600,7 +600,7 @@ func TestE2EHealthCheckBackupServer(t *testing.T) {
 
 	// 构建配置：第二个后端为备份（使用内部地址）
 	targetOpts := [][]testutil.ProxyTargetOption{
-		{},                     // 主服务器
+		{},                      // 主服务器
 		{testutil.WithBackup()}, // 备份服务器
 	}
 

@@ -9,7 +9,6 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"testing"
