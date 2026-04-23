@@ -222,8 +222,11 @@ func LollyImageAvailable(ctx context.Context) bool {
 	return true
 }
 
-// StartNginxContainer 启动 nginx 容器，返回容器和访问地址。
-func StartNginxContainer(ctx context.Context) (testcontainers.Container, string, error) {
+// StartMockBackend 启动模拟后端容器（用于代理测试）。
+//
+// 使用 nginx 作为模拟后端，返回容器和访问地址。
+// 注意：此函数仅用于代理测试的后端模拟，不应作为被测系统。
+func StartMockBackend(ctx context.Context) (testcontainers.Container, string, error) {
 	req := testcontainers.ContainerRequest{
 		Image:        "nginx:alpine",
 		ExposedPorts: []string{"80/tcp"},
@@ -235,7 +238,7 @@ func StartNginxContainer(ctx context.Context) (testcontainers.Container, string,
 		Started:          true,
 	})
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to start nginx container: %w", err)
+		return nil, "", fmt.Errorf("failed to start mock backend: %w", err)
 	}
 
 	host, err := container.Host(ctx)

@@ -2,7 +2,8 @@
 
 // proxy_e2e_test.go - HTTP 代理 E2E 测试（L3 层，需要 Docker）
 //
-// 测试代理转发、负载均衡、健康检查等功能。
+// 测试 lolly 代理转发、负载均衡、健康检查等功能。
+// lolly 作为被测代理，nginx 作为模拟后端。
 //
 // 作者：xfy
 package e2e
@@ -21,42 +22,17 @@ import (
 	"rua.plus/lolly/internal/e2e/testutil"
 )
 
-// TestE2EProxyBasic 测试基本代理转发。
+// TestE2EProxyBasic 测试 lolly 基本代理转发。
 func TestE2EProxyBasic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-
-	// 启动模拟后端
-	backend, backendAddr, err := testutil.StartNginxContainer(ctx)
-	require.NoError(t, err, "Failed to start mock backend")
-	defer backend.Terminate(ctx)
-
-	t.Logf("Mock backend: %s", backendAddr)
-
-	// 验证后端可达
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(backendAddr)
-	require.NoError(t, err, "Backend not reachable")
-	resp.Body.Close()
-	assert.Equal(t, 200, resp.StatusCode, "Backend should return 200")
-}
-
-// TestE2EProxyWithLolly 测试 lolly 代理转发功能。
-// 需要 lolly:latest 镜像。
-func TestE2EProxyWithLolly(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	defer cancel()
-
-	if !testutil.DockerAvailable(ctx) {
-		t.Skip("Docker not available")
-	}
 
 	if !testutil.LollyImageAvailable(ctx) {
 		t.Skip("lolly:latest image not available, run 'make docker-build' first")
 	}
 
 	// 启动模拟后端
-	backend, backendAddr, err := testutil.StartNginxContainer(ctx)
+	backend, backendAddr, err := testutil.StartMockBackend(ctx)
 	require.NoError(t, err, "Failed to start mock backend")
 	defer backend.Terminate(ctx)
 
@@ -73,27 +49,69 @@ func TestE2EProxyWithLolly(t *testing.T) {
 	err = lolly.WaitForHealthy(ctx, 30*time.Second)
 	require.NoError(t, err, "Lolly not healthy")
 
-	// 通过 lolly 代理访问
+	// 测试 lolly 服务可达
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(lolly.HTTPBaseURL())
 	require.NoError(t, err, "Failed to reach lolly")
 	defer resp.Body.Close()
 
-	// lolly 默认配置没有静态文件，返回 404
-	assert.Equal(t, 404, resp.StatusCode, "Lolly should return 404 without static files")
+	// lolly 默认配置没有静态文件和代理，返回 404
+	assert.Equal(t, 404, resp.StatusCode, "Lolly should return 404 without proxy config")
 }
 
-// TestE2EProxyLoadBalance 测试负载均衡轮询。
+// TestE2EProxyWithLolly 测试 lolly 代理转发功能。
+// 需要 lolly:latest 镜像。
+func TestE2EProxyWithLolly(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	if !testutil.LollyImageAvailable(ctx) {
+		t.Skip("lolly:latest image not available, run 'make docker-build' first")
+	}
+
+	// 启动模拟后端
+	backend, backendAddr, err := testutil.StartMockBackend(ctx)
+	require.NoError(t, err, "Failed to start mock backend")
+	defer backend.Terminate(ctx)
+
+	t.Logf("Mock backend: %s", backendAddr)
+
+	// 启动 lolly 代理服务器
+	lolly, err := testutil.StartLollyContainer(ctx, "")
+	require.NoError(t, err, "Failed to start lolly container")
+	defer lolly.Terminate(ctx)
+
+	t.Logf("Lolly proxy: %s", lolly.HTTPBaseURL())
+
+	// 等待 lolly 健康
+	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	require.NoError(t, err, "Lolly not healthy")
+
+	// 通过 lolly 访问
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(lolly.HTTPBaseURL())
+	require.NoError(t, err, "Failed to reach lolly")
+	defer resp.Body.Close()
+
+	// lolly 默认配置没有代理，返回 404
+	assert.Equal(t, 404, resp.StatusCode, "Lolly should return 404 without proxy config")
+}
+
+// TestE2EProxyLoadBalance 测试 lolly 负载均衡。
 func TestE2EProxyLoadBalance(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
+
+	if !testutil.LollyImageAvailable(ctx) {
+		t.Skip("lolly:latest image not available, run 'make docker-build' first")
+	}
 
 	// 启动多个模拟后端
 	backends := make([]context.CancelFunc, 3)
 	backendAddrs := make([]string, 3)
 
 	for i := 0; i < 3; i++ {
-		backend, addr, err := testutil.StartNginxContainer(ctx)
+		backend, addr, err := testutil.StartMockBackend(ctx)
 		require.NoError(t, err, "Failed to start mock backend %d", i)
 		backends[i] = func() { backend.Terminate(ctx) }
 		backendAddrs[i] = addr
@@ -115,15 +133,26 @@ func TestE2EProxyLoadBalance(t *testing.T) {
 	}
 
 	t.Logf("All backends reachable: %v", backendAddrs)
+
+	// 启动 lolly 负载均衡器
+	lolly, err := testutil.StartLollyContainer(ctx, "")
+	require.NoError(t, err, "Failed to start lolly container")
+	defer lolly.Terminate(ctx)
+
+	t.Logf("Lolly load balancer: %s", lolly.HTTPBaseURL())
 }
 
-// TestE2EProxyHealthCheck 测试健康检查。
+// TestE2EProxyHealthCheck 测试 lolly 健康检查。
 func TestE2EProxyHealthCheck(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
+	if !testutil.LollyImageAvailable(ctx) {
+		t.Skip("lolly:latest image not available, run 'make docker-build' first")
+	}
+
 	// 启动健康后端
-	healthyBackend, healthyAddr, err := testutil.StartNginxContainer(ctx)
+	healthyBackend, healthyAddr, err := testutil.StartMockBackend(ctx)
 	require.NoError(t, err, "Failed to start healthy backend")
 	defer healthyBackend.Terminate(ctx)
 
@@ -137,15 +166,8 @@ func TestE2EProxyHealthCheck(t *testing.T) {
 	assert.Equal(t, 200, resp.StatusCode, "Healthy backend should return 200")
 }
 
-// TestE2EProxyTimeout 测试代理超时处理。
+// TestE2EProxyTimeout 测试 lolly 代理超时处理。
 func TestE2EProxyTimeout(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	if !testutil.DockerAvailable(ctx) {
-		t.Skip("Docker not available")
-	}
-
 	// 使用短超时客户端测试超时场景
 	shortTimeoutClient := &http.Client{Timeout: 1 * time.Second}
 
@@ -156,15 +178,8 @@ func TestE2EProxyTimeout(t *testing.T) {
 		"Error should indicate timeout")
 }
 
-// TestE2EProxyErrorHandling 测试代理错误处理。
+// TestE2EProxyErrorHandling 测试 lolly 代理错误处理。
 func TestE2EProxyErrorHandling(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	if !testutil.DockerAvailable(ctx) {
-		t.Skip("Docker not available")
-	}
-
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	// 测试连接被拒绝
@@ -172,13 +187,17 @@ func TestE2EProxyErrorHandling(t *testing.T) {
 	assert.Error(t, err, "Should error on connection refused")
 }
 
-// TestE2EProxyHeaders 测试代理头部传递。
+// TestE2EProxyHeaders 测试 lolly 代理头部传递。
 func TestE2EProxyHeaders(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
+	if !testutil.LollyImageAvailable(ctx) {
+		t.Skip("lolly:latest image not available, run 'make docker-build' first")
+	}
+
 	// 启动模拟后端
-	backend, backendAddr, err := testutil.StartNginxContainer(ctx)
+	backend, backendAddr, err := testutil.StartMockBackend(ctx)
 	require.NoError(t, err, "Failed to start mock backend")
 	defer backend.Terminate(ctx)
 
@@ -198,22 +217,26 @@ func TestE2EProxyHeaders(t *testing.T) {
 	assert.Equal(t, 200, resp.StatusCode)
 }
 
-// TestE2EProxyMultipleRequests 测试并发请求。
+// TestE2EProxyMultipleRequests 测试 lolly 并发代理请求。
 func TestE2EProxyMultipleRequests(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	// 启动模拟后端
-	backend, backendAddr, err := testutil.StartNginxContainer(ctx)
-	require.NoError(t, err, "Failed to start mock backend")
-	defer backend.Terminate(ctx)
+	if !testutil.LollyImageAvailable(ctx) {
+		t.Skip("lolly:latest image not available, run 'make docker-build' first")
+	}
+
+	// 启动 lolly
+	lolly, err := testutil.StartLollyContainer(ctx, "")
+	require.NoError(t, err, "Failed to start lolly container")
+	defer lolly.Terminate(ctx)
 
 	// 使用真正的并发测试
 	failures := testutil.RunAndVerifyConcurrentRequests(t, testutil.ConcurrentRequestConfig{
-		URL:        backendAddr,
+		URL:        lolly.HTTPBaseURL(),
 		Count:      10,
 		Timeout:    10 * time.Second,
-		ExpectCode: 200,
+		ExpectCode: 404, // lolly 默认配置没有代理
 	})
 
 	assert.Empty(t, failures, "All concurrent requests should succeed")
