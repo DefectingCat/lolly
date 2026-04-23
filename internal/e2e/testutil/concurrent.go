@@ -18,6 +18,7 @@ type ConcurrentRequestConfig struct {
 	Count      int
 	Timeout    time.Duration
 	ExpectCode int
+	Client     *http.Client // 可选的自定义客户端
 }
 
 // ConcurrentRequestResult 并发请求结果。
@@ -35,8 +36,11 @@ func RunConcurrentRequests(cfg ConcurrentRequestConfig) []ConcurrentRequestResul
 	results := make([]ConcurrentRequestResult, cfg.Count)
 	var wg sync.WaitGroup
 
-	client := &http.Client{
-		Timeout: cfg.Timeout,
+	client := cfg.Client
+	if client == nil {
+		client = &http.Client{
+			Timeout: cfg.Timeout,
+		}
 	}
 
 	for i := 0; i < cfg.Count; i++ {
