@@ -337,6 +337,11 @@ func TestLoadCACertPool_PermissionDenied(t *testing.T) {
 		t.Skip("Skipping on Windows")
 	}
 
+	// Skip if running as root - root can read any file
+	if os.Getuid() == 0 {
+		t.Skip("Skipping permission test when running as root")
+	}
+
 	tmpDir := t.TempDir()
 	caPath := filepath.Join(tmpDir, "no-perm.pem")
 

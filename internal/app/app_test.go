@@ -16,6 +16,7 @@ package app
 import (
 	"bytes"
 	"crypto/tls"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,11 +43,18 @@ func captureStdout(t *testing.T) (func() string, func()) {
 	}
 	os.Stdout = w
 
+	// 异步读取管道，避免死锁
+	var buf bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = io.Copy(&buf, r)
+	}()
+
 	return func() string {
 			_ = w.Close()
 			os.Stdout = old
-			var buf bytes.Buffer
-			_, _ = buf.ReadFrom(r)
+			<-done
 			return buf.String()
 		}, func() {
 			_ = w.Close()
@@ -64,11 +72,18 @@ func captureStderr(t *testing.T) (func() string, func()) {
 	}
 	os.Stderr = w
 
+	// 异步读取管道，避免死锁
+	var buf bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, _ = io.Copy(&buf, r)
+	}()
+
 	return func() string {
 			_ = w.Close()
 			os.Stderr = old
-			var buf bytes.Buffer
-			_, _ = buf.ReadFrom(r)
+			<-done
 			return buf.String()
 		}, func() {
 			_ = w.Close()
@@ -317,6 +332,11 @@ func TestGenerateConfig(t *testing.T) {
 	})
 
 	t.Run("输出到无效路径", func(t *testing.T) {
+		// Skip if running as root - root can write anywhere
+		if os.Getuid() == 0 {
+			t.Skip("Skipping permission test when running as root")
+		}
+
 		// 使用一个无法写入的路径（如根目录下的文件）
 		invalidPath := "/root/cannot-write-here.yaml"
 

@@ -1,14 +1,18 @@
+version: "2"
+
 run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
 
 output:
-  print-issued-lines: true
-  print-linter-name: true
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
 
 linters:
-  enable-all: true
+  default: all
   disable:
     # 合理禁用 - 项目有中文注释/标识符
     - asciicheck
@@ -64,7 +68,6 @@ linters:
     - bidichk
     - rowserrcheck
     - sqlclosecheck
-    - tenv  # 已弃用，被 usetesting 替代
 
     # 可配置而非禁用
     - forbidigo
@@ -130,56 +133,65 @@ linters:
     - sloglint
     - unconvert
     - whitespace
+    # v2 新增 linters
+    - embeddedstructfieldcheck
+    - funcorder
+    - godoclint
+    - iotamixing
+    - modernize
+    - noinlineerr
+    - prealloc
+    - wsl_v5
 
-issues:
-  exclude-rules:
-    - path: '_test\.go'
-      linters:
-        - dupl
-        - goconst
-        - errcheck
-        - govet
-        - revive
-        - staticcheck
-        - unused
-    - path: 'internal/ssl/ocsp_test\.go'
-      linters:
-        - unparam
-    - path: 'internal/lua/'
-      text: "stutters"
-      linters:
-        - revive
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: false
-
-  govet:
-    enable-all: true
-    disable:
-      - fieldalignment
-
-  staticcheck:
-    checks: ["all", "-ST1000", "-ST1003"]
-
-  revive:
-    severity: warning
+  exclusions:
     rules:
-      - name: unused-parameter
-        severity: warning
-      - name: unreachable-code
-        severity: error
-      - name: context-as-argument
-        severity: warning
-      - name: error-naming
-        severity: warning
-      - name: error-return
-        severity: error
-      - name: exported
-        severity: warning
-        arguments:
-          - "disableStutteringCheck"
+      - path: '_test\.go'
+        linters:
+          - dupl
+          - goconst
+          - errcheck
+          - govet
+          - revive
+          - staticcheck
+          - unused
+      - path: 'internal/ssl/ocsp_test\.go'
+        linters:
+          - unparam
+      - path: 'internal/lua/'
+        text: "stutters"
+        linters:
+          - revive
 
-  gofmt:
-    simplify: true
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+
+    staticcheck:
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+
+    revive:
+      severity: warning
+      rules:
+        - name: unused-parameter
+          severity: warning
+        - name: unreachable-code
+          severity: error
+        - name: context-as-argument
+          severity: warning
+        - name: error-naming
+          severity: warning
+        - name: error-return
+          severity: error
+        - name: exported
+          severity: warning
+          arguments:
+            - "disableStutteringCheck"
