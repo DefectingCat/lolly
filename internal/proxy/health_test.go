@@ -444,3 +444,60 @@ func TestMarkUnhealthy(t *testing.T) {
 		}
 	})
 }
+
+// TestMarkUnhealthy_WithSlowStartManager 测试 MarkUnhealthy 与 SlowStartManager 集成。
+func TestMarkUnhealthy_WithSlowStartManager(t *testing.T) {
+	target := &loadbalance.Target{
+		URL:    "http://127.0.0.1:8080",
+		Weight: 100,
+	}
+	target.Healthy.Store(true)
+	target.SlowStart = 30 * time.Second
+
+	checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
+		Interval:  1 * time.Hour,
+		Timeout:   5 * time.Second,
+		Path:      "/health",
+		SlowStart: 30 * time.Second,
+	})
+
+	// 先标记为健康以初始化慢启动
+	checker.MarkHealthy(target)
+
+	// 标记目标为不健康
+	checker.MarkUnhealthy(target)
+
+	if target.Healthy.Load() {
+		t.Error("target 应标记为 unhealthy")
+	}
+}
+
+// TestMarkHealthy_WithSlowStartManager 测试 MarkHealthy 与 SlowStartManager 集成。
+func TestMarkHealthy_WithSlowStartManager(t *testing.T) {
+	target := &loadbalance.Target{
+		URL:    "http://127.0.0.1:8080",
+		Weight: 100,
+	}
+	target.Healthy.Store(false)
+	target.SlowStart = 30 * time.Second
+
+	checker := NewHealthChecker([]*loadbalance.Target{target}, &config.HealthCheckConfig{
+		Interval:  1 * time.Hour,
+		Timeout:   5 * time.Second,
+		Path:      "/health",
+		SlowStart: 30 * time.Second,
+	})
+
+	// 标记目标为健康
+	checker.MarkHealthy(target)
+
+	if !target.Healthy.Load() {
+		t.Error("target 应标记为 healthy")
+	}
+
+	// 验证慢启动已开始（EffectiveWeight 应被设置为 1）
+	ew := target.EffectiveWeight.Load()
+	if ew <= 0 {
+		t.Errorf("慢启动 EffectiveWeight 应大于 0，got: %d", ew)
+	}
+}

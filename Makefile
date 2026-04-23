@@ -148,6 +148,20 @@ test:
 	@echo "Running tests..."
 	go test -v ./...
 
+# 运行 L2 集成测试（无需 Docker）
+test-integration:
+	@echo "Running L2 integration tests..."
+	go test -v -tags=integration ./internal/integration/...
+
+# 运行 L3 E2E 测试（需要 Docker）
+test-e2e:
+	@echo "Running L3 E2E tests (requires Docker)..."
+	go test -v -tags=e2e ./internal/e2e/...
+
+# 运行所有测试（单元 + 集成 + E2E）
+test-all: test test-integration test-e2e
+	@echo "All tests passed."
+
 # 运行测试（带覆盖率）
 test-cover:
 	@echo "Running tests with coverage..."
@@ -231,7 +245,7 @@ lint:
 	fi
 
 # 代码检查
-check: fmt lint test
+check: fmt lint test-all
 	@echo "All checks passed."
 
 # ============================================
