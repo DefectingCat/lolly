@@ -1,0 +1,10 @@
+# E2E 测试配置 - 反向代理
+server:
+  listen: ":8080"
+
+proxy:
+  path: "/"
+  targets:
+    - url: "http://backend1:80"
+    - url: "http://backend2:80"
+  load_balance: "round_robin"

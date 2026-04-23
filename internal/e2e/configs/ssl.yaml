@@ -1,0 +1,12 @@
+# E2E 测试配置 - SSL/TLS 服务器
+server:
+  listen: ":8443"
+
+ssl:
+  enabled: true
+  cert: "/etc/lolly/certs/server.crt"
+  key: "/etc/lolly/certs/server.key"
+
+static:
+  root: "/var/www/html"
+  index: "index.html"

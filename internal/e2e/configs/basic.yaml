@@ -1,0 +1,7 @@
+# E2E 测试配置 - 基础 HTTP 服务器
+server:
+  listen: ":8080"
+
+static:
+  root: "/var/www/html"
+  index: "index.html"
