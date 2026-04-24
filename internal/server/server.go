@@ -534,7 +534,7 @@ func (s *Server) createListener(cfg *config.ServerConfig) (net.Listener, error) 
 
 		// 2. 清理旧 socket 文件
 		if _, err := os.Stat(socketPath); err == nil {
-			os.Remove(socketPath)
+			_ = os.Remove(socketPath)
 		}
 
 		// 3. 创建 Unix socket listener

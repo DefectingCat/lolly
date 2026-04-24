@@ -82,7 +82,7 @@ func NewGeoIPLookup(dbPath string, cacheSize int, ttl time.Duration, privateIPBe
 	cache, err := lru.New[string, *cachedCountry](cacheSize)
 	if err != nil {
 
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("create lru cache: %w", err)
 	}
 

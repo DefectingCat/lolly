@@ -429,7 +429,7 @@ func (s *TCPSocket) Close() error {
 
 	// 关闭连接
 	if s.conn != nil {
-		s.conn.Close()
+		_ = s.conn.Close()
 		s.conn = nil
 	}
 
@@ -802,7 +802,7 @@ func tcpSocketSetTimeouts(L *glua.LState) int {
 // tcpSocketGC __gc 元方法
 func tcpSocketGC(L *glua.LState) int {
 	socket := checkTCPSocket(L, 1)
-	socket.Close()
+	_ = socket.Close()
 	return 0
 }
 

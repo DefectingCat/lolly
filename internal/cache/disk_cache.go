@@ -370,7 +370,7 @@ func (dc *DiskCache) Set(hashKey uint64, origKey string, data []byte, headers ma
 		return
 	}
 	if err := os.Rename(tmpDataPath, dataPath); err != nil {
-		os.Remove(tmpDataPath)
+		_ = os.Remove(tmpDataPath)
 		return
 	}
 
@@ -384,7 +384,7 @@ func (dc *DiskCache) Set(hashKey uint64, origKey string, data []byte, headers ma
 		return
 	}
 	if err := os.Rename(tmpMetaPath, metaPath); err != nil {
-		os.Remove(tmpMetaPath)
+		_ = os.Remove(tmpMetaPath)
 		return
 	}
 
@@ -424,8 +424,8 @@ func (dc *DiskCache) Delete(hashKey uint64) error {
 	// 删除文件
 	dataPath := dc.filePathFromHash(hashKey, "data")
 	metaPath := dc.filePathFromHash(hashKey, "meta")
-	os.Remove(dataPath)
-	os.Remove(metaPath)
+	_ = os.Remove(dataPath)
+	_ = os.Remove(metaPath)
 
 	return nil
 }
@@ -505,7 +505,7 @@ func (dc *DiskCache) evict() {
 		// 删除文件
 		dataPath := dc.filePathFromHash(oldestKey, "data")
 		metaPath := dc.filePathFromHash(oldestKey, "meta")
-		os.Remove(dataPath)
-		os.Remove(metaPath)
+		_ = os.Remove(dataPath)
+		_ = os.Remove(metaPath)
 	}
 }
