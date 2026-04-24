@@ -192,6 +192,12 @@ func (m *Middleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 		// 执行处理器
 		next(ctx)
 
+		// 检查是否已有 Content-Encoding（由 gzip_static 或上游处理器设置）
+		// 已编码的响应不应再次压缩，避免双重编码导致数据损坏
+		if len(ctx.Response.Header.Peek("Content-Encoding")) > 0 {
+			return
+		}
+
 		// 获取响应体
 		body := ctx.Response.Body()
 		bodyLen := len(body)

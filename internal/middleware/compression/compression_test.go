@@ -475,3 +475,77 @@ func TestProcessSmallResponseBuffered(t *testing.T) {
 		t.Errorf("Expected compressed body smaller than original, got %d >= %d", len(body), len(smallResponse))
 	}
 }
+
+// TestMiddleware_SkipPrecompressed 验证预压缩响应不被再次压缩。
+// 当上游处理器（如 gzip_static）已设置 Content-Encoding 时，
+// compression 中间件应跳过压缩，避免双重编码导致数据损坏。
+func TestMiddleware_SkipPrecompressed(t *testing.T) {
+	m, _ := New(&config.CompressionConfig{
+		Type:    "gzip",
+		Level:   6,
+		MinSize: 1,
+	})
+
+	// 模拟预压缩响应（如 gzip_static 设置的）
+	originalBody := []byte("precompressed data")
+	nextHandler := func(ctx *fasthttp.RequestCtx) {
+		ctx.Response.SetBody(originalBody)
+		ctx.Response.Header.Set("Content-Encoding", "gzip")
+		ctx.Response.Header.SetContentType("application/json")
+	}
+
+	handler := m.Process(nextHandler)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Accept-Encoding", "gzip")
+
+	handler(ctx)
+
+	// 验证 Content-Encoding 保持不变
+	encoding := ctx.Response.Header.Peek("Content-Encoding")
+	if string(encoding) != "gzip" {
+		t.Errorf("Content-Encoding = %q, want %q", string(encoding), "gzip")
+	}
+
+	// 验证 body 内容未被修改（未被再次压缩）
+	body := ctx.Response.Body()
+	if !bytes.Equal(body, originalBody) {
+		t.Errorf("Body was modified, should remain unchanged")
+	}
+}
+
+// TestMiddleware_CompressWhenNoPrecompressed 验证无预压缩文件的响应仍正常压缩。
+func TestMiddleware_CompressWhenNoPrecompressed(t *testing.T) {
+	m, _ := New(&config.CompressionConfig{
+		Type:    "gzip",
+		Level:   6,
+		MinSize: 1,
+		Types:   []string{"application/json"},
+	})
+
+	// 使用足够大的数据确保压缩后更小
+	originalBody := bytes.Repeat([]byte(`{"message": "test"}`), 100) // ~1700 bytes
+	nextHandler := func(ctx *fasthttp.RequestCtx) {
+		ctx.Response.SetBody(originalBody)
+		ctx.Response.Header.SetContentType("application/json")
+	}
+
+	handler := m.Process(nextHandler)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.Set("Accept-Encoding", "gzip")
+
+	handler(ctx)
+
+	// 验证 Content-Encoding 被设置
+	encoding := ctx.Response.Header.Peek("Content-Encoding")
+	if string(encoding) != "gzip" {
+		t.Errorf("Content-Encoding = %q, want %q", string(encoding), "gzip")
+	}
+
+	// 验证 body 被压缩（大小应该变小）
+	body := ctx.Response.Body()
+	if len(body) >= len(originalBody) {
+		t.Errorf("Expected compressed body smaller than original, got %d >= %d", len(body), len(originalBody))
+	}
+}
