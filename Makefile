@@ -169,6 +169,26 @@ test-cover:
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
+# 运行 act 本地 CI 测试
+act:
+	@echo "Running CI locally with act..."
+	@if command -v act >/dev/null 2>&1; then \
+		mkdir -p /tmp/artifacts && act --artifact-server-path /tmp/artifacts; \
+	else \
+		echo "act 未安装，运行: go install github.com/nektos/act@latest"; \
+		exit 1; \
+	fi
+
+# 运行 act 单个 job
+act-unit:
+	@echo "Running unit tests job with act..."
+	@if command -v act >/dev/null 2>&1; then \
+		mkdir -p /tmp/artifacts && act -j unit --artifact-server-path /tmp/artifacts; \
+	else \
+		echo "act 未安装，运行: go install github.com/nektos/act@latest"; \
+		exit 1; \
+	fi
+
 # 运行基准测试
 bench:
 	@echo "Running benchmarks..."
@@ -344,6 +364,8 @@ help:
 	@echo "Testing:"
 	@echo "  make test           - Run all tests"
 	@echo "  make test-cover     - Run tests with coverage"
+	@echo "  make act            - Run CI locally with act"
+	@echo "  make act-unit       - Run unit tests job with act"
 	@echo "  make bench          - Run benchmarks"
 	@echo "  make bench-stat     - Run benchmarks with statistical sampling (10x)"
 	@echo "  make bench-compare  - Compare against baseline (needs benchstat)"
