@@ -28,10 +28,21 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/mimeutil"
 )
+
+// existResult 预压缩文件存在性缓存结果。
+//
+// 采用永不过期策略，与 nginx gzip_static 行为一致：
+// 预压缩文件通常在构建时生成，运行时不会频繁增删。
+// 如需更新缓存，重启服务即可。
+type existResult struct {
+	// exists 预压缩文件是否存在
+	exists bool
+}
 
 // GzipStatic 预压缩文件支持中间件。
 //
@@ -46,6 +57,8 @@ type GzipStatic struct {
 	extensions []string
 	// enabled 是否启用预压缩支持
 	enabled bool
+	// existCache 预压缩文件存在性缓存，避免重复 os.Stat 调用
+	existCache sync.Map
 }
 
 // NewGzipStatic 创建预压缩文件处理器。
@@ -116,8 +129,23 @@ func (g *GzipStatic) ServeFile(ctx *fasthttp.RequestCtx, filePath string) bool {
 		compressedPath := filePath + ext
 		fullPath := filepath.Join(g.root, compressedPath)
 
-		// 检查文件是否存在
-		if _, err := os.Stat(fullPath); err != nil {
+		// 检查文件是否存在（优先查缓存）
+		var exists bool
+		if cached, ok := g.existCache.Load(fullPath); ok {
+			if er, ok := cached.(existResult); ok {
+				exists = er.exists
+			} else {
+				// 意外类型，回退到 os.Stat
+				_, err := os.Stat(fullPath)
+				exists = err == nil
+				g.existCache.Store(fullPath, existResult{exists: exists})
+			}
+		} else {
+			_, err := os.Stat(fullPath)
+			exists = err == nil
+			g.existCache.Store(fullPath, existResult{exists: exists})
+		}
+		if !exists {
 			continue
 		}
 
