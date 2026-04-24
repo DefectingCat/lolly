@@ -409,6 +409,8 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #       cache_lock: true          # 防止缓存击穿\n")
 	buf.WriteString("    #       cache_lock_timeout: 5s   # 缓存锁超时时间（默认 5s）\n")
 	buf.WriteString("    #       stale_while_revalidate: 30s\n")
+	buf.WriteString("    #       stale_if_error: 1m       # 上游错误时使用过期缓存的时间窗口\n")
+	buf.WriteString("    #       stale_if_timeout: 30s    # 上游超时时使用过期缓存的时间窗口\n")
 	buf.WriteString("    #       background_update_disable: false  # 禁用后台更新（默认启用）\n")
 	buf.WriteString("    #       cache_ignore_headers: [] # 缓存时忽略的响应头\n")
 	buf.WriteString("    #       revalidate: false        # 启用条件请求（默认关闭）\n")

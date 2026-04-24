@@ -181,7 +181,7 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 				MaxAge:   cfg.Cache.MaxAge,
 			})
 		}
-		p.cache = cache.NewProxyCache(rules, cfg.Cache.CacheLock, cfg.Cache.StaleWhileRevalidate)
+		p.cache = cache.NewProxyCache(rules, cfg.Cache.CacheLock, cfg.Cache.StaleWhileRevalidate, cfg.Cache.StaleIfError, cfg.Cache.StaleIfTimeout)
 	}
 
 	// 初始化重定向改写器
@@ -681,6 +681,19 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			// 被动健康检查：标记目标为不健康
 			if p.healthChecker != nil {
 				p.healthChecker.MarkUnhealthy(target)
+			}
+
+			// 尝试使用 stale 缓存
+			if p.cache != nil {
+				hashKey, origKey := p.buildCacheKeyHash(ctx)
+				isTimeout := errors.Is(err, fasthttp.ErrTimeout)
+				if staleEntry, ok := p.cache.GetStale(hashKey, origKey, isTimeout); ok {
+					logging.Info().Msgf("[PROXY] 使用 stale 缓存: key=%s, isTimeout=%v", origKey, isTimeout)
+					p.writeCachedResponse(ctx, staleEntry)
+					upstreamStatus = staleEntry.Status
+					upstreamAddr = upstreamCache
+					return
+				}
 			}
 
 			// 释放缓存锁
