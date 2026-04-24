@@ -310,12 +310,14 @@ type ProxyCacheEntry struct {
 
 // ProxyCache 代理响应缓存，支持缓存锁防击穿。
 type ProxyCache struct {
-	entries   map[uint64]*ProxyCacheEntry
-	pending   map[uint64]*pendingRequest
-	rules     []ProxyCacheRule
-	staleTime time.Duration
-	mu        sync.RWMutex
-	cacheLock bool
+	entries        map[uint64]*ProxyCacheEntry
+	pending        map[uint64]*pendingRequest
+	rules          []ProxyCacheRule
+	staleTime      time.Duration // StaleWhileRevalidate 窗口
+	staleIfError   time.Duration // 错误时使用过期缓存的窗口
+	staleIfTimeout time.Duration // 超时时使用过期缓存的窗口
+	mu             sync.RWMutex
+	cacheLock      bool
 }
 
 // pendingRequest 等待中的缓存请求。
@@ -332,17 +334,21 @@ type pendingRequest struct {
 // 参数：
 //   - rules: 代理缓存规则列表，定义可缓存的路径、方法、状态码等
 //   - cacheLock: 是否启用缓存生成锁，防止多个请求同时生成缓存
-//   - staleTime: 过期缓存可复用的额外时间，设为 0 表示不启用
+//   - staleTime: StaleWhileRevalidate 窗口，过期后后台刷新期间可复用
+//   - staleIfError: 错误时使用过期缓存的窗口（上游 5xx/连接失败）
+//   - staleIfTimeout: 超时时使用过期缓存的窗口
 //
 // 返回值：
 //   - *ProxyCache: 初始化的代理缓存实例
-func NewProxyCache(rules []ProxyCacheRule, cacheLock bool, staleTime time.Duration) *ProxyCache {
+func NewProxyCache(rules []ProxyCacheRule, cacheLock bool, staleTime, staleIfError, staleIfTimeout time.Duration) *ProxyCache {
 	return &ProxyCache{
-		rules:     rules,
-		entries:   make(map[uint64]*ProxyCacheEntry),
-		cacheLock: cacheLock,
-		pending:   make(map[uint64]*pendingRequest),
-		staleTime: staleTime,
+		rules:          rules,
+		entries:        make(map[uint64]*ProxyCacheEntry),
+		cacheLock:      cacheLock,
+		pending:        make(map[uint64]*pendingRequest),
+		staleTime:      staleTime,
+		staleIfError:   staleIfError,
+		staleIfTimeout: staleIfTimeout,
 	}
 }
 
@@ -378,6 +384,61 @@ func (c *ProxyCache) Get(hashKey uint64, origKey string) (*ProxyCacheEntry, bool
 	}
 
 	return entry, true, false
+}
+
+// GetStale 在上游错误时获取可用的过期缓存。
+//
+// 与 Get 不同，GetStale 只在错误发生时使用，根据错误类型检查对应的 stale 窗口。
+// 超时错误检查 staleIfTimeout，其他错误检查 staleIfError。
+//
+// 参数：
+//   - hashKey: 缓存键的哈希值
+//   - origKey: 原始缓存键（用于双重验证）
+//   - isTimeout: 是否为超时错误
+//
+// 返回值：
+//   - *ProxyCacheEntry: 缓存条目
+//   - bool: 是否存在可用的过期缓存
+func (c *ProxyCache) GetStale(hashKey uint64, origKey string, isTimeout bool) (*ProxyCacheEntry, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	entry, ok := c.entries[hashKey]
+	if !ok {
+		return nil, false
+	}
+
+	// 双重验证：检查原始 key 是否匹配
+	if entry.OrigKey != origKey {
+		return nil, false
+	}
+
+	now := time.Now()
+	expiresAt := entry.Created.Add(entry.MaxAge)
+
+	// 未过期，直接返回
+	if !now.After(expiresAt) {
+		return entry, true
+	}
+
+	// 已过期，检查 stale 窗口
+	var staleWindow time.Duration
+	if isTimeout {
+		staleWindow = c.staleIfTimeout
+	} else {
+		staleWindow = c.staleIfError
+	}
+
+	if staleWindow <= 0 {
+		return nil, false
+	}
+
+	// 检查是否在 stale 窗口内
+	if now.Sub(expiresAt) > staleWindow {
+		return nil, false
+	}
+
+	return entry, true
 }
 
 // Set 设置代理缓存条目。

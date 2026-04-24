@@ -28,6 +28,10 @@ type TieredCacheConfig struct {
 	// L2 配置
 	L2Config *DiskCacheConfig
 
+	// Stale 配置
+	StaleIfError   time.Duration // 错误时使用过期缓存的窗口
+	StaleIfTimeout time.Duration // 超时时使用过期缓存的窗口
+
 	// 热点提升配置
 	PromoteThreshold int           // 访问次数阈值，超过后提升到 L1
 	PromoteInterval  time.Duration // 提升检查间隔
@@ -66,7 +70,7 @@ type accessInfo struct {
 // NewTieredCache 创建分层缓存实例。
 func NewTieredCache(cfg *TieredCacheConfig) (*TieredCache, error) {
 	// 创建 L1 内存缓存
-	l1 := NewProxyCache(nil, true, 0)
+	l1 := NewProxyCache(nil, true, 0, cfg.StaleIfError, cfg.StaleIfTimeout)
 
 	// 创建 L2 磁盘缓存
 	l2, err := NewDiskCache(cfg.L2Config)
@@ -121,6 +125,26 @@ func (tc *TieredCache) Get(hashKey uint64, origKey string) (*ProxyCacheEntry, bo
 	}
 
 	return entry, true, stale
+}
+
+// GetStale 在上游错误时获取可用的过期缓存。
+//
+// 先查 L1，再查 L2。
+func (tc *TieredCache) GetStale(hashKey uint64, origKey string, isTimeout bool) (*ProxyCacheEntry, bool) {
+	// 1. 先查 L1
+	if entry, ok := tc.l1.GetStale(hashKey, origKey, isTimeout); ok {
+		tc.l1Hits.Add(1)
+		return entry, true
+	}
+
+	// 2. 查 L2
+	if entry, ok := tc.l2.GetStale(hashKey, origKey, isTimeout); ok {
+		tc.l2Hits.Add(1)
+		return entry, true
+	}
+
+	tc.misses.Add(1)
+	return nil, false
 }
 
 // Set 设置缓存条目（实现 CacheBackend 接口）。

@@ -37,18 +37,26 @@ type DiskCacheConfig struct {
 
 	// Inactive 未访问淘汰时间
 	Inactive time.Duration
+
+	// StaleIfError 错误时使用过期缓存的窗口
+	StaleIfError time.Duration
+
+	// StaleIfTimeout 超时时使用过期缓存的窗口
+	StaleIfTimeout time.Duration
 }
 
 // DiskCache 磁盘缓存实现。
 type DiskCache struct {
-	basePath    string
-	levels      []int
-	maxSize     int64
-	inactive    time.Duration
-	currentSize atomic.Int64
-	entries     map[uint64]*DiskCacheMeta
-	mu          sync.RWMutex
-	stopCh      chan struct{}
+	basePath       string
+	levels         []int
+	maxSize        int64
+	inactive       time.Duration
+	staleIfError   time.Duration
+	staleIfTimeout time.Duration
+	currentSize    atomic.Int64
+	entries        map[uint64]*DiskCacheMeta
+	mu             sync.RWMutex
+	stopCh         chan struct{}
 
 	// 懒加载相关
 	loaded atomic.Bool
@@ -90,13 +98,15 @@ func NewDiskCache(cfg *DiskCacheConfig) (*DiskCache, error) {
 	}
 
 	dc := &DiskCache{
-		basePath: cfg.Path,
-		levels:   parseLevels(cfg.Levels),
-		maxSize:  cfg.MaxSize,
-		inactive: cfg.Inactive,
-		entries:  make(map[uint64]*DiskCacheMeta),
-		loadCh:   make(chan struct{}),
-		stopCh:   make(chan struct{}),
+		basePath:       cfg.Path,
+		levels:         parseLevels(cfg.Levels),
+		maxSize:        cfg.MaxSize,
+		inactive:       cfg.Inactive,
+		staleIfError:   cfg.StaleIfError,
+		staleIfTimeout: cfg.StaleIfTimeout,
+		entries:        make(map[uint64]*DiskCacheMeta),
+		loadCh:         make(chan struct{}),
+		stopCh:         make(chan struct{}),
 	}
 
 	// 启动后台加载，不阻塞服务启动
@@ -239,6 +249,92 @@ func (dc *DiskCache) Get(hashKey uint64, origKey string) (*ProxyCacheEntry, bool
 	}
 
 	return entry, true, stale
+}
+
+// GetStale 在上游错误时获取可用的过期缓存。
+//
+// 与 Get 不同，GetStale 只在错误发生时使用，根据错误类型检查对应的 stale 窗口。
+func (dc *DiskCache) GetStale(hashKey uint64, origKey string, isTimeout bool) (*ProxyCacheEntry, bool) {
+	// 等待懒加载完成
+	if !dc.loaded.Load() {
+		select {
+		case <-dc.loadCh:
+		case <-time.After(100 * time.Millisecond):
+			return nil, false
+		}
+	}
+
+	dc.mu.RLock()
+	meta, ok := dc.entries[hashKey]
+	dc.mu.RUnlock()
+
+	if !ok {
+		return nil, false
+	}
+
+	// 双重验证：检查原始 key 是否匹配
+	if meta.OrigKey != origKey {
+		return nil, false
+	}
+
+	// 读取数据文件
+	dataPath := dc.filePathFromHash(hashKey, "data")
+	data, err := os.ReadFile(dataPath)
+	if err != nil {
+		return nil, false
+	}
+
+	// 验证 CRC32
+	crc := crc32.ChecksumIEEE(data)
+	if crc != meta.CRC32 {
+		return nil, false
+	}
+
+	now := time.Now()
+	expiresAt := meta.Created.Add(meta.MaxAge)
+
+	// 未过期，直接返回
+	if !now.After(expiresAt) {
+		entry := &ProxyCacheEntry{
+			Key:     meta.OrigKey,
+			OrigKey: meta.OrigKey,
+			Data:    data,
+			Headers: meta.Headers,
+			Status:  meta.Status,
+			Created: meta.Created,
+			MaxAge:  meta.MaxAge,
+		}
+		return entry, true
+	}
+
+	// 已过期，检查 stale 窗口
+	var staleWindow time.Duration
+	if isTimeout {
+		staleWindow = dc.staleIfTimeout
+	} else {
+		staleWindow = dc.staleIfError
+	}
+
+	if staleWindow <= 0 {
+		return nil, false
+	}
+
+	// 检查是否在 stale 窗口内
+	if now.Sub(expiresAt) > staleWindow {
+		return nil, false
+	}
+
+	entry := &ProxyCacheEntry{
+		Key:     meta.OrigKey,
+		OrigKey: meta.OrigKey,
+		Data:    data,
+		Headers: meta.Headers,
+		Status:  meta.Status,
+		Created: meta.Created,
+		MaxAge:  meta.MaxAge,
+	}
+
+	return entry, true
 }
 
 // Set 设置缓存条目（实现 CacheBackend 接口）。

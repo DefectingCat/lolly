@@ -34,6 +34,21 @@ type CacheBackend interface {
 	//   - bool: 是否过期（stale），true 表示可使用过期缓存
 	Get(hashKey uint64, origKey string) (entry *ProxyCacheEntry, exists bool, stale bool)
 
+	// GetStale 在上游错误时获取可用的过期缓存。
+	//
+	// 与 Get 不同，GetStale 只在错误发生时使用，根据错误类型检查对应的 stale 窗口。
+	// 超时错误检查 staleIfTimeout 窗口，其他错误检查 staleIfError 窗口。
+	//
+	// 参数：
+	//   - hashKey: 缓存键的哈希值
+	//   - origKey: 原始缓存键（用于双重验证）
+	//   - isTimeout: 是否为超时错误
+	//
+	// 返回值：
+	//   - *ProxyCacheEntry: 缓存条目
+	//   - bool: 是否存在可用的过期缓存
+	GetStale(hashKey uint64, origKey string, isTimeout bool) (entry *ProxyCacheEntry, exists bool)
+
 	// Set 设置缓存条目。
 	//
 	// 无返回值，与现有 ProxyCache.Set 签名一致。
