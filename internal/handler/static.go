@@ -19,6 +19,7 @@
 package handler
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,8 @@ import (
 	"rua.plus/lolly/internal/mimeutil"
 	"rua.plus/lolly/internal/utils"
 )
+
+const httpTimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 
 // StaticHandler 静态文件处理器。
 //
@@ -324,7 +327,7 @@ func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string)
 			for _, idx := range h.index {
 				idxPath := filepath.Join(filePath, idx)
 				if idxInfo, err := os.Stat(idxPath); err == nil && !idxInfo.IsDir() {
-					h.serveFile(ctx, idxPath, idxInfo)
+					h.serveFile(ctx, idxPath, idxInfo, false)
 					return
 				}
 			}
@@ -339,7 +342,7 @@ func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string)
 		}
 
 		// 直接服务文件
-		h.serveFile(ctx, filePath, info)
+		h.serveFile(ctx, filePath, info, false)
 		return
 	}
 
@@ -430,7 +433,7 @@ func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetP
 		utils.SendError(ctx, utils.ErrForbidden)
 		return
 	}
-	h.serveFile(ctx, filePath, info)
+	h.serveFile(ctx, filePath, info, false)
 }
 
 // handleStandard 标准静态文件处理流程。
@@ -490,7 +493,7 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 		for _, idx := range h.index {
 			idxPath := filepath.Join(filePath, idx)
 			if idxInfo, err := os.Stat(idxPath); err == nil && !idxInfo.IsDir() {
-				h.serveFile(ctx, idxPath, idxInfo)
+				h.serveFile(ctx, idxPath, idxInfo, true)
 				return
 			}
 		}
@@ -501,6 +504,14 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 	// Phase 2: 缓存查找 + TTL 验证
 	// 在 serveFile 调用前检查缓存，减少 os.ReadFile 调用
 	// 注意: CachedAt 迁移已在 FileCache.Get() 内部完成，确保并发安全
+	etag := generateETag(info.ModTime(), info.Size())
+	if isNotModified(ctx, etag, info.ModTime()) {
+		ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
+		ctx.Response.Header.Set("ETag", etag)
+		ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+		ctx.Response.SkipBody = true
+		return
+	}
 	if h.fileCache != nil {
 		if entry, ok := h.fileCache.Get(filePath); ok {
 			// TTL 验证（cacheTTL > 0 时启用）
@@ -508,6 +519,8 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 				// TTL 内直接返回（无需验证 ModTime）
 				ctx.Response.SetBody(entry.Data)
 				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+				ctx.Response.Header.Set("ETag", etag)
+				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 				return
 			}
 
@@ -519,6 +532,8 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 				}
 				ctx.Response.SetBody(entry.Data)
 				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+				ctx.Response.Header.Set("ETag", etag)
+				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 				return
 			}
 
@@ -528,7 +543,7 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 	}
 
 	// Phase 3: 缓存未命中，调用 serveFile 处理
-	h.serveFile(ctx, filePath, info)
+	h.serveFile(ctx, filePath, info, true)
 }
 
 // serveFile 提供文件服务，支持缓存和零拷贝传输。
@@ -539,23 +554,38 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 //   - ctx: fasthttp 请求上下文
 //   - filePath: 文件绝对路径
 //   - info: 文件信息（用于判断文件大小和修改时间）
-func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, info os.FileInfo) {
+func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, info os.FileInfo, skipCacheLookup bool) {
+	// 生成 ETag 并检查条件请求（在预压缩检查之前）
+	etag := generateETag(info.ModTime(), info.Size())
+	if isNotModified(ctx, etag, info.ModTime()) {
+		ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
+		ctx.Response.Header.Set("ETag", etag)
+		ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+		ctx.Response.SkipBody = true
+		return
+	}
+
 	// 尝试发送预压缩文件
 	if h.gzipStatic != nil {
 		relPath := strings.TrimPrefix(filePath, h.root)
 		if h.gzipStatic.ServeFile(ctx, relPath) {
-			return // 预压缩文件已发送
+			// 预压缩文件已发送，补充验证头
+			ctx.Response.Header.Set("ETag", etag)
+			ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+			return
 		}
 	}
 
 	// 尝试从缓存获取
-	if h.fileCache != nil {
+	if !skipCacheLookup && h.fileCache != nil {
 		if entry, ok := h.fileCache.Get(filePath); ok {
 			// 检查文件是否被修改
 			if entry.ModTime.Equal(info.ModTime()) {
 				// 缓存命中且文件未修改
 				ctx.Response.SetBody(entry.Data)
 				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+				ctx.Response.Header.Set("ETag", etag)
+				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 				return
 			}
 			// 文件已修改，删除旧缓存
@@ -571,6 +601,8 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 	// 这样保证 HTTP 头先发送，避免顺序错乱导致的 "200 0" malformed response
 	if h.useSendfile && info.Size() >= MinSendfileSize {
 		ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+		ctx.Response.Header.Set("ETag", etag)
+		ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 
 		file, err := os.Open(filePath)
 		if err == nil {
@@ -595,6 +627,8 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 
 	ctx.Response.SetBody(data)
 	ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+	ctx.Response.Header.Set("ETag", etag)
+	ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 }
 
 // validateSymlink 验证符号链接是否安全。
@@ -655,4 +689,27 @@ func (h *StaticHandler) validateSymlink(filePath string) error {
 	}
 
 	return nil
+}
+
+// generateETag 基于 ModTime 和 Size 生成 ETag。
+func generateETag(modTime time.Time, size int64) string {
+	return fmt.Sprintf("\"%x-%x\"", modTime.Unix(), size)
+}
+
+// isNotModified 检查条件请求是否匹配（返回 true 表示应返回 304）。
+func isNotModified(ctx *fasthttp.RequestCtx, etag string, modTime time.Time) bool {
+	if match := ctx.Request.Header.Peek("If-None-Match"); len(match) > 0 {
+		// RFC 9110: If-None-Match = #entity-tag，逗号分隔
+		for tag := range strings.SplitSeq(string(match), ",") {
+			if strings.TrimSpace(tag) == etag {
+				return true
+			}
+		}
+	}
+	if since := ctx.Request.Header.Peek("If-Modified-Since"); len(since) > 0 {
+		if t, err := fasthttp.ParseHTTPDate(since); err == nil {
+			return !modTime.After(t)
+		}
+	}
+	return false
 }
