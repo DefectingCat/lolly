@@ -88,31 +88,54 @@ func NewFileCache(maxEntries, maxSize int64, inactive time.Duration) *FileCache 
 //   - *FileEntry: 缓存条目，包含文件内容和元数据
 //   - bool: 是否找到有效缓存
 func (c *FileCache) Get(path string) (*FileEntry, bool) {
-	c.mu.Lock()
+	c.mu.RLock()
 
 	entry, ok := c.entries[path]
 	if !ok {
-		c.mu.Unlock()
+		c.mu.RUnlock()
 		return nil, false
 	}
 
-	// 检查是否过期
+	// 只读判断：检查是否过期
 	if time.Since(entry.LastAccess) > c.inactive {
-		c.removeEntry(entry)
+		c.mu.RUnlock()
+		// 升级为写锁，double-check entry 仍存在且仍过期
+		c.mu.Lock()
+		if entry, ok = c.entries[path]; ok && time.Since(entry.LastAccess) > c.inactive {
+			c.removeEntry(entry)
+		}
 		c.mu.Unlock()
 		return nil, false
 	}
 
-	// 迁移处理: CachedAt 为零值时视为刚刚缓存（旧条目）
-	// 在锁内执行，确保并发安全
-	if entry.CachedAt.IsZero() {
+	// 只读判断：CachedAt 是否需要迁移
+	needMigrate := entry.CachedAt.IsZero()
+
+	c.mu.RUnlock()
+
+	if needMigrate {
+		// 升级为写锁，double-check entry 仍存在
+		c.mu.Lock()
+		entry, ok = c.entries[path]
+		if !ok {
+			c.mu.Unlock()
+			return nil, false
+		}
+		// double-check 过期（RUnlock 和 Lock 之间可能已过期）
+		if time.Since(entry.LastAccess) > c.inactive {
+			c.removeEntry(entry)
+			c.mu.Unlock()
+			return nil, false
+		}
 		entry.CachedAt = time.Now()
+		entry.LastAccess = time.Now()
+		c.lruList.MoveToFront(entry.element)
+		c.mu.Unlock()
+		return entry, true
 	}
 
-	// 更新访问时间并移到 LRU 链表头部
-	entry.LastAccess = time.Now()
-	c.lruList.MoveToFront(entry.element)
-	c.mu.Unlock()
+	// 近似 LRU: 不更新 LastAccess/LRU 位置，直接返回
+	// 精确 LRU 由 Set/Delete/evict 操作保证
 	return entry, true
 }
 
