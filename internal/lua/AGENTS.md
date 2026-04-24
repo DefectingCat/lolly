@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-04-13 | Updated: 2026-04-13 -->
+<!-- Generated: 2026-04-13 | Updated: 2026-04-24 -->
 
 # lua
 
@@ -22,6 +22,8 @@ Lua 脚本嵌入引擎，提供类似 OpenResty 的 Lua 沙箱环境，支持请
 | `cache.go` | 字节码缓存：预编译脚本缓存 |
 | `register.go` | API 注册：ngx 表初始化 |
 | `filter_writer.go` | 响应过滤器：body_filter_by_lua |
+| `boundary_test.go` | 边界条件测试：错误处理、资源限制 |
+| `scheduler_test.go` | 调度器测试：定时器、协程调度 |
 | `api_*.go` | ngx API 实现：req、resp、ctx、var、log、timer、socket、location、shared_dict |
 
 ## For AI Agents

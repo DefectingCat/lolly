@@ -11,7 +11,7 @@
 
 ### 核心功能
 
-- **静态文件服务** - 零拷贝传输（sendfile）、文件缓存、预压缩支持、try_files 配置、符号链接安全检查
+- **静态文件服务** - 零拷贝传输（sendfile）、文件缓存、预压缩支持、try_files 配置、符号链接安全检查、ETag 和 304 Not Modified 支持
 - **反向代理** - 完整的代理功能，支持请求头/响应头修改、超时控制、故障转移（next_upstream）、Location/Refresh 头改写
 - **HTTP/3 (QUIC)** - 基于 quic-go，支持 0-RTT 连接
 - **WebSocket** - 完整的 WebSocket 代理支持
@@ -24,6 +24,7 @@
 - **Lua 脚本** - 基于 gopher-lua 的可编程扩展，支持 nginx-lua 兼容 API（ngx.var/ngx.ctx/ngx.req/ngx.resp/ngx.timer/ngx.location.capture/ngx.shared.DICT）
 - **GeoIP 过滤** - 基于 MaxMind GeoIP2 的国家/地区访问控制
 - **自定义错误页面** - 支持为特定状态码配置自定义错误页面
+- **nginx 配置导入** - 支持将 nginx 配置文件转换为 lolly YAML 配置
 
 ### 负载均衡
 
@@ -116,9 +117,32 @@ make build-all
 # 生成默认配置
 ./bin/lolly --generate-config -o lolly.yaml
 
+# 导入 nginx 配置
+./bin/lolly --import /etc/nginx/nginx.conf -o lolly.yaml
+./bin/lolly -i nginx.conf  # 简写形式
+
 # 显示版本
 ./bin/lolly -v
 ```
+
+### nginx 配置导入
+
+lolly 支持将 nginx 配置文件转换为 YAML 格式：
+
+```bash
+# 导入 nginx 配置并输出到文件
+./bin/lolly --import nginx.conf -o lolly.yaml
+
+# 导入后会显示转换警告（不支持的指令）
+```
+
+支持的 nginx 指令：
+- `server` 块：listen、server_name、ssl_certificate、ssl_certificate_key
+- `location` 块：proxy_pass、root、alias、index、try_files
+- `upstream` 块：server（含 weight、max_fails、fail_timeout、backup、down）、least_conn、ip_hash、hash、random
+- 其他：gzip、gzip_types、gzip_min_length、client_max_body_size、access_log、error_log、rewrite、return（301/302）、error_page、auth_basic
+
+不支持的指令会在转换时显示警告，需要手动处理。
 
 ## 配置
 
@@ -441,6 +465,8 @@ type Balancer interface {
 - **缓存锁**（cache_lock）- 防止缓存击穿，同一缓存键只允许一个请求访问后端
 - **过期复用**（stale-while-revalidate）- 允许在后台刷新时返回过期缓存
 - **后台刷新** - 异步更新缓存，不影响请求响应时间
+- **错误回退**（stale-if-error）- 后端错误时返回过期缓存
+- **超时回退**（stale-if-timeout）- 后端超时时返回过期缓存
 
 ## Lua 脚本
 
@@ -968,8 +994,8 @@ make lint
 
 ### 项目统计
 
-- Go 文件：110
-- 测试文件：113
+- Go 文件：132
+- 测试文件：157
 - 核心模块均有完整测试和性能基准测试
 - 中文代码注释
 
