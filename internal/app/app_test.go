@@ -200,6 +200,7 @@ func TestRun(t *testing.T) {
 		name            string
 		cfgPath         string
 		outputPath      string
+		importPath      string
 		wantContains    string
 		wantErrContains string
 		wantExitCode    int
@@ -234,6 +235,25 @@ func TestRun(t *testing.T) {
 			wantExitCode:    1,
 			wantErrContains: "加载配置失败",
 		},
+		{
+			name:            "generate 与 import 互斥",
+			genConfig:       true,
+			importPath:      "/tmp/nginx.conf",
+			wantExitCode:    1,
+			wantErrContains: "mutually exclusive",
+		},
+		{
+			name:            "o 参数无 generate 或 import",
+			outputPath:      "output.yaml",
+			wantExitCode:    1,
+			wantErrContains: "-o requires",
+		},
+		{
+			name:            "导入 nginx 配置文件不存在",
+			importPath:      "/tmp/nginx.conf",
+			wantExitCode:    1,
+			wantErrContains: "解析 nginx 配置失败",
+		},
 	}
 
 	for _, tt := range tests {
@@ -241,7 +261,7 @@ func TestRun(t *testing.T) {
 			getStdout, restoreStdout := captureStdout(t)
 			getStderr, restoreStderr := captureStderr(t)
 
-			exitCode := Run(tt.cfgPath, tt.genConfig, tt.outputPath, tt.showVersion)
+			exitCode := Run(tt.cfgPath, tt.genConfig, tt.outputPath, tt.importPath, tt.showVersion)
 
 			restoreStderr()
 			restoreStdout()

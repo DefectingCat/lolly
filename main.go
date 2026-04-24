@@ -3,6 +3,7 @@
 // 该文件包含命令行参数解析和应用程序启动逻辑：
 //   - 配置文件路径指定（-c/--config）
 //   - 默认配置生成（--generate-config）
+//   - nginx 配置导入（--import/-i）
 //   - 版本信息显示（-v）
 //
 // 使用示例：
@@ -26,7 +27,9 @@ func main() {
 	cfgPathLong := flag.String("config", "", "配置文件路径（长参数）")
 	genConfig := flag.Bool("generate-config", false, "生成默认配置")
 	genConfigShort := flag.Bool("g", false, "生成默认配置（短参数）")
-	outputPath := flag.String("o", "", "输出文件路径（配合 --generate-config）")
+	outputPath := flag.String("o", "", "输出文件路径（配合 --generate-config 或 --import）")
+	importPath := flag.String("import", "", "导入 nginx 配置文件")
+	importPathShort := flag.String("i", "", "导入 nginx 配置文件（短参数）")
 	showVersion := flag.Bool("v", false, "显示版本")
 
 	flag.Parse()
@@ -37,6 +40,10 @@ func main() {
 		configPath = *cfgPathLong
 	}
 	generate := *genConfig || *genConfigShort
+	nginxImport := *importPath
+	if *importPathShort != "" {
+		nginxImport = *importPathShort
+	}
 
-	os.Exit(app.Run(configPath, generate, *outputPath, *showVersion))
+	os.Exit(app.Run(configPath, generate, *outputPath, nginxImport, *showVersion))
 }
