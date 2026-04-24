@@ -458,10 +458,11 @@ func parseSize(s string) (int, error) {
 	multiplier := 1
 	numStr := s
 
-	if unit == "k" {
+	switch unit {
+	case "k":
 		multiplier = 1024
 		numStr = s[:len(s)-1]
-	} else if unit == "m" {
+	case "m":
 		multiplier = 1024 * 1024
 		numStr = s[:len(s)-1]
 	}

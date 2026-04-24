@@ -27,7 +27,7 @@ func TestProxyCacheCreation(t *testing.T) {
 		},
 	}
 
-	pc := cache.NewProxyCache(rules, true, 30*time.Second)
+	pc := cache.NewProxyCache(rules, true, 30*time.Second, 0, 0)
 	require.NotNil(t, pc)
 }
 
@@ -35,7 +35,7 @@ func TestProxyCacheCreation(t *testing.T) {
 func TestProxyCacheDisabled(t *testing.T) {
 	rules := []cache.ProxyCacheRule{}
 
-	pc := cache.NewProxyCache(rules, false, 0)
+	pc := cache.NewProxyCache(rules, false, 0, 0, 0)
 	require.NotNil(t, pc)
 }
 
@@ -50,7 +50,7 @@ func TestProxyCacheSetAndGet(t *testing.T) {
 		},
 	}
 
-	pc := cache.NewProxyCache(rules, true, 30*time.Second)
+	pc := cache.NewProxyCache(rules, true, 30*time.Second, 0, 0)
 	require.NotNil(t, pc)
 
 	origKey := "GET:/test"
@@ -85,7 +85,7 @@ func TestProxyCacheMiss(t *testing.T) {
 		},
 	}
 
-	pc := cache.NewProxyCache(rules, true, 30*time.Second)
+	pc := cache.NewProxyCache(rules, true, 30*time.Second, 0, 0)
 	require.NotNil(t, pc)
 
 	origKey := "GET:/nonexistent"
@@ -109,7 +109,7 @@ func TestProxyCacheExpiration(t *testing.T) {
 		},
 	}
 
-	pc := cache.NewProxyCache(rules, true, 50*time.Millisecond)
+	pc := cache.NewProxyCache(rules, true, 50*time.Millisecond, 0, 0)
 	require.NotNil(t, pc)
 
 	origKey := "GET:/expiring"
@@ -146,7 +146,7 @@ func TestProxyCacheStale(t *testing.T) {
 	}
 
 	// staleTime = 200ms，允许过期后 200ms 内复用
-	pc := cache.NewProxyCache(rules, true, 200*time.Millisecond)
+	pc := cache.NewProxyCache(rules, true, 200*time.Millisecond, 0, 0)
 	require.NotNil(t, pc)
 
 	origKey := "GET:/stale"
@@ -178,7 +178,7 @@ func TestProxyCacheHashKeyCollision(t *testing.T) {
 		},
 	}
 
-	pc := cache.NewProxyCache(rules, true, 30*time.Second)
+	pc := cache.NewProxyCache(rules, true, 30*time.Second, 0, 0)
 	require.NotNil(t, pc)
 
 	// 两个不同的 key
@@ -213,7 +213,7 @@ func TestProxyCacheConcurrent(t *testing.T) {
 		},
 	}
 
-	pc := cache.NewProxyCache(rules, true, 30*time.Second)
+	pc := cache.NewProxyCache(rules, true, 30*time.Second, 0, 0)
 	require.NotNil(t, pc)
 
 	// 并发写入
@@ -251,7 +251,7 @@ func TestProxyCacheUsesCount(t *testing.T) {
 		},
 	}
 
-	pc := cache.NewProxyCache(rules, true, 30*time.Second)
+	pc := cache.NewProxyCache(rules, true, 30*time.Second, 0, 0)
 	require.NotNil(t, pc)
 
 	origKey := "GET:/counted"
