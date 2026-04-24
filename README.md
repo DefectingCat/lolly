@@ -35,6 +35,7 @@
 | Least Connections | 最少连接，选择活跃连接最少的目标 |
 | IP Hash | IP 哈希，同一客户端始终路由到同一目标 |
 | Consistent Hash | 一致性哈希，支持虚拟节点（默认 150），最小化节点变更影响 |
+| Random | Power of Two Choices，随机选择两个后比较，简单高效 |
 
 ### 故障转移
 
@@ -83,7 +84,7 @@ proxy:
 
 ```bash
 # 克隆仓库
-git clone https://github.com/xfy/lolly.git
+git clone https://github.com/DefectingCat/lolly.git
 cd lolly
 
 # 本地构建
@@ -149,129 +150,283 @@ lolly 支持将 nginx 配置文件转换为 YAML 格式：
 配置文件使用 YAML 格式。以下是完整配置示例：
 
 ```yaml
-server:
-  listen: ":8080"
-  name: "example.com"
-  read_timeout: 30s
-  write_timeout: 30s
-  idle_timeout: 120s
-  max_conns_per_ip: 100
-  max_requests_per_conn: 1000
-  client_max_body_size: "10MB"
+mode: "auto"  # single/vhost/multi_server/auto
 
-  static:
-    - path: "/"
-      root: "/var/www/html"
-      index: ["index.html", "index.htm"]
-      try_files: ["$uri", "$uri/", "/index.html"]
-      try_files_pass: false
-    - path: "/assets/"
-      root: "/var/www/assets"
+variables:
+  set:
+    app_name: "lolly"
+    version: "1.0.0"
 
-  proxy:
-    - path: "/api"
-      targets:
-        - url: "http://backend1:8080"
-          weight: 2
-        - url: "http://backend2:8080"
-          weight: 1
-      load_balance: "weighted_round_robin"
-      health_check:
-        interval: 10s
-        path: "/health"
-        timeout: 5s
-      next_upstream:
-        tries: 3
-        http_codes: [502, 503, 504]
-      timeout:
-        connect: 5s
-        read: 30s
-        write: 30s
-      headers:
-        set_request:
-          X-Forwarded-For: "$remote_addr"
-          X-Real-IP: "$remote_addr"
-        set_response:
-          X-Proxy-By: "lolly"
-      cache:
+servers:
+  - listen: ":8080"
+    name: "example.com"
+    default: true  # vhost 默认主机
+    server_names: ["example.com", "*.example.com"]
+    read_timeout: 30s
+    write_timeout: 30s
+    idle_timeout: 120s
+    max_conns_per_ip: 100
+    max_requests_per_conn: 1000
+    concurrency: 262144  # 最大并发连接数
+    read_buffer_size: 16384  # 16KB
+    write_buffer_size: 16384
+    client_max_body_size: "10MB"
+    server_tokens: false  # 隐藏版本号
+
+    static:
+      - path: "/"
+        root: "/var/www/html"
+        index: ["index.html", "index.htm"]
+        try_files: ["$uri", "$uri/", "/index.html"]
+        try_files_pass: false
+        symlink_check: true
+        location_type: "prefix"
+      - path: "/assets/"
+        root: "/var/www/assets"
+        internal: true  # 仅允许内部重定向访问
+
+    proxy:
+      - path: "/api"
+        targets:
+          - url: "http://backend1:8080"
+            weight: 2
+            max_conns: 100
+            max_fails: 3
+            fail_timeout: 30s
+            backup: false
+            down: false
+            proxy_uri: "/v1"  # 替换请求路径
+          - url: "http://backend2:8080"
+            weight: 1
+        load_balance: "weighted_round_robin"
+        virtual_nodes: 150  # 一致性哈希虚拟节点数
+        hash_key: "$uri"  # 一致性哈希键
+        location_type: "prefix_priority"
+        internal: false
+        health_check:
+          interval: 10s
+          path: "/health"
+          timeout: 5s
+          slow_start: 30s  # 慢启动时间
+          match:
+            status: ["200-299"]
+            body: "ok"
+            headers:
+              Content-Type: "application/json"
+        next_upstream:
+          tries: 3
+          http_codes: [502, 503, 504]
+        timeout:
+          connect: 5s
+          read: 30s
+          write: 30s
+        headers:
+          set_request:
+            X-Forwarded-For: "$remote_addr"
+            X-Real-IP: "$remote_addr"
+          set_response:
+            X-Proxy-By: "lolly"
+          remove: ["X-Internal-Header"]
+          hide_response: ["X-Powered-By"]
+          pass_response: ["Content-Type", "Content-Length"]
+          cookie_domain: ".example.com"
+          cookie_path: "/"
+        cache:
+          enabled: true
+          max_age: 5m
+          stale_while_revalidate: 1m
+          stale_if_error: 10m
+          stale_if_timeout: 5m
+          cache_lock: true
+          cache_lock_timeout: 5s
+          methods: ["GET", "HEAD"]
+          min_uses: 1  # 缓存阈值
+          background_update_disable: false
+          cache_ignore_headers: ["Set-Cookie"]
+          revalidate: true  # 条件请求
+        cache_valid:
+          ok: 10m  # 200-299
+          redirect: 1h  # 301/302
+          not_found: 1m
+          client_error: 0
+          server_error: 0
+        buffering:
+          mode: "default"  # default/on/off
+          buffer_size: 16384
+          buffers: "8 16k"  # 8 个 16KB 缓冲区
+        proxy_ssl:
+          enabled: true
+          server_name: "backend.internal"
+          trusted_ca: "/etc/ssl/ca/upstream-ca.crt"
+          client_cert: "/etc/ssl/client.crt"
+          client_key: "/etc/ssl/client.key"
+          min_version: "TLSv1.2"
+          insecure_skip_verify: false
+        redirect_rewrite:
+          mode: "default"  # default/off/custom
+          rules:
+            - pattern: "http://backend:8000/"
+              replacement: "$scheme://$host:$server_port/"
+        client_max_body_size: "50MB"
+        balancer_by_lua:
+          enabled: false
+          script: "/etc/lolly/scripts/balancer.lua"
+          timeout: 100ms
+          fallback: "round_robin"
+
+    ssl:
+      cert: "/etc/ssl/certs/server.crt"
+      key: "/etc/ssl/private/server.key"
+      cert_chain: "/etc/ssl/certs/chain.crt"
+      protocols: ["TLSv1.2", "TLSv1.3"]
+      ciphers: ["TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"]
+      ocsp_stapling: true
+      session_tickets:
         enabled: true
-        max_age: 5m
-        cache_lock: true
-        stale_while_revalidate: 1m
-      client_max_body_size: "50MB"
+        key_file: "/var/lib/lolly/session_tickets.key"
+        rotate_interval: 1h
+        retain_keys: 3
+      client_verify:
+        enabled: false
+        mode: "require"  # none/request/require/optional_no_ca
+        client_ca: "/etc/ssl/ca/client-ca.crt"
+        verify_depth: 1
+        crl: "/etc/ssl/ca/client-ca.crl"
+      http2:
+        enabled: true
+        max_concurrent_streams: 128
+        max_header_list_size: 16384
+        idle_timeout: 90s
+        push_enabled: false
+        h2c_enabled: false
+        graceful_shutdown_timeout: 30s
+      hsts:
+        max_age: 31536000
+        include_sub_domains: true
+        preload: false
 
-  ssl:
-    cert: "/etc/ssl/certs/server.crt"
-    key: "/etc/ssl/private/server.key"
-    cert_chain: "/etc/ssl/certs/chain.crt"
-    protocols: ["TLSv1.2", "TLSv1.3"]
-    ocsp_stapling: true
-    hsts:
-      max_age: 31536000
-      include_sub_domains: true
-      preload: false
+    security:
+      access:
+        allow: ["192.168.1.0/24", "10.0.0.0/8"]
+        deny: []
+        default: "deny"
+        trusted_proxies: ["172.16.0.0/16"]
+        geoip:
+          enabled: false
+          database: "/var/lib/GeoIP/GeoIP2-Country.mmdb"
+          allow_countries: ["CN", "US"]
+          deny_countries: []
+          default: "deny"
+          cache_size: 10000
+          cache_ttl: 1h
+          private_ip_behavior: "allow"
+      rate_limit:
+        request_rate: 100
+        burst: 200
+        conn_limit: 50
+        algorithm: "token_bucket"  # token_bucket/sliding_window
+        key: "ip"
+        sliding_window_mode: "approximate"  # exact/approximate
+        sliding_window: 60
+      auth:
+        type: "basic"
+        require_tls: true
+        algorithm: "bcrypt"  # bcrypt/argon2id
+        realm: "Secure Area"
+        min_password_length: 8
+        users:
+          - name: "admin"
+            password: "$2y$10$N9qo8uLOickgx2ZMRZoMy..."
+      auth_request:
+        enabled: false
+        uri: "/auth"
+        method: "GET"
+        auth_timeout: 5s
+        forward_headers: ["Cookie", "Authorization"]
+        headers:
+          X-Original-Uri: "$request_uri"
+          X-Original-Host: "$host"
+      headers:
+        x_frame_options: "DENY"
+        x_content_type_options: "nosniff"
+        content_security_policy: "default-src 'self'"
+        referrer_policy: "strict-origin-when-cross-origin"
+        permissions_policy: "geolocation=(), microphone=()"
+      error_page:
+        pages:
+          404: "/var/www/errors/404.html"
+          500: "/var/www/errors/500.html"
+        default: "/var/www/errors/error.html"
+        response_code: 0  # 覆盖响应状态码
 
-  security:
-    access:
-      allow: ["192.168.1.0/24", "10.0.0.0/8"]
-      deny: []
-      default: "deny"
-      trusted_proxies: ["172.16.0.0/16"]
-    geoip:
-      database: "/var/lib/GeoIP/GeoIP2-Country.mmdb"
-      allow_countries: ["CN", "US"]
-      deny_countries: []
-      default: "deny"
-    rate_limit:
-      request_rate: 100
-      burst: 200
-      conn_limit: 50
-      algorithm: "token_bucket"
-    auth:
-      type: "basic"
-      require_tls: true
-      algorithm: "bcrypt"
-      realm: "Secure Area"
-      users:
-        - name: "admin"
-          password: "$2y$10$N9qo8uLOickgx2ZMRZoMy..."
-    headers:
-      x_frame_options: "DENY"
-      x_content_type_options: "nosniff"
-      content_security_policy: "default-src 'self'"
-      referrer_policy: "strict-origin-when-cross-origin"
-    error_page:
-      pages:
-        404: "/var/www/errors/404.html"
-        500: "/var/www/errors/500.html"
-      default: "/var/www/errors/error.html"
+    rewrite:
+      - pattern: "^/old/(.*)$"
+        replacement: "/new/$1"
+        flag: "permanent"
+      - pattern: "^/api/v1/(.*)$"
+        replacement: "/v1/$1"
+        flag: "last"
 
-  rewrite:
-    - pattern: "^/old/(.*)$"
-      replacement: "/new/$1"
-      flag: "permanent"
+    compression:
+      type: "gzip"  # gzip/brotli/both
+      level: 6
+      min_size: 1024
+      types: ["text/html", "text/css", "application/javascript", "application/json"]
+      gzip_static: true
+      gzip_static_extensions: [".gz", ".br"]
 
-  compression:
-    type: "gzip"
-    level: 6
-    min_size: 1024
-    types: ["text/html", "text/css", "application/javascript", "application/json"]
-    gzip_static: true
-    gzip_static_extensions: [".gz", ".br"]
-
-  lua:
-    enabled: true
-    package_path: "/etc/lolly/lua/?.lua"
-    code_cache:
+    lua:
       enabled: true
-      ttl: 60s
-    max_concurrent: 1000
-    timeout: 30s
-    phases:
-      rewrite: "/etc/lolly/lua/rewrite.lua"
-      access: "/etc/lolly/lua/access.lua"
-      content: "/etc/lolly/lua/content.lua"
-      log: "/etc/lolly/lua/log.lua"
+      scripts:
+        - path: "/etc/lolly/lua/rewrite.lua"
+          phase: "rewrite"
+          timeout: 30s
+          enabled: true
+        - path: "/etc/lolly/lua/access.lua"
+          phase: "access"
+          timeout: 30s
+        - path: "/etc/lolly/lua/content.lua"
+          phase: "content"
+          timeout: 30s
+        - path: "/etc/lolly/lua/log.lua"
+          phase: "log"
+          timeout: 30s
+      global_settings:
+        max_concurrent_coroutines: 1000
+        coroutine_timeout: 30s
+        code_cache_size: 1000
+        max_execution_time: 30s
+        coroutine_stack_size: 64
+        coroutine_pool_warmup: 4
+        enable_file_watch: true
+        minimize_stack_memory: true
+
+    limit_rate:
+      rate: 1048576  # 1MB/s
+      burst: 524288  # 512KB 突发
+      large_file_threshold: 10485760  # 10MB
+      large_file_strategy: "skip"  # skip/coarse
+
+    types:
+      default_type: "application/octet-stream"
+      map:
+        ".html": "text/html"
+        ".css": "text/css"
+        ".js": "application/javascript"
+        ".json": "application/json"
+
+    unix_socket:
+      mode: 0666
+      user: "www-data"
+      group: "www-data"
+
+    cache_api:
+      enabled: false
+      path: "/_cache/purge"
+      allow: ["127.0.0.1", "10.0.0.0/8"]
+      auth:
+        type: "token"
+        token: "${CACHE_API_TOKEN}"
 
 http3:
   enabled: true
@@ -290,15 +445,54 @@ stream:
         - addr: "mysql2:3306"
           weight: 1
       load_balance: "round_robin"
+    ssl:
+      enabled: false
+      cert: "/etc/ssl/stream.crt"
+      key: "/etc/ssl/stream.key"
+      client_ca: ""
+      protocols: ["TLSv1.2", "TLSv1.3"]
+      ciphers: []
+      verify_depth: 1
+    proxy_ssl:
+      enabled: false
+      trusted_ca: "/etc/ssl/ca.crt"
+      server_name: "mysql.internal"
+      cert: ""
+      key: ""
+      protocols: ["TLSv1.2", "TLSv1.3"]
+      verify: true
+      session_reuse: true
+
+resolver:
+  enabled: false
+  addresses:
+    - "8.8.8.8:53"
+    - "8.8.4.4:53"
+  valid: 30s  # 缓存 TTL
+  timeout: 5s
+  ipv4: true
+  ipv6: false
+  cache_size: 1024
+
+cache_path:
+  path: "/var/cache/lolly"
+  levels: "1:2"
+  max_size: 1073741824  # 1GB
+  inactive: 60m
+  purger: true
+  purger_interval: 1m
+  l1_max_entries: 10000
+  l1_max_size: 67108864  # 64MB
+  promote_threshold: 3
 
 logging:
-  format: "json"
+  format: "json"  # text/json
   access:
     path: "/var/log/lolly/access.log"
     format: "combined"
   error:
     path: "/var/log/lolly/error.log"
-    level: "info"
+    level: "info"  # debug/info/warn/error
 
 performance:
   goroutine_pool:
@@ -316,12 +510,21 @@ performance:
 
 monitoring:
   status:
+    enabled: true
     path: "/status"
+    format: "json"  # json/text/html/prometheus
     allow: ["127.0.0.1", "10.0.0.0/8"]
   pprof:
     enabled: false
     path: "/debug/pprof"
     allow: ["127.0.0.1"]
+
+shutdown:
+  graceful_timeout: 30s  # SIGQUIT 优雅停止
+  fast_timeout: 5s  # SIGINT/SIGTERM 快速停止
+
+include:
+  - path: "conf.d/*.yaml"  # glob 模式展开
 ```
 
 完整配置说明请参考 `config.example.yaml` 和源码 `internal/config/config.go`。
@@ -367,9 +570,11 @@ monitoring:
 ```
 internal/
 ├── app/                    # 应用入口、信号处理、生命周期
-│   └── app.go              # 主程序逻辑
+│   ├── app.go              # 主程序逻辑
+│   └── import.go           # nginx 配置导入
 ├── config/                 # 配置加载、验证、默认值
 │   ├── config.go           # 配置结构定义
+│   ├── loader.go           # 配置文件加载
 │   ├── defaults.go         # 默认配置
 │   └── validate.go         # 配置验证
 ├── server/                 # HTTP 服务器核心
@@ -378,52 +583,114 @@ internal/
 │   ├── pool.go             # Goroutine 池
 │   ├── status.go           # 状态端点
 │   ├── pprof.go            # pprof 端点
+│   ├── pprof_impl.go       # pprof 实现
+│   ├── purge.go            # 缓存清除端点
+│   ├── internal.go         # 内部端点处理
 │   └── upgrade.go          # 热升级管理
 ├── handler/                # 请求处理器
 │   ├── router.go           # 路由器
 │   ├── static.go           # 静态文件处理
-│   ├── sendfile.go         # 零拷贝传输
+│   ├── sendfile.go         # 零拷贝传输（通用）
+│   ├── sendfile_linux.go   # Linux sendfile 实现
 │   └── errorpage.go        # 错误页面管理
 ├── proxy/                  # 反向代理
 │   ├── proxy.go            # 代理核心逻辑
 │   ├── websocket.go        # WebSocket 代理
-│   └── health.go           # 健康检查
+│   ├── health.go           # 健康检查
+│   ├── headers.go          # 头部处理工具
+│   ├── redirect_rewrite.go # Location 头改写
+│   ├── proxy_ssl.go        # SSL 代理
+│   └── tempfile.go         # 临时文件管理
 ├── loadbalance/            # 负载均衡算法
-│   ├── balancer.go         # 算法实现
-│   └── consistent_hash.go  # 一致性哈希
+│   ├── balancer.go         # 算法接口
+│   ├── algorithms.go       # 算法注册（round-robin 等）
+│   ├── consistent_hash.go  # 一致性哈希
+│   ├── random.go           # Power of Two Choices
+│   └── slow_start.go       # 慢启动算法
+├── matcher/                # Location 匹配器
+│   ├── matcher.go          # 匹配器接口
+│   ├── exact.go            # 精确匹配
+│   ├── prefix.go           # 前缀匹配
+│   ├── regex.go            # 正则匹配
+│   └── radix.go            # 基数树匹配
 ├── middleware/             # 中间件链
 │   ├── middleware.go       # 中间件接口
 │   ├── compression/        # Gzip/Brotli 压缩
-│   ├── security/           # 访问控制、限流、认证、安全头部
+│   │   ├── compression.go  # 压缩实现
+│   │   └── gzip_static.go  # 预压缩文件
+│   ├── security/           # 安全中间件
+│   │   ├── access.go       # 访问控制
+│   │   ├── ratelimit.go    # 限流算法
+│   │   ├── sliding_window.go # 滑动窗口
+│   │   ├── auth.go         # Basic Auth
+│   │   ├── auth_request.go # 子请求认证
+│   │   ├── geoip.go        # GeoIP 过滤
+│   │   └ headers.go        # 安全头部
 │   ├── rewrite/            # URL 重写
+│   │   └ rewrite.go        # 重写实现
 │   ├── accesslog/          # 访问日志
+│   │   └ accesslog.go      # 日志实现
 │   ├── bodylimit/          # 请求体大小限制
+│   │   └ bodylimit.go      # 限制实现
+│   ├── limitrate/          # 响应速率限制
+│   │   └ limitrate.go      # 限速实现
 │   └── errorintercept/     # 错误页面拦截
+│       └ errorintercept.go # 拦截实现
 ├── lua/                    # Lua 脚本引擎
 │   ├── engine.go           # gopher-lua 引擎
 │   ├── context.go          # Lua 请求上下文
-│   └── api_*.go            # nginx-lua 兼容 API
+│   ├── register.go         # API 注册
+│   ├── socket_manager.go   # Socket 管理
+│   ├── filter_writer.go    # header/body_filter
+│   └── api_*.go            # nginx-lua 兼容 API（20+ 文件）
+├── http2/                  # HTTP/2 服务器
+│   ├── server.go           # HTTP/2 服务器实现
+│   └── adapter.go          # HTTP/2 适配器
 ├── http3/                  # HTTP/3 服务器
 │   ├── server.go           # QUIC 服务器
 │   └── adapter.go          # HTTP/3 适配器
 ├── stream/                 # TCP/UDP Stream 代理
-│   └── stream.go           # 四层代理实现
+│   ├── stream.go           # 四层代理实现
+│   └ ssl.go                # Stream SSL 支持
 ├── ssl/                    # TLS 配置
 │   ├── ssl.go              # TLS 管理器
 │   ├── ocsp.go             # OCSP Stapling
-│   └── session_tickets.go  # Session Tickets 密钥轮换
+│   ├── session_tickets.go  # Session Tickets 密钥轮换
+│   └ client_verify.go      # 客户端证书验证
 ├── cache/                  # 缓存系统
+│   ├── backend.go          # 缓存后端抽象
 │   ├── file_cache.go       # 文件缓存
-│   └── purge.go            # 代理缓存
+│   ├── disk_cache.go       # 磁盘缓存
+│   ├── tiered_cache.go     # L1/L2 分层缓存
+│   └ purge.go              # 缓存清除
 ├── resolver/               # DNS 解析器
-│   └── resolver.go         # TTL 缓存、异步解析
+│   ├── resolver.go         # DNS 解析逻辑
+│   ├── cache.go            # DNS 结果缓存
+│   └ stats.go              # DNS 解析统计
 ├── variable/               # 变量系统
-│   └── variable.go         # 日志/头部变量
+│   ├── variable.go         # 变量接口
+│   ├── builtin.go          # 内置变量
+│   ├── pool.go             # 变量池
+│   └ ssl.go                # SSL 相关变量
+├── converter/              # 配置转换器
+│   └ nginx/                # nginx 配置导入
+│       ├── parser.go       # nginx 语法解析
+│       └ converter.go      # YAML 转换
 ├── logging/                # 日志系统
-│   └── logging.go          # 结构化日志（zerolog）
+│   └ logging.go            # 结构化日志（zerolog）
 ├── netutil/                # 网络工具
 │   ├── ip.go               # IP 解析
-│   └── url.go              # URL 处理
+│   ├── host.go             # 主机名处理
+│   └ url.go                # URL 处理
+├── mimeutil/               # MIME 类型检测
+│   └ detect.go             # MIME 检测实现
+├── sslutil/                # SSL 工具
+│   └ certpool.go           # 证书池管理
+├── utils/                  # 通用工具
+│   ├── httperror.go        # HTTP 错误处理
+│   └ internal.go           # 内部工具
+├── version/                # 版本信息
+│   └ version.go            # 版本定义
 └── benchmark/              # 基准测试工具
     └── tools/              # 测试辅助工具
 ```
@@ -495,28 +762,103 @@ ngx.log(ngx.ERR, "error message")
 ngx.log(ngx.WARN, "warning message")
 ngx.log(ngx.INFO, "info message")
 
--- 请求操作
+-- HTTP 状态码常量
+ngx.HTTP_OK = 200
+ngx.HTTP_NOT_FOUND = 404
+ngx.HTTP_INTERNAL_SERVER_ERROR = 500
+-- 更多: HTTP_MOVED_PERMANENTLY, HTTP_BAD_REQUEST, HTTP_FORBIDDEN 等
+
+-- 特殊常量
+ngx.OK, ngx.ERROR, ngx.AGAIN, ngx.DONE, ngx.DECLINED
+
+-- 内置变量（ngx.var）
 local uri = ngx.var.uri
-local args = ngx.req.get_uri_args()
-ngx.req.set_uri("/new_path")
+local method = ngx.var.request_method
+local remote_addr = ngx.var.remote_addr
+local host = ngx.var.host
+local request_uri = ngx.var.request_uri
+local scheme = ngx.var.scheme
+local server_port = ngx.var.server_port
+-- 任意请求头: ngx.var.http_xxx（如 ngx.var.http_user_agent）
+-- 任意查询参数: ngx.var.arg_xxx（如 ngx.var.arg_token）
+
+-- 请求操作（ngx.req）
+ngx.req.get_method()          -- 获取 HTTP 方法
+ngx.req.get_uri()             -- 获取 URI 路径
+ngx.req.set_uri("/new_path")  -- 设置 URI
+ngx.req.set_uri_args("a=1&b=2") -- 设置查询参数
+ngx.req.get_uri_args()        -- 获取查询参数表
+ngx.req.get_headers(max?)     -- 获取请求头表
 ngx.req.set_header("X-Custom", "value")
+ngx.req.clear_header("X-Custom")
+ngx.req.get_body_data()       -- 获取请求体
+ngx.req.read_body()           -- 确保请求体已读取
 
--- 响应操作
-ngx.header["X-Response"] = "value"
-ngx.say("Hello World")
-ngx.exit(200)
+-- 响应操作（ngx.resp）
+ngx.resp.get_status()         -- 获取响应状态码
+ngx.resp.set_status(200)      -- 设置响应状态码
+ngx.resp.get_headers(max?)    -- 获取响应头表
+ngx.resp.set_header("X-Response", "value")
+ngx.resp.clear_header("X-Response")
 
--- 共享字典
+-- 快捷响应
+ngx.say("Hello World")        -- 输出内容并换行
+ngx.print("Hello World")      -- 输出内容不换行
+ngx.flush(wait?)              -- 刷新响应缓冲区
+ngx.redirect("/new", 302)     -- 重定向
+ngx.exit(200)                 -- 结束请求处理
+
+-- 请求上下文（ngx.ctx，每请求独立的 table）
+ngx.ctx.user_id = 123
+local id = ngx.ctx.user_id
+
+-- 共享字典（ngx.shared.DICT）
 local dict = ngx.shared.DICT
-dict:set("key", "value", 3600)
-local val = dict:get("key")
+dict:set("key", "value", 3600)   -- 设置（含过期时间）
+dict:add("key", "value", 3600)   -- 仅键不存在时添加
+dict:replace("key", "value")     -- 仅键存在时替换
+local val = dict:get("key")      -- 获取值
+dict:incr("counter", 1)          -- 数值自增
+dict:delete("key")               -- 删除键
+dict:flush_all()                 -- 清空所有条目
+dict:flush_expired(max?)         -- 清除过期条目
+dict:get_keys(max?)              -- 获取所有键
+dict:size()                      -- 获取条目数
+dict:free_space()                -- 获取剩余容量
+-- 元表语法: dict["key"] = value / val = dict["key"]
 
--- Socket（受限）
+-- Socket（ngx.socket.tcp，受限）
 local sock = ngx.socket.tcp()
 sock:connect("127.0.0.1", 8080)
+sock:settimeout(5000)            -- 设置超时（毫秒）
+sock:settimeouts(1000, 2000, 3000) -- 分别设置连接/发送/读取超时
 sock:send("GET / HTTP/1.0\r\n\r\n")
-local response = sock:receive("*a")
+local response = sock:receive("*a") -- 读取全部
+local line = sock:receive("*l")     -- 读取一行
+local reader = sock:receiveuntil("--boundary") -- 按模式读取
 sock:close()
+
+-- 定时器（ngx.timer）
+local timer_id = ngx.timer.at(5, function()
+    ngx.log(ngx.INFO, "timer fired")
+end)
+ngx.timer.running_count() -- 获取运行中的定时器数量
+-- handle:cancel()        -- 取消定时器（通过返回的 handle）
+
+-- 子请求（ngx.location.capture）
+local res = ngx.location.capture("/internal/auth", {
+    method = ngx.HTTP_GET,
+    body = "request body",
+    args = "a=1&b=2"
+})
+-- res.status, res.body, res.headers
+
+-- 动态负载均衡（ngx.balancer）
+ngx.balancer.set_current_peer("backend:8080") -- 设置后端地址
+ngx.balancer.set_more_tries(3)                -- 设置重试次数
+local fail_type = ngx.balancer.get_last_failure() -- 获取上次失败类型
+local targets = ngx.balancer.get_targets()    -- 获取所有可用目标
+local client_ip = ngx.balancer.get_client_ip() -- 获取客户端 IP
 ```
 
 ### 示例脚本
@@ -668,44 +1010,57 @@ sudo systemctl status lolly   # 查看状态
 
 ```json
 {
-  "connections": {
-    "active": 150,
-    "reading": 2,
-    "writing": 10,
-    "idle": 138
+  "version": "0.2.1",
+  "uptime": "2h30m15s",
+  "connections": 150,
+  "requests": 125000,
+  "bytes_sent": 5368709120,
+  "bytes_received": 1073741824,
+  "pool": {
+    "workers": 256,
+    "IdleWorkers": 200,
+    "MaxWorkers": 10000,
+    "MinWorkers": 100,
+    "QueueLen": 0,
+    "QueueCap": 1000
   },
-  "requests": {
-    "total": 125000,
-    "current": 150,
-    "per_second": 1250
-  },
-  "traffic": {
-    "in_bytes": 1073741824,
-    "out_bytes": 5368709120
-  },
-  "upstreams": {
-    "backend1": {
-      "active": 50,
-      "healthy": true,
-      "total_requests": 80000
-    },
-    "backend2": {
-      "active": 30,
-      "healthy": true,
-      "total_requests": 45000
+  "upstreams": [
+    {
+      "name": "backend1",
+      "targets": [
+        {"url": "http://10.0.0.1:8080", "healthy": true, "latency_ms": 5},
+        {"url": "http://10.0.0.2:8080", "healthy": true, "latency_ms": 8}
+      ],
+      "healthy_count": 2,
+      "unhealthy_count": 0,
+      "latency_p50_ms": 5.2,
+      "latency_p95_ms": 12.5,
+      "latency_p99_ms": 25.0
     }
+  ],
+  "rate_limits": [
+    {
+      "zone_name": "api_limit",
+      "requests": 50000,
+      "limit": 100,
+      "rejected": 150
+    }
+  ],
+  "ssl": {
+    "handshakes": 2500,
+    "session_reused": 800,
+    "reuse_rate_percent": 32.0
   },
   "cache": {
     "file_cache": {
       "entries": 5000,
-      "size_bytes": 134217728,
-      "hits": 85000,
-      "misses": 15000
+      "max_entries": 50000,
+      "size": 134217728,
+      "max_size": 268435456
     },
     "proxy_cache": {
       "entries": 2000,
-      "hits": 70000,
-      "misses": 10000
+      "pending": 5
     }
   }
 }
@@ -961,7 +1316,7 @@ curl http://localhost:8080/status | jq '.cache'
 
 ### 环境要求
 
-- Go 1.26+
+- Go 1.24+
 - make
 
 ### 命令
@@ -994,7 +1349,7 @@ make lint
 
 ### 项目统计
 
-- Go 文件：132
+- Go 文件：290
 - 测试文件：157
 - 核心模块均有完整测试和性能基准测试
 - 中文代码注释
@@ -1004,11 +1359,20 @@ make lint
 | 库 | 版本 | 用途 |
 |------|---------|------|
 | [fasthttp](https://github.com/valyala/fasthttp) | v1.70.0 | HTTP 服务器核心 |
+| [fasthttp/router](https://github.com/fasthttp/router) | v1.5.4 | HTTP 路由器 |
 | [quic-go](https://github.com/quic-go/quic-go) | v0.59.0 | QUIC/HTTP/3 实现 |
 | [zerolog](https://github.com/rs/zerolog) | v1.35.0 | 零分配 JSON 日志 |
 | [gopher-lua](https://github.com/yuin/gopher-lua) | v1.1.2 | Lua 脚本引擎 |
 | [klauspost/compress](https://github.com/klauspost/compress) | v1.18.5 | Gzip/Brotli 压缩 |
+| [brotli](https://github.com/andybalholm/brotli) | v1.2.1 | Brotli 压缩编码 |
 | [geoip2-golang](https://github.com/oschwald/geoip2-golang) | v1.13.0 | GeoIP 查询 |
+| [golang-lru/v2](https://github.com/hashicorp/golang-lru) | v2.0.7 | LRU 缓存 |
+| [uuid](https://github.com/google/uuid) | v1.6.0 | UUID 生成 |
+| [testcontainers-go](https://github.com/testcontainers/testcontainers-go) | v0.42.0 | 集成测试容器 |
+| [testify](https://github.com/stretchr/testify) | v1.11.1 | 测试断言 |
+| [golang.org/x/crypto](https://golang.org/x/crypto) | v0.50.0 | 加密工具 |
+| [golang.org/x/net](https://golang.org/x/net) | v0.53.0 | 网络扩展 |
+| [yaml.v3](https://gopkg.in/yaml.v3) | v3.0.1 | YAML 配置解析 |
 
 ## 许可证
 
