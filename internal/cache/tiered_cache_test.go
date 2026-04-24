@@ -357,3 +357,75 @@ func TestTieredCacheCacheStats(t *testing.T) {
 		t.Errorf("Entries = %d, should be >= 1", stats.Entries)
 	}
 }
+
+func TestTieredCacheGetStaleL1Hit(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &TieredCacheConfig{
+		L1MaxEntries: 100,
+		L1MaxSize:    1024 * 1024,
+		L2Config: &DiskCacheConfig{
+			Path:   tmpDir,
+			Levels: "1:2",
+		},
+		StaleIfError:   200 * time.Millisecond,
+		StaleIfTimeout: 0,
+	}
+
+	tc, err := NewTieredCache(cfg)
+	if err != nil {
+		t.Fatalf("NewTieredCache failed: %v", err)
+	}
+	defer tc.Stop()
+
+	hashKey := uint64(54321)
+	origKey := "GET:/api/tiered"
+	tc.Set(hashKey, origKey, []byte("l1data"), nil, 200, 100*time.Millisecond)
+
+	// 等待过期但仍在 stale_if_error 窗口内
+	time.Sleep(150 * time.Millisecond)
+
+	// isTimeout=false，应该从 L1 获取 stale 缓存
+	entry, ok := tc.GetStale(hashKey, origKey, false)
+	if !ok {
+		t.Error("stale entry should be usable on error from L1")
+	}
+	if entry == nil || string(entry.Data) != "l1data" {
+		t.Errorf("entry.Data = %v, want %q", entry, "l1data")
+	}
+
+	// isTimeout=true，staleIfTimeout=0，不应该可用
+	if _, ok2 := tc.GetStale(hashKey, origKey, true); ok2 {
+		t.Error("stale entry should NOT be usable on timeout when staleIfTimeout=0")
+	}
+}
+
+func TestTieredCacheGetStaleMiss(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &TieredCacheConfig{
+		L1MaxEntries: 100,
+		L1MaxSize:    1024 * 1024,
+		L2Config: &DiskCacheConfig{
+			Path:   tmpDir,
+			Levels: "1:2",
+		},
+		StaleIfError:   200 * time.Millisecond,
+		StaleIfTimeout: 200 * time.Millisecond,
+	}
+
+	tc, err := NewTieredCache(cfg)
+	if err != nil {
+		t.Fatalf("NewTieredCache failed: %v", err)
+	}
+	defer tc.Stop()
+
+	// 不存在的 key
+	if _, ok := tc.GetStale(99999, "nonexistent", false); ok {
+		t.Error("should not find nonexistent key")
+	}
+
+	if _, ok2 := tc.GetStale(99999, "nonexistent", true); ok2 {
+		t.Error("should not find nonexistent key on timeout")
+	}
+}

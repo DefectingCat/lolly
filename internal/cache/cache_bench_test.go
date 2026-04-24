@@ -194,7 +194,7 @@ func BenchmarkFileCacheLRUTouch(b *testing.B) {
 
 // BenchmarkProxyCacheGet 测试代理缓存 Get 性能。
 func BenchmarkProxyCacheGet(b *testing.B) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 
 	// 预填充缓存
 	for i := 0; i < 1000; i++ {
@@ -219,7 +219,7 @@ func BenchmarkProxyCacheGet(b *testing.B) {
 
 // BenchmarkProxyCacheSet 测试代理缓存 Set 性能。
 func BenchmarkProxyCacheSet(b *testing.B) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	data := []byte("response body")
 	headers := map[string]string{"Content-Type": "application/json"}
 
@@ -234,7 +234,7 @@ func BenchmarkProxyCacheSet(b *testing.B) {
 // BenchmarkProxyCacheConcurrent 测试代理缓存并发混合负载。
 // 使用 90% Get / 10% Set 的混合负载。
 func BenchmarkProxyCacheConcurrent(b *testing.B) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 
 	// 预填充缓存
 	for i := 0; i < 1000; i++ {

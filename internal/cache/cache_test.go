@@ -89,7 +89,7 @@ func TestFileCacheLRUEviction(t *testing.T) {
 }
 
 func TestAcquireLockWithTimeout(t *testing.T) {
-	pc := NewProxyCache(nil, true, 0)
+	pc := NewProxyCache(nil, true, 0, 0, 0)
 	key := hashKey("timeout-test")
 
 	// 测试获取锁
@@ -114,7 +114,7 @@ func TestAcquireLockWithTimeout(t *testing.T) {
 }
 
 func TestRefreshTTL(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	key := hashKey("refresh-test")
 	origKey := "refresh-test"
 
@@ -140,7 +140,7 @@ func TestRefreshTTL(t *testing.T) {
 }
 
 func TestSetValidationHeaders(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	key := hashKey("validation-test")
 	origKey := "validation-test"
 
@@ -182,7 +182,7 @@ func TestMatchRulePathVariants(t *testing.T) {
 			rules := []ProxyCacheRule{
 				{Path: tt.rulePath, Methods: []string{"GET"}, MaxAge: time.Minute},
 			}
-			pc := NewProxyCache(rules, false, 0)
+			pc := NewProxyCache(rules, false, 0, 0, 0)
 			rule := pc.MatchRule(tt.reqPath, "GET", 0)
 			if (rule != nil) != tt.want {
 				t.Errorf("MatchRule(%s, %s) = %v, want %v", tt.rulePath, tt.reqPath, rule != nil, tt.want)
@@ -192,7 +192,7 @@ func TestMatchRulePathVariants(t *testing.T) {
 }
 
 func TestMinUsesThreshold(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	key := hashKey("minuses-test")
 	origKey := "minuses-test"
 
@@ -283,14 +283,14 @@ func TestNewProxyCache(t *testing.T) {
 		{Path: "/api/", Methods: []string{"GET"}, MaxAge: 10 * time.Minute},
 	}
 
-	pc := NewProxyCache(rules, true, 60*time.Second)
+	pc := NewProxyCache(rules, true, 60*time.Second, 0, 0)
 	if pc == nil {
 		t.Error("Expected non-nil ProxyCache")
 	}
 }
 
 func TestProxyCacheSetGet(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 
 	key := "test-key"
 	data := []byte("response body")
@@ -314,7 +314,7 @@ func TestProxyCacheSetGet(t *testing.T) {
 }
 
 func TestProxyCacheExpiration(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 
 	key := "expire-test"
 	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 100*time.Millisecond)
@@ -335,7 +335,7 @@ func TestProxyCacheExpiration(t *testing.T) {
 }
 
 func TestProxyCacheStaleWhileRevalidate(t *testing.T) {
-	pc := NewProxyCache(nil, false, 200*time.Millisecond)
+	pc := NewProxyCache(nil, false, 200*time.Millisecond, 0, 0)
 
 	key := "stale-test"
 	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 100*time.Millisecond)
@@ -356,7 +356,7 @@ func TestProxyCacheStaleWhileRevalidate(t *testing.T) {
 }
 
 func TestProxyCacheLock(t *testing.T) {
-	pc := NewProxyCache(nil, true, 0)
+	pc := NewProxyCache(nil, true, 0, 0, 0)
 
 	key := "lock-test"
 
@@ -388,7 +388,7 @@ func TestProxyCacheMatchRule(t *testing.T) {
 		{Path: "/static/*", Methods: []string{"GET"}, MaxAge: 1 * time.Hour},
 	}
 
-	pc := NewProxyCache(rules, false, 0)
+	pc := NewProxyCache(rules, false, 0, 0, 0)
 
 	tests := []struct {
 		path   string
@@ -416,7 +416,7 @@ func TestProxyCacheMatchRule(t *testing.T) {
 }
 
 func TestProxyCacheDelete(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 
 	key := "key1"
 	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 10*time.Minute)
@@ -429,7 +429,7 @@ func TestProxyCacheDelete(t *testing.T) {
 }
 
 func TestProxyCacheClear(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 
 	pc.Set(hashKey("a"), "a", []byte("a"), nil, 200, 10*time.Minute)
 	pc.Set(hashKey("b"), "b", []byte("b"), nil, 200, 10*time.Minute)
@@ -468,5 +468,95 @@ func TestPathMatch(t *testing.T) {
 				t.Errorf("MatchPattern(%s, %s) = %v, want %v", pattern, tt.path, result, tt.want)
 			}
 		})
+	}
+}
+
+func TestProxyCacheGetStaleIfError(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0, 200*time.Millisecond, 0)
+
+	key := "stale-error-test"
+	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 100*time.Millisecond)
+
+	// 等待过期但仍在 stale_if_error 窗口内
+	time.Sleep(150 * time.Millisecond)
+
+	// isTimeout=false，应该使用 staleIfError 窗口
+	entry, ok := pc.GetStale(hashKey(key), key, false)
+	if !ok {
+		t.Error("stale entry should be usable on error")
+	}
+	if entry == nil {
+		t.Error("expected stale entry data")
+	}
+	if string(entry.Data) != "data" {
+		t.Errorf("entry.Data = %q, want %q", entry.Data, "data")
+	}
+
+	// isTimeout=true，staleIfTimeout=0，不应该可用
+	if _, ok2 := pc.GetStale(hashKey(key), key, true); ok2 {
+		t.Error("stale entry should NOT be usable on timeout when staleIfTimeout=0")
+	}
+}
+
+func TestProxyCacheGetStaleIfTimeout(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0, 0, 300*time.Millisecond)
+
+	key := "stale-timeout-test"
+	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 100*time.Millisecond)
+
+	// 等待过期但仍在 stale_if_timeout 窗口内
+	time.Sleep(250 * time.Millisecond)
+
+	// isTimeout=true，应该使用 staleIfTimeout 窗口
+	entry, ok := pc.GetStale(hashKey(key), key, true)
+	if !ok {
+		t.Error("stale entry should be usable on timeout")
+	}
+	if entry == nil {
+		t.Error("expected stale entry data")
+	}
+
+	// isTimeout=false，staleIfError=0，不应该可用
+	if _, ok2 := pc.GetStale(hashKey(key), key, false); ok2 {
+		t.Error("stale entry should NOT be usable on error when staleIfError=0")
+	}
+}
+
+func TestProxyCacheGetStaleExpired(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0, 100*time.Millisecond, 100*time.Millisecond)
+
+	key := "stale-expired-test"
+	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 50*time.Millisecond)
+
+	// 等待超过 stale 窗口
+	time.Sleep(200 * time.Millisecond)
+
+	// 两种情况都不应该可用
+	if _, ok := pc.GetStale(hashKey(key), key, false); ok {
+		t.Error("stale entry should NOT be usable after stale window expired")
+	}
+
+	if _, ok2 := pc.GetStale(hashKey(key), key, true); ok2 {
+		t.Error("stale entry should NOT be usable on timeout after stale window expired")
+	}
+}
+
+func TestProxyCacheGetStaleNotExpired(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0, 100*time.Millisecond, 100*time.Millisecond)
+
+	key := "stale-fresh-test"
+	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 200*time.Millisecond)
+
+	// 未过期，两种情况都应该可用（返回新鲜数据）
+	entry, ok := pc.GetStale(hashKey(key), key, false)
+	if !ok {
+		t.Error("fresh entry should be usable")
+	}
+	if string(entry.Data) != "data" {
+		t.Errorf("entry.Data = %q, want %q", entry.Data, "data")
+	}
+
+	if _, ok2 := pc.GetStale(hashKey(key), key, true); !ok2 {
+		t.Error("fresh entry should be usable on timeout")
 	}
 }

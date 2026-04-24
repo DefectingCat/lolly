@@ -109,7 +109,7 @@ func TestNewPurgeAPI(t *testing.T) {
 	})
 
 	t.Run("with cache", func(t *testing.T) {
-		pc := NewProxyCache(nil, false, 0)
+		pc := NewProxyCache(nil, false, 0, 0, 0)
 		cfg := &config.CacheAPIConfig{
 			Path:  "/custom/purge",
 			Allow: []string{"127.0.0.1"},
@@ -276,7 +276,7 @@ func TestPurgeAPI_ServeHTTP_AccessForbidden(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_Unauthorized(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	cfg := &config.CacheAPIConfig{
 		Allow: []string{"127.0.0.1"},
 		Auth: config.CacheAPIAuthConfig{
@@ -303,7 +303,7 @@ func TestPurgeAPI_ServeHTTP_Unauthorized(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_BadRequest(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	cfg := &config.CacheAPIConfig{
 		Allow: []string{},
 	}
@@ -338,7 +338,7 @@ func TestPurgeAPI_ServeHTTP_BadRequest(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_PurgeByPath(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	key := "GET:/api/test"
 	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 10*60*time.Second)
 
@@ -376,7 +376,7 @@ func TestPurgeAPI_ServeHTTP_PurgeByPath(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_PurgeByPath_NotFound(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	cfg := &config.CacheAPIConfig{
 		Allow: []string{},
 	}
@@ -405,7 +405,7 @@ func TestPurgeAPI_ServeHTTP_PurgeByPath_NotFound(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_PurgeByPattern(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	pc.Set(hashKey("GET:/api/users"), "GET:/api/users", []byte("users"), nil, 200, 10*60*time.Second)
 	pc.Set(hashKey("GET:/api/posts"), "GET:/api/posts", []byte("posts"), nil, 200, 10*60*time.Second)
 	pc.Set(hashKey("GET:/static/css"), "GET:/static/css", []byte("css"), nil, 200, 10*60*time.Second)
@@ -444,7 +444,7 @@ func TestPurgeAPI_ServeHTTP_PurgeByPattern(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_PurgeByPattern_Wildcard(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	pc.Set(hashKey("GET:/a"), "GET:/a", []byte("a"), nil, 200, 10*60*time.Second)
 	pc.Set(hashKey("GET:/b"), "GET:/b", []byte("b"), nil, 200, 10*60*time.Second)
 
@@ -472,7 +472,7 @@ func TestPurgeAPI_ServeHTTP_PurgeByPattern_Wildcard(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_PurgeByPattern_DirPrefix(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	pc.Set(hashKey("GET:/api/v1/users"), "GET:/api/v1/users", []byte("u"), nil, 200, 10*60*time.Second)
 	pc.Set(hashKey("GET:/api/v2/posts"), "GET:/api/v2/posts", []byte("p"), nil, 200, 10*60*time.Second)
 	pc.Set(hashKey("GET:/other"), "GET:/other", []byte("o"), nil, 200, 10*60*time.Second)
@@ -501,7 +501,7 @@ func TestPurgeAPI_ServeHTTP_PurgeByPattern_DirPrefix(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_ContentType(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	cfg := &config.CacheAPIConfig{
 		Allow: []string{},
 	}
@@ -535,7 +535,7 @@ func TestPurgeAPI_ServeHTTP_ContentType(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_AccessAllowed(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	cfg := &config.CacheAPIConfig{
 		Allow: []string{"10.0.0.0/8"},
 	}
@@ -558,7 +558,7 @@ func TestPurgeAPI_ServeHTTP_AccessAllowed(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_TokenAuth(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	cfg := &config.CacheAPIConfig{
 		Allow: []string{},
 		Auth: config.CacheAPIAuthConfig{
@@ -599,7 +599,7 @@ func TestPurgeAPI_ServeHTTP_TokenAuth(t *testing.T) {
 }
 
 func TestPurgeAPI_ServeHTTP_AuthTypeNone(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	cfg := &config.CacheAPIConfig{
 		Allow: []string{},
 		Auth: config.CacheAPIAuthConfig{
@@ -711,7 +711,7 @@ func TestPurgeAPI_ErrorResponse(t *testing.T) {
 
 func TestPurgeAPI_PurgeByPath_WrongMethod(t *testing.T) {
 	// Test that hashPath only uses GET, so purging a POST-cached entry won't work
-	pc := NewProxyCache(nil, false, 0)
+	pc := NewProxyCache(nil, false, 0, 0, 0)
 	// Set a cache entry with GET:/api/test key
 	pc.Set(hashKey("GET:/api/test"), "GET:/api/test", []byte("data"), nil, 200, 10*60*time.Second)
 

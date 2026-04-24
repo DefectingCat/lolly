@@ -384,3 +384,114 @@ func TestDiskCacheRestart(t *testing.T) {
 		t.Errorf("Data = %q, want %q", entry.Data, data)
 	}
 }
+
+func TestDiskCacheGetStaleIfError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &DiskCacheConfig{
+		Path:           tmpDir,
+		Levels:         "1:2",
+		StaleIfError:   200 * time.Millisecond,
+		StaleIfTimeout: 0,
+	}
+
+	dc, err := NewDiskCache(cfg)
+	if err != nil {
+		t.Fatalf("NewDiskCache failed: %v", err)
+	}
+	defer dc.Stop()
+	<-dc.loadCh
+
+	hashKey := uint64(12345)
+	origKey := "GET:/api/test"
+	dc.Set(hashKey, origKey, []byte("data"), nil, 200, 100*time.Millisecond)
+
+	// 等待过期但仍在 stale_if_error 窗口内
+	time.Sleep(150 * time.Millisecond)
+
+	// isTimeout=false，应该使用 staleIfError 窗口
+	entry, ok := dc.GetStale(hashKey, origKey, false)
+	if !ok {
+		t.Error("stale entry should be usable on error")
+	}
+	if entry == nil || string(entry.Data) != "data" {
+		t.Errorf("entry.Data = %v, want %q", entry, "data")
+	}
+
+	// isTimeout=true，staleIfTimeout=0，不应该可用
+	if _, ok2 := dc.GetStale(hashKey, origKey, true); ok2 {
+		t.Error("stale entry should NOT be usable on timeout when staleIfTimeout=0")
+	}
+}
+
+func TestDiskCacheGetStaleIfTimeout(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &DiskCacheConfig{
+		Path:           tmpDir,
+		Levels:         "1:2",
+		StaleIfError:   0,
+		StaleIfTimeout: 300 * time.Millisecond,
+	}
+
+	dc, err := NewDiskCache(cfg)
+	if err != nil {
+		t.Fatalf("NewDiskCache failed: %v", err)
+	}
+	defer dc.Stop()
+	<-dc.loadCh
+
+	hashKey := uint64(12345)
+	origKey := "GET:/api/test"
+	dc.Set(hashKey, origKey, []byte("data"), nil, 200, 100*time.Millisecond)
+
+	// 等待过期但仍在 stale_if_timeout 窗口内
+	time.Sleep(250 * time.Millisecond)
+
+	// isTimeout=true，应该使用 staleIfTimeout 窗口
+	entry, ok := dc.GetStale(hashKey, origKey, true)
+	if !ok {
+		t.Error("stale entry should be usable on timeout")
+	}
+	if entry == nil {
+		t.Error("expected stale entry data")
+	}
+
+	// isTimeout=false，staleIfError=0，不应该可用
+	if _, ok2 := dc.GetStale(hashKey, origKey, false); ok2 {
+		t.Error("stale entry should NOT be usable on error when staleIfError=0")
+	}
+}
+
+func TestDiskCacheGetStaleExpired(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &DiskCacheConfig{
+		Path:           tmpDir,
+		Levels:         "1:2",
+		StaleIfError:   100 * time.Millisecond,
+		StaleIfTimeout: 100 * time.Millisecond,
+	}
+
+	dc, err := NewDiskCache(cfg)
+	if err != nil {
+		t.Fatalf("NewDiskCache failed: %v", err)
+	}
+	defer dc.Stop()
+	<-dc.loadCh
+
+	hashKey := uint64(12345)
+	origKey := "GET:/api/test"
+	dc.Set(hashKey, origKey, []byte("data"), nil, 200, 50*time.Millisecond)
+
+	// 等待超过 stale 窗口
+	time.Sleep(200 * time.Millisecond)
+
+	if _, ok := dc.GetStale(hashKey, origKey, false); ok {
+		t.Error("stale entry should NOT be usable after stale window expired")
+	}
+
+	if _, ok2 := dc.GetStale(hashKey, origKey, true); ok2 {
+		t.Error("stale entry should NOT be usable on timeout after stale window expired")
+	}
+}
