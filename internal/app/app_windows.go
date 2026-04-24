@@ -1,11 +1,7 @@
 //go:build windows
 
-// Package app 提供 Windows 平台的应用程序逻辑 stub。
-//
-// Windows 不支持 POSIX 信号（SIGUSR1、SIGUSR2、SIGHUP、SIGQUIT），
-// 该文件提供兼容的实现，忽略这些 Unix 特有的信号。
-//
-// 作者：xfy
+// Windows lacks POSIX signals (SIGUSR1, SIGUSR2, SIGHUP, SIGQUIT);
+// this file provides stub implementations for those Unix-specific signals.
 package app
 
 import (
@@ -24,102 +20,39 @@ import (
 	"rua.plus/lolly/internal/server"
 	"rua.plus/lolly/internal/stream"
 	"rua.plus/lolly/internal/variable"
-	"rua.plus/lolly/internal/version"
 )
 
-// App 应用程序结构（Windows 版本）。
+// App manages the server lifecycle (Windows version).
 type App struct {
-	cfgPath    string
-	cfg        *config.Config
-	srv        *server.Server
-	http3Srv   *http3.Server
-	http2Srv   *http2.Server
-	streamSrv  *stream.Server
+	resv      resolver.Resolver
+	cfg       *config.Config
+	srv       *server.Server
+	http3Srv  *http3.Server
+	http2Srv  *http2.Server
+	streamSrv *stream.Server
+	logger    *logging.AppLogger
+	cfgPath   string
+	pidFile   string
+	logFile   string
+	listeners []net.Listener
 	upgradeMgr *server.UpgradeManager
-	pidFile    string
-	logFile    string
-	listeners  []net.Listener
-	logger     *logging.AppLogger
-	resv       resolver.Resolver
 }
 
-// NewApp 创建应用程序实例（Windows 版本）。
-//
-// 该函数初始化 App 结构体，保存配置文件路径供后续加载使用。
-//
-// 参数：
-//   - cfgPath: 配置文件路径（YAML 格式），用于加载服务器配置
-//
-// 返回值：
-//   - *App: 初始化的应用程序实例，包含配置路径等信息
 func NewApp(cfgPath string) *App {
-	return &App{cfgPath: cfgPath}
+	return &App{
+		cfgPath: cfgPath,
+	}
 }
 
-// SetPidFile 设置 PID 文件路径。
 func (a *App) SetPidFile(path string) {
 	a.pidFile = path
 }
 
-// SetLogFile 设置日志文件路径。
 func (a *App) SetLogFile(path string) {
 	a.logFile = path
 }
 
-// Run 应用程序入口函数（Windows 版本）。
-//
-// 根据参数决定行为：生成配置、打印版本或启动应用。
-//
-// 参数：
-//   - cfgPath: 配置文件路径
-//   - genConfig: 是否仅生成默认配置并退出
-//   - outputPath: 配置输出路径，为空时输出到 stdout
-//   - showVersion: 是否仅打印版本信息并退出
-//
-// 返回值：
-//   - int: 退出码，0 表示正常退出，1 表示异常
-func Run(cfgPath string, genConfig bool, outputPath string, showVersion bool) int {
-	if genConfig {
-		return generateConfig(outputPath)
-	}
-	if showVersion {
-		printVersion()
-		return 0
-	}
-	app := NewApp(cfgPath)
-	return app.Run()
-}
-
-// generateConfig 生成默认配置文件。
-func generateConfig(outputPath string) int {
-	cfg := config.DefaultConfig()
-	yamlData, err := config.GenerateConfigYAML(cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "生成配置失败: %v\n", err)
-		return 1
-	}
-	if outputPath == "" {
-		fmt.Print(string(yamlData))
-	} else {
-		if err := os.WriteFile(outputPath, yamlData, 0o644); err != nil {
-			fmt.Fprintf(os.Stderr, "写入文件失败: %v\n", err)
-			return 1
-		}
-		fmt.Printf("配置已写入: %s\n", outputPath)
-	}
-	return 0
-}
-
-// printVersion 打印版本信息。
-func printVersion() {
-	fmt.Printf("lolly version %s\n", version.Version)
-	fmt.Printf("  Git: %s (%s)\n", version.GitCommit, version.GitBranch)
-	fmt.Printf("  Built: %s\n", version.BuildTime)
-	fmt.Printf("  Go: %s\n", version.GoVersion)
-	fmt.Printf("  Platform: %s\n", version.BuildPlatform)
-}
-
-// Run 启动应用程序。
+// Run starts the application: loads config, creates servers, and handles signals (Windows version).
 func (a *App) Run() int {
 	cfg, err := config.Load(a.cfgPath)
 	if err != nil {
@@ -137,7 +70,19 @@ func (a *App) Run() int {
 	}
 
 	a.logger.LogStartup("配置加载成功", map[string]string{"config_path": a.cfgPath})
-	a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Servers[0].Listen})
+
+	mode := a.cfg.GetMode()
+	if mode == config.ServerModeMultiServer {
+		for i, srv := range a.cfg.Servers {
+			a.logger.LogStartup("监听地址", map[string]string{
+				"index":  fmt.Sprintf("[%d]", i),
+				"listen": srv.Listen,
+				"name":   srv.Name,
+			})
+		}
+	} else {
+		a.logger.LogStartup("监听地址", map[string]string{"listen": a.cfg.Servers[0].Listen})
+	}
 
 	if a.cfg.Resolver.Enabled {
 		a.resv = resolver.New(&a.cfg.Resolver)
@@ -148,11 +93,11 @@ func (a *App) Run() int {
 	}
 
 	a.srv = server.New(a.cfg)
+
 	if a.resv != nil {
 		a.srv.SetResolver(a.resv)
 	}
 
-	// Stream 服务器
 	if len(a.cfg.Stream) > 0 {
 		a.streamSrv = stream.NewServer()
 		for _, sc := range a.cfg.Stream {
@@ -163,9 +108,11 @@ func (a *App) Run() int {
 					Weight: t.Weight,
 				}
 			}
+
 			if err := a.streamSrv.AddUpstream(sc.Listen, targets, sc.Upstream.LoadBalance, stream.HealthCheckSpec{}); err != nil {
 				a.logger.Error().Err(err).Msg("添加 Stream 上游失败")
 			}
+
 			if sc.Protocol == "udp" {
 				if err := a.streamSrv.ListenUDP(sc.Listen, sc.Listen, 60*time.Second); err != nil {
 					a.logger.Error().Err(err).Str("listen", sc.Listen).Msg("监听 UDP 失败")
@@ -176,6 +123,7 @@ func (a *App) Run() int {
 				}
 			}
 		}
+
 		go func() {
 			a.logger.LogStartup("Stream 服务器启动中", nil)
 			if err := a.streamSrv.Start(); err != nil {
@@ -184,7 +132,6 @@ func (a *App) Run() int {
 		}()
 	}
 
-	// HTTP/3 服务器
 	if a.cfg.HTTP3.Enabled && a.cfg.Servers[0].SSL.Cert != "" {
 		tlsConfig, err := a.srv.GetTLSConfig()
 		if err != nil {
@@ -204,7 +151,6 @@ func (a *App) Run() int {
 		}
 	}
 
-	// HTTP/2 服务器
 	if a.cfg.Servers[0].SSL.HTTP2.Enabled && a.cfg.Servers[0].SSL.Cert != "" {
 		tlsConfig, err := a.srv.GetTLSConfig()
 		if err != nil {
@@ -233,7 +179,6 @@ func (a *App) Run() int {
 		}
 	}
 
-	// 创建升级管理器（Windows stub）
 	a.upgradeMgr = server.NewUpgradeManager(a.srv)
 	if a.pidFile != "" {
 		a.upgradeMgr.SetPidFile(a.pidFile)
@@ -274,9 +219,6 @@ func (a *App) Run() int {
 	}
 }
 
-// setupSignalHandlers 设置信号处理（Windows 版本）。
-//
-// Windows 仅支持 SIGINT 和 SIGTERM，忽略 Unix 特有的信号。
 func (a *App) setupSignalHandlers(sigChan chan<- os.Signal) {
 	signal.Notify(sigChan,
 		syscall.SIGTERM,
@@ -284,16 +226,13 @@ func (a *App) setupSignalHandlers(sigChan chan<- os.Signal) {
 	)
 }
 
-// handleSignal 处理信号（Windows 版本）。
-//
-// Windows 仅处理 SIGTERM 和 SIGINT，其他信号忽略并继续运行。
+// handleSignal returns false to indicate the app should exit (Windows version).
 func (a *App) handleSignal(sig os.Signal) bool {
 	switch sig {
 	case syscall.SIGTERM, syscall.SIGINT:
-		// 快速停止
 		timeout := a.cfg.Shutdown.FastTimeout
 		if timeout <= 0 {
-			timeout = 5 * time.Second // 默认值
+			timeout = 5 * time.Second
 		}
 		a.logger.LogSignal(sigName(sig.(syscall.Signal)), "停止服务器")
 		a.shutdownHTTP2()
@@ -306,7 +245,6 @@ func (a *App) handleSignal(sig os.Signal) bool {
 	}
 }
 
-// shutdownHTTP3 关闭 HTTP/3 服务器。
 func (a *App) shutdownHTTP3() {
 	if a.http3Srv != nil {
 		if err := a.http3Srv.Stop(); err != nil {
@@ -315,7 +253,6 @@ func (a *App) shutdownHTTP3() {
 	}
 }
 
-// shutdownHTTP2 关闭 HTTP/2 服务器。
 func (a *App) shutdownHTTP2() {
 	if a.http2Srv != nil {
 		if err := a.http2Srv.Stop(); err != nil {
@@ -324,12 +261,10 @@ func (a *App) shutdownHTTP2() {
 	}
 }
 
-// reloadConfig 重载配置（Windows stub）。
 func (a *App) reloadConfig() {
-	// Windows stub - 功能受限
+	// Windows stub - functionality limited
 }
 
-// reopenLogs 重新打开日志文件（Windows stub）。
 func (a *App) reopenLogs() {
 	if a.cfg != nil {
 		logging.Init(a.cfg.Logging.Error.Level, a.cfg.Logging.Format)
@@ -338,14 +273,10 @@ func (a *App) reopenLogs() {
 	a.logger.LogStartup("日志已重新打开", nil)
 }
 
-// gracefulUpgrade 执行热升级（Windows stub）。
-//
-// Windows 不支持热升级，此方法为空实现。
 func (a *App) gracefulUpgrade() {
 	a.logger.Info().Msg("Windows 不支持热升级")
 }
 
-// sigName 返回信号名称（Windows 版本）。
 func sigName(sig syscall.Signal) string {
 	switch sig {
 	case syscall.SIGTERM:
