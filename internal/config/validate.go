@@ -75,8 +75,9 @@ func validateMode(mode ServerMode) error {
 
 // validateListenConflicts 检测 servers 中监听地址冲突。
 //
-// 在 multi_server 模式下，每个 server 必须有 listen 配置且不能重复。
-// 收集所有 servers[i].Listen，检查重复项并输出具体冲突信息。
+// 在 multi_server 模式下，每个 server 必须有 listen 配置。
+// 允许相同 listen 地址但不同 server_name 的配置（nginx 虚拟主机风格）。
+// 只有当 listen 和 server_name 都相同时才报冲突。
 //
 // 参数：
 //   - servers: 服务器配置列表
@@ -89,15 +90,19 @@ func validateListenConflicts(servers []ServerConfig, mode ServerMode) error {
 		return nil
 	}
 
+	// 使用 listen+name 组合作为唯一标识
+	// 允许相同 listen 但不同 name（虚拟主机）
 	seen := make(map[string]int)
 	for i, s := range servers {
 		if s.Listen == "" {
 			return fmt.Errorf("servers[%d]: multi_server 模式下每个 server 必须配置 listen 地址", i)
 		}
-		if idx, exists := seen[s.Listen]; exists {
-			return fmt.Errorf("监听地址冲突: servers[%d] 和 servers[%d] 都使用 %s", idx, i, s.Listen)
+		// 使用 listen + name 作为唯一键
+		key := s.Listen + "|" + s.Name
+		if idx, exists := seen[key]; exists {
+			return fmt.Errorf("监听地址冲突: servers[%d] 和 servers[%d] 都使用 %s 且 server_name 相同", idx, i, s.Listen)
 		}
-		seen[s.Listen] = i
+		seen[key] = i
 	}
 	return nil
 }

@@ -48,6 +48,13 @@ type locationClassification struct {
 	Directives []Directive // original directives in the location block
 }
 
+// listenInfo holds parsed listen directive information.
+type listenInfo struct {
+	Addr      string
+	IsSSL     bool
+	IsDefault bool
+}
+
 // unsupportedDirectives are known nginx directives that have no lolly equivalent.
 var unsupportedDirectives = map[string]string{
 	"if":               "the 'if' directive is not supported; consider using map or rewrite",
@@ -120,8 +127,8 @@ func Convert(nginxCfg *NginxConfig) (*ConvertResult, error) {
 
 	// 3. Convert each server block.
 	for i := range serverBlocks {
-		serverCfg := convertServerBlock(&serverBlocks[i], upstreams, result)
-		result.Config.Servers = append(result.Config.Servers, serverCfg)
+		serverCfgs := convertServerBlock(&serverBlocks[i], upstreams, result)
+		result.Config.Servers = append(result.Config.Servers, serverCfgs...)
 	}
 
 	return result, nil
@@ -196,23 +203,38 @@ func convertUpstreamServer(d *Directive) config.ProxyTarget {
 	return target
 }
 
-// convertServerBlock converts a server block directive to a ServerConfig.
-func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result *ConvertResult) config.ServerConfig {
-	server := config.ServerConfig{}
-	var sslDetected bool
+// convertServerBlock converts a server block directive to one or more ServerConfigs.
+// If a server block has multiple listen directives (e.g., listen 80; listen 443 ssl;),
+// it will be split into multiple ServerConfigs, one for each listen address.
+func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result *ConvertResult) []config.ServerConfig {
+	var listens []listenInfo
+	baseServer := config.ServerConfig{}
 	var serverRoot string
 	var serverIndex []string
 
+	// First pass: collect all listen directives
+	for i := range d.Block {
+		bd := &d.Block[i]
+		if bd.Name == "listen" {
+			info := parseListenInfo(bd)
+			listens = append(listens, info)
+		}
+	}
+
+	// Default if no listen directive
+	if len(listens) == 0 {
+		listens = append(listens, listenInfo{Addr: "0.0.0.0:80"})
+	}
+
+	// Second pass: process other directives into baseServer
 	for i := range d.Block {
 		bd := &d.Block[i]
 
 		switch bd.Name {
 		case "listen":
-			if parseListen(bd, &server) {
-				sslDetected = true
-			}
+			// Already processed above
 		case "server_name":
-			parseServerName(bd, &server)
+			parseServerName(bd, &baseServer)
 		case "root":
 			if len(bd.Args) > 0 {
 				serverRoot = bd.Args[0]
@@ -221,45 +243,45 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 			serverIndex = append(serverIndex, bd.Args...)
 		case "ssl_certificate":
 			if len(bd.Args) > 0 {
-				server.SSL.Cert = bd.Args[0]
+				baseServer.SSL.Cert = bd.Args[0]
 			}
 		case "ssl_certificate_key":
 			if len(bd.Args) > 0 {
-				server.SSL.Key = bd.Args[0]
+				baseServer.SSL.Key = bd.Args[0]
 			}
 		case gzipType:
-			parseGzip(bd, &server)
+			parseGzip(bd, &baseServer)
 		case "gzip_types":
-			server.Compression.Types = bd.Args
+			baseServer.Compression.Types = bd.Args
 		case "gzip_min_length":
 			if len(bd.Args) > 0 {
 				if v, err := strconv.Atoi(bd.Args[0]); err == nil {
-					server.Compression.MinSize = v
+					baseServer.Compression.MinSize = v
 				}
 			}
 		case "client_max_body_size":
 			if len(bd.Args) > 0 {
-				server.ClientMaxBodySize = bd.Args[0]
+				baseServer.ClientMaxBodySize = bd.Args[0]
 			}
 		case "server_tokens":
 			if len(bd.Args) > 0 {
-				server.ServerTokens = bd.Args[0] != offValue
+				baseServer.ServerTokens = bd.Args[0] != offValue
 			}
 		case "access_log":
 			parseAccessLog(bd, result)
 		case "error_log":
 			parseErrorLog(bd, result)
 		case "return":
-			parseServerReturn(bd, &server, result)
+			parseServerReturn(bd, &baseServer, result)
 		case "rewrite":
-			parseRewrite(bd, &server)
+			parseRewrite(bd, &baseServer)
 		case "location":
 			classification := classifyLocation(bd, serverRoot, result)
-			convertLocation(classification, &server, upstreams, result)
+			convertLocation(classification, &baseServer, upstreams, result)
 		case "error_page":
-			parseErrorPage(bd, &server)
+			parseErrorPage(bd, &baseServer)
 		case "auth_basic":
-			parseAuthBasic(bd, &server)
+			parseAuthBasic(bd, &baseServer)
 		case "auth_basic_user_file":
 			if len(bd.Args) > 0 {
 				result.Warnings = append(result.Warnings, Warning{
@@ -281,28 +303,22 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 		}
 	}
 
-	// If server-level root is defined but no explicit location / static config exists,
-	// create a default static configuration for "/".
-	// However, if location / is a proxy, don't create static config.
-	// Also, fill empty root in existing static configs with server-level root.
+	// Handle server-level root for static files
 	if serverRoot != "" {
 		hasRootLocation := false
-		for i := range server.Static {
-			// Inherit server-level root if location has no root specified
-			if server.Static[i].Root == "" {
-				server.Static[i].Root = serverRoot
+		for i := range baseServer.Static {
+			if baseServer.Static[i].Root == "" {
+				baseServer.Static[i].Root = serverRoot
 			}
-			// Inherit server-level index if location has no index specified
-			if len(server.Static[i].Index) == 0 && len(serverIndex) > 0 {
-				server.Static[i].Index = serverIndex
+			if len(baseServer.Static[i].Index) == 0 && len(serverIndex) > 0 {
+				baseServer.Static[i].Index = serverIndex
 			}
-			if server.Static[i].Path == "/" {
+			if baseServer.Static[i].Path == "/" {
 				hasRootLocation = true
 			}
 		}
-		// Check if location / is a proxy
 		if !hasRootLocation {
-			for _, p := range server.Proxy {
+			for _, p := range baseServer.Proxy {
 				if p.Path == "/" {
 					hasRootLocation = true
 					break
@@ -310,7 +326,7 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 			}
 		}
 		if !hasRootLocation {
-			server.Static = append(server.Static, config.StaticConfig{
+			baseServer.Static = append(baseServer.Static, config.StaticConfig{
 				Path:  "/",
 				Root:  serverRoot,
 				Index: serverIndex,
@@ -318,62 +334,54 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 		}
 	}
 
-	// Warn if SSL was detected (listen ... ssl) but cert/key are not configured.
-	if sslDetected && (server.SSL.Cert == "" || server.SSL.Key == "") {
-		result.Warnings = append(result.Warnings, Warning{
-			Directive: "listen",
-			Message:   "SSL is enabled via listen directive but ssl_certificate and/or ssl_certificate_key are not configured; SSL config will be incomplete",
-		})
+	// Create servers for each listen address
+	var servers []config.ServerConfig
+	for _, li := range listens {
+		server := baseServer // Copy base config
+		server.Listen = li.Addr
+		server.Default = li.IsDefault
+
+		// Warn if SSL listen but no cert/key
+		if li.IsSSL && (server.SSL.Cert == "" || server.SSL.Key == "") {
+			result.Warnings = append(result.Warnings, Warning{
+				Directive: "listen",
+				Message:   "SSL is enabled via listen directive but ssl_certificate and/or ssl_certificate_key are not configured; SSL config will be incomplete",
+			})
+		}
+
+		servers = append(servers, server)
 	}
 
-	// Default listen address if no listen directive was specified.
-	if server.Listen == "" {
-		server.Listen = "0.0.0.0:80"
-	}
-
-	return server
+	return servers
 }
 
-// parseListen parses a listen directive.
-func parseListen(d *Directive, server *config.ServerConfig) bool {
+// parseListenInfo parses a listen directive and returns structured info.
+func parseListenInfo(d *Directive) listenInfo {
+	info := listenInfo{}
 	if len(d.Args) == 0 {
-		return false
+		return info
 	}
 
 	addr := d.Args[0]
-	isSSL := false
-	isDefault := false
-
 	for _, arg := range d.Args[1:] {
 		if arg == "ssl" {
-			isSSL = true
+			info.IsSSL = true
 		}
 		if arg == "default_server" {
-			isDefault = true
+			info.IsDefault = true
 		}
 	}
 
-	// If addr is just a port number like "80" or "8080", prefix with ":".
+	// Format address: if just a port number, prefix with ":".
 	if port, err := strconv.Atoi(addr); err == nil {
-		server.Listen = fmt.Sprintf(":%d", port)
+		info.Addr = fmt.Sprintf(":%d", port)
 	} else if strings.Contains(addr, ":") {
-		server.Listen = addr
+		info.Addr = addr
 	} else {
-		server.Listen = ":" + addr
+		info.Addr = ":" + addr
 	}
 
-	// Set default_server flag.
-	if isDefault {
-		server.Default = true
-	}
-
-	// Enable SSL if specified.
-	if isSSL {
-		server.SSL.Cert = "" // Marker cleared; cert/key set by ssl_certificate directives.
-		server.SSL.Key = ""  // If cert/key remain empty, a warning is added after processing.
-	}
-
-	return isSSL
+	return info
 }
 
 // parseServerName parses a server_name directive.
