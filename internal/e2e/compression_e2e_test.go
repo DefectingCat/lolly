@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -274,7 +275,6 @@ func writeFileBytesWithPerm(path string, content []byte, perm uint32) error {
 }
 
 func writeFileWithPerm(path string, content []byte, perm uint32) error {
-	import "os"
 	return os.WriteFile(path, content, os.FileMode(perm))
 }
 
