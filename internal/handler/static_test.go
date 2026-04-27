@@ -1948,3 +1948,134 @@ func TestStaticHandler_Handle_CacheModTimeChanged(t *testing.T) {
 		t.Errorf("修改后内容 = %q, want %q", got, newContent)
 	}
 }
+
+// TestStaticHandler_SetExpires 测试 SetExpires 方法。
+func TestStaticHandler_SetExpires(t *testing.T) {
+	tmpDir := t.TempDir()
+	handler := newTestHandler(t, tmpDir)
+
+	// 默认为空
+	if handler.expires != "" {
+		t.Errorf("默认 expires = %q, want empty", handler.expires)
+	}
+
+	// 设置 expires
+	handler.SetExpires("30d")
+	if handler.expires != "30d" {
+		t.Errorf("expires = %q, want 30d", handler.expires)
+	}
+
+	// 设置 off
+	handler.SetExpires("off")
+	if handler.expires != "off" {
+		t.Errorf("expires = %q, want off", handler.expires)
+	}
+
+	// 设置 max
+	handler.SetExpires("max")
+	if handler.expires != "max" {
+		t.Errorf("expires = %q, want max", handler.expires)
+	}
+}
+
+// TestSetCacheHeaders 测试 setCacheHeaders 方法。
+func TestSetCacheHeaders(t *testing.T) {
+	tests := []struct {
+		name           string
+		expires        string
+		wantCacheCtrl  string
+		wantExpiresSet bool // 是否设置 Expires 头
+	}{
+		{
+			name:          "empty_expires",
+			expires:       "",
+			wantCacheCtrl: "",
+		},
+		{
+			name:          "off_expires",
+			expires:       "off",
+			wantCacheCtrl: "",
+		},
+		{
+			name:           "epoch_expires",
+			expires:        "epoch",
+			wantCacheCtrl:  "no-cache, no-store, must-revalidate",
+			wantExpiresSet: true,
+		},
+		{
+			name:           "max_expires",
+			expires:        "max",
+			wantCacheCtrl:  "public, max-age=315360000, immutable",
+			wantExpiresSet: true,
+		},
+		{
+			name:           "duration_expires",
+			expires:        "1h",
+			wantCacheCtrl:  "public, max-age=3600",
+			wantExpiresSet: true,
+		},
+		{
+			name:           "complex_duration",
+			expires:        "1d1h",
+			wantCacheCtrl:  "public, max-age=90000",
+			wantExpiresSet: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			handler := newTestHandler(t, tmpDir)
+			handler.SetExpires(tt.expires)
+
+			ctx := newTestContext(t, "/test.txt")
+			handler.setCacheHeaders(ctx)
+
+			cacheCtrl := string(ctx.Response.Header.Peek("Cache-Control"))
+			if tt.wantCacheCtrl == "" {
+				if cacheCtrl != "" {
+					t.Errorf("Cache-Control = %q, want empty", cacheCtrl)
+				}
+			} else {
+				if cacheCtrl != tt.wantCacheCtrl {
+					t.Errorf("Cache-Control = %q, want %q", cacheCtrl, tt.wantCacheCtrl)
+				}
+			}
+
+			expires := string(ctx.Response.Header.Peek("Expires"))
+			if tt.wantExpiresSet && expires == "" {
+				t.Error("Expected Expires header to be set")
+			}
+		})
+	}
+}
+
+// TestParseExpires 测试 parseExpires 函数。
+func TestParseExpires(t *testing.T) {
+	tests := []struct {
+		name     string
+		expires  string
+		wantSecs int64
+	}{
+		{"empty", "", 0},
+		{"off", "off", 0},
+		{"max", "max", 315360000},
+		{"epoch", "epoch", -1},
+		{"seconds", "30s", 30},
+		{"minutes", "5m", 300},
+		{"hours", "2h", 7200},
+		{"days", "1d", 86400},
+		{"complex", "1d1h1m1s", 90061},
+		{"multiple_days", "30d", 2592000},
+		{"mixed", "7d12h", 648000},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseExpires(tt.expires)
+			if got != tt.wantSecs {
+				t.Errorf("parseExpires(%q) = %d, want %d", tt.expires, got, tt.wantSecs)
+			}
+		})
+	}
+}

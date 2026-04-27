@@ -560,3 +560,145 @@ func TestProxyCacheGetStaleNotExpired(t *testing.T) {
 		t.Error("fresh entry should be usable on timeout")
 	}
 }
+
+// TestFileCacheRefreshCachedAt 测试 RefreshCachedAt 方法。
+func TestFileCacheRefreshCachedAt(t *testing.T) {
+	fc := NewFileCache(10, 1024, 1*time.Hour)
+
+	path := "/test/refresh.txt"
+	data := []byte("test data")
+
+	// 设置缓存
+	_ = fc.Set(path, data, int64(len(data)), time.Now())
+
+	// 获取原始 CachedAt 时间
+	entry, ok := fc.Get(path)
+	if !ok {
+		t.Fatal("Expected to find cached entry")
+	}
+	originalCachedAt := entry.CachedAt
+
+	// 等待一小段时间
+	time.Sleep(10 * time.Millisecond)
+
+	// 刷新 CachedAt
+	fc.RefreshCachedAt(path)
+
+	// 再次获取，验证 CachedAt 已更新
+	entry, ok = fc.Get(path)
+	if !ok {
+		t.Fatal("Expected to find cached entry after refresh")
+	}
+	if !entry.CachedAt.After(originalCachedAt) {
+		t.Errorf("CachedAt not updated: %v <= %v", entry.CachedAt, originalCachedAt)
+	}
+}
+
+// TestFileCacheRefreshCachedAtNonExistent 测试刷新不存在的条目。
+func TestFileCacheRefreshCachedAtNonExistent(t *testing.T) {
+	fc := NewFileCache(10, 1024, 1*time.Hour)
+
+	// 刷新不存在的条目应该静默忽略
+	fc.RefreshCachedAt("/nonexistent/path")
+
+	// 验证没有副作用
+	stats := fc.Stats()
+	if stats.Entries != 0 {
+		t.Errorf("Expected 0 entries, got %d", stats.Entries)
+	}
+}
+
+// TestProxyCacheDeleteByPatternWithMethod 测试按模式和方法的删除。
+func TestProxyCacheDeleteByPatternWithMethod(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0, 0, 0)
+
+	// 添加多个缓存条目，带不同方法前缀
+	pc.Set(hashKey("GET:/api/users"), "GET:/api/users", []byte("users"), nil, 200, 10*time.Minute)
+	pc.Set(hashKey("POST:/api/users"), "POST:/api/users", []byte("create"), nil, 200, 10*time.Minute)
+	pc.Set(hashKey("GET:/api/posts"), "GET:/api/posts", []byte("posts"), nil, 200, 10*time.Minute)
+	pc.Set(hashKey("DELETE:/api/users/1"), "DELETE:/api/users/1", []byte("delete"), nil, 200, 10*time.Minute)
+
+	// 删除所有 GET:/api/users* 的条目（模式匹配 OrigKey，包含方法前缀）
+	deleted := pc.DeleteByPatternWithMethod("GET:/api/users*", "GET")
+	if deleted != 1 {
+		t.Errorf("Expected 1 deleted, got %d", deleted)
+	}
+
+	// 验证 GET:/api/users 被删除
+	if _, ok, _ := pc.Get(hashKey("GET:/api/users"), "GET:/api/users"); ok {
+		t.Error("GET:/api/users should be deleted")
+	}
+
+	// 验证 POST:/api/users 还在
+	if _, ok, _ := pc.Get(hashKey("POST:/api/users"), "POST:/api/users"); !ok {
+		t.Error("POST:/api/users should still exist")
+	}
+
+	// 验证 GET:/api/posts 还在
+	if _, ok, _ := pc.Get(hashKey("GET:/api/posts"), "GET:/api/posts"); !ok {
+		t.Error("GET:/api/posts should still exist")
+	}
+}
+
+// TestProxyCacheDeleteByPatternAllMethods 测试删除所有方法。
+func TestProxyCacheDeleteByPatternAllMethods(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0, 0, 0)
+
+	// 添加多个缓存条目
+	pc.Set(hashKey("GET:/api/test"), "GET:/api/test", []byte("get"), nil, 200, 10*time.Minute)
+	pc.Set(hashKey("POST:/api/test"), "POST:/api/test", []byte("post"), nil, 200, 10*time.Minute)
+	pc.Set(hashKey("PUT:/api/test"), "PUT:/api/test", []byte("put"), nil, 200, 10*time.Minute)
+
+	// 删除所有 *:/api/test* 的条目（不限制方法，使用 * 通配符）
+	deleted := pc.DeleteByPatternWithMethod("*", "")
+	if deleted != 3 {
+		t.Errorf("Expected 3 deleted, got %d", deleted)
+	}
+}
+
+// TestProxyCacheDeleteByPatternNoMatch 测试无匹配删除。
+func TestProxyCacheDeleteByPatternNoMatch(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0, 0, 0)
+
+	pc.Set(hashKey("GET:/api/users"), "GET:/api/users", []byte("users"), nil, 200, 10*time.Minute)
+
+	// 删除不匹配的模式
+	deleted := pc.DeleteByPatternWithMethod("/other/*", "")
+	if deleted != 0 {
+		t.Errorf("Expected 0 deleted, got %d", deleted)
+	}
+
+	// 验证原条目还在
+	if _, ok, _ := pc.Get(hashKey("GET:/api/users"), "GET:/api/users"); !ok {
+		t.Error("Original entry should still exist")
+	}
+}
+
+// TestProxyCacheStatsToCacheStats 测试 ProxyCacheStats 转换。
+func TestProxyCacheStatsToCacheStats(t *testing.T) {
+	stats := ProxyCacheStats{
+		Entries: 10,
+		Pending: 2,
+	}
+
+	cacheStats := stats.ToCacheStats()
+
+	if cacheStats.Entries != 10 {
+		t.Errorf("Entries = %d, want 10", cacheStats.Entries)
+	}
+}
+
+// TestProxyCacheCacheStatsMethod 测试 CacheStats 方法。
+func TestProxyCacheCacheStatsMethod(t *testing.T) {
+	pc := NewProxyCache(nil, false, 0, 0, 0)
+
+	// 添加缓存条目
+	pc.Set(hashKey("key1"), "key1", []byte("data1"), nil, 200, 10*time.Minute)
+	pc.Set(hashKey("key2"), "key2", []byte("data2"), nil, 200, 10*time.Minute)
+
+	stats := pc.CacheStats()
+
+	if stats.Entries != 2 {
+		t.Errorf("Entries = %d, want 2", stats.Entries)
+	}
+}
