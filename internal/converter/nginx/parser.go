@@ -280,7 +280,16 @@ func (p *parser) readToken() (string, error) {
 	ch := p.input[p.pos]
 
 	if ch == '"' || ch == '\'' {
-		return p.readQuotedString(ch)
+		token, err := p.readQuotedString(ch)
+		if err != nil {
+			return "", err
+		}
+		// Return a special marker for empty quoted strings to distinguish
+		// from the empty string returned when encountering special chars.
+		if token == "" {
+			return `""`, nil
+		}
+		return token, nil
 	}
 
 	if ch == '{' || ch == '}' || ch == ';' {

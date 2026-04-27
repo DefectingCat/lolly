@@ -167,7 +167,12 @@ func convertUpstreamServer(d *Directive) config.ProxyTarget {
 	target := config.ProxyTarget{}
 
 	if len(d.Args) > 0 {
-		target.URL = d.Args[0]
+		url := d.Args[0]
+		// Add http:// prefix if no scheme present (nginx upstream servers don't have schemes)
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			url = "http://" + url
+		}
+		target.URL = url
 	}
 
 	for _, arg := range d.Args[1:] {
@@ -619,7 +624,12 @@ func convertProxyDirectives(directives []Directive, proxy *config.ProxyConfig, u
 				if proxy.Headers.SetRequest == nil {
 					proxy.Headers.SetRequest = make(map[string]string)
 				}
-				proxy.Headers.SetRequest[d.Args[0]] = mapVariable(d.Args[1], result, d)
+				value := mapVariable(d.Args[1], result, d)
+				// Convert the empty string marker back to actual empty string
+				if value == `""` {
+					value = ""
+				}
+				proxy.Headers.SetRequest[d.Args[0]] = value
 			}
 		case "proxy_hide_header":
 			if len(d.Args) > 0 {

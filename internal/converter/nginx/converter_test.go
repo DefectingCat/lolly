@@ -159,8 +159,8 @@ http {
 		t.Fatalf("expected 3 targets, got %d", len(p.Targets))
 	}
 
-	if p.Targets[0].URL != "10.0.0.1:8080" {
-		t.Errorf("target[0] URL = %s, want 10.0.0.1:8080", p.Targets[0].URL)
+	if p.Targets[0].URL != "http://10.0.0.1:8080" {
+		t.Errorf("target[0] URL = %s, want http://10.0.0.1:8080", p.Targets[0].URL)
 	}
 	if p.Targets[0].Weight != 3 {
 		t.Errorf("target[0] Weight = %d, want 3", p.Targets[0].Weight)
@@ -1244,11 +1244,11 @@ http {
 	if len(p.Targets) != 2 {
 		t.Fatalf("expected 2 targets from upstream inside http block, got %d", len(p.Targets))
 	}
-	if p.Targets[0].URL != "10.0.0.1:8080" {
-		t.Errorf("target[0] URL = %s, want 10.0.0.1:8080", p.Targets[0].URL)
+	if p.Targets[0].URL != "http://10.0.0.1:8080" {
+		t.Errorf("target[0] URL = %s, want http://10.0.0.1:8080", p.Targets[0].URL)
 	}
-	if p.Targets[1].URL != "10.0.0.2:8080" {
-		t.Errorf("target[1] URL = %s, want 10.0.0.2:8080", p.Targets[1].URL)
+	if p.Targets[1].URL != "http://10.0.0.2:8080" {
+		t.Errorf("target[1] URL = %s, want http://10.0.0.2:8080", p.Targets[1].URL)
 	}
 }
 
