@@ -10,6 +10,7 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -298,6 +299,28 @@ func (c *LollyContainer) WaitForHealthy(ctx context.Context, timeout time.Durati
 	}
 
 	return fmt.Errorf("service not healthy after %v", timeout)
+}
+
+// Logs 获取容器日志。
+//
+// 用于诊断测试失败原因。
+func (c *LollyContainer) Logs(ctx context.Context) (string, error) {
+	if c.Container == nil {
+		return "", fmt.Errorf("container is nil")
+	}
+
+	reader, err := c.Container.Logs(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get container logs: %w", err)
+	}
+	defer reader.Close()
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return "", fmt.Errorf("failed to read container logs: %w", err)
+	}
+
+	return string(data), nil
 }
 
 // MockBackendContainer 启动一个模拟后端服务器容器。

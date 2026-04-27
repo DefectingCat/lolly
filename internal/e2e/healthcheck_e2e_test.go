@@ -9,6 +9,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"testing"
@@ -76,8 +77,23 @@ func TestE2EHealthCheckActive(t *testing.T) {
 
 	t.Log("Backend 0 terminated, waiting for health check to detect...")
 
-	// 等待健康检查检测到故障
-	time.Sleep(10 * time.Second)
+	// 等待健康检查检测到故障（使用重试机制）
+	err = testutil.WaitForNoError(ctx, testutil.RetryConfig{
+		Interval: 1 * time.Second,
+		Timeout:  15 * time.Second,
+	}, func() error {
+		// 发送请求验证故障转移
+		resp, err := client.Get(lolly.HTTPBaseURL())
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		}
+		return nil
+	})
+	require.NoError(t, err, "Health check should detect failure and route to healthy backend")
 
 	// 继续发送请求，应该仍然成功（路由到健康后端）
 	successCount := 0
@@ -205,8 +221,8 @@ func TestE2EHealthCheckRecovery(t *testing.T) {
 
 	t.Log("Backend terminated, waiting for health check...")
 
-	// 等待健康检查
-	time.Sleep(10 * time.Second)
+	// 等待健康检查检测到故障
+	time.Sleep(5 * time.Second)
 
 	// 恢复后端
 	err = pool.RestartOne(ctx, 0)
@@ -214,8 +230,22 @@ func TestE2EHealthCheckRecovery(t *testing.T) {
 
 	t.Log("Backend restarted, waiting for recovery detection...")
 
-	// 等待健康检查检测到恢复
-	time.Sleep(10 * time.Second)
+	// 等待健康检查检测到恢复（使用重试机制）
+	err = testutil.WaitForNoError(ctx, testutil.RetryConfig{
+		Interval: 1 * time.Second,
+		Timeout:  15 * time.Second,
+	}, func() error {
+		resp, err := client.Get(lolly.HTTPBaseURL())
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		}
+		return nil
+	})
+	require.NoError(t, err, "Backend should recover and accept requests")
 
 	// 发送请求验证恢复
 	successCount := 0
@@ -430,8 +460,22 @@ func TestE2EHealthCheckMultipleBackends(t *testing.T) {
 
 	t.Log("Backend 1 terminated")
 
-	// 等待健康检查
-	time.Sleep(10 * time.Second)
+	// 等待健康检查检测到故障（使用重试机制）
+	err = testutil.WaitForNoError(ctx, testutil.RetryConfig{
+		Interval: 1 * time.Second,
+		Timeout:  15 * time.Second,
+	}, func() error {
+		resp, err := client.Get(lolly.HTTPBaseURL())
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != 200 {
+			return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+		}
+		return nil
+	})
+	require.NoError(t, err, "Health check should detect failure and route to remaining backends")
 
 	// 继续发送请求
 	successCount := 0

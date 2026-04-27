@@ -158,6 +158,18 @@ test-e2e:
 	@echo "Running L3 E2E tests (requires Docker)..."
 	go test -v -tags=e2e ./internal/e2e/...
 
+# 运行 L3 E2E 测试（带覆盖率）
+test-e2e-cover:
+	@echo "Running L3 E2E tests with coverage..."
+	go test -tags=e2e -coverprofile=e2e-coverage.out -coverpkg=./... ./internal/e2e/...
+	go tool cover -html=e2e-coverage.out -o e2e-coverage.html
+	@echo "E2E coverage report: e2e-coverage.html"
+
+# 运行 L3 E2E 测试（短模式，仅运行工具测试）
+test-e2e-short:
+	@echo "Running L3 E2E tests (short mode - testutil only)..."
+	go test -tags=e2e -short -v ./internal/e2e/testutil/... -timeout 60s
+
 # 运行所有测试（单元 + 集成 + E2E）
 test-all: test test-integration test-e2e
 	@echo "All tests passed."
@@ -364,6 +376,11 @@ help:
 	@echo "Testing:"
 	@echo "  make test           - Run all tests"
 	@echo "  make test-cover     - Run tests with coverage"
+	@echo "  make test-integration - Run L2 integration tests"
+	@echo "  make test-e2e       - Run L3 E2E tests (requires Docker)"
+	@echo "  make test-e2e-cover - Run E2E tests with coverage"
+	@echo "  make test-e2e-short - Run E2E tests (short mode)"
+	@echo "  make test-all       - Run all tests (unit + integration + E2E)"
 	@echo "  make act            - Run CI locally with act"
 	@echo "  make act-unit       - Run unit tests job with act"
 	@echo "  make bench          - Run benchmarks"
