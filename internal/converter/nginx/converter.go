@@ -284,13 +284,20 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 	// If server-level root is defined but no explicit location / static config exists,
 	// create a default static configuration for "/".
 	// However, if location / is a proxy, don't create static config.
+	// Also, fill empty root in existing static configs with server-level root.
 	if serverRoot != "" {
 		hasRootLocation := false
-		// Check if there's already a static config for "/"
-		for _, s := range server.Static {
-			if s.Path == "/" {
+		for i := range server.Static {
+			// Inherit server-level root if location has no root specified
+			if server.Static[i].Root == "" {
+				server.Static[i].Root = serverRoot
+			}
+			// Inherit server-level index if location has no index specified
+			if len(server.Static[i].Index) == 0 && len(serverIndex) > 0 {
+				server.Static[i].Index = serverIndex
+			}
+			if server.Static[i].Path == "/" {
 				hasRootLocation = true
-				break
 			}
 		}
 		// Check if location / is a proxy
@@ -526,6 +533,7 @@ func classifyLocation(d *Directive, result *ConvertResult) locationClassificatio
 	// Classify based on content.
 	hasProxyPass := false
 	hasRootOrAlias := false
+	hasTryFiles := false
 	hasRedirect := false
 
 	for i := range d.Block {
@@ -534,6 +542,8 @@ func classifyLocation(d *Directive, result *ConvertResult) locationClassificatio
 			hasProxyPass = true
 		case "root", "alias":
 			hasRootOrAlias = true
+		case "try_files":
+			hasTryFiles = true
 		case "return":
 			if len(d.Block[i].Args) > 0 {
 				code, err := strconv.Atoi(d.Block[i].Args[0])
@@ -555,7 +565,7 @@ func classifyLocation(d *Directive, result *ConvertResult) locationClassificatio
 				Message:   "location has both proxy_pass and root/alias; proxy_pass takes priority",
 			})
 		}
-	case hasRootOrAlias:
+	case hasRootOrAlias || hasTryFiles:
 		class.LocType = "static"
 	case hasRedirect:
 		class.LocType = redirectType
