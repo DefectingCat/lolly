@@ -14,6 +14,7 @@ const (
 	gzipType     = "gzip"
 	offValue     = "off"
 	redirectType = "redirect"
+	staticType   = "static"
 )
 
 // Warning represents a conversion warning for unsupported or partially supported directives.
@@ -574,14 +575,14 @@ func classifyLocation(d *Directive, serverRoot string, result *ConvertResult) lo
 			})
 		}
 	case hasRootOrAlias || hasTryFiles:
-		class.LocType = "static"
+		class.LocType = staticType
 	case hasRedirect:
 		class.LocType = redirectType
 	default:
 		// If no explicit root/alias/try_files but server-level root exists,
 		// classify as static (will inherit server root)
 		if serverRoot != "" {
-			class.LocType = "static"
+			class.LocType = staticType
 		} else {
 			class.LocType = "unsupported"
 		}
@@ -608,7 +609,7 @@ func convertLocation(class locationClassification, server *config.ServerConfig, 
 		convertProxyDirectives(class.Directives, &proxy, upstreams, result)
 		server.Proxy = append(server.Proxy, proxy)
 
-	case "static":
+	case staticType:
 		static := config.StaticConfig{
 			Path:         class.Path,
 			LocationType: locType,
