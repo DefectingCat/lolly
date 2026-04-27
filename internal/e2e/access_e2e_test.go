@@ -51,7 +51,7 @@ servers:
 `
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "", testutil.WithConfigYAML(config))
+	lolly, err := testutil.StartLolly(ctx, testutil.WithConfigYAML(config))
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
@@ -92,7 +92,7 @@ servers:
 `
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "", testutil.WithConfigYAML(config))
+	lolly, err := testutil.StartLolly(ctx, testutil.WithConfigYAML(config))
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
@@ -133,7 +133,7 @@ servers:
 `
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "", testutil.WithConfigYAML(config))
+	lolly, err := testutil.StartLolly(ctx, testutil.WithConfigYAML(config))
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
@@ -170,7 +170,7 @@ servers:
 `
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "", testutil.WithConfigYAML(config))
+	lolly, err := testutil.StartLolly(ctx, testutil.WithConfigYAML(config))
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
@@ -213,7 +213,7 @@ servers:
 `
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "", testutil.WithConfigYAML(config))
+	lolly, err := testutil.StartLolly(ctx, testutil.WithConfigYAML(config))
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
@@ -263,7 +263,7 @@ servers:
 `, backendAddr)
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "", testutil.WithConfigYAML(config))
+	lolly, err := testutil.StartLolly(ctx, testutil.WithConfigYAML(config))
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 

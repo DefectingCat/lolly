@@ -19,6 +19,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -38,9 +39,12 @@ func TestE2ECompressionGzip(t *testing.T) {
 	}
 
 	// 创建包含可压缩内容的 HTML 文件
-	htmlContent := `<html><body>` + repeatString("<p>Hello World</p>", 100) + `</body></html>`
+	htmlContent := repeatString("<p>Hello World</p>", 100)
+	tmpDir := t.TempDir()
+	htmlPath := filepath.Join(tmpDir, "index.html")
+	require.NoError(t, os.WriteFile(htmlPath, []byte(htmlContent), 0o644))
 
-	config := fmt.Sprintf(`
+	config := `
 servers:
   - listen: ":8080"
     static:
@@ -52,12 +56,12 @@ servers:
         - "text/html"
         - "text/css"
         - "application/json"
-`)
+`
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "",
+	lolly, err := testutil.StartLolly(ctx,
 		testutil.WithConfigYAML(config),
-		testutil.WithExtraMount(createTempHTMLFile(t, "index.html", htmlContent), "/var/www/html/index.html"),
+		testutil.WithExtraMount(tmpDir, "/var/www/html"),
 	)
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
@@ -104,6 +108,9 @@ func TestE2ECompressionNoAcceptEncoding(t *testing.T) {
 	}
 
 	htmlContent := `<html><body><p>Test Content</p></body></html>`
+	tmpDir := t.TempDir()
+	htmlPath := filepath.Join(tmpDir, "index.html")
+	require.NoError(t, os.WriteFile(htmlPath, []byte(htmlContent), 0o644))
 
 	config := `
 servers:
@@ -116,9 +123,9 @@ servers:
 `
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "",
+	lolly, err := testutil.StartLolly(ctx,
 		testutil.WithConfigYAML(config),
-		testutil.WithExtraMount(createTempHTMLFile(t, "index.html", htmlContent), "/var/www/html/index.html"),
+		testutil.WithExtraMount(tmpDir, "/var/www/html"),
 	)
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
@@ -148,6 +155,9 @@ func TestE2ECompressionDisabled(t *testing.T) {
 	}
 
 	htmlContent := repeatString("<p>Hello World</p>", 100)
+	tmpDir := t.TempDir()
+	htmlPath := filepath.Join(tmpDir, "index.html")
+	require.NoError(t, os.WriteFile(htmlPath, []byte(htmlContent), 0o644))
 
 	config := `
 servers:
@@ -160,9 +170,9 @@ servers:
 `
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "",
+	lolly, err := testutil.StartLolly(ctx,
 		testutil.WithConfigYAML(config),
-		testutil.WithExtraMount(createTempHTMLFile(t, "index.html", htmlContent), "/var/www/html/index.html"),
+		testutil.WithExtraMount(tmpDir, "/var/www/html"),
 	)
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
@@ -200,8 +210,8 @@ func TestE2ECompressionPrecompressed(t *testing.T) {
 	gzContent := gzipCompress(t, originalContent)
 
 	tmpDir := t.TempDir()
-	writeFile(t, tmpDir+"/test.js", originalContent)
-	writeFile(t, tmpDir+"/test.js.gz", gzContent)
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.js"), []byte(originalContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "test.js.gz"), gzContent, 0o644))
 
 	config := `
 servers:
@@ -213,7 +223,7 @@ servers:
 `
 
 	// 启动 lolly
-	lolly, err := testutil.StartLollyContainer(ctx, "",
+	lolly, err := testutil.StartLolly(ctx,
 		testutil.WithConfigYAML(config),
 		testutil.WithExtraMount(tmpDir, "/var/www/html"),
 	)
@@ -247,35 +257,6 @@ func repeatString(s string, n int) string {
 		buf.WriteString(s)
 	}
 	return buf.String()
-}
-
-func createTempHTMLFile(t *testing.T, filename, content string) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	filePath := tmpDir + "/" + filename
-	writeFile(t, filePath, content)
-	return filePath
-}
-
-func writeFile(t *testing.T, path, content string) {
-	t.Helper()
-	require.NoError(t, writeFileErr(path, content))
-}
-
-func writeFileErr(path, content string) error {
-	return writeFileBytes(path, []byte(content))
-}
-
-func writeFileBytes(path string, content []byte) error {
-	return writeFileBytesWithPerm(path, content, 0o644)
-}
-
-func writeFileBytesWithPerm(path string, content []byte, perm uint32) error {
-	return writeFileWithPerm(path, content, perm)
-}
-
-func writeFileWithPerm(path string, content []byte, perm uint32) error {
-	return os.WriteFile(path, content, os.FileMode(perm))
 }
 
 func gzipCompress(t *testing.T, content string) []byte {
