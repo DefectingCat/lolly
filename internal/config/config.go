@@ -319,6 +319,12 @@ type StaticConfig struct {
 	// Internal 仅允许内部访问
 	// 设置为 true 时，该位置仅允许内部重定向访问
 	Internal bool `yaml:"internal"`
+
+	// Expires 缓存过期时间
+	// 支持 nginx 兼容格式：30d, 1h, 1m, max, epoch, off
+	// 设置 Cache-Control: max-age 和 Expires 响应头
+	// 示例：expires: 30d → Cache-Control: max-age=2592000
+	Expires string `yaml:"expires"`
 }
 
 // ProxyConfig 反向代理配置，支持负载均衡和健康检查。

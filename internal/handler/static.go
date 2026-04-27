@@ -52,6 +52,7 @@ type StaticHandler struct {
 	root       string
 	alias      string
 	pathPrefix string
+	expires    string // 缓存过期时间（nginx 兼容格式）
 	// 切片字段
 	index    []string
 	tryFiles []string
@@ -222,6 +223,17 @@ func (h *StaticHandler) SetSymlinkCheck(enabled bool) {
 //   - enabled: 是否启用内部访问限制
 func (h *StaticHandler) SetInternal(enabled bool) {
 	h.internal = enabled
+}
+
+// SetExpires 设置缓存过期时间。
+//
+// 支持 nginx 兼容格式：30d, 1h, 1m, max, epoch, off
+// 设置后会在响应中添加 Cache-Control 和 Expires 头。
+//
+// 参数：
+//   - expires: 过期时间字符串
+func (h *StaticHandler) SetExpires(expires string) {
+	h.expires = expires
 }
 
 // SetCacheTTL 设置缓存新鲜度 TTL。
@@ -561,6 +573,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 		ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
 		ctx.Response.Header.Set("ETag", etag)
 		ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+		h.setCacheHeaders(ctx)
 		ctx.Response.SkipBody = true
 		return
 	}
@@ -572,6 +585,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 			// 预压缩文件已发送，补充验证头
 			ctx.Response.Header.Set("ETag", etag)
 			ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+			h.setCacheHeaders(ctx)
 			return
 		}
 	}
@@ -586,6 +600,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
 				ctx.Response.Header.Set("ETag", etag)
 				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+				h.setCacheHeaders(ctx)
 				return
 			}
 			// 文件已修改，删除旧缓存
@@ -603,6 +618,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 		ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
 		ctx.Response.Header.Set("ETag", etag)
 		ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+		h.setCacheHeaders(ctx)
 
 		file, err := os.Open(filePath)
 		if err == nil {
@@ -629,6 +645,69 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 	ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
 	ctx.Response.Header.Set("ETag", etag)
 	ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+	h.setCacheHeaders(ctx)
+}
+
+// setCacheHeaders 设置缓存控制响应头。
+func (h *StaticHandler) setCacheHeaders(ctx *fasthttp.RequestCtx) {
+	if h.expires == "" || h.expires == "off" {
+		return
+	}
+
+	if h.expires == "epoch" {
+		ctx.Response.Header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		ctx.Response.Header.Set("Expires", "Thu, 01 Jan 1970 00:00:00 GMT")
+		return
+	}
+
+	if h.expires == "max" {
+		ctx.Response.Header.Set("Cache-Control", "public, max-age=315360000, immutable")
+		ctx.Response.Header.Set("Expires", time.Now().Add(315360000*time.Second).UTC().Format(httpTimeFormat))
+		return
+	}
+
+	maxAge := parseExpires(h.expires)
+	if maxAge > 0 {
+		ctx.Response.Header.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", maxAge))
+		ctx.Response.Header.Set("Expires", time.Now().Add(time.Duration(maxAge)*time.Second).UTC().Format(httpTimeFormat))
+	}
+}
+
+// parseExpires 解析 nginx 兼容的过期时间格式。
+// 支持格式：30d, 1h, 1m, 1s, 30d1h 等
+// 返回秒数。
+func parseExpires(expires string) int64 {
+	if expires == "" || expires == "off" {
+		return 0
+	}
+	if expires == "max" {
+		return 315360000
+	}
+	if expires == "epoch" {
+		return -1
+	}
+
+	var total int64
+	var num int64
+	for _, ch := range expires {
+		switch {
+		case ch >= '0' && ch <= '9':
+			num = num*10 + int64(ch-'0')
+		case ch == 'd':
+			total += num * 86400
+			num = 0
+		case ch == 'h':
+			total += num * 3600
+			num = 0
+		case ch == 'm':
+			total += num * 60
+			num = 0
+		case ch == 's':
+			total += num
+			num = 0
+		}
+	}
+	return total
 }
 
 // validateSymlink 验证符号链接是否安全。

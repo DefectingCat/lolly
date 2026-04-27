@@ -355,13 +355,17 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 		buf.WriteString("        try_files: []             # SPA 部署示例: [\"$uri\", \"$uri/\", \"/index.html\"]\n")
 		buf.WriteString("        try_files_pass: false     # 内部重定向是否触发中间件\n")
 		buf.WriteString("        symlink_check: false      # 是否检查符号链接安全（防止路径遍历攻击）\n")
+		buf.WriteString("        # expires: \"\"              # 缓存过期时间（nginx 兼容格式：30d, 1h, max, epoch）\n")
+		buf.WriteString("        #   30d → Cache-Control: max-age=2592000\n")
+		buf.WriteString("        #   max → Cache-Control: max-age=315360000, immutable\n")
+		buf.WriteString("        #   epoch → Cache-Control: no-cache\n")
 		buf.WriteString("        # location_type: \"\"         # 位置匹配类型（有效值: exact, prefix, regex, regex_caseless, prefix_priority, named）\n")
 		buf.WriteString("        # internal: false           # 仅允许内部重定向访问\n")
 	}
-	buf.WriteString("    # 示例：使用 alias 替换路径\n")
-	buf.WriteString("    # - path: \"/images/\"\n")
-	buf.WriteString("    #   alias: \"/var/www/files/\"  # /images/logo.png → /var/www/files/logo.png\n")
-	buf.WriteString("    #   index: [\"index.html\"]\n")
+	buf.WriteString("    # 示例：静态资源缓存配置\n")
+	buf.WriteString("    # - path: \"/assets/\"\n")
+	buf.WriteString("    #   root: \"/var/www/assets\"\n")
+	buf.WriteString("    #   expires: \"30d\"  # 缓存 30 天\n")
 	buf.WriteString("\n")
 
 	// proxy 配置示例

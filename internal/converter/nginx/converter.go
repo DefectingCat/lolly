@@ -844,6 +844,10 @@ func convertStaticDirectives(directives []Directive, static *config.StaticConfig
 			static.Index = append(static.Index, d.Args...)
 		case "try_files":
 			static.TryFiles = append(static.TryFiles, d.Args...)
+		case "expires":
+			if len(d.Args) > 0 {
+				static.Expires = d.Args[0]
+			}
 		default:
 			if msg, ok := unsupportedDirectives[d.Name]; ok {
 				result.Warnings = append(result.Warnings, Warning{

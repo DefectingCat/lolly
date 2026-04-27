@@ -1098,6 +1098,11 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 		// 设置 internal 限制
 		staticHandler.SetInternal(static.Internal)
 
+		// 设置缓存过期时间
+		if static.Expires != "" {
+			staticHandler.SetExpires(static.Expires)
+		}
+
 		// 根据 LocationType 注册路由
 		locType := static.LocationType
 		if locType == "" {
@@ -1463,6 +1468,11 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 
 		// 设置符号链接安全检查
 		staticHandler.SetSymlinkCheck(static.SymlinkCheck)
+
+		// 设置缓存过期时间
+		if static.Expires != "" {
+			staticHandler.SetExpires(static.Expires)
+		}
 
 		// 设置 try_files 配置
 		if len(static.TryFiles) > 0 {
