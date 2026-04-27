@@ -747,10 +747,10 @@ http {
 
 func TestConvertProxyRedirect(t *testing.T) {
 	tests := []struct {
-		name   string
-		input  string
-		mode   string
-		rules  int
+		name  string
+		input string
+		mode  string
+		rules int
 	}{
 		{
 			name: "off",
@@ -956,9 +956,9 @@ http {
 
 func TestConvertUpstreamLoadBalance(t *testing.T) {
 	tests := []struct {
-		name       string
-		upstream   string
-		wantLB     string
+		name     string
+		upstream string
+		wantLB   string
 	}{
 		{
 			name:     "least_conn",
@@ -1325,4 +1325,3 @@ http {
 		t.Errorf("Listen = %s, want 0.0.0.0:80 when no listen directive", s.Listen)
 	}
 }
-

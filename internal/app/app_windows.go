@@ -24,17 +24,17 @@ import (
 
 // App manages the server lifecycle (Windows version).
 type App struct {
-	resv      resolver.Resolver
-	cfg       *config.Config
-	srv       *server.Server
-	http3Srv  *http3.Server
-	http2Srv  *http2.Server
-	streamSrv *stream.Server
-	logger    *logging.AppLogger
-	cfgPath   string
-	pidFile   string
-	logFile   string
-	listeners []net.Listener
+	resv       resolver.Resolver
+	cfg        *config.Config
+	srv        *server.Server
+	http3Srv   *http3.Server
+	http2Srv   *http2.Server
+	streamSrv  *stream.Server
+	logger     *logging.AppLogger
+	cfgPath    string
+	pidFile    string
+	logFile    string
+	listeners  []net.Listener
 	upgradeMgr *server.UpgradeManager
 }
 

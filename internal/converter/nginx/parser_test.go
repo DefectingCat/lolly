@@ -193,7 +193,7 @@ func TestParseFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "nginx.conf")
 	content := "listen 80;\nserver_name example.com;"
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
 	cfg, err := ParseFile(path)
@@ -216,21 +216,21 @@ func TestParseIncludeGlob(t *testing.T) {
 
 	// Create a subdirectory for included files to avoid matching nginx.conf itself.
 	incDir := filepath.Join(dir, "includes")
-	if err := os.Mkdir(incDir, 0755); err != nil {
+	if err := os.Mkdir(incDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(incDir, "a.conf"), []byte("listen 80;\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(incDir, "a.conf"), []byte("listen 80;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(incDir, "b.conf"), []byte("server_name a.com;\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(incDir, "b.conf"), []byte("server_name a.com;\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create main config with include.
 	main := filepath.Join(dir, "nginx.conf")
 	content := "include " + incDir + "/*.conf;"
-	if err := os.WriteFile(main, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(main, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -256,10 +256,10 @@ func TestParseIncludeCircular(t *testing.T) {
 	a := filepath.Join(dir, "a.conf")
 	b := filepath.Join(dir, "b.conf")
 
-	if err := os.WriteFile(a, []byte("include "+b+";"), 0644); err != nil {
+	if err := os.WriteFile(a, []byte("include "+b+";"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(b, []byte("include "+a+";"), 0644); err != nil {
+	if err := os.WriteFile(b, []byte("include "+a+";"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -289,7 +289,7 @@ func TestParseIncludeMaxDepth(t *testing.T) {
 		} else {
 			content = "listen 80;"
 		}
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -307,7 +307,7 @@ func TestParseIncludeNotFound(t *testing.T) {
 	dir := t.TempDir()
 	main := filepath.Join(dir, "nginx.conf")
 	content := "include /nonexistent/path.conf;"
-	if err := os.WriteFile(main, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(main, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := ParseFile(main)
@@ -320,7 +320,7 @@ func TestParseIncludeGlobNoMatch(t *testing.T) {
 	dir := t.TempDir()
 	main := filepath.Join(dir, "nginx.conf")
 	content := "include " + dir + "/nonexistent/*.conf;"
-	if err := os.WriteFile(main, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(main, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := ParseFile(main)
@@ -334,10 +334,10 @@ func TestParseIncludeGlobNoMatch(t *testing.T) {
 
 func TestParseLocationModifiers(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		dirName  string
-		args     []string
+		name    string
+		input   string
+		dirName string
+		args    []string
 	}{
 		{
 			name:    "exact match",
