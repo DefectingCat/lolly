@@ -200,6 +200,8 @@ func convertUpstreamServer(d *Directive) config.ProxyTarget {
 func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result *ConvertResult) config.ServerConfig {
 	server := config.ServerConfig{}
 	var sslDetected bool
+	var serverRoot string
+	var serverIndex []string
 
 	for i := range d.Block {
 		bd := &d.Block[i]
@@ -211,6 +213,12 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 			}
 		case "server_name":
 			parseServerName(bd, &server)
+		case "root":
+			if len(bd.Args) > 0 {
+				serverRoot = bd.Args[0]
+			}
+		case "index":
+			serverIndex = append(serverIndex, bd.Args...)
 		case "ssl_certificate":
 			if len(bd.Args) > 0 {
 				server.SSL.Cert = bd.Args[0]
@@ -270,6 +278,36 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 					Message:   msg,
 				})
 			}
+		}
+	}
+
+	// If server-level root is defined but no explicit location / static config exists,
+	// create a default static configuration for "/".
+	// However, if location / is a proxy, don't create static config.
+	if serverRoot != "" {
+		hasRootLocation := false
+		// Check if there's already a static config for "/"
+		for _, s := range server.Static {
+			if s.Path == "/" {
+				hasRootLocation = true
+				break
+			}
+		}
+		// Check if location / is a proxy
+		if !hasRootLocation {
+			for _, p := range server.Proxy {
+				if p.Path == "/" {
+					hasRootLocation = true
+					break
+				}
+			}
+		}
+		if !hasRootLocation {
+			server.Static = append(server.Static, config.StaticConfig{
+				Path:  "/",
+				Root:  serverRoot,
+				Index: serverIndex,
+			})
 		}
 	}
 

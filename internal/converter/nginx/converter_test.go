@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"rua.plus/lolly/internal/config"
 )
 
 // helper: parse nginx config string and convert.
@@ -124,6 +126,112 @@ http {
 	}
 	if len(st.Index) != 2 || st.Index[0] != "index.html" || st.Index[1] != "index.htm" {
 		t.Errorf("expected [index.html index.htm], got %v", st.Index)
+	}
+}
+
+func TestConvertServerLevelRoot(t *testing.T) {
+	input := `
+http {
+    server {
+        listen 80;
+        root /var/www/html;
+        index index.html index.htm index.php;
+    }
+}
+`
+	result, err := convertString(t, input)
+	if err != nil {
+		t.Fatalf("convert error: %v", err)
+	}
+
+	s := result.Config.Servers[0]
+	if len(s.Static) != 1 {
+		t.Fatalf("expected 1 static, got %d", len(s.Static))
+	}
+
+	st := s.Static[0]
+	if st.Path != "/" {
+		t.Errorf("expected path /, got %s", st.Path)
+	}
+	if st.Root != "/var/www/html" {
+		t.Errorf("expected root /var/www/html, got %s", st.Root)
+	}
+	if len(st.Index) != 3 || st.Index[0] != "index.html" || st.Index[1] != "index.htm" || st.Index[2] != "index.php" {
+		t.Errorf("expected [index.html index.htm index.php], got %v", st.Index)
+	}
+}
+
+func TestConvertServerLevelRootWithLocation(t *testing.T) {
+	// When both server-level root and location /static exist, both should be converted
+	input := `
+http {
+    server {
+        listen 80;
+        root /var/www/html;
+        index index.html;
+        location /static/ {
+            root /var/www/static;
+        }
+    }
+}
+`
+	result, err := convertString(t, input)
+	if err != nil {
+		t.Fatalf("convert error: %v", err)
+	}
+
+	s := result.Config.Servers[0]
+	if len(s.Static) != 2 {
+		t.Fatalf("expected 2 static, got %d", len(s.Static))
+	}
+
+	// Find the root location
+	var rootStatic, staticLoc *config.StaticConfig
+	for i := range s.Static {
+		if s.Static[i].Path == "/" {
+			rootStatic = &s.Static[i]
+		} else if s.Static[i].Path == "/static/" {
+			staticLoc = &s.Static[i]
+		}
+	}
+
+	if rootStatic == nil {
+		t.Error("expected root static config at path /")
+	} else if rootStatic.Root != "/var/www/html" {
+		t.Errorf("expected root /var/www/html, got %s", rootStatic.Root)
+	}
+
+	if staticLoc == nil {
+		t.Error("expected static config at path /static/")
+	} else if staticLoc.Root != "/var/www/static" {
+		t.Errorf("expected root /var/www/static, got %s", staticLoc.Root)
+	}
+}
+
+func TestConvertServerLevelRootNotCreatedForProxy(t *testing.T) {
+	// When location / is a proxy, server-level root should NOT create a static config
+	input := `
+http {
+    server {
+        listen 80;
+        root /var/www/html;
+        location / {
+            proxy_pass http://backend;
+        }
+    }
+}
+`
+	result, err := convertString(t, input)
+	if err != nil {
+		t.Fatalf("convert error: %v", err)
+	}
+
+	s := result.Config.Servers[0]
+	if len(s.Static) != 0 {
+		t.Errorf("expected 0 static (location / is proxy), got %d", len(s.Static))
+	}
+	if len(s.Proxy) != 1 {
+		t.Errorf("expected 1 proxy, got %d", len(s.Proxy))
 	}
 }
 
