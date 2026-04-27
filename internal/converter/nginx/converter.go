@@ -254,7 +254,7 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 		case "rewrite":
 			parseRewrite(bd, &server)
 		case "location":
-			classification := classifyLocation(bd, result)
+			classification := classifyLocation(bd, serverRoot, result)
 			convertLocation(classification, &server, upstreams, result)
 		case "error_page":
 			parseErrorPage(bd, &server)
@@ -506,7 +506,7 @@ func parseAuthBasic(d *Directive, server *config.ServerConfig) {
 }
 
 // classifyLocation classifies a location block based on its directives.
-func classifyLocation(d *Directive, result *ConvertResult) locationClassification {
+func classifyLocation(d *Directive, serverRoot string, result *ConvertResult) locationClassification {
 	class := locationClassification{
 		Directives: d.Block,
 	}
@@ -570,7 +570,13 @@ func classifyLocation(d *Directive, result *ConvertResult) locationClassificatio
 	case hasRedirect:
 		class.LocType = redirectType
 	default:
-		class.LocType = "unsupported"
+		// If no explicit root/alias/try_files but server-level root exists,
+		// classify as static (will inherit server root)
+		if serverRoot != "" {
+			class.LocType = "static"
+		} else {
+			class.LocType = "unsupported"
+		}
 	}
 
 	return class
