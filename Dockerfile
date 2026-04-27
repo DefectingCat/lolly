@@ -40,6 +40,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /build/lolly \
     main.go
 
+# 创建运行时目录结构和默认页面
+RUN mkdir -p /etc/lolly /var/www/html && \
+    echo '<!DOCTYPE html><html><head><title>Lolly</title></head><body><h1>It works!</h1></body></html>' > /var/www/html/index.html
+
 # ---- Tini stage ----
 FROM alpine:3.19 AS tini-stage
 RUN apk add --no-cache tini-static
@@ -49,6 +53,10 @@ FROM scratch
 
 # CA 证书（出站 HTTPS 代理需要）
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+# 创建配置和静态文件目录
+COPY --from=builder /etc/lolly /etc/lolly
+COPY --from=builder /var/www/html /var/www/html
 
 # 二进制文件
 COPY --from=builder /build/lolly /lolly

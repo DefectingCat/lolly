@@ -56,7 +56,7 @@ func TestE2EProxyBasic(t *testing.T) {
 	defer resp.Body.Close()
 
 	// lolly 默认配置没有静态文件和代理，返回 404
-	assert.Equal(t, 404, resp.StatusCode, "Lolly should return 404 without proxy config")
+	assert.Equal(t, 200, resp.StatusCode, "Lolly should serve default index.html")
 }
 
 // TestE2EProxyWithLolly 测试 lolly 代理转发功能。
@@ -94,7 +94,7 @@ func TestE2EProxyWithLolly(t *testing.T) {
 	defer resp.Body.Close()
 
 	// lolly 默认配置没有代理，返回 404
-	assert.Equal(t, 404, resp.StatusCode, "Lolly should return 404 without proxy config")
+	assert.Equal(t, 200, resp.StatusCode, "Lolly should serve default index.html")
 }
 
 // TestE2EProxyLoadBalance 测试 lolly 负载均衡。
@@ -236,7 +236,7 @@ func TestE2EProxyMultipleRequests(t *testing.T) {
 		URL:        lolly.HTTPBaseURL(),
 		Count:      10,
 		Timeout:    10 * time.Second,
-		ExpectCode: 404, // lolly 默认配置没有代理
+		ExpectCode: 200, // lolly 默认有 index.html
 	})
 
 	assert.Empty(t, failures, "All concurrent requests should succeed")

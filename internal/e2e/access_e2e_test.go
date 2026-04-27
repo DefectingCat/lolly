@@ -41,6 +41,8 @@ servers:
     static:
       - path: "/"
         root: "/var/www/html"
+        index:
+          - "index.html"
     access:
       allow:
         - "127.0.0.1"
@@ -85,6 +87,8 @@ servers:
     static:
       - path: "/"
         root: "/var/www/html"
+        index:
+          - "index.html"
     access:
       deny:
         - "192.168.100.0/24"
@@ -126,6 +130,8 @@ servers:
     static:
       - path: "/"
         root: "/var/www/html"
+        index:
+          - "index.html"
     access:
       allow:
         - "127.0.0.1"
@@ -167,6 +173,8 @@ servers:
     static:
       - path: "/"
         root: "/var/www/html"
+        index:
+          - "index.html"
 `
 
 	// 启动 lolly
@@ -204,6 +212,8 @@ servers:
     static:
       - path: "/"
         root: "/var/www/html"
+        index:
+          - "index.html"
     access:
       allow:
         - "10.0.0.0/8"

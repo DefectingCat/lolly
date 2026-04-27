@@ -50,8 +50,8 @@ func TestE2EStaticWithLolly(t *testing.T) {
 	require.NoError(t, err, "Failed to reach lolly")
 	defer resp.Body.Close()
 
-	// lolly 默认配置没有静态文件，返回 404
-	assert.Equal(t, 404, resp.StatusCode, "Lolly should return 404 without static files")
+	// lolly 默认配置有 index.html，返回 200
+	assert.Equal(t, 200, resp.StatusCode, "Lolly should serve default index.html")
 }
 
 // TestE2EStaticFileServe 测试 lolly 静态文件服务。
@@ -82,8 +82,8 @@ func TestE2EStaticFileServe(t *testing.T) {
 	require.NoError(t, err, "Failed to reach lolly")
 	defer resp.Body.Close()
 
-	// lolly 默认配置没有静态文件，返回 404
-	assert.Equal(t, 404, resp.StatusCode, "Lolly should return 404 without static files")
+	// lolly 默认配置有 index.html，返回 200
+	assert.Equal(t, 200, resp.StatusCode, "Lolly should serve default index.html")
 }
 
 // TestE2EStaticContentType 测试 lolly Content-Type 检测。
@@ -106,8 +106,8 @@ func TestE2EStaticContentType(t *testing.T) {
 
 	// 验证响应有 Content-Type 头
 	contentType := resp.Header.Get("Content-Type")
-	// lolly 返回 404 时应该有 Content-Type（可能是 text/html、text/plain 或其他）
-	assert.NotEmpty(t, contentType, "404 response should have Content-Type header")
+	// lolly 返回 200 时应该有 Content-Type（可能是 text/html、text/plain 或其他）
+	assert.NotEmpty(t, contentType, "200 response should have Content-Type header")
 }
 
 // TestE2EStaticNotFound 测试 lolly 404 错误。
@@ -149,7 +149,7 @@ func TestE2EStaticConcurrent(t *testing.T) {
 		URL:        lolly.HTTPBaseURL(),
 		Count:      20,
 		Timeout:    10 * time.Second,
-		ExpectCode: 404, // lolly 默认配置没有静态文件
+		ExpectCode: 200, // lolly 默认配置有 index.html
 	})
 
 	assert.Empty(t, failures, "All concurrent requests should succeed")
@@ -178,6 +178,6 @@ func TestE2EStaticLargeFile(t *testing.T) {
 	require.NoError(t, err)
 
 	// 验证响应
-	assert.Equal(t, 404, resp.StatusCode) // lolly 默认没有静态文件
+	assert.Equal(t, 200, resp.StatusCode) // lolly 默认有 index.html
 	assert.NotEmpty(t, body)              // 404 页面应该有内容
 }

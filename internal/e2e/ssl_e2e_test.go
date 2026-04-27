@@ -41,7 +41,7 @@ func TestE2ESSLHandshake(t *testing.T) {
 	cfg := testutil.NewConfigBuilder().
 		WithServer(":8443").
 		WithSSL("/etc/lolly/ssl/server.crt", "/etc/lolly/ssl/server.key").
-		WithStatic("/", "/var/www/html")
+		WithStatic("/", "/var/www/html", testutil.WithIndex([]string{"index.html"}))
 
 	configYAML, err := cfg.Build()
 	require.NoError(t, err, "Failed to build config")
@@ -87,7 +87,7 @@ func TestE2ESSLHTTP2(t *testing.T) {
 	cfg := testutil.NewConfigBuilder().
 		WithServer(":8443").
 		WithSSL("/etc/lolly/ssl/server.crt", "/etc/lolly/ssl/server.key").
-		WithStatic("/", "/var/www/html")
+		WithStatic("/", "/var/www/html", testutil.WithIndex([]string{"index.html"}))
 
 	configYAML, err := cfg.Build()
 	require.NoError(t, err, "Failed to build config")
@@ -134,7 +134,7 @@ func TestE2ESSLProtocolVersions(t *testing.T) {
 		WithSSL("/etc/lolly/ssl/server.crt", "/etc/lolly/ssl/server.key",
 			testutil.WithTLSProtocols([]string{"TLSv1.2", "TLSv1.3"}),
 		).
-		WithStatic("/", "/var/www/html")
+		WithStatic("/", "/var/www/html", testutil.WithIndex([]string{"index.html"}))
 
 	configYAML, err := cfg.Build()
 	require.NoError(t, err, "Failed to build config")
@@ -178,7 +178,7 @@ func TestE2ESSLCertificateChain(t *testing.T) {
 	cfg := testutil.NewConfigBuilder().
 		WithServer(":8443").
 		WithSSL("/etc/lolly/ssl/server.crt", "/etc/lolly/ssl/server.key").
-		WithStatic("/", "/var/www/html")
+		WithStatic("/", "/var/www/html", testutil.WithIndex([]string{"index.html"}))
 
 	configYAML, err := cfg.Build()
 	require.NoError(t, err, "Failed to build config")
@@ -222,7 +222,7 @@ func TestE2ESSLInsecureSkipVerify(t *testing.T) {
 	cfg := testutil.NewConfigBuilder().
 		WithServer(":8443").
 		WithSSL("/etc/lolly/ssl/server.crt", "/etc/lolly/ssl/server.key").
-		WithStatic("/", "/var/www/html")
+		WithStatic("/", "/var/www/html", testutil.WithIndex([]string{"index.html"}))
 
 	configYAML, err := cfg.Build()
 	require.NoError(t, err, "Failed to build config")
@@ -306,7 +306,7 @@ func TestE2ESSLConcurrent(t *testing.T) {
 	cfg := testutil.NewConfigBuilder().
 		WithServer(":8443").
 		WithSSL("/etc/lolly/ssl/server.crt", "/etc/lolly/ssl/server.key").
-		WithStatic("/", "/var/www/html")
+		WithStatic("/", "/var/www/html", testutil.WithIndex([]string{"index.html"}))
 
 	configYAML, err := cfg.Build()
 	require.NoError(t, err, "Failed to build config")
@@ -328,11 +328,11 @@ func TestE2ESSLConcurrent(t *testing.T) {
 		URL:        lolly.HTTPSBaseURL(),
 		Count:      10,
 		Timeout:    testutil.ConcurrentRequestTimeout,
-		ExpectCode: 404, // 静态文件不存在，返回 404
+		ExpectCode: 200, // lolly 默认有 index.html
 		Client:     client,
 	})
 
-	assert.Empty(t, failures, "All concurrent HTTPS requests should succeed (404 is acceptable)")
+	assert.Empty(t, failures, "All concurrent HTTPS requests should succeed (200 is acceptable)")
 }
 
 // TestE2ESSLWithLolly 测试 lolly SSL/TLS 功能（兼容旧测试）。
@@ -365,8 +365,8 @@ func TestE2ESSLWithLolly(t *testing.T) {
 	require.NoError(t, err, "Failed to reach lolly HTTP")
 	defer resp.Body.Close()
 
-	// lolly 默认配置没有静态文件，返回 404
-	assert.Equal(t, 404, resp.StatusCode, "Lolly HTTP should return 404 without static files")
+	// lolly 默认配置有 index.html，返回 200
+	assert.Equal(t, 200, resp.StatusCode, "Lolly HTTP should serve default index.html")
 }
 
 // TestE2ESSLCertificateGeneration 测试证书生成。
@@ -443,7 +443,7 @@ func TestE2ESSLSessionTickets(t *testing.T) {
 		WithSSL("/etc/lolly/ssl/server.crt", "/etc/lolly/ssl/server.key",
 			testutil.WithSessionTickets(true),
 		).
-		WithStatic("/", "/var/www/html")
+		WithStatic("/", "/var/www/html", testutil.WithIndex([]string{"index.html"}))
 
 	configYAML, err := cfg.Build()
 	require.NoError(t, err, "Failed to build config")
@@ -491,7 +491,7 @@ func TestE2ESSLHSTS(t *testing.T) {
 		WithSSL("/etc/lolly/ssl/server.crt", "/etc/lolly/ssl/server.key",
 			testutil.WithHSTS(31536000, true),
 		).
-		WithStatic("/", "/var/www/html")
+		WithStatic("/", "/var/www/html", testutil.WithIndex([]string{"index.html"}))
 
 	configYAML, err := cfg.Build()
 	require.NoError(t, err, "Failed to build config")

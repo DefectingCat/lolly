@@ -290,8 +290,8 @@ func (c *LollyContainer) WaitForHealthy(ctx context.Context, timeout time.Durati
 		resp, err := client.Get(url)
 		if err == nil {
 			resp.Body.Close()
-			if resp.StatusCode == 200 || resp.StatusCode == 404 {
-				// 200 或 404 都表示服务器正在运行
+			if resp.StatusCode < 500 {
+				// 任何非 5xx 响应都表示服务器正在运行
 				return nil
 			}
 		}
@@ -359,7 +359,7 @@ func MockBackendContainer(ctx context.Context, port int) (testcontainers.Contain
 func DockerAvailable(ctx context.Context) bool {
 	req := testcontainers.ContainerRequest{
 		Image:      "alpine:latest",
-		Cmd:        []string{"echo", "test"},
+		Cmd:        []string{"/bin/true"},
 		AutoRemove: true,
 	}
 
@@ -378,7 +378,7 @@ func DockerAvailable(ctx context.Context) bool {
 func LollyImageAvailable(ctx context.Context) bool {
 	req := testcontainers.ContainerRequest{
 		Image:      "lolly:latest",
-		Cmd:        []string{"echo", "test"},
+		Cmd:        []string{"/lolly", "-v"},
 		AutoRemove: true,
 	}
 
