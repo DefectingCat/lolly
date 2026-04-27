@@ -127,9 +127,7 @@ func (p *parser) parseDirectives() ([]Directive, error) {
 		directives = append(directives, *d)
 
 		// Drain any extra directives injected by include expansion.
-		for _, extra := range p.extraDirectives {
-			directives = append(directives, extra)
-		}
+		directives = append(directives, p.extraDirectives...)
 		p.extraDirectives = nil
 	}
 	return directives, nil

@@ -10,6 +10,12 @@ import (
 	"rua.plus/lolly/internal/config"
 )
 
+const (
+	gzipType     = "gzip"
+	offValue     = "off"
+	redirectType = "redirect"
+)
+
 // Warning represents a conversion warning for unsupported or partially supported directives.
 type Warning struct {
 	Directive string
@@ -44,18 +50,18 @@ type locationClassification struct {
 
 // unsupportedDirectives are known nginx directives that have no lolly equivalent.
 var unsupportedDirectives = map[string]string{
-	"if":                "the 'if' directive is not supported; consider using map or rewrite",
-	"map":               "the 'map' directive is not supported; use variables config instead",
-	"set":               "the 'set' directive is not supported; use variables config instead",
-	"limit_req":         "the 'limit_req' directive is not supported; use rate_limit config instead",
-	"limit_conn":        "the 'limit_conn' directive is not supported",
-	"add_header":        "the 'add_header' directive is not supported; use security.headers config instead",
-	"more_set_headers":  "the 'more_set_headers' directive is not supported; use security.headers config instead",
-	"auth_request":      "the 'auth_request' directive is not supported; use security.auth_request config instead",
-	"split_clients":     "the 'split_clients' directive is not supported",
-	"geo":               "the 'geo' directive is not supported; use access.geoip config instead",
-	"range":             "the 'range' directive is not supported",
-	"return":            "the 'return' directive is not supported for non-redirect status codes; only 301/302 are supported",
+	"if":               "the 'if' directive is not supported; consider using map or rewrite",
+	"map":              "the 'map' directive is not supported; use variables config instead",
+	"set":              "the 'set' directive is not supported; use variables config instead",
+	"limit_req":        "the 'limit_req' directive is not supported; use rate_limit config instead",
+	"limit_conn":       "the 'limit_conn' directive is not supported",
+	"add_header":       "the 'add_header' directive is not supported; use security.headers config instead",
+	"more_set_headers": "the 'more_set_headers' directive is not supported; use security.headers config instead",
+	"auth_request":     "the 'auth_request' directive is not supported; use security.auth_request config instead",
+	"split_clients":    "the 'split_clients' directive is not supported",
+	"geo":              "the 'geo' directive is not supported; use access.geoip config instead",
+	"range":            "the 'range' directive is not supported",
+	"return":           "the 'return' directive is not supported for non-redirect status codes; only 301/302 are supported",
 }
 
 // Convert converts a parsed nginx configuration to a lolly configuration.
@@ -91,7 +97,8 @@ func Convert(nginxCfg *NginxConfig) (*ConvertResult, error) {
 	var serverBlocks []Directive
 	for i := range nginxCfg.Directives {
 		d := &nginxCfg.Directives[i]
-		if d.Name == "http" {
+		switch d.Name {
+		case "http":
 			// Check for unsupported directives at the http level.
 			for j := range d.Block {
 				bd := &d.Block[j]
@@ -106,7 +113,7 @@ func Convert(nginxCfg *NginxConfig) (*ConvertResult, error) {
 					})
 				}
 			}
-		} else if d.Name == "server" {
+		case "server":
 			serverBlocks = append(serverBlocks, *d)
 		}
 	}
@@ -207,7 +214,7 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 			if len(bd.Args) > 0 {
 				server.SSL.Key = bd.Args[0]
 			}
-		case "gzip":
+		case gzipType:
 			parseGzip(bd, &server)
 		case "gzip_types":
 			server.Compression.Types = bd.Args
@@ -223,7 +230,7 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 			}
 		case "server_tokens":
 			if len(bd.Args) > 0 {
-				server.ServerTokens = bd.Args[0] != "off"
+				server.ServerTokens = bd.Args[0] != offValue
 			}
 		case "access_log":
 			parseAccessLog(bd, result)
@@ -441,7 +448,7 @@ func parseErrorPage(d *Directive, server *config.ServerConfig) {
 // parseAuthBasic parses an auth_basic directive.
 func parseAuthBasic(d *Directive, server *config.ServerConfig) {
 	if len(d.Args) > 0 {
-		if d.Args[0] != "off" {
+		if d.Args[0] != offValue {
 			server.Security.Auth.Type = "basic"
 			server.Security.Auth.Realm = d.Args[0]
 		}
@@ -508,7 +515,7 @@ func classifyLocation(d *Directive, result *ConvertResult) locationClassificatio
 	case hasRootOrAlias:
 		class.LocType = "static"
 	case hasRedirect:
-		class.LocType = "redirect"
+		class.LocType = redirectType
 	default:
 		class.LocType = "unsupported"
 	}

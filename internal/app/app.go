@@ -36,16 +36,19 @@ type App struct {
 	listeners  []net.Listener
 }
 
+// NewApp creates a new App instance with the given config path.
 func NewApp(cfgPath string) *App {
 	return &App{
 		cfgPath: cfgPath,
 	}
 }
 
+// SetPidFile sets the path to the PID file for the app.
 func (a *App) SetPidFile(path string) {
 	a.pidFile = path
 }
 
+// SetLogFile sets the path to the log file for the app.
 func (a *App) SetLogFile(path string) {
 	a.logFile = path
 }

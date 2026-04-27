@@ -79,8 +79,8 @@ func importNginxConfig(path, outputPath string) error {
 		fmt.Fprintf(os.Stderr, "warning: %s:line %d: %s\n", w.File, w.Line, w.Message)
 	}
 
-	if err := config.Validate(result.Config); err != nil {
-		return fmt.Errorf("转换后配置验证失败: %w", err)
+	if validateErr := config.Validate(result.Config); validateErr != nil {
+		return fmt.Errorf("转换后配置验证失败: %w", validateErr)
 	}
 
 	yamlData, err := yaml.Marshal(result.Config)
@@ -89,7 +89,9 @@ func importNginxConfig(path, outputPath string) error {
 	}
 
 	if outputPath == "" {
-		os.Stdout.Write(yamlData)
+		if _, err := os.Stdout.Write(yamlData); err != nil {
+			return fmt.Errorf("写入标准输出失败: %w", err)
+		}
 	} else {
 		if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 			return fmt.Errorf("创建输出目录失败: %w", err)
