@@ -1077,6 +1077,10 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 			static.Index,
 			true, // useSendfile
 		)
+		// 设置 alias（与 root 互斥）
+		if static.Alias != "" {
+			staticHandler.SetAlias(static.Alias)
+		}
 		if s.fileCache != nil {
 			staticHandler.SetFileCache(s.fileCache)
 			// 设置默认缓存 TTL (5s)
@@ -1442,6 +1446,10 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 			static.Index,
 			true, // useSendfile
 		)
+		// 设置 alias（与 root 互斥）
+		if static.Alias != "" {
+			staticHandler.SetAlias(static.Alias)
+		}
 		if s.fileCache != nil {
 			staticHandler.SetFileCache(s.fileCache)
 			// 设置默认缓存 TTL (5s)

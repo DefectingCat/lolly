@@ -343,6 +343,11 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	for _, st := range cfg.Servers[0].Static {
 		buf.WriteString("      - path: \"/\"              # 匹配路径前缀\n")
 		fmt.Fprintf(&buf, "        root: \"%s\"  # 静态文件根目录\n", st.Root)
+		buf.WriteString("        # alias: \"\"             # 替换路径（与 root 互斥，nginx alias 语义）\n")
+		buf.WriteString("        # root: 请求路径追加到 root 后面\n")
+		buf.WriteString("        # alias: 请求路径替换 location 为 alias\n")
+		buf.WriteString("        # 示例: path=/images/, alias=/var/www/files/\n")
+		buf.WriteString("        #   /images/logo.png → /var/www/files/logo.png\n")
 		buf.WriteString("        index:                 # 索引文件\n")
 		for _, idx := range st.Index {
 			fmt.Fprintf(&buf, "          - \"%s\"\n", idx)
@@ -353,9 +358,9 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 		buf.WriteString("        # location_type: \"\"         # 位置匹配类型（有效值: exact, prefix, regex, regex_caseless, prefix_priority, named）\n")
 		buf.WriteString("        # internal: false           # 仅允许内部重定向访问\n")
 	}
-	buf.WriteString("    # 示例：额外的静态目录\n")
-	buf.WriteString("    # - path: \"/assets/\"\n")
-	buf.WriteString("    #   root: \"/var/www/assets\"\n")
+	buf.WriteString("    # 示例：使用 alias 替换路径\n")
+	buf.WriteString("    # - path: \"/images/\"\n")
+	buf.WriteString("    #   alias: \"/var/www/files/\"  # /images/logo.png → /var/www/files/logo.png\n")
 	buf.WriteString("    #   index: [\"index.html\"]\n")
 	buf.WriteString("\n")
 

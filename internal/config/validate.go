@@ -221,9 +221,19 @@ func validateStatics(statics []StaticConfig) error {
 		}
 		paths[path] = i
 
+		// root 和 alias 互斥检查
+		if s.Root != "" && s.Alias != "" {
+			return fmt.Errorf("static[%d]: root 和 alias 不能同时设置", i)
+		}
+
 		// 验证根目录路径安全
 		if s.Root != "" && strings.Contains(s.Root, "..") {
 			return fmt.Errorf("static[%d]: 根目录路径不能包含 '..'", i)
+		}
+
+		// 验证 alias 路径安全
+		if s.Alias != "" && strings.Contains(s.Alias, "..") {
+			return fmt.Errorf("static[%d]: alias 路径不能包含 '..'", i)
 		}
 
 		// 验证 try_files 模式

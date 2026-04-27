@@ -261,7 +261,14 @@ type StaticConfig struct {
 
 	// Root 静态文件根目录
 	// 所有静态文件请求都将以此目录为基础解析
+	// 请求路径追加到 root 后面
+	// 示例: root=/var/www, path=/static/ → /static/img.png → /var/www/static/img.png
 	Root string `yaml:"root"`
+
+	// Alias 替换路径（与 root 互斥）
+	// 将 location 路径替换为 alias 路径（nginx alias 语义）
+	// 示例: alias=/var/www/files/, path=/images/ → /images/logo.png → /var/www/files/logo.png
+	Alias string `yaml:"alias"`
 
 	// Index 索引文件列表
 	// 访问目录时依次查找这些文件作为默认页面

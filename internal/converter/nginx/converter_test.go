@@ -645,12 +645,12 @@ http {
 	}
 
 	st := s.Static[0]
-	if st.Root != "/data/photos/" {
-		t.Errorf("Root = %s, want /data/photos/", st.Root)
+	if st.Alias != "/data/photos/" {
+		t.Errorf("Alias = %s, want /data/photos/", st.Alias)
 	}
-
-	if !hasWarningContaining(result.Warnings, "alias") {
-		t.Error("expected warning about alias conversion to root")
+	// alias 和 root 互斥，root 应为空
+	if st.Root != "" {
+		t.Errorf("Root = %s, want empty (alias is set)", st.Root)
 	}
 }
 

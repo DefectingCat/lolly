@@ -832,13 +832,7 @@ func convertStaticDirectives(directives []Directive, static *config.StaticConfig
 			}
 		case "alias":
 			if len(d.Args) > 0 {
-				static.Root = d.Args[0]
-				result.Warnings = append(result.Warnings, Warning{
-					Directive: "alias",
-					Line:      d.Line,
-					File:      d.File,
-					Message:   "alias is converted to root; semantic differences may exist for locations with non-trailing paths",
-				})
+				static.Alias = d.Args[0]
 			}
 		case "index":
 			static.Index = append(static.Index, d.Args...)
