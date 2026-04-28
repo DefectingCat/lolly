@@ -171,8 +171,8 @@ func TestDefaultConfigPerformance(t *testing.T) {
 	if cfg.Performance.Transport.IdleConnTimeout != 90*time.Second {
 		t.Errorf("Transport.IdleConnTimeout 期望 90s, 实际 %v", cfg.Performance.Transport.IdleConnTimeout)
 	}
-	if cfg.Performance.Transport.MaxConnsPerHost != 0 {
-		t.Errorf("Transport.MaxConnsPerHost 期望 0 (不限制), 实际 %d", cfg.Performance.Transport.MaxConnsPerHost)
+	if cfg.Performance.Transport.MaxConnsPerHost != 512 {
+		t.Errorf("Transport.MaxConnsPerHost 期望 512 (fasthttp 推荐), 实际 %d", cfg.Performance.Transport.MaxConnsPerHost)
 	}
 }
 

@@ -261,12 +261,17 @@ type HealthMatchConfig struct {
 // 使用示例：
 //
 //	timeout:
-//	  connect: 5s
+//	  dial: 5s     # TCP 连接建立超时
+//	  connect: 30s # 总连接超时（含 DNS/TLS）
 //	  read: 30s
 //	  write: 30s
 type ProxyTimeout struct {
-	// Connect 连接超时
-	// 建立到后端服务器的连接超时
+	// Dial TCP 连接建立超时
+	// 建立 TCP 连接的超时时间（不含 DNS 和 TLS）
+	Dial time.Duration `yaml:"dial"`
+
+	// Connect 总连接超时
+	// 从开始连接到连接可用的总超时时间（含 DNS 和 TLS）
 	Connect time.Duration `yaml:"connect"`
 
 	// Read 读取超时

@@ -9,33 +9,18 @@ import (
 	"rua.plus/lolly/internal/loadbalance"
 )
 
-// buildCacheKey 构建缓存键字符串。
-//
-// 使用请求方法和完整请求 URI 作为缓存键。
-// 该函数保留用于日志记录和调试场景。
-//
-// 参数：
-//   - ctx: FastHTTP 请求上下文
-//
-// 返回值：
-//   - string: 缓存键（格式 "METHOD:URI"）
-func (p *Proxy) buildCacheKey(ctx *fasthttp.RequestCtx) string {
-	// 使用请求方法和路径作为缓存键
-	return string(ctx.Request.Header.Method()) + ":" + string(ctx.Request.URI().RequestURI())
-}
-
 // buildCacheKeyHash 使用 FNV-64a 计算缓存键的 uint64 哈希值。
-// 返回哈希值和原始字符串键。
-// 注意：此函数会先构建字符串键再哈希，存在双重分配。
-// 对于只需要哈希值的场景，使用 buildCacheKeyHashValue 代替。
+// 使用零分配方式构建哈希，避免 []byte(origKey) 转换。
 func (p *Proxy) buildCacheKeyHash(ctx *fasthttp.RequestCtx) (uint64, string) {
-	// 构建原始 key
-	origKey := p.buildCacheKey(ctx)
-
-	// 使用 FNV-64a 计算哈希
 	h := fnv.New64a()
-	h.Write([]byte(origKey))
-	return h.Sum64(), origKey
+	h.Write(ctx.Request.Header.Method())
+	h.Write([]byte(":"))
+	h.Write(ctx.Request.URI().RequestURI())
+	hash := h.Sum64()
+
+	// 仅在需要 origKey 时构建字符串
+	origKey := b2s(ctx.Request.Header.Method()) + ":" + b2s(ctx.Request.URI().RequestURI())
+	return hash, origKey
 }
 
 // buildCacheKeyHashValue 直接计算缓存键的哈希值，零字符串分配。
@@ -111,12 +96,12 @@ func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.
 
 	// 处理 304 Not Modified 响应
 	if resp.StatusCode() == 304 {
-		newHeaders := make(map[string]string)
+		newHeaders := make(map[string]string, 5) // 预分配，通常只有 Last-Modified 和 ETag
 		if lm := resp.Header.Peek("Last-Modified"); len(lm) > 0 {
-			newHeaders["Last-Modified"] = string(lm)
+			newHeaders["Last-Modified"] = b2s(lm)
 		}
 		if et := resp.Header.Peek("ETag"); len(et) > 0 {
-			newHeaders["ETag"] = string(et)
+			newHeaders["ETag"] = b2s(et)
 		}
 		p.cache.RefreshTTL(hashKey, origKey, newHeaders)
 		return

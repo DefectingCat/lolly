@@ -276,7 +276,7 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 
 	// 默认值
 	maxIdleConnDuration := 90 * time.Second
-	maxConns := 100
+	maxConns := 512 // fasthttp 推荐值 DefaultMaxConnsPerHost
 
 	// 应用 Transport 配置
 	if transportCfg != nil {
@@ -301,17 +301,25 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 		SecureErrorLogMessage:  false,
 	}
 
-	// ProxyBind：使用指定本地地址作为出站连接源
-	if proxyBind != "" {
-		localAddr := proxyBind
-		dialTimeout := client.MaxConnWaitTimeout
-		if dialTimeout <= 0 {
-			dialTimeout = 30 * time.Second
-		}
+	// Dial timeout：如果配置了 Dial，使用它作为 TCP 连接建立超时
+	// 否则使用 Connect 作为向后兼容
+	dialTimeout := timeout.Dial
+	if dialTimeout <= 0 {
+		dialTimeout = timeout.Connect
+	}
+	if dialTimeout <= 0 {
+		dialTimeout = 30 * time.Second // 最终默认值
+	}
+
+	// 设置自定义 Dial 函数以使用 Dial timeout
+	// 如果有 ProxyBind 或需要自定义 Dial timeout
+	if proxyBind != "" || timeout.Dial > 0 {
 		client.Dial = func(addr string) (net.Conn, error) {
 			dialer := &net.Dialer{
-				LocalAddr: &net.TCPAddr{IP: net.ParseIP(localAddr)},
-				Timeout:   dialTimeout,
+				Timeout: dialTimeout,
+			}
+			if proxyBind != "" {
+				dialer.LocalAddr = &net.TCPAddr{IP: net.ParseIP(proxyBind)}
 			}
 			return dialer.Dial("tcp", addr)
 		}
@@ -456,9 +464,14 @@ func FinalizeUpstreamVars(vc *variable.Context, upstreamAddr string, upstreamSta
 // 如果没有可用的健康目标，返回 502 Bad Gateway。
 // 如果后端请求失败，根据 next_upstream 配置尝试下一个目标。
 func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
-	// DEBUG: 打印请求信息
-	logging.Debug().Msgf("[PROXY] 收到请求: path=%s, host=%s, method=%s",
-		string(ctx.Path()), string(ctx.Host()), string(ctx.Method()))
+	// DEBUG: 打印请求信息（条件化避免非 Debug 级别的 string() 分配）
+	if logging.Debug().Enabled() {
+		logging.Debug().
+			Str("path", b2s(ctx.Path())).
+			Str("host", b2s(ctx.Host())).
+			Str("method", b2s(ctx.Method())).
+			Msg("[PROXY] 收到请求")
+	}
 
 	// 上游变量捕获
 	var upstreamAddr string
@@ -517,8 +530,13 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		attemptedTargets = append(attemptedTargets, target)
 
-		// DEBUG: 打印选中的目标
-		logging.Debug().Msgf("[PROXY] 选中目标: url=%s, healthy=%v", target.URL, target.Healthy.Load())
+		// DEBUG: 打印选中的目标（条件化避免分配）
+		if logging.Debug().Enabled() {
+			logging.Debug().
+				Str("url", target.URL).
+				Bool("healthy", target.Healthy.Load()).
+				Msg("[PROXY] 选中目标")
+		}
 
 		// 获取所选目标的客户端
 		client := p.getClient(target.URL)
@@ -531,8 +549,13 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			continue
 		}
 
-		// DEBUG: 打印客户端信息
-		logging.Debug().Msgf("[PROXY] client 信息: Addr=%s, IsTLS=%v", client.Addr, client.IsTLS)
+		// DEBUG: 打印客户端信息（条件化避免分配）
+		if logging.Debug().Enabled() {
+			logging.Debug().
+				Str("addr", client.Addr).
+				Bool("isTLS", client.IsTLS).
+				Msg("[PROXY] client 信息")
+		}
 
 		// 增加连接计数（用于最少连接数负载均衡）
 		loadbalance.IncrementConnections(target)
@@ -598,9 +621,14 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		}
 		req.SetRequestURIBytes(targetURI)
 
-		// DEBUG: 打印请求头
-		logging.Debug().Msgf("[PROXY] 请求准备完成: Host=%s, URI=%s, targetURI=%s",
-			string(req.Header.Host()), string(req.RequestURI()), targetURI)
+		// DEBUG: 打印请求头（条件化避免分配）
+		if logging.Debug().Enabled() {
+			logging.Debug().
+				Str("host", b2s(req.Header.Host())).
+				Str("uri", b2s(req.RequestURI())).
+				Str("targetURI", b2s(targetURI)).
+				Msg("[PROXY] 请求准备完成")
+		}
 
 		// 尝试从缓存获取（如果启用）
 		if p.cache != nil && attempt == 0 {
@@ -679,7 +707,12 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		if err != nil {
 			logging.Error().Msgf("[PROXY] 请求失败: url=%s, err=%v, errType=%T", target.URL, err, err)
 		} else {
-			logging.Debug().Msgf("[PROXY] 请求成功: url=%s, status=%d", target.URL, ctx.Response.StatusCode())
+			if logging.Debug().Enabled() {
+				logging.Debug().
+					Str("url", target.URL).
+					Int("status", ctx.Response.StatusCode()).
+					Msg("[PROXY] 请求成功")
+			}
 		}
 
 		if err != nil {
@@ -805,17 +838,25 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 				var lastModified, etag string
 				for key, value := range ctx.Response.Header.All() {
-					headerName := strings.ToLower(string(key))
-					if ignoreSet[headerName] {
+					// 使用 bytes.EqualFold 进行大小写不敏感比较，避免 strings.ToLower 分配
+					shouldIgnore := false
+					for _, h := range p.config.Cache.CacheIgnoreHeaders {
+						if bytes.EqualFold(key, s2b(h)) {
+							shouldIgnore = true
+							break
+						}
+					}
+					if shouldIgnore {
 						continue
 					}
-					headers[string(key)] = string(value)
+					// 使用 b2s 零分配转换
+					headers[b2s(key)] = b2s(value)
 
-					switch headerName {
-					case "last-modified":
-						lastModified = string(value)
-					case "etag":
-						etag = string(value)
+					// 检查特定头部（使用 bytes.EqualFold）
+					if bytes.EqualFold(key, []byte("last-modified")) {
+						lastModified = b2s(value)
+					} else if bytes.EqualFold(key, []byte("etag")) {
+						etag = b2s(value)
 					}
 				}
 				p.cache.Set(hashKey, origKey, ctx.Response.Body(), headers, statusCode, p.getCacheDuration(statusCode))
@@ -1010,4 +1051,3 @@ func extractHostFromURL(urlStr string) string {
 
 	return host
 }
-

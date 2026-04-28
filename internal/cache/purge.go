@@ -266,4 +266,3 @@ func MatchPattern(pattern, path string) bool {
 func matchPattern(pattern, path string) bool {
 	return MatchPattern(pattern, path)
 }
-

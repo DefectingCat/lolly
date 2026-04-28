@@ -234,8 +234,8 @@ func (h *HealthChecker) checkTarget(target *loadbalance.Target) {
 		return
 	}
 
-	// 提取响应头（小写 key）
-	headers := make(map[string]string)
+	// 提取响应头（小写 key，预分配容量）
+	headers := make(map[string]string, 20)
 	for key, value := range resp.Header.All() {
 		headers[string(key)] = string(value)
 	}

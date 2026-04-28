@@ -16,8 +16,8 @@ import (
 	"net"
 	"net/http"
 
-	"rua.plus/lolly/internal/adapter"
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/adapter"
 )
 
 // Adapter 将 fasthttp.RequestHandler 适配为 http.Handler。

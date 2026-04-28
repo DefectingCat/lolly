@@ -9,9 +9,9 @@
 //
 // 关键设计决策：
 //
-//   1. bufferPool 使用 singleton 模式，ctxPool 保持独立
-//   2. CommonAdapter 不包含 ConvertResponse（HTTP/2/HTTP/3 行为不同）
-//   3. 阈值常量统一，避免 HTTP/2 inline 和 HTTP/3 constant 不一致
+//  1. bufferPool 使用 singleton 模式，ctxPool 保持独立
+//  2. CommonAdapter 不包含 ConvertResponse（HTTP/2/HTTP/3 行为不同）
+//  3. 阈值常量统一，避免 HTTP/2 inline 和 HTTP/3 constant 不一致
 //
 // 作者：xfy
 package adapter

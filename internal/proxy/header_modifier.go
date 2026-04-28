@@ -75,8 +75,9 @@ func (p *Proxy) modifyResponseHeaders(ctx *fasthttp.RequestCtx) {
 	if len(passSet) > 0 {
 		var toDelete []string
 		for key := range respHeaders.All() {
-			if !passSet[string(key)] {
-				toDelete = append(toDelete, string(key))
+			// 不在白名单中的应该删除
+			if !isInWhitelist(key, passSet) {
+				toDelete = append(toDelete, b2s(key))
 			}
 		}
 		for _, k := range toDelete {

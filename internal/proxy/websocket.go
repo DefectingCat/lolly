@@ -36,6 +36,15 @@ import (
 	"rua.plus/lolly/internal/netutil"
 )
 
+// wsBufPool WebSocket 数据转发 buffer pool。
+// 复用 32KB buffer 避免每次 copyData 调用分配。
+var wsBufPool = sync.Pool{
+	New: func() interface{} {
+		buf := make([]byte, 32*1024)
+		return &buf
+	},
+}
+
 // WebSocketBridge WebSocket 桥接器。
 //
 // 在客户端和后端服务器之间建立双向数据通道，透明转发 WebSocket 数据帧。
@@ -118,7 +127,10 @@ func (b *WebSocketBridge) Bridge() error {
 // 返回值：
 //   - error: 读写错误，连接正常关闭返回 nil
 func (b *WebSocketBridge) copyData(dst, src net.Conn, direction string) error {
-	buf := make([]byte, 32*1024) // 32KB 缓冲区
+	bufPtr := wsBufPool.Get().(*[]byte)
+	buf := *bufPtr
+	defer wsBufPool.Put(bufPtr)
+
 	for {
 		n, err := src.Read(buf)
 		if err != nil {

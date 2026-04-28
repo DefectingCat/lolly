@@ -182,7 +182,7 @@ func DefaultConfig() *Config {
 			},
 			Transport: TransportConfig{
 				IdleConnTimeout: 90 * time.Second,
-				MaxConnsPerHost: 0, // 0 表示不限制
+				MaxConnsPerHost: 512, // fasthttp 推荐值
 			},
 		},
 		Monitoring: MonitoringConfig{

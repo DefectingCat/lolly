@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -771,8 +772,16 @@ func (h *StaticHandler) validateSymlink(filePath string) error {
 }
 
 // generateETag 基于 ModTime 和 Size 生成 ETag。
+// 使用 strconv.AppendInt 避免 fmt.Sprintf 分配。
 func generateETag(modTime time.Time, size int64) string {
-	return fmt.Sprintf("\"%x-%x\"", modTime.Unix(), size)
+	var buf [32]byte
+	b := buf[:0]
+	b = append(b, '"')
+	b = strconv.AppendInt(b, modTime.Unix(), 16)
+	b = append(b, '-')
+	b = strconv.AppendInt(b, size, 16)
+	b = append(b, '"')
+	return string(b)
 }
 
 // isNotModified 检查条件请求是否匹配（返回 true 表示应返回 304）。
