@@ -582,7 +582,7 @@ func (cl *ConnLimiter) Acquire(ctx *fasthttp.RequestCtx) bool {
 //   - ctx: FastHTTP 请求上下文
 func (cl *ConnLimiter) Release(ctx *fasthttp.RequestCtx) {
 	if !cl.perKey {
-		addInt64(&cl.current, -1)
+		atomic.AddInt64(&cl.current, -1)
 		return
 	}
 
@@ -598,21 +598,16 @@ func (cl *ConnLimiter) Release(ctx *fasthttp.RequestCtx) {
 // Middleware 返回连接限制的中间件包装。
 //
 // 返回值：
-//   - middleware.Middleware: 可用于中间件链的限制器
+//   - middleware.Middleware: 可用于中间件链的限制器（返回自身）
 func (cl *ConnLimiter) Middleware() middleware.Middleware {
-	return &connLimiterMiddleware{limiter: cl}
-}
-
-// connLimiterMiddleware 连接限制器的中间件包装。
-type connLimiterMiddleware struct {
-	limiter *ConnLimiter // 连接限制器实例
+	return cl
 }
 
 // Name 返回中间件名称。
 //
 // 返回值：
 //   - string: 中间件标识名 "conn_limiter"
-func (m *connLimiterMiddleware) Name() string {
+func (cl *ConnLimiter) Name() string {
 	return "conn_limiter"
 }
 
@@ -626,28 +621,20 @@ func (m *connLimiterMiddleware) Name() string {
 //
 // 返回值：
 //   - fasthttp.RequestHandler: 包装后的处理器
-func (m *connLimiterMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
+func (cl *ConnLimiter) Process(next fasthttp.RequestHandler) fasthttp.RequestHandler {
 	return func(ctx *fasthttp.RequestCtx) {
-		if !m.limiter.Acquire(ctx) {
+		if !cl.Acquire(ctx) {
 			utils.SendErrorWithDetail(ctx, utils.ErrServiceUnavailable, "Connection limit exceeded")
 			return
 		}
 
-		defer m.limiter.Release(ctx)
+		defer cl.Release(ctx)
 		next(ctx)
 	}
-}
-
-// 连接数原子操作辅助函数
-
-// addInt64 原子添加 int64 增量。
-
-func addInt64(ptr *int64, delta int64) {
-	atomic.AddInt64(ptr, delta)
 }
 
 // 验证接口实现
 var (
 	_ middleware.Middleware = (*RateLimiter)(nil)
-	_ middleware.Middleware = (*connLimiterMiddleware)(nil)
+	_ middleware.Middleware = (*ConnLimiter)(nil)
 )

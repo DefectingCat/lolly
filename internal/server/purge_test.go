@@ -785,15 +785,6 @@ func TestPurgeHandler_checkAccess_WithAllowedIP(t *testing.T) {
 	})
 }
 
-// mockProxyWithCache 是一个用于测试的 mock Proxy，可以返回指定的缓存。
-type mockProxyWithCache struct {
-	cache *cache.ProxyCache
-}
-
-func (m *mockProxyWithCache) GetCache() *cache.ProxyCache {
-	return m.cache
-}
-
 // TestPurgeHandler_PurgeByPath_WithRealCache 测试 purgeByPath 在有真实缓存时的行为。
 func TestPurgeHandler_PurgeByPath_WithRealCache(t *testing.T) {
 	// 创建启用缓存的代理

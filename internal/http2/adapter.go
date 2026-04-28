@@ -13,13 +13,12 @@
 package http2
 
 import (
-	"io"
 	"net"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/adapter"
 )
 
 // FastHTTPHandlerAdapter 将 fasthttp.RequestHandler 适配为 http.Handler。
@@ -27,16 +26,8 @@ import (
 // 由于 HTTP/2 服务器使用标准库的 http.Handler 接口，
 // 而 lolly 使用 fasthttp，需要通过适配层进行转换。
 type FastHTTPHandlerAdapter struct {
+	*adapter.CommonAdapter
 	handler fasthttp.RequestHandler
-
-	// ctxPool 用于复用 fasthttp.RequestCtx 对象
-	ctxPool sync.Pool
-
-	// bufferPool 用于复用字节缓冲区（零拷贝优化）
-	bufferPool sync.Pool
-
-	// headerBufferPool 用于复用头部缓冲区
-	headerBufferPool sync.Pool
 }
 
 // NewFastHTTPHandlerAdapter 创建新的 HTTP/2 适配器。
@@ -48,23 +39,8 @@ type FastHTTPHandlerAdapter struct {
 //   - *FastHTTPHandlerAdapter: 适配器实例
 func NewFastHTTPHandlerAdapter(handler fasthttp.RequestHandler) *FastHTTPHandlerAdapter {
 	return &FastHTTPHandlerAdapter{
-		handler: handler,
-		ctxPool: sync.Pool{
-			New: func() interface{} {
-				return &fasthttp.RequestCtx{}
-			},
-		},
-		bufferPool: sync.Pool{
-			New: func() interface{} {
-				buf := make([]byte, 4096) // 4KB 初始缓冲区
-				return &buf
-			},
-		},
-		headerBufferPool: sync.Pool{
-			New: func() interface{} {
-				return &fasthttp.RequestHeader{}
-			},
-		},
+		CommonAdapter: adapter.NewCommonAdapter(),
+		handler:       handler,
 	}
 }
 
@@ -78,39 +54,23 @@ func NewFastHTTPHandlerAdapter(handler fasthttp.RequestHandler) *FastHTTPHandler
 //   - r: 标准库 HTTP 请求
 func (a *FastHTTPHandlerAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 从池中获取 RequestCtx
-	ctx, ok := a.ctxPool.Get().(*fasthttp.RequestCtx)
-	if !ok {
-		// 如果类型断言失败，创建新的上下文（不应该发生，但为了安全）
-		ctx = &fasthttp.RequestCtx{}
-	}
-	defer a.ctxPool.Put(ctx)
+	ctx, _ := a.GetContext()
+	defer a.PutContext(ctx)
 
 	// 重置 ctx 状态以避免污染
-	a.resetContext(ctx)
+	a.ResetContext(ctx)
 
 	// 转换请求（零拷贝头部转换）
 	a.convertRequest(r, ctx)
 
 	// 流式处理请求体
-	a.streamRequestBody(r, ctx)
+	a.StreamRequestBody(r, ctx)
 
 	// 调用 fasthttp handler
 	a.handler(ctx)
 
 	// 转换响应
 	a.convertResponse(ctx, w)
-}
-
-// resetContext 重置 fasthttp.RequestCtx 状态。
-//
-// 参数：
-//   - ctx: 需要重置的上下文
-func (a *FastHTTPHandlerAdapter) resetContext(ctx *fasthttp.RequestCtx) {
-	// 清空请求头
-	ctx.Request.Header.DisableNormalizing()
-	ctx.Request.Reset()
-	ctx.Response.Reset()
-	ctx.SetUserValueBytes(nil, nil)
 }
 
 // convertRequest 将 net/http.Request 转换为 fasthttp.RequestCtx。
@@ -201,61 +161,6 @@ func (a *FastHTTPHandlerAdapter) setRemoteAddr(r *http.Request, ctx *fasthttp.Re
 				Port: 0,
 			})
 		}
-	}
-}
-
-// streamRequestBody 流式读取请求体到 fasthttp。
-//
-// 对于大请求体，使用流式处理避免内存峰值。
-//
-// 参数：
-//   - r: 标准库 HTTP 请求
-//   - ctx: FastHTTP 请求上下文
-func (a *FastHTTPHandlerAdapter) streamRequestBody(r *http.Request, ctx *fasthttp.RequestCtx) {
-	if r.Body == nil || r.Body == http.NoBody {
-		return
-	}
-
-	defer func() {
-		_ = r.Body.Close()
-	}()
-
-	// 小请求体：直接读取到内存
-	if r.ContentLength > 0 && r.ContentLength <= 64*1024 {
-		body, err := io.ReadAll(r.Body)
-		if err == nil {
-			ctx.Request.SetBody(body)
-		}
-		return
-	}
-
-	// 大请求体：使用流式缓冲区
-	bufPtr, ok := a.bufferPool.Get().(*[]byte)
-	if !ok {
-		// 如果类型断言失败，创建新的缓冲区
-		buf := make([]byte, 4096)
-		bufPtr = &buf
-	}
-	defer a.bufferPool.Put(bufPtr)
-
-	buf := *bufPtr
-	var body []byte
-
-	for {
-		n, err := r.Body.Read(buf)
-		if n > 0 {
-			body = append(body, buf[:n]...)
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			break
-		}
-	}
-
-	if len(body) > 0 {
-		ctx.Request.SetBody(body)
 	}
 }
 

@@ -848,3 +848,22 @@ func TestKeyByIP_Unknown(t *testing.T) {
 		t.Error("keyByIP() should return non-empty string")
 	}
 }
+
+// TestConnLimiter_MiddlewareIdentity 验证 Middleware() 返回相同实例
+func TestConnLimiter_MiddlewareIdentity(t *testing.T) {
+	cl, err := NewConnLimiter(100, false, "")
+	if err != nil {
+		t.Fatalf("NewConnLimiter() error: %v", err)
+	}
+
+	// Middleware() 应该返回自身
+	middleware := cl.Middleware()
+	if middleware != cl {
+		t.Error("Middleware() should return the same ConnLimiter instance")
+	}
+
+	// 验证返回的实例实现了 Middleware 接口
+	if middleware.Name() != "conn_limiter" {
+		t.Errorf("Name() = %s, want 'conn_limiter'", middleware.Name())
+	}
+}
