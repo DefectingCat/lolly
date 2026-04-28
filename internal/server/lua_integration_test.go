@@ -75,7 +75,7 @@ func TestBuildLuaMiddlewares_InvalidPhase(t *testing.T) {
 
 	_, err = s.buildLuaMiddlewares(luaCfg)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "无效的阶段")
+	assert.Contains(t, err.Error(), "invalid phase")
 }
 
 // TestBuildLuaMiddlewares_WithTimeout 测试超时配置

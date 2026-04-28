@@ -20,7 +20,6 @@
 package server
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -34,16 +33,10 @@ import (
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/handler"
-	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/lua"
 	"rua.plus/lolly/internal/matcher"
-	"rua.plus/lolly/internal/middleware"
 	"rua.plus/lolly/internal/middleware/accesslog"
-	"rua.plus/lolly/internal/middleware/bodylimit"
-	"rua.plus/lolly/internal/middleware/compression"
-	"rua.plus/lolly/internal/middleware/errorintercept"
-	"rua.plus/lolly/internal/middleware/rewrite"
 	"rua.plus/lolly/internal/middleware/security"
 	"rua.plus/lolly/internal/mimeutil"
 	"rua.plus/lolly/internal/proxy"
@@ -211,236 +204,6 @@ func (s *Server) GetHandler() fasthttp.RequestHandler {
 	return s.handler
 }
 
-// buildMiddlewareChain 构建中间件链。
-//
-// 根据服务器配置按顺序构建中间件链，顺序为：
-//
-//	AccessLog -> AccessControl -> RateLimiter -> BasicAuth -> Rewrite -> Compression -> SecurityHeaders
-//
-// 参数：
-//   - serverCfg: 单个服务器的配置对象
-//
-// 返回值：
-//   - *middleware.Chain: 构建完成的中间件链
-//   - error: 构建过程中遇到的错误，如中间件创建失败
-//
-// 注意事项：
-//   - 各中间件按顺序依次包装请求处理器
-//   - 未配置的中间件不会添加到链中
-func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middleware.Chain, error) {
-	var middlewares []middleware.Middleware
-
-	// 1. AccessLog (已集成)
-	s.accessLogMiddleware = accesslog.New(&s.config.Logging)
-	middlewares = append(middlewares, s.accessLogMiddleware)
-
-	// 2. Security: AccessControl (IP 访问控制)
-	if len(serverCfg.Security.Access.Allow) > 0 || len(serverCfg.Security.Access.Deny) > 0 {
-		ac, err := security.NewAccessControl(&serverCfg.Security.Access)
-		if err != nil {
-			return nil, fmt.Errorf("创建访问控制中间件失败: %w", err)
-		}
-		middlewares = append(middlewares, ac)
-		s.accessControl = ac
-	}
-
-	// 3. Security: RateLimiter (速率限制)
-	if serverCfg.Security.RateLimit.RequestRate > 0 {
-		rl, err := security.NewRateLimiter(&serverCfg.Security.RateLimit)
-		if err != nil {
-			return nil, fmt.Errorf("创建限流中间件失败: %w", err)
-		}
-		middlewares = append(middlewares, rl)
-	}
-
-	// 3.5 Security: ConnLimiter (连接数限制)
-	if serverCfg.Security.RateLimit.ConnLimit > 0 {
-		cl, err := security.NewConnLimiter(serverCfg.Security.RateLimit.ConnLimit, true, serverCfg.Security.RateLimit.Key)
-		if err != nil {
-			return nil, fmt.Errorf("创建连接限制中间件失败: %w", err)
-		}
-		middlewares = append(middlewares, cl.Middleware())
-	}
-
-	// 4. Security: BasicAuth (认证)
-	if len(serverCfg.Security.Auth.Users) > 0 {
-		auth, err := security.NewBasicAuth(&serverCfg.Security.Auth)
-		if err != nil {
-			return nil, fmt.Errorf("创建认证中间件失败: %w", err)
-		}
-		middlewares = append(middlewares, auth)
-	}
-
-	// 4.3 Security: AuthRequest (外部认证子请求)
-	if serverCfg.Security.AuthRequest.Enabled && serverCfg.Security.AuthRequest.URI != "" {
-		authReq, err := security.NewAuthRequest(serverCfg.Security.AuthRequest)
-		if err != nil {
-			return nil, fmt.Errorf("创建外部认证中间件失败: %w", err)
-		}
-		middlewares = append(middlewares, authReq)
-	}
-
-	// 4.5 BodyLimit (请求体大小限制)
-	// 创建 bodylimit 中间件，使用全局配置或默认值
-	bodyLimitMiddleware := bodylimit.NewWithDefault()
-	if serverCfg.ClientMaxBodySize != "" {
-		bl, err := bodylimit.New(serverCfg.ClientMaxBodySize)
-		if err != nil {
-			return nil, fmt.Errorf("创建请求体限制中间件失败: %w", err)
-		}
-		bodyLimitMiddleware = bl
-	}
-	// 添加路径级别的限制配置
-	for i := range serverCfg.Proxy {
-		if serverCfg.Proxy[i].ClientMaxBodySize != "" {
-			if err := bodyLimitMiddleware.AddPathLimit(
-				serverCfg.Proxy[i].Path,
-				serverCfg.Proxy[i].ClientMaxBodySize,
-			); err != nil {
-				return nil, fmt.Errorf("添加路径请求体限制失败: %w", err)
-			}
-		}
-	}
-	middlewares = append(middlewares, bodyLimitMiddleware)
-
-	// 5. Rewrite (URL 重写)
-	if len(serverCfg.Rewrite) > 0 {
-		rw, err := rewrite.New(serverCfg.Rewrite)
-		if err != nil {
-			return nil, fmt.Errorf("创建重写中间件失败: %w", err)
-		}
-		middlewares = append(middlewares, rw)
-	}
-
-	// 6. Compression (响应压缩)
-	if serverCfg.Compression.Type != "" {
-		comp, err := compression.New(&serverCfg.Compression)
-		if err != nil {
-			return nil, fmt.Errorf("创建压缩中间件失败: %w", err)
-		}
-		middlewares = append(middlewares, comp)
-	}
-
-	// 7. SecurityHeaders (安全头部)
-	// 如果有任何安全头部配置，则启用
-	if serverCfg.Security.Headers.XFrameOptions != "" ||
-		serverCfg.Security.Headers.XContentTypeOptions != "" ||
-		serverCfg.Security.Headers.ContentSecurityPolicy != "" ||
-		serverCfg.Security.Headers.ReferrerPolicy != "" ||
-		serverCfg.Security.Headers.PermissionsPolicy != "" {
-		headers := security.NewHeadersWithHSTS(&serverCfg.Security.Headers, &serverCfg.SSL.HSTS)
-		middlewares = append(middlewares, headers)
-	}
-
-	// 8. ErrorIntercept (错误页面拦截)
-	// 如果配置了错误页面，添加错误拦截中间件
-	if s.errorPageManager != nil && s.errorPageManager.IsConfigured() {
-		ei := errorintercept.New(s.errorPageManager)
-		middlewares = append(middlewares, ei)
-	}
-
-	// Lua 中间件（可选）
-	if s.luaEngine != nil && serverCfg.Lua != nil && serverCfg.Lua.Enabled {
-		luaMiddlewares, err := s.buildLuaMiddlewares(serverCfg.Lua)
-		if err != nil {
-			return nil, fmt.Errorf("创建 Lua 中间件失败: %w", err)
-		}
-		middlewares = append(middlewares, luaMiddlewares...)
-	}
-
-	return middleware.NewChain(middlewares...), nil
-}
-
-// buildLuaMiddlewares 根据 Lua 配置创建中间件。
-//
-// 根据 Scripts 配置创建 LuaMiddleware 或 MultiPhaseLuaMiddleware。
-// 支持单脚本和多阶段脚本配置。
-//
-// 参数：
-//   - luaCfg: Lua 配置对象
-//
-// 返回值：
-//   - []middleware.Middleware: 创建的中间件列表
-//   - error: 创建过程中遇到的错误
-func (s *Server) buildLuaMiddlewares(luaCfg *config.LuaMiddlewareConfig) ([]middleware.Middleware, error) {
-	if s.luaEngine == nil {
-		return nil, nil
-	}
-
-	// 按阶段分组脚本
-	phaseScripts := make(map[string][]config.LuaScriptConfig)
-	for _, script := range luaCfg.Scripts {
-		// 默认启用
-		enabled := script.Enabled
-		if !enabled && script.Timeout == 0 && script.Path != "" {
-			enabled = true // 零值时默认启用
-		}
-		if enabled {
-			phaseScripts[script.Phase] = append(phaseScripts[script.Phase], script)
-		}
-	}
-
-	var middlewares []middleware.Middleware
-
-	// 为每个阶段创建中间件
-	for phase, scripts := range phaseScripts {
-		if len(scripts) == 0 {
-			continue
-		}
-
-		// 单脚本：直接创建 LuaMiddleware
-		if len(scripts) == 1 {
-			script := scripts[0]
-			luaPhase, err := lua.ParsePhase(phase)
-			if err != nil {
-				return nil, fmt.Errorf("无效的阶段 '%s': %w", phase, err)
-			}
-
-			timeout := script.Timeout
-			if timeout == 0 {
-				timeout = 30 * time.Second
-			}
-
-			cfg := lua.LuaMiddlewareConfig{
-				ScriptPath: script.Path,
-				Phase:      luaPhase,
-				Timeout:    timeout,
-				Name:       fmt.Sprintf("lua-%s", phase),
-			}
-
-			mw, err := lua.NewLuaMiddleware(s.luaEngine, cfg)
-			if err != nil {
-				return nil, fmt.Errorf("创建 Lua 中间件失败 (phase=%s): %w", phase, err)
-			}
-
-			middlewares = append(middlewares, mw)
-		} else {
-			// 多脚本：创建 MultiPhaseLuaMiddleware
-			multi := lua.NewMultiPhaseLuaMiddleware(s.luaEngine, fmt.Sprintf("lua-multi-%s", phase))
-			for _, script := range scripts {
-				luaPhase, err := lua.ParsePhase(phase)
-				if err != nil {
-					return nil, fmt.Errorf("无效的阶段 '%s': %w", phase, err)
-				}
-
-				timeout := script.Timeout
-				if timeout == 0 {
-					timeout = 30 * time.Second
-				}
-
-				err = multi.AddPhase(luaPhase, script.Path, timeout)
-				if err != nil {
-					return nil, fmt.Errorf("添加 Lua 阶段失败 (phase=%s): %w", phase, err)
-				}
-			}
-
-			middlewares = append(middlewares, multi)
-		}
-	}
-
-	return middlewares, nil
-}
-
 // Start 启动 HTTP 服务器。
 //
 // 初始化日志系统、性能优化组件（Goroutine池、文件缓存），
@@ -549,13 +312,13 @@ func (s *Server) createListener(cfg *config.ServerConfig) (net.Listener, error) 
 			mode = cfg.UnixSocket.Mode
 		}
 		if err := os.Chmod(socketPath, os.FileMode(mode)); err != nil {
-			logging.Warn().Err(err).Msg("设置 socket 文件权限失败")
+			logging.Warn().Err(err).Msg("Failed to set socket file permissions")
 		}
 
 		// 5. 设置文件所有权（需要 root 权限）
 		if cfg.UnixSocket.User != "" || cfg.UnixSocket.Group != "" {
 			// 简化处理：仅记录警告，实际实现需要 syscall.Chown
-			logging.Warn().Msg("Unix socket 用户/组配置需要 root 权限，已跳过")
+			logging.Warn().Msg("Unix socket user/group config requires root privileges, skipped")
 		}
 
 		return listener, nil
@@ -590,7 +353,7 @@ func (s *Server) startSingleMode() error {
 	if s.config.Monitoring.Status.Path != "" || len(s.config.Monitoring.Status.Allow) > 0 {
 		statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
 		if err != nil {
-			logging.Error().Msg("创建状态处理器失败: " + err.Error())
+			logging.Error().Msg("Failed to create status handler: " + err.Error())
 		} else {
 			_ = s.locationEngine.AddExact(statusHandler.Path(), statusHandler.ServeHTTP, false)
 		}
@@ -600,7 +363,7 @@ func (s *Server) startSingleMode() error {
 	if s.config.Monitoring.Pprof.Enabled {
 		pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
 		if err != nil {
-			logging.Error().Msg("创建 pprof 处理器失败: " + err.Error())
+			logging.Error().Msg("Failed to create pprof handler: " + err.Error())
 		} else {
 			_ = s.locationEngine.AddExact(pprofHandler.Path(), pprofHandler.ServeHTTP, false)
 			_ = s.locationEngine.AddPrefixPriority(pprofHandler.Path()+"/", pprofHandler.ServeHTTP, false)
@@ -611,7 +374,7 @@ func (s *Server) startSingleMode() error {
 	if serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
 		purgeHandler, err := NewPurgeHandler(s, serverCfg.CacheAPI)
 		if err != nil {
-			logging.Error().Msg("创建缓存清理处理器失败: " + err.Error())
+			logging.Error().Msg("Failed to create cache purge handler: " + err.Error())
 		} else {
 			_ = s.locationEngine.AddExact(purgeHandler.Path(), purgeHandler.ServeHTTP, false)
 		}
@@ -685,7 +448,7 @@ func (s *Server) startSingleMode() error {
 		var err error
 		s.tlsManager, err = ssl.NewTLSManager(&serverCfg.SSL)
 		if err != nil {
-			return fmt.Errorf("创建 TLS 管理器失败: %w", err)
+			return fmt.Errorf("failed to create TLS manager: %w", err)
 		}
 		s.fastServer.TLSConfig = s.tlsManager.GetTLSConfig()
 		return s.fastServer.ServeTLS(ln, "", "")
@@ -747,7 +510,7 @@ func (s *Server) startVHostMode() error {
 		if s.config.Monitoring.Status.Enabled {
 			statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
 			if err != nil {
-				logging.Error().Msg("创建状态处理器失败: " + err.Error())
+				logging.Error().Msg("Failed to create status handler: " + err.Error())
 			} else {
 				router.GET(statusHandler.Path(), statusHandler.ServeHTTP)
 			}
@@ -757,7 +520,7 @@ func (s *Server) startVHostMode() error {
 		if s.config.Monitoring.Pprof.Enabled {
 			pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
 			if err != nil {
-				logging.Error().Msg("创建 pprof 处理器失败: " + err.Error())
+				logging.Error().Msg("Failed to create pprof handler: " + err.Error())
 			} else {
 				router.GET(pprofHandler.Path(), pprofHandler.ServeHTTP)
 				router.GET(pprofHandler.Path()+"/{profile:*}", pprofHandler.ServeHTTP)
@@ -769,7 +532,7 @@ func (s *Server) startVHostMode() error {
 		if defaultSrv != nil && defaultSrv.CacheAPI != nil && defaultSrv.CacheAPI.Enabled {
 			purgeHandler, err := NewPurgeHandler(s, defaultSrv.CacheAPI)
 			if err != nil {
-				logging.Error().Msg("创建缓存清理处理器失败: " + err.Error())
+				logging.Error().Msg("Failed to create cache purge handler: " + err.Error())
 			} else {
 				router.POST(purgeHandler.Path(), purgeHandler.ServeHTTP)
 			}
@@ -829,7 +592,7 @@ func (s *Server) startVHostMode() error {
 		var err error
 		s.tlsManager, err = ssl.NewTLSManager(&serverCfg.SSL)
 		if err != nil {
-			return fmt.Errorf("创建 TLS 管理器失败: %w", err)
+			return fmt.Errorf("failed to create TLS manager: %w", err)
 		}
 		s.fastServer.TLSConfig = s.tlsManager.GetTLSConfig()
 		return s.fastServer.ServeTLS(ln, "", "")
@@ -853,7 +616,7 @@ func (s *Server) startVHostMode() error {
 func (s *Server) startMultiServerMode() error {
 	// 热升级检测：multi_server 热升级未实现，回退到 vhost 模式
 	if os.Getenv("GRACEFUL_UPGRADE") == "1" {
-		logging.Warn().Msg("热升级模式下 multi_server 模式未实现，回退到虚拟主机模式")
+		logging.Warn().Msg("multi_server mode not implemented for graceful upgrade, falling back to vhost mode")
 		return s.startVHostMode()
 	}
 
@@ -874,7 +637,7 @@ func (s *Server) startMultiServerMode() error {
 			// 创建监听器
 			ln, err := s.createListener(serverCfg)
 			if err != nil {
-				errCh <- fmt.Errorf("监听地址 %s 失败: %w", serverCfg.Listen, err)
+				errCh <- fmt.Errorf("failed to listen on %s: %w", serverCfg.Listen, err)
 				return
 			}
 			s.listeners[idx] = ln
@@ -886,7 +649,7 @@ func (s *Server) startMultiServerMode() error {
 			if idx == 0 && serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
 				purgeHandler, purgeErr := NewPurgeHandler(s, serverCfg.CacheAPI)
 				if purgeErr != nil {
-					errCh <- fmt.Errorf("创建缓存清理处理器失败 (server[%d]): %w", idx, purgeErr)
+					errCh <- fmt.Errorf("failed to create cache purge handler (server[%d]): %w", idx, purgeErr)
 					return
 				}
 				router.POST(purgeHandler.Path(), purgeHandler.ServeHTTP)
@@ -900,7 +663,7 @@ func (s *Server) startMultiServerMode() error {
 			// 构建独立的中间件链
 			chain, err := s.buildMiddlewareChain(serverCfg)
 			if err != nil {
-				errCh <- fmt.Errorf("构建中间件链失败 (server[%d]): %w", idx, err)
+				errCh <- fmt.Errorf("failed to build middleware chain (server[%d]): %w", idx, err)
 				return
 			}
 
@@ -927,7 +690,7 @@ func (s *Server) startMultiServerMode() error {
 			if serverCfg.SSL.Cert != "" && serverCfg.SSL.Key != "" {
 				tlsManager, err := ssl.NewTLSManager(&serverCfg.SSL)
 				if err != nil {
-					errCh <- fmt.Errorf("创建 TLS 管理器失败 (server[%d]): %w", idx, err)
+					errCh <- fmt.Errorf("failed to create TLS manager (server[%d]): %w", idx, err)
 					return
 				}
 				fastSrv.TLSConfig = tlsManager.GetTLSConfig()
@@ -978,7 +741,7 @@ func (s *Server) startMultiServerMode() error {
 				serveErr = f.Serve(l)
 			}
 			if serveErr != nil {
-				logging.Error().Err(serveErr).Msgf("服务器 [%d] 监听 %s 时发生错误", i, l.Addr())
+				logging.Error().Err(serveErr).Msgf("Server [%d] error while listening on %s", i, l.Addr())
 			}
 		}(fastSrv, ln, idx)
 	}
@@ -986,509 +749,6 @@ func (s *Server) startMultiServerMode() error {
 	// 等待服务器停止（阻塞）
 	wg.Wait()
 	return nil
-}
-
-// registerProxyRoutesWithLocationEngine 使用 LocationEngine 注册代理路由。
-//
-// 根据配置为 LocationEngine 注册代理路径，创建代理处理器和健康检查器。
-// 支持通过 LocationType 配置不同的匹配方式。
-func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerConfig) {
-	for i := range serverCfg.Proxy {
-		proxyCfg := &serverCfg.Proxy[i]
-
-		// 转换目标
-		targets := make([]*loadbalance.Target, len(proxyCfg.Targets))
-		for j, t := range proxyCfg.Targets {
-			failTimeout := t.FailTimeout
-			if t.MaxFails > 0 && failTimeout == 0 {
-				failTimeout = 10 * time.Second
-			}
-			targets[j] = loadbalance.NewTargetFromConfig(
-				t.URL, t.Weight,
-				int64(t.MaxConns), int64(t.MaxFails), failTimeout,
-				t.Backup, t.Down, t.ProxyURI,
-			)
-		}
-
-		// 传递 Transport 配置和 Lua 引擎
-		p, err := proxy.NewProxy(proxyCfg, targets, &s.config.Performance.Transport, s.luaEngine)
-		if err != nil {
-			logging.Error().Msg("创建代理失败: " + err.Error())
-			continue
-		}
-
-		// 设置 DNS 解析器（如果已配置）
-		if s.resolver != nil {
-			p.SetResolver(s.resolver)
-			if err := p.Start(); err != nil {
-				logging.Error().Err(err).Msg("启动代理失败")
-			}
-		}
-
-		// 启动健康检查
-		if proxyCfg.HealthCheck.Interval > 0 {
-			hc := proxy.NewHealthChecker(targets, &proxyCfg.HealthCheck)
-			hc.Start()
-			s.healthCheckers = append(s.healthCheckers, hc)
-			// 设置被动健康检查
-			p.SetHealthChecker(hc)
-		}
-
-		// 保存代理实例用于缓存统计
-		s.proxies = append(s.proxies, p)
-
-		// 根据 LocationType 注册路由
-		locType := proxyCfg.LocationType
-		if locType == "" {
-			locType = matcher.LocationTypePrefix
-		}
-
-		switch locType {
-		case matcher.LocationTypeExact:
-			_ = s.locationEngine.AddExact(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
-		case matcher.LocationTypePrefixPriority:
-			_ = s.locationEngine.AddPrefixPriority(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
-		case matcher.LocationTypeRegex, matcher.LocationTypeRegexCaseless:
-			caseInsensitive := locType == matcher.LocationTypeRegexCaseless
-			_ = s.locationEngine.AddRegex(proxyCfg.Path, p.ServeHTTP, caseInsensitive, proxyCfg.Internal)
-		case matcher.LocationTypeNamed:
-			if proxyCfg.LocationName != "" {
-				_ = s.locationEngine.AddNamed(proxyCfg.LocationName, p.ServeHTTP)
-			}
-		case matcher.LocationTypePrefix:
-			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
-		default:
-			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
-		}
-	}
-}
-
-// registerStaticHandlersWithLocationEngine 使用 LocationEngine 注册静态文件处理器。
-func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConfig) {
-	for _, static := range cfg.Static {
-		path := static.Path
-		if path == "" {
-			path = "/"
-		}
-
-		staticHandler := handler.NewStaticHandler(
-			static.Root,
-			path,
-			static.Index,
-			true, // useSendfile
-		)
-		// 设置 alias（与 root 互斥）
-		if static.Alias != "" {
-			staticHandler.SetAlias(static.Alias)
-		}
-		if s.fileCache != nil {
-			staticHandler.SetFileCache(s.fileCache)
-			// 设置默认缓存 TTL (5s)
-			staticHandler.SetCacheTTL(5 * time.Second)
-		}
-		if cfg.Compression.GzipStatic {
-			// extensions: 源文件类型，为空使用默认值
-			// GzipStaticExtensions: 预压缩文件扩展名（如 .br, .gz）
-			staticHandler.SetGzipStatic(true, nil, cfg.Compression.GzipStaticExtensions)
-		}
-
-		// 设置符号链接安全检查
-		staticHandler.SetSymlinkCheck(static.SymlinkCheck)
-
-		// 设置 internal 限制
-		staticHandler.SetInternal(static.Internal)
-
-		// 设置缓存过期时间
-		if static.Expires != "" {
-			staticHandler.SetExpires(static.Expires)
-		}
-
-		// 根据 LocationType 注册路由
-		locType := static.LocationType
-		if locType == "" {
-			locType = matcher.LocationTypePrefix
-		}
-
-		switch locType {
-		case matcher.LocationTypeExact:
-			_ = s.locationEngine.AddExact(path, staticHandler.Handle, static.Internal)
-		case matcher.LocationTypePrefixPriority:
-			_ = s.locationEngine.AddPrefixPriority(path, staticHandler.Handle, static.Internal)
-		case matcher.LocationTypePrefix:
-			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle, static.Internal)
-		default:
-			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle, static.Internal)
-		}
-	}
-}
-
-// registerProxyRoutes 注册代理路由。
-//
-// 根据配置为路由器注册代理路径，创建代理处理器和健康检查器。
-// 支持 GET、POST、PUT、DELETE、HEAD 等 HTTP 方法。
-//
-// 参数：
-//   - router: 路由器实例，用于注册路由规则
-//   - serverCfg: 服务器配置，包含代理目标、负载均衡、健康检查等设置
-//
-// 注意事项：
-//   - 代理目标初始状态默认为健康
-//   - 健康检查根据配置自动启动
-func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.ServerConfig) {
-	for i := range serverCfg.Proxy {
-		proxyCfg := &serverCfg.Proxy[i]
-
-		// 转换目标
-		targets := make([]*loadbalance.Target, len(proxyCfg.Targets))
-		for j, t := range proxyCfg.Targets {
-			failTimeout := t.FailTimeout
-			if t.MaxFails > 0 && failTimeout == 0 {
-				failTimeout = 10 * time.Second
-			}
-			targets[j] = loadbalance.NewTargetFromConfig(
-				t.URL, t.Weight,
-				int64(t.MaxConns), int64(t.MaxFails), failTimeout,
-				t.Backup, t.Down, t.ProxyURI,
-			)
-		}
-
-		// 传递 Transport 配置和 Lua 引擎
-		p, err := proxy.NewProxy(proxyCfg, targets, &s.config.Performance.Transport, s.luaEngine)
-		if err != nil {
-			logging.Error().Msg("创建代理失败: " + err.Error())
-			continue
-		}
-
-		// 设置 DNS 解析器（如果已配置）
-		if s.resolver != nil {
-			p.SetResolver(s.resolver)
-			if err := p.Start(); err != nil {
-				logging.Error().Err(err).Msg("启动代理失败")
-			}
-		}
-
-		// 启动健康检查
-		if proxyCfg.HealthCheck.Interval > 0 {
-			hc := proxy.NewHealthChecker(targets, &proxyCfg.HealthCheck)
-			hc.Start()
-			s.healthCheckers = append(s.healthCheckers, hc)
-			// 设置被动健康检查
-			p.SetHealthChecker(hc)
-		}
-
-		// 保存代理实例用于缓存统计
-		s.proxies = append(s.proxies, p)
-
-		// 使用前缀匹配（通配符）注册代理路由
-		// path: / 匹配所有子路径如 /sorry/index
-		// path: /api/ 匹配 /api/* 所有子路径
-		routePath := proxyCfg.Path
-		// 确保通配符路由格式正确
-		if !strings.HasSuffix(routePath, "/") && routePath != "/" {
-			routePath += "/"
-		}
-		wildcardPath := routePath + "{path:*}"
-		router.GET(wildcardPath, p.ServeHTTP)
-		router.POST(wildcardPath, p.ServeHTTP)
-		router.PUT(wildcardPath, p.ServeHTTP)
-		router.DELETE(wildcardPath, p.ServeHTTP)
-		router.HEAD(wildcardPath, p.ServeHTTP)
-	}
-}
-
-// shutdownServers 并行关闭多个 fasthttp.Server 实例。
-//
-// 使用 goroutine 并行关闭所有服务器，收集所有错误并返回聚合错误。
-// 部分服务器关闭失败不会影响其他服务器的关闭。
-//
-// 参数：
-//   - ctx: 关闭上下文，用于控制超时和取消
-//   - servers: 要关闭的 fasthttp.Server 实例列表
-//
-// 返回值：
-//   - error: 聚合错误，无错误或全部成功时返回 nil
-func shutdownServers(ctx context.Context, servers []*fasthttp.Server) error {
-	// 防御性检查：nil ctx 使用默认背景
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if len(servers) == 0 {
-		return nil
-	}
-
-	var (
-		mu   sync.Mutex
-		errs []error
-		wg   sync.WaitGroup
-	)
-
-	for _, srv := range servers {
-		if srv == nil {
-			continue
-		}
-		wg.Add(1)
-		go func(s *fasthttp.Server) {
-			defer wg.Done()
-			if err := s.Shutdown(); err != nil {
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-			}
-		}(srv)
-	}
-
-	// 等待所有关闭完成或上下文取消
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		if len(errs) == 0 {
-			return nil
-		}
-		if len(errs) == 1 {
-			return errs[0]
-		}
-		msgs := make([]string, len(errs))
-		for i, e := range errs {
-			msgs[i] = e.Error()
-		}
-		return fmt.Errorf("关闭服务器时发生 %d 个错误: %s", len(errs), strings.Join(msgs, "; "))
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-// StopWithTimeout 快速停止服务器（支持自定义超时）。
-//
-// 立即停止服务器，不等待正在处理的请求完成。
-// 停止所有健康检查器和访问日志中间件。
-//
-// 参数：
-//   - timeout: 快速关闭的最大等待时间
-//
-// 返回值：
-//   - error: 停止过程中遇到的错误
-//
-// 注意事项：
-//   - 对于生产环境，建议使用 GracefulStop 实现优雅关闭
-//   - timeout <= 0 时会使用默认 5s 超时
-func (s *Server) StopWithTimeout(timeout time.Duration) error {
-	// 防御性检查：如果 timeout <= 0，使用默认值
-	if timeout <= 0 {
-		timeout = 5 * time.Second
-	}
-
-	s.running = false
-
-	// 停止 Goroutine 池
-	if s.pool != nil {
-		s.pool.Stop()
-	}
-
-	// 停止健康检查器
-	for _, hc := range s.healthCheckers {
-		hc.Stop()
-	}
-
-	// 关闭访问日志
-	if s.accessLogMiddleware != nil {
-		_ = s.accessLogMiddleware.Close()
-	}
-
-	// 关闭 TLS 管理器
-	if s.tlsManager != nil {
-		s.tlsManager.Close()
-	}
-
-	// 关闭 AccessControl (释放 GeoIP 资源)
-	if s.accessControl != nil {
-		if err := s.accessControl.Close(); err != nil {
-			logging.Warn().Err(err).Msg("关闭 AccessControl 失败")
-		}
-	}
-
-	// 关闭 Lua 引擎
-	if s.luaEngine != nil {
-		s.luaEngine.Close()
-		logging.Info().Msg("Lua 引擎已关闭")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// 多服务器模式：并行关闭所有 fasthttp.Server
-	if len(s.fastServers) > 0 {
-		return shutdownServers(ctx, s.fastServers)
-	}
-
-	// 单服务器模式：关闭单个 fasthttp.Server
-	if s.fastServer != nil {
-		done := make(chan struct{})
-		go func() {
-			_ = s.fastServer.Shutdown()
-			close(done)
-		}()
-
-		select {
-		case <-done:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	return nil
-}
-
-// GracefulStop 优雅停止服务器。
-//
-// 等待正在处理的请求完成后再停止服务器，确保连接正常关闭。
-// 如果超时时间到达仍有请求未完成，将返回超时错误。
-//
-// 参数：
-//   - timeout: 优雅关闭的最大等待时间
-//
-// 返回值：
-//   - error: 停止过程中遇到的错误，超时返回 context.DeadlineExceeded
-//
-// 注意事项：
-//   - 推荐在生产环境使用此方法关闭服务器
-//   - 超时后会强制关闭，可能导致部分请求中断
-func (s *Server) GracefulStop(timeout time.Duration) error {
-	s.running = false
-
-	// 停止 Goroutine 池
-	if s.pool != nil {
-		s.pool.Stop()
-	}
-
-	// 停止健康检查器
-	for _, hc := range s.healthCheckers {
-		hc.Stop()
-	}
-
-	// 关闭访问日志
-	if s.accessLogMiddleware != nil {
-		_ = s.accessLogMiddleware.Close()
-	}
-
-	// 关闭 TLS 管理器
-	if s.tlsManager != nil {
-		s.tlsManager.Close()
-	}
-
-	// 关闭 AccessControl (释放 GeoIP 资源)
-	if s.accessControl != nil {
-		if err := s.accessControl.Close(); err != nil {
-			logging.Warn().Err(err).Msg("关闭 AccessControl 失败")
-		}
-	}
-
-	// 关闭 Lua 引擎
-	if s.luaEngine != nil {
-		s.luaEngine.Close()
-		logging.Info().Msg("Lua 引擎已关闭")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// 多服务器模式：并行关闭所有 fasthttp.Server
-	if len(s.fastServers) > 0 {
-		return shutdownServers(ctx, s.fastServers)
-	}
-
-	// 单服务器模式：关闭单个 fasthttp.Server
-	if s.fastServer != nil {
-		done := make(chan struct{})
-		go func() {
-			_ = s.fastServer.Shutdown()
-			close(done)
-		}()
-
-		select {
-		case <-done:
-			return nil
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	return nil
-}
-
-// getProxyCacheStats 收集所有代理缓存的统计信息。
-func (s *Server) getProxyCacheStats() ProxyCacheStats {
-	var total ProxyCacheStats
-	for _, p := range s.proxies {
-		if stats := p.GetCacheStats(); stats != nil {
-			total.Entries += stats.Entries
-			total.Pending += stats.Pending
-		}
-	}
-	return total
-}
-
-// registerStaticHandlers 注册静态文件处理器。
-//
-// 为路由器注册静态文件服务，支持多个静态目录、文件缓存和预压缩文件。
-//
-// 参数：
-//   - router: 路由器实例，用于注册路由规则
-//   - cfg: 服务器配置，包含静态文件和压缩设置
-func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.ServerConfig) {
-	for _, static := range cfg.Static {
-		path := static.Path
-		if path == "" {
-			path = "/"
-		}
-
-		staticHandler := handler.NewStaticHandler(
-			static.Root,
-			path,
-			static.Index,
-			true, // useSendfile
-		)
-		// 设置 alias（与 root 互斥）
-		if static.Alias != "" {
-			staticHandler.SetAlias(static.Alias)
-		}
-		if s.fileCache != nil {
-			staticHandler.SetFileCache(s.fileCache)
-			// 设置默认缓存 TTL (5s)
-			staticHandler.SetCacheTTL(5 * time.Second)
-		}
-		if cfg.Compression.GzipStatic {
-			// extensions: 源文件类型，为空使用默认值
-			// GzipStaticExtensions: 预压缩文件扩展名（如 .br, .gz）
-			staticHandler.SetGzipStatic(true, nil, cfg.Compression.GzipStaticExtensions)
-		}
-
-		// 设置符号链接安全检查
-		staticHandler.SetSymlinkCheck(static.SymlinkCheck)
-
-		// 设置缓存过期时间
-		if static.Expires != "" {
-			staticHandler.SetExpires(static.Expires)
-		}
-
-		// 设置 try_files 配置
-		if len(static.TryFiles) > 0 {
-			// 注意：tryFilesPass 需要路由器支持，当前实现传入 nil
-			// 如果 tryFilesPass 为 true，需要额外处理
-			staticHandler.SetTryFiles(static.TryFiles, static.TryFilesPass, router)
-		}
-
-		// 注册路由：确保路径以 / 结尾
-		routePath := path
-		if !strings.HasSuffix(routePath, "/") {
-			routePath += "/"
-		}
-		router.GET(routePath+"{filepath:*}", staticHandler.Handle)
-		router.HEAD(routePath+"{filepath:*}", staticHandler.Handle)
-	}
 }
 
 // SetResolver 设置 DNS 解析器。

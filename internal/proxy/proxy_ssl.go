@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/logging"
 )
 
 // tlsVersionMap TLS 版本字符串到 tls 常量的映射表。
@@ -100,13 +101,20 @@ func CreateTLSConfig(cfg *config.ProxySSLConfig, defaultServerName string) (*tls
 		tlsCfg.Certificates = []tls.Certificate{cert}
 	}
 
-	// TLS 版本配置
+	// TLS 版本配置：默认 MinVersion = TLS 1.2
+	tlsCfg.MinVersion = tls.VersionTLS12
+
 	if cfg.MinVersion != "" {
 		version, ok := tlsVersionMap[strings.ToUpper(cfg.MinVersion)]
 		if !ok {
 			return nil, errors.New("invalid TLS min version: " + cfg.MinVersion)
 		}
 		tlsCfg.MinVersion = version
+	}
+
+	// 警告：TLS 1.0/1.1 已不安全，不应在生产环境使用
+	if tlsCfg.MinVersion < tls.VersionTLS12 {
+		logging.Warn().Msgf("上游 TLS MinVersion 设置为 %s（低于 TLS 1.2），存在安全风险", cfg.MinVersion)
 	}
 
 	if cfg.MaxVersion != "" {

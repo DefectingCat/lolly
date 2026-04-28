@@ -142,10 +142,10 @@ func initLuaEngine(luaCfg *config.LuaMiddlewareConfig) (*lua.LuaEngine, error) {
 
 	engine, err := lua.NewEngine(engineCfg)
 	if err != nil {
-		return nil, fmt.Errorf("初始化 Lua 引擎失败: %w", err)
+		return nil, fmt.Errorf("failed to initialize Lua engine: %w", err)
 	}
 
-	logging.Info().Msg("Lua 引擎已启动")
+	logging.Info().Msg("Lua engine started")
 	return engine, nil
 }
 
@@ -169,14 +169,14 @@ func initErrorPageManager(errorPageCfg *config.ErrorPageConfig) (*handler.ErrorP
 	if err != nil {
 		// 检查是否是部分加载失败
 		if _, ok := err.(*handler.PartialLoadError); ok {
-			logging.Warn().Msg("部分错误页面加载失败: " + err.Error())
+			logging.Warn().Msg("Some error pages failed to load: " + err.Error())
 			// 返回部分加载的管理器
 			return manager, nil
 		}
 		// 全部加载失败
-		return nil, fmt.Errorf("加载错误页面失败: %w", err)
+		return nil, fmt.Errorf("failed to load error pages: %w", err)
 	}
 
-	logging.Info().Msg("错误页面管理器已启动")
+	logging.Info().Msg("Error page manager started")
 	return manager, nil
 }

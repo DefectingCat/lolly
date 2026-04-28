@@ -48,7 +48,7 @@ func generateConfig(outputPath string) int {
 	cfg := config.DefaultConfig()
 	yamlData, err := config.GenerateConfigYAML(cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "生成配置失败: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Failed to generate config: %v\n", err)
 		return 1
 	}
 
@@ -56,10 +56,10 @@ func generateConfig(outputPath string) int {
 		fmt.Print(string(yamlData))
 	} else {
 		if err := os.WriteFile(outputPath, yamlData, 0o644); err != nil {
-			fmt.Fprintf(os.Stderr, "写入文件失败: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Failed to write file: %v\n", err)
 			return 1
 		}
-		fmt.Printf("配置已写入: %s\n", outputPath)
+		fmt.Printf("Config written to: %s\n", outputPath)
 	}
 	return 0
 }
@@ -67,12 +67,12 @@ func generateConfig(outputPath string) int {
 func importNginxConfig(path, outputPath string) error {
 	nginxCfg, err := nginx.ParseFile(path)
 	if err != nil {
-		return fmt.Errorf("解析 nginx 配置失败: %w", err)
+		return fmt.Errorf("failed to parse nginx config: %w", err)
 	}
 
 	result, err := nginx.Convert(nginxCfg)
 	if err != nil {
-		return fmt.Errorf("转换配置失败: %w", err)
+		return fmt.Errorf("failed to convert config: %w", err)
 	}
 
 	for _, w := range result.Warnings {
@@ -80,26 +80,26 @@ func importNginxConfig(path, outputPath string) error {
 	}
 
 	if validateErr := config.Validate(result.Config); validateErr != nil {
-		return fmt.Errorf("转换后配置验证失败: %w", validateErr)
+		return fmt.Errorf("converted config validation failed: %w", validateErr)
 	}
 
 	yamlData, err := yaml.Marshal(result.Config)
 	if err != nil {
-		return fmt.Errorf("序列化 YAML 失败: %w", err)
+		return fmt.Errorf("failed to marshal YAML: %w", err)
 	}
 
 	if outputPath == "" {
 		if _, err := os.Stdout.Write(yamlData); err != nil {
-			return fmt.Errorf("写入标准输出失败: %w", err)
+			return fmt.Errorf("failed to write to stdout: %w", err)
 		}
 	} else {
 		if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
-			return fmt.Errorf("创建输出目录失败: %w", err)
+			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 		if err := os.WriteFile(outputPath, yamlData, 0o644); err != nil {
-			return fmt.Errorf("写入文件失败: %w", err)
+			return fmt.Errorf("failed to write file: %w", err)
 		}
-		fmt.Printf("配置已写入: %s\n", outputPath)
+		fmt.Printf("Config written to: %s\n", outputPath)
 	}
 
 	return nil

@@ -21,7 +21,6 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
-	"rua.plus/lolly/internal/netutil"
 	"rua.plus/lolly/internal/utils"
 )
 
@@ -194,7 +193,7 @@ func (h *StatusHandler) Path() string {
 //   - ctx: FastHTTP 请求上下文
 func (h *StatusHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// 步骤1: 检查 IP 访问权限
-	if !h.checkAccess(ctx) {
+	if !utils.CheckIPAccess(ctx, h.allowed) {
 		utils.SendErrorWithDetail(ctx, utils.ErrForbidden, "Access denied")
 		return
 	}
@@ -507,34 +506,6 @@ func (h *StatusHandler) serveHTML(ctx *fasthttp.RequestCtx, status *Status) {
 	if _, err := ctx.WriteString(buf.String()); err != nil {
 		log.Printf("failed to write html response: %v", err)
 	}
-}
-
-// checkAccess 检查客户端 IP 是否在允许列表中。
-//
-// 如果未配置允许列表，则允许所有访问。
-// 检查时支持代理头部（X-Forwarded-For、X-Real-IP）。
-//
-// 参数：
-//   - ctx: FastHTTP 请求上下文
-//
-// 返回值：
-//   - bool: true 表示允许访问，false 表示拒绝
-func (h *StatusHandler) checkAccess(ctx *fasthttp.RequestCtx) bool {
-	// 如果没有配置允许列表，允许所有访问
-	if len(h.allowed) == 0 {
-		return true
-	}
-
-	clientIP := netutil.ExtractClientIPNet(ctx)
-
-	// 检查是否在允许列表中
-	for _, network := range h.allowed {
-		if network.Contains(clientIP) {
-			return true
-		}
-	}
-
-	return false
 }
 
 // collectStatus 收集服务器状态数据。

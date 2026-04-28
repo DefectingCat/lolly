@@ -23,6 +23,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/netutil"
+	"rua.plus/lolly/internal/utils"
 )
 
 // VHostManager 虚拟主机管理器。
@@ -212,7 +213,7 @@ func (v *VHostManager) Handler() fasthttp.RequestHandler {
 		if vhost := v.FindHost(host); vhost != nil {
 			vhost.handler(ctx)
 		} else {
-			ctx.Error("Host not found", fasthttp.StatusNotFound)
+			utils.SendError(ctx, utils.ErrNotFound)
 		}
 	}
 }

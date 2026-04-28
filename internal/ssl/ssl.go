@@ -47,6 +47,7 @@ import (
 	"sync"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/netutil"
 )
 
@@ -145,9 +146,7 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 	if cfg.SessionTickets.Enabled {
 		sessionTicketMgr, err := NewSessionTicketManager(cfg.SessionTickets)
 		if err != nil {
-			// Session Tickets 初始化失败不阻止 TLS 工作
-			// 可以记录日志
-			_ = err
+			logging.Warn().Err(err).Msg("Session Ticket 初始化失败，TLS 性能可能降级")
 		} else {
 			manager.sessionTicketMgr = sessionTicketMgr
 			// 应用 Session Tickets 到 TLS 配置
@@ -174,9 +173,9 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 					issuerCert, err := x509.ParseCertificate(cert.Certificate[1])
 					if err == nil {
 						manager.issuers[serial] = issuerCert
-						// 注册证书用于 OCSP Stapling
-						// 错误会记录日志但不会阻止 TLS 工作
-						_ = ocspMgr.RegisterCertificate(parsedCert, issuerCert)
+						if err := ocspMgr.RegisterCertificate(parsedCert, issuerCert); err != nil {
+							logging.Warn().Err(err).Msg("OCSP Stapling 注册失败")
+						}
 					}
 				}
 
@@ -192,9 +191,7 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 	if cfg.ClientVerify.Enabled {
 		clientVerifier, err := NewClientVerifier(cfg.ClientVerify)
 		if err != nil {
-			// 客户端验证配置失败不阻止 TLS 工作
-			// 可以记录日志
-			_ = err
+			logging.Warn().Err(err).Msg("客户端证书验证配置失败")
 		} else {
 			manager.clientVerifier = clientVerifier
 			clientVerifier.ConfigureTLS(tlsCfg)

@@ -18,6 +18,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -106,7 +107,11 @@ func NewErrorPageManager(cfg *config.ErrorPageConfig) (*ErrorPageManager, error)
 
 		if len(loadErrors) == totalPages {
 			// 全部加载失败，返回错误
-			return nil, fmt.Errorf("所有错误页面加载失败: %v", loadErrors)
+			errs := make([]error, 0, len(loadErrors))
+			for _, e := range loadErrors {
+				errs = append(errs, e)
+			}
+			return nil, fmt.Errorf("所有错误页面加载失败: %w", errors.Join(errs...))
 		}
 		// 部分失败，记录警告（由调用者处理）
 		return manager, &PartialLoadError{Errors: loadErrors}

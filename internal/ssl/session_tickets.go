@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/logging"
 )
 
 const (
@@ -192,9 +193,7 @@ func (m *SessionTicketManager) RotateKey() error {
 	// 如果有密钥文件，保存所有密钥
 	if m.config.KeyFile != "" {
 		if err := m.saveKeys(); err != nil {
-			// 保存失败不影响运行，记录错误即可
-			// 这里可以考虑添加日志
-			_ = err
+			logging.Warn().Err(err).Msg("Session Ticket 密钥保存失败")
 		}
 	}
 

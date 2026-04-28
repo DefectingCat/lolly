@@ -525,7 +525,7 @@ func validateProxy(p *ProxyConfig) error {
 		}
 		// 使用 regexp.Compile 验证正则语法有效性
 		if _, err := regexp.Compile(p.Path); err != nil {
-			return fmt.Errorf("location_type 为 '%s' 时，path '%s' 不是有效正则: %v", p.LocationType, p.Path, err)
+			return fmt.Errorf("location_type 为 '%s' 时，path '%s' 不是有效正则: %w", p.LocationType, p.Path, err)
 		}
 	}
 
@@ -1273,7 +1273,7 @@ func validateRedirectRewrite(cfg *RedirectRewriteConfig) error {
 				patternStr = rule.Pattern[2:] // 去掉 ~* 前缀（大小写不敏感）
 			}
 			if _, err := regexp.Compile(patternStr); err != nil {
-				return fmt.Errorf("redirect_rewrite.rules[%d].pattern invalid regex: %v", i, err)
+				return fmt.Errorf("redirect_rewrite.rules[%d].pattern invalid regex: %w", i, err)
 			}
 		}
 	}

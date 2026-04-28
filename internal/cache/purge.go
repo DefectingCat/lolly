@@ -12,7 +12,6 @@
 package cache
 
 import (
-	"crypto/subtle"
 	"encoding/json"
 	"hash/fnv"
 	"net"
@@ -20,7 +19,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
-	"rua.plus/lolly/internal/netutil"
+	"rua.plus/lolly/internal/utils"
 )
 
 // PurgeAPI 缓存清理 API 处理器。
@@ -117,26 +116,26 @@ func (p *PurgeAPI) Path() string {
 func (p *PurgeAPI) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// 仅允许 POST 方法
 	if string(ctx.Method()) != "POST" {
-		p.sendError(ctx, fasthttp.StatusMethodNotAllowed, "method not allowed")
+		utils.SendJSONError(ctx, fasthttp.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	// 检查 IP 访问权限
-	if !p.checkAccess(ctx) {
-		p.sendError(ctx, fasthttp.StatusForbidden, "forbidden")
+	if !utils.CheckIPAccess(ctx, p.allowed) {
+		utils.SendJSONError(ctx, fasthttp.StatusForbidden, "forbidden")
 		return
 	}
 
 	// 检查认证
-	if !p.checkAuth(ctx) {
-		p.sendError(ctx, fasthttp.StatusUnauthorized, "unauthorized")
+	if !utils.CheckTokenAuth(ctx, p.auth) {
+		utils.SendJSONError(ctx, fasthttp.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	// 解析请求体
 	var req PurgeRequest
 	if err := json.Unmarshal(ctx.PostBody(), &req); err != nil {
-		p.sendError(ctx, fasthttp.StatusBadRequest, "invalid request body")
+		utils.SendJSONError(ctx, fasthttp.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -147,7 +146,7 @@ func (p *PurgeAPI) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	} else if req.Pattern != "" {
 		deleted = p.purgeByPattern(req.Pattern)
 	} else {
-		p.sendError(ctx, fasthttp.StatusBadRequest, "missing path or pattern")
+		utils.SendJSONError(ctx, fasthttp.StatusBadRequest, "missing path or pattern")
 		return
 	}
 
@@ -155,61 +154,6 @@ func (p *PurgeAPI) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/json; charset=utf-8")
 	ctx.SetStatusCode(fasthttp.StatusOK)
 	_ = json.NewEncoder(ctx).Encode(PurgeResponse{Deleted: deleted})
-}
-
-// checkAccess 检查客户端 IP 是否在允许列表中。
-func (p *PurgeAPI) checkAccess(ctx *fasthttp.RequestCtx) bool {
-	// 如果没有配置允许列表，允许所有访问
-	if len(p.allowed) == 0 {
-		return true
-	}
-
-	clientIP := p.getClientIP(ctx)
-	if clientIP == nil {
-		return false
-	}
-
-	// 检查是否在允许列表中
-	for _, network := range p.allowed {
-		if network.Contains(clientIP) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// checkAuth 检查认证。
-func (p *PurgeAPI) checkAuth(ctx *fasthttp.RequestCtx) bool {
-	// 无需认证
-	if p.auth.Type == "" || p.auth.Type == "none" {
-		return true
-	}
-
-	// Token 认证
-	if p.auth.Type == "token" {
-		// 从 Authorization header 获取 token
-		authHeader := ctx.Request.Header.Peek("Authorization")
-		if len(authHeader) == 0 {
-			return false
-		}
-
-		// 支持 Bearer token 格式
-		authStr := string(authHeader)
-		if token, ok := strings.CutPrefix(authStr, "Bearer "); ok {
-			return subtle.ConstantTimeCompare([]byte(token), []byte(p.auth.Token)) == 1
-		}
-
-		// 也支持直接传递 token
-		return subtle.ConstantTimeCompare([]byte(authStr), []byte(p.auth.Token)) == 1
-	}
-
-	return false
-}
-
-// getClientIP 从请求上下文提取客户端 IP。
-func (p *PurgeAPI) getClientIP(ctx *fasthttp.RequestCtx) net.IP {
-	return netutil.ExtractClientIPNet(ctx)
 }
 
 // purgeByPath 按精确路径清理缓存。
@@ -323,9 +267,3 @@ func matchPattern(pattern, path string) bool {
 	return MatchPattern(pattern, path)
 }
 
-// sendError 发送错误响应。
-func (p *PurgeAPI) sendError(ctx *fasthttp.RequestCtx, status int, errMsg string) {
-	ctx.SetContentType("application/json; charset=utf-8")
-	ctx.SetStatusCode(status)
-	_ = json.NewEncoder(ctx).Encode(PurgeErrorResponse{Error: errMsg})
-}

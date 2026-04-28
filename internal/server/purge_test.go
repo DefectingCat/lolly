@@ -24,6 +24,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/proxy"
+	"rua.plus/lolly/internal/utils"
 )
 
 func TestPurgeHandler_Path(t *testing.T) {
@@ -238,7 +239,7 @@ func TestPurgeHandler_checkAccess(t *testing.T) {
 
 			if len(h.allowed) == 0 {
 				// 无白名单时应允许所有访问
-				if !h.checkAccess(nil) {
+				if !utils.CheckIPAccess(nil, h.allowed) {
 					t.Error("expected access to be true when no allow list configured")
 				}
 				return
@@ -281,7 +282,7 @@ func TestPurgeHandler_checkAuth(t *testing.T) {
 		}
 
 		ctx := &fasthttp.RequestCtx{}
-		if !h.checkAuth(ctx) {
+		if !utils.CheckTokenAuth(ctx, h.auth) {
 			t.Error("expected auth to pass when no auth configured")
 		}
 	})
@@ -301,7 +302,7 @@ func TestPurgeHandler_checkAuth(t *testing.T) {
 		}
 
 		ctx := &fasthttp.RequestCtx{}
-		if !h.checkAuth(ctx) {
+		if !utils.CheckTokenAuth(ctx, h.auth) {
 			t.Error("expected auth to pass when type is none")
 		}
 	})
@@ -323,7 +324,7 @@ func TestPurgeHandler_checkAuth(t *testing.T) {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.Header.Set("Authorization", "Bearer secret-token")
 
-		if !h.checkAuth(ctx) {
+		if !utils.CheckTokenAuth(ctx, h.auth) {
 			t.Error("expected auth to pass with correct Bearer token")
 		}
 	})
@@ -345,7 +346,7 @@ func TestPurgeHandler_checkAuth(t *testing.T) {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.Header.Set("Authorization", "secret-token")
 
-		if !h.checkAuth(ctx) {
+		if !utils.CheckTokenAuth(ctx, h.auth) {
 			t.Error("expected auth to pass with correct direct token")
 		}
 	})
@@ -367,7 +368,7 @@ func TestPurgeHandler_checkAuth(t *testing.T) {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.Header.Set("Authorization", "Bearer wrong-token")
 
-		if h.checkAuth(ctx) {
+		if utils.CheckTokenAuth(ctx, h.auth) {
 			t.Error("expected auth to fail with wrong token")
 		}
 	})
@@ -388,7 +389,7 @@ func TestPurgeHandler_checkAuth(t *testing.T) {
 
 		ctx := &fasthttp.RequestCtx{}
 
-		if h.checkAuth(ctx) {
+		if utils.CheckTokenAuth(ctx, h.auth) {
 			t.Error("expected auth to fail when Authorization header is missing")
 		}
 	})
@@ -410,7 +411,7 @@ func TestPurgeHandler_checkAuth(t *testing.T) {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.Header.Set("Authorization", "Bearer secret-token")
 
-		if h.checkAuth(ctx) {
+		if utils.CheckTokenAuth(ctx, h.auth) {
 			t.Error("expected auth to fail for unknown auth type")
 		}
 	})
@@ -570,7 +571,7 @@ func TestPurgeHandler_SendError(t *testing.T) {
 				Allow: []string{},
 			}
 
-			h, err := NewPurgeHandler(nil, cfg)
+			_, err := NewPurgeHandler(nil, cfg)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -578,7 +579,7 @@ func TestPurgeHandler_SendError(t *testing.T) {
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Init(&fasthttp.Request{}, nil, nil)
 
-			h.sendError(ctx, tt.status, tt.errMsg)
+			utils.SendJSONError(ctx, tt.status, tt.errMsg)
 
 			if ctx.Response.StatusCode() != tt.status {
 				t.Errorf("expected status %d, got %d", tt.status, ctx.Response.StatusCode())
@@ -690,7 +691,7 @@ func TestPurgeHandler_checkAccess_NilContext(t *testing.T) {
 		}
 
 		// Empty allow list should allow access (returns true even with nil context)
-		if !h.checkAccess(nil) {
+		if !utils.CheckIPAccess(nil, h.allowed) {
 			t.Error("expected checkAccess to return true with empty allow list")
 		}
 	})
@@ -779,7 +780,7 @@ func TestPurgeHandler_checkAccess_WithAllowedIP(t *testing.T) {
 		ctx.Init(&fasthttp.Request{}, nil, nil)
 
 		// context with nil remote address - should return false (no client IP)
-		if h.checkAccess(ctx) {
+		if utils.CheckIPAccess(ctx, h.allowed) {
 			t.Error("expected checkAccess to return false with no client IP")
 		}
 	})

@@ -41,6 +41,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/middleware"
+	"rua.plus/lolly/internal/utils"
 )
 
 // HashAlgorithm 表示密码哈希算法类型。
@@ -381,7 +382,7 @@ func (ba *BasicAuth) extractCredentials(ctx *fasthttp.RequestCtx) (string, strin
 func (ba *BasicAuth) sendAuthChallenge(ctx *fasthttp.RequestCtx) {
 	ctx.Response.Header.Set("WWW-Authenticate",
 		fmt.Sprintf("Basic realm=\"%s\", charset=\"UTF-8\"", ba.realm))
-	ctx.Error("Unauthorized", fasthttp.StatusUnauthorized)
+	utils.SendError(ctx, utils.ErrUnauthorized)
 }
 
 // AddUser 动态添加新用户。

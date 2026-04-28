@@ -4,7 +4,16 @@
 // the scattered pattern of ctx.Error throughout the codebase.
 package utils
 
-import "github.com/valyala/fasthttp"
+import (
+	"crypto/subtle"
+	"encoding/json"
+	"net"
+	"strings"
+
+	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/netutil"
+)
 
 // HTTPError represents an HTTP error with a message and status code.
 type HTTPError struct {
@@ -36,4 +45,58 @@ func SendErrorWithDetail(ctx *fasthttp.RequestCtx, err HTTPError, detail string)
 	} else {
 		SendError(ctx, err)
 	}
+}
+
+// SendJSONError sends a JSON error response.
+func SendJSONError(ctx *fasthttp.RequestCtx, status int, errMsg string) {
+	ctx.SetContentType("application/json; charset=utf-8")
+	ctx.SetStatusCode(status)
+	_ = json.NewEncoder(ctx).Encode(struct {
+		Error string `json:"error"`
+	}{Error: errMsg})
+}
+
+// CheckIPAccess checks whether the client IP is in the allowed list.
+// If allowed is empty, all access is permitted.
+func CheckIPAccess(ctx *fasthttp.RequestCtx, allowed []net.IPNet) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+
+	clientIP := netutil.ExtractClientIPNet(ctx)
+	if clientIP == nil {
+		return false
+	}
+
+	for _, network := range allowed {
+		if network.Contains(clientIP) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// CheckTokenAuth checks token-based authentication.
+// Returns true if auth is disabled or the token matches.
+func CheckTokenAuth(ctx *fasthttp.RequestCtx, auth config.CacheAPIAuthConfig) bool {
+	if auth.Type == "" || auth.Type == "none" {
+		return true
+	}
+
+	if auth.Type == "token" {
+		authHeader := ctx.Request.Header.Peek("Authorization")
+		if len(authHeader) == 0 {
+			return false
+		}
+
+		authStr := string(authHeader)
+		if token, ok := strings.CutPrefix(authStr, "Bearer "); ok {
+			return subtle.ConstantTimeCompare([]byte(token), []byte(auth.Token)) == 1
+		}
+
+		return subtle.ConstantTimeCompare([]byte(authStr), []byte(auth.Token)) == 1
+	}
+
+	return false
 }

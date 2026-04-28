@@ -76,7 +76,7 @@ func NewPprofHandler(cfg *config.PprofConfig) (*PprofHandler, error) {
 		// 尝试解析 CIDR
 		_, net, err := net.ParseCIDR(ipStr)
 		if err != nil {
-			return nil, fmt.Errorf("解析 IP/CIDR 失败: %s: %w", ipStr, err)
+			return nil, fmt.Errorf("failed to parse IP/CIDR: %s: %w", ipStr, err)
 		}
 		h.allowedNets = append(h.allowedNets, net)
 	}

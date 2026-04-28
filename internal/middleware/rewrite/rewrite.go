@@ -25,6 +25,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/utils"
 	"rua.plus/lolly/internal/variable"
 )
 
@@ -179,7 +180,7 @@ func (m *Middleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 		for ruleIndex < len(m.rules) {
 			// 步骤1: 检查迭代次数是否超过限制（防止无限循环）
 			if iterationCount >= MaxRewriteIterations {
-				ctx.Error("Internal Server Error", fasthttp.StatusInternalServerError)
+				utils.SendError(ctx, utils.ErrInternalError)
 				return
 			}
 

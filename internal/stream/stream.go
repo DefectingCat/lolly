@@ -571,9 +571,22 @@ func (s *Server) handleConnection(clientConn net.Conn, _ string) {
 	}
 	defer func() { _ = targetConn.Close() }()
 
-	// 双向数据转发
-	go func() { _, _ = io.Copy(targetConn, clientConn) }()
-	_, _ = io.Copy(clientConn, targetConn)
+	// 双向数据转发：任一方向完成/出错时立即关闭双端连接，迫使另一方向退出
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(targetConn, clientConn)
+		_ = clientConn.Close()
+		_ = targetConn.Close()
+	}()
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(clientConn, targetConn)
+		_ = targetConn.Close()
+		_ = clientConn.Close()
+	}()
+	wg.Wait()
 }
 
 // Select 选择健康的上游目标。

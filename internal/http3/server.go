@@ -201,15 +201,9 @@ func (s *Server) Stop() error {
 	s.running = false
 
 	if s.http3Server != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
 		if err := s.http3Server.Close(); err != nil {
 			logging.Error().Err(err).Msg("HTTP/3 server close error")
 		}
-
-		// 等待服务完全停止
-		<-ctx.Done()
 	}
 
 	logging.Info().Msg("HTTP/3 server stopped")

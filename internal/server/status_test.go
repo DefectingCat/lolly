@@ -24,6 +24,7 @@ import (
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/netutil"
+	"rua.plus/lolly/internal/utils"
 )
 
 func TestNewStatusHandler_CIDR(t *testing.T) {
@@ -896,7 +897,7 @@ func TestStatusHandler_checkAccess_AllowList(t *testing.T) {
 			ctx := &fasthttp.RequestCtx{}
 			ctx.SetRemoteAddr(&net.TCPAddr{IP: tt.remoteIP, Port: 12345})
 
-			got := h.checkAccess(ctx)
+			got := utils.CheckIPAccess(ctx, h.allowed)
 			if got != tt.wantAccess {
 				t.Errorf("expected access %v, got %v", tt.wantAccess, got)
 			}

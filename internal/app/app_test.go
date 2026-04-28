@@ -225,7 +225,7 @@ func TestRun(t *testing.T) {
 			genConfig:    true,
 			outputPath:   filepath.Join(t.TempDir(), "config.yaml"),
 			wantExitCode: 0,
-			wantContains: "配置已写入:",
+			wantContains: "Config written to:",
 		},
 		{
 			name:            "配置文件不存在",
@@ -233,7 +233,7 @@ func TestRun(t *testing.T) {
 			genConfig:       false,
 			showVersion:     false,
 			wantExitCode:    1,
-			wantErrContains: "加载配置失败",
+			wantErrContains: "Failed to load config",
 		},
 		{
 			name:            "generate 与 import 互斥",
@@ -252,7 +252,7 @@ func TestRun(t *testing.T) {
 			name:            "导入 nginx 配置文件不存在",
 			importPath:      "/tmp/nginx.conf",
 			wantExitCode:    1,
-			wantErrContains: "解析 nginx 配置失败",
+			wantErrContains: "failed to parse nginx config",
 		},
 	}
 
@@ -371,8 +371,8 @@ func TestGenerateConfig(t *testing.T) {
 			t.Errorf("exit code = %d, want 1", exitCode)
 		}
 
-		if !strings.Contains(stderr, "写入文件失败") {
-			t.Errorf("stderr 应包含 '写入文件失败', 实际输出: %q", stderr)
+		if !strings.Contains(stderr, "Failed to write file") {
+			t.Errorf("stderr should contain 'Failed to write file', actual: %q", stderr)
 		}
 	})
 }
@@ -1247,8 +1247,8 @@ func TestGenerateConfig_ErrorCase(t *testing.T) {
 			t.Errorf("exit code = %d, want 1", exitCode)
 		}
 
-		if !strings.Contains(stderr, "写入文件失败") {
-			t.Errorf("stderr 应包含 '写入文件失败', 实际输出: %q", stderr)
+		if !strings.Contains(stderr, "Failed to write file") {
+			t.Errorf("stderr should contain 'Failed to write file', actual: %q", stderr)
 		}
 	})
 }
