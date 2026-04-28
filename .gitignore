@@ -61,7 +61,7 @@ lolly.yaml
 config.yaml
 lolly
 coverage.html
-*.coverage.html
+*coverage.html
 html/
 default.pgo
 benchmark-*.txt
