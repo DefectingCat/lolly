@@ -26,6 +26,7 @@ import (
 // TestE2EStaticWithLolly 测试 lolly 静态文件服务功能。
 // 需要 lolly:latest 镜像。
 func TestE2EStaticWithLolly(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -41,7 +42,7 @@ func TestE2EStaticWithLolly(t *testing.T) {
 	t.Logf("Lolly static server: %s", lolly.HTTPBaseURL())
 
 	// 等待 lolly 健康
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 测试静态文件服务
@@ -56,6 +57,7 @@ func TestE2EStaticWithLolly(t *testing.T) {
 
 // TestE2EStaticFileServe 测试 lolly 静态文件服务。
 func TestE2EStaticFileServe(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -88,6 +90,7 @@ func TestE2EStaticFileServe(t *testing.T) {
 
 // TestE2EStaticContentType 测试 lolly Content-Type 检测。
 func TestE2EStaticContentType(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -112,6 +115,7 @@ func TestE2EStaticContentType(t *testing.T) {
 
 // TestE2EStaticNotFound 测试 lolly 404 错误。
 func TestE2EStaticNotFound(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -133,6 +137,7 @@ func TestE2EStaticNotFound(t *testing.T) {
 
 // TestE2EStaticConcurrent 测试 lolly 并发静态文件请求。
 func TestE2EStaticConcurrent(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -157,6 +162,7 @@ func TestE2EStaticConcurrent(t *testing.T) {
 
 // TestE2EStaticLargeFile 测试 lolly 大文件传输。
 func TestE2EStaticLargeFile(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 

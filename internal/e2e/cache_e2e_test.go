@@ -26,6 +26,7 @@ import (
 //
 // 验证第二次请求返回缓存内容。
 func TestE2EProxyCacheHit(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -34,9 +35,9 @@ func TestE2EProxyCacheHit(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：启用缓存
 	cfg := testutil.NewConfigBuilder().
@@ -54,7 +55,7 @@ func TestE2EProxyCacheHit(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -96,6 +97,7 @@ func TestE2EProxyCacheHit(t *testing.T) {
 //
 // 验证缓存过期后重新获取。
 func TestE2EProxyCacheExpire(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -104,9 +106,9 @@ func TestE2EProxyCacheExpire(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：短缓存时间
 	cfg := testutil.NewConfigBuilder().
@@ -123,7 +125,7 @@ func TestE2EProxyCacheExpire(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -153,6 +155,7 @@ func TestE2EProxyCacheExpire(t *testing.T) {
 //
 // 验证缓存锁防止缓存击穿。
 func TestE2EProxyCacheLock(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -161,9 +164,9 @@ func TestE2EProxyCacheLock(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：启用缓存锁
 	cfg := testutil.NewConfigBuilder().
@@ -180,7 +183,7 @@ func TestE2EProxyCacheLock(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 并发发送相同请求
@@ -198,6 +201,7 @@ func TestE2EProxyCacheLock(t *testing.T) {
 //
 // 验证特定请求绕过缓存。
 func TestE2EProxyCacheBypass(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -206,9 +210,9 @@ func TestE2EProxyCacheBypass(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -225,7 +229,7 @@ func TestE2EProxyCacheBypass(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -251,6 +255,7 @@ func TestE2EProxyCacheBypass(t *testing.T) {
 //
 // 验证只有 GET 和 HEAD 被缓存。
 func TestE2EProxyCacheMethods(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -259,9 +264,9 @@ func TestE2EProxyCacheMethods(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -278,7 +283,7 @@ func TestE2EProxyCacheMethods(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -305,6 +310,7 @@ func TestE2EProxyCacheMethods(t *testing.T) {
 //
 // 验证缓存头部正确设置。
 func TestE2EProxyCacheHeaders(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -313,9 +319,9 @@ func TestE2EProxyCacheHeaders(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -332,7 +338,7 @@ func TestE2EProxyCacheHeaders(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -356,6 +362,7 @@ func TestE2EProxyCacheHeaders(t *testing.T) {
 //
 // 验证后端不可用时返回过期缓存。
 func TestE2EProxyCacheStale(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -364,9 +371,9 @@ func TestE2EProxyCacheStale(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：启用 stale-while-revalidate
 	cfg := testutil.NewConfigBuilder().
@@ -383,7 +390,7 @@ func TestE2EProxyCacheStale(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -410,6 +417,7 @@ func TestE2EProxyCacheStale(t *testing.T) {
 //
 // 验证 Vary 头部影响缓存键。
 func TestE2EProxyCacheVary(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -418,9 +426,9 @@ func TestE2EProxyCacheVary(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -437,7 +445,7 @@ func TestE2EProxyCacheVary(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -462,6 +470,7 @@ func TestE2EProxyCacheVary(t *testing.T) {
 //
 // 验证条件请求正确处理。
 func TestE2EProxyCacheRevalidate(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -470,9 +479,9 @@ func TestE2EProxyCacheRevalidate(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -489,7 +498,7 @@ func TestE2EProxyCacheRevalidate(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -522,6 +531,7 @@ func TestE2EProxyCacheRevalidate(t *testing.T) {
 //
 // 验证并发请求正确处理缓存。
 func TestE2EProxyCacheConcurrent(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -530,9 +540,9 @@ func TestE2EProxyCacheConcurrent(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -549,7 +559,7 @@ func TestE2EProxyCacheConcurrent(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 并发请求
@@ -569,6 +579,7 @@ func TestE2EProxyCacheConcurrent(t *testing.T) {
 //
 // 验证不同路径独立缓存。
 func TestE2EProxyCacheMultiplePaths(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -577,9 +588,9 @@ func TestE2EProxyCacheMultiplePaths(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：多路径代理
 	cfg := testutil.NewConfigBuilder().
@@ -599,7 +610,7 @@ func TestE2EProxyCacheMultiplePaths(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -626,6 +637,7 @@ func TestE2EProxyCacheMultiplePaths(t *testing.T) {
 //
 // 验证请求头正确传递并影响缓存。
 func TestE2EProxyCacheWithHeaders(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -634,9 +646,9 @@ func TestE2EProxyCacheWithHeaders(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -662,7 +674,7 @@ func TestE2EProxyCacheWithHeaders(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -688,6 +700,7 @@ func TestE2EProxyCacheWithHeaders(t *testing.T) {
 //
 // 验证大响应不被缓存或正确处理。
 func TestE2EProxyCacheSize(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -696,9 +709,9 @@ func TestE2EProxyCacheSize(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -715,7 +728,7 @@ func TestE2EProxyCacheSize(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -743,6 +756,7 @@ func TestE2EProxyCacheSize(t *testing.T) {
 //
 // 验证不同 HTTP 状态码的缓存行为。
 func TestE2EProxyCacheStatusCodes(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -751,9 +765,9 @@ func TestE2EProxyCacheStatusCodes(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -770,7 +784,7 @@ func TestE2EProxyCacheStatusCodes(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -801,6 +815,7 @@ func TestE2EProxyCacheStatusCodes(t *testing.T) {
 //
 // 验证不同查询参数产生不同的缓存条目。
 func TestE2EProxyCacheQueryParams(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -809,9 +824,9 @@ func TestE2EProxyCacheQueryParams(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -828,7 +843,7 @@ func TestE2EProxyCacheQueryParams(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -858,6 +873,7 @@ func TestE2EProxyCacheQueryParams(t *testing.T) {
 //
 // 验证缓存功能与其他功能的集成。
 func TestE2EProxyCacheIntegration(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -866,9 +882,9 @@ func TestE2EProxyCacheIntegration(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：缓存 + 负载均衡
 	cfg := testutil.NewConfigBuilder().
@@ -887,7 +903,7 @@ func TestE2EProxyCacheIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 30 * time.Second}

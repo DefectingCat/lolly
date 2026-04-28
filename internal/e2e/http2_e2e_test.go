@@ -28,6 +28,7 @@ import (
 //
 // 验证 HTTPS 连接可以成功建立。
 func TestE2EHTTPSConnection(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -73,6 +74,7 @@ func TestE2EHTTPSConnection(t *testing.T) {
 //
 // 验证多个并发 HTTPS 请求正常工作。
 func TestE2EHTTPSConcurrentRequests(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -144,6 +146,7 @@ func TestE2EHTTPSConcurrentRequests(t *testing.T) {
 //
 // 验证自定义头部正确传递。
 func TestE2EHTTPSCustomHeaders(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -201,6 +204,7 @@ func TestE2EHTTPSCustomHeaders(t *testing.T) {
 //
 // 验证大请求体的处理。
 func TestE2EHTTPSLargeRequest(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -253,6 +257,7 @@ func TestE2EHTTPSLargeRequest(t *testing.T) {
 //
 // 验证 TLS ALPN 扩展正常工作。
 func TestE2EALPNNegotiation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 

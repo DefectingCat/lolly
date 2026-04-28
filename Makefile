@@ -155,8 +155,8 @@ test-integration:
 
 # 运行 L3 E2E 测试（需要 Docker）
 test-e2e:
-	@echo "Running L3 E2E tests (requires Docker)..."
-	go test -v -tags=e2e ./internal/e2e/...
+	@echo "Running L3 E2E tests (parallel: $(or $(E2E_PARALLEL),4))..."
+	go test -tags=e2e -parallel $(or $(E2E_PARALLEL),4) -count 1 ./internal/e2e/...
 
 # 运行 L3 E2E 测试（带覆盖率）
 test-e2e-cover:
@@ -170,9 +170,18 @@ test-e2e-short:
 	@echo "Running L3 E2E tests (short mode - testutil only)..."
 	go test -tags=e2e -short -v ./internal/e2e/testutil/... -timeout 60s
 
-# 运行所有测试（单元 + 集成 + E2E）
-test-all: test test-integration test-e2e
-	@echo "All tests passed."
+# 运行所有测试（单元 + 集成 + E2E）— 并行执行
+test-all:
+	@echo "Running all tests in parallel..."
+	@FAIL=0; \
+	$(MAKE) test & PID1=$$!; \
+	$(MAKE) test-integration & PID2=$$!; \
+	$(MAKE) test-e2e & PID3=$$!; \
+	wait $$PID1 || FAIL=1; \
+	wait $$PID2 || FAIL=1; \
+	wait $$PID3 || FAIL=1; \
+	if [ $$FAIL -eq 0 ]; then echo "All tests passed."; fi; \
+	exit $$FAIL
 
 # 运行测试（带覆盖率）
 test-cover:

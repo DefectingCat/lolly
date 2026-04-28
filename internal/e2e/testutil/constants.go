@@ -18,7 +18,7 @@ const (
 	ContainerStartupTimeout = 30 * time.Second
 
 	// HealthCheckWaitTimeout 健康检查等待超时。
-	HealthCheckWaitTimeout = 30 * time.Second
+	HealthCheckWaitTimeout = 15 * time.Second
 
 	// HealthCheckDetectionTime 健康检查检测时间。
 	HealthCheckDetectionTime = 10 * time.Second
@@ -27,7 +27,7 @@ const (
 	CacheExpireBuffer = 1 * time.Second
 
 	// DefaultTestTimeout 测试上下文超时。
-	DefaultTestTimeout = 180 * time.Second
+	DefaultTestTimeout = 120 * time.Second
 
 	// DefaultClientTimeout HTTP 客户端超时。
 	DefaultClientTimeout = 10 * time.Second

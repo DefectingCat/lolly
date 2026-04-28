@@ -26,6 +26,7 @@ import (
 
 // TestE2ERewriteBasic 测试基本 URL 重写。
 func TestE2ERewriteBasic(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -51,7 +52,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -71,6 +72,7 @@ servers:
 
 // TestE2ERewriteRedirect 测试重写为重定向。
 func TestE2ERewriteRedirect(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -96,7 +98,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -117,6 +119,7 @@ servers:
 
 // TestE2ERewritePermanent 测试永久重定向。
 func TestE2ERewritePermanent(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -142,7 +145,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -159,6 +162,7 @@ servers:
 
 // TestE2ERewriteRegexCapture 测试正则表达式捕获组。
 func TestE2ERewriteRegexCapture(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -184,7 +188,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -205,6 +209,7 @@ servers:
 
 // TestE2ERewriteProxy 测试代理模式下的重写。
 func TestE2ERewriteProxy(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -236,7 +241,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -253,6 +258,7 @@ servers:
 
 // TestE2ERewriteNoMatch 测试不匹配时不重写。
 func TestE2ERewriteNoMatch(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -278,7 +284,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {

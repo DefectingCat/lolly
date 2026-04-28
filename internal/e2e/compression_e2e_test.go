@@ -30,6 +30,7 @@ import (
 
 // TestE2ECompressionGzip 测试 Gzip 压缩响应。
 func TestE2ECompressionGzip(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -65,7 +66,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -99,6 +100,7 @@ servers:
 
 // TestE2ECompressionNoAcceptEncoding 测试不发送 Accept-Encoding 时不压缩。
 func TestE2ECompressionNoAcceptEncoding(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -129,7 +131,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -146,6 +148,7 @@ servers:
 
 // TestE2ECompressionDisabled 测试禁用压缩。
 func TestE2ECompressionDisabled(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -176,7 +179,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -197,6 +200,7 @@ servers:
 
 // TestE2ECompressionPrecompressed 测试预压缩文件。
 func TestE2ECompressionPrecompressed(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -229,7 +233,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}

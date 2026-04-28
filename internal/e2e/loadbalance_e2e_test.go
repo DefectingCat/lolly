@@ -25,6 +25,7 @@ import (
 //
 // 验证请求均匀分布到多个后端。
 func TestE2ELoadBalanceRoundRobin(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -33,9 +34,9 @@ func TestE2ELoadBalanceRoundRobin(t *testing.T) {
 	}
 
 	// 启动 3 个后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 3)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 3, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	t.Logf("Backend pool: %v", pool.Addresses())
 
@@ -53,7 +54,7 @@ func TestE2ELoadBalanceRoundRobin(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 发送 30 个请求，验证都成功
@@ -81,6 +82,7 @@ func TestE2ELoadBalanceRoundRobin(t *testing.T) {
 //
 // 验证请求按权重比例分布。
 func TestE2ELoadBalanceWeighted(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -89,9 +91,9 @@ func TestE2ELoadBalanceWeighted(t *testing.T) {
 	}
 
 	// 启动 2 个后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：权重 3:1
 	targetOpts := [][]testutil.ProxyTargetOption{
@@ -112,7 +114,7 @@ func TestE2ELoadBalanceWeighted(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 发送 40 个请求
@@ -137,6 +139,7 @@ func TestE2ELoadBalanceWeighted(t *testing.T) {
 //
 // 验证请求路由到连接数最少的后端。
 func TestE2ELoadBalanceLeastConn(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -145,9 +148,9 @@ func TestE2ELoadBalanceLeastConn(t *testing.T) {
 	}
 
 	// 启动 2 个后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -162,7 +165,7 @@ func TestE2ELoadBalanceLeastConn(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 并发发送请求
@@ -182,6 +185,7 @@ func TestE2ELoadBalanceLeastConn(t *testing.T) {
 //
 // 验证同一 IP 的请求总是路由到同一后端。
 func TestE2ELoadBalanceIPHash(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -190,9 +194,9 @@ func TestE2ELoadBalanceIPHash(t *testing.T) {
 	}
 
 	// 启动 3 个后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 3)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 3, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -207,7 +211,7 @@ func TestE2ELoadBalanceIPHash(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 从同一客户端发送多个请求
@@ -225,6 +229,7 @@ func TestE2ELoadBalanceIPHash(t *testing.T) {
 //
 // 验证基于请求 URI 的一致性哈希路由。
 func TestE2ELoadBalanceConsistentHash(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -233,9 +238,9 @@ func TestE2ELoadBalanceConsistentHash(t *testing.T) {
 	}
 
 	// 启动 3 个后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 3)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 3, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置（使用 ip_hash 代替 consistent_hash，因为可能不被支持）
 	cfg := testutil.NewConfigBuilder().
@@ -250,7 +255,7 @@ func TestE2ELoadBalanceConsistentHash(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 发送请求
@@ -269,6 +274,7 @@ func TestE2ELoadBalanceConsistentHash(t *testing.T) {
 //
 // 验证后端故障时自动切换到其他后端。
 func TestE2ELoadBalanceFailover(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -277,9 +283,9 @@ func TestE2ELoadBalanceFailover(t *testing.T) {
 	}
 
 	// 启动 2 个后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：启用故障转移
 	cfg := testutil.NewConfigBuilder().
@@ -297,7 +303,7 @@ func TestE2ELoadBalanceFailover(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 发送请求验证正常工作
@@ -337,6 +343,7 @@ func TestE2ELoadBalanceFailover(t *testing.T) {
 //
 // 验证不健康后端被自动剔除。
 func TestE2ELoadBalanceHealthCheck(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -345,9 +352,9 @@ func TestE2ELoadBalanceHealthCheck(t *testing.T) {
 	}
 
 	// 启动 2 个后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：启用主动健康检查
 	cfg := testutil.NewConfigBuilder().
@@ -365,7 +372,7 @@ func TestE2ELoadBalanceHealthCheck(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 发送请求验证正常工作
@@ -385,6 +392,7 @@ func TestE2ELoadBalanceHealthCheck(t *testing.T) {
 //
 // 验证不同路径代理到不同后端。
 func TestE2ELoadBalanceMultiplePaths(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -393,9 +401,9 @@ func TestE2ELoadBalanceMultiplePaths(t *testing.T) {
 	}
 
 	// 启动 2 个后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：多路径代理（都代理到根路径）
 	cfg := testutil.NewConfigBuilder().
@@ -411,7 +419,7 @@ func TestE2ELoadBalanceMultiplePaths(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -436,6 +444,7 @@ func TestE2ELoadBalanceMultiplePaths(t *testing.T) {
 //
 // 验证超时配置生效。
 func TestE2ELoadBalanceTimeout(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -444,9 +453,9 @@ func TestE2ELoadBalanceTimeout(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：设置超时
 	cfg := testutil.NewConfigBuilder().
@@ -463,7 +472,7 @@ func TestE2ELoadBalanceTimeout(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 发送正常请求
@@ -478,6 +487,7 @@ func TestE2ELoadBalanceTimeout(t *testing.T) {
 //
 // 验证请求头正确传递到后端。
 func TestE2ELoadBalanceHeaders(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -486,9 +496,9 @@ func TestE2ELoadBalanceHeaders(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：设置代理头部
 	cfg := testutil.NewConfigBuilder().
@@ -514,7 +524,7 @@ func TestE2ELoadBalanceHeaders(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 发送请求

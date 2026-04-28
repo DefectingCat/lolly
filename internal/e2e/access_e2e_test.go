@@ -26,6 +26,7 @@ import (
 
 // TestE2EAccessAllowWhitelist 测试 IP 白名单。
 func TestE2EAccessAllowWhitelist(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -57,7 +58,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -73,6 +74,7 @@ servers:
 
 // TestE2EAccessDenyBlacklist 测试 IP 黑名单。
 func TestE2EAccessDenyBlacklist(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -100,7 +102,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -116,6 +118,7 @@ servers:
 
 // TestE2EAccessDefaultDeny 测试默认拒绝策略。
 func TestE2EAccessDefaultDeny(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -143,7 +146,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -159,6 +162,7 @@ servers:
 
 // TestE2EAccessNoRestriction 测试无访问限制。
 func TestE2EAccessNoRestriction(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -182,7 +186,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -198,6 +202,7 @@ servers:
 
 // TestE2EAccessCIDRMatch 测试 CIDR 网段匹配。
 func TestE2EAccessCIDRMatch(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -227,7 +232,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -244,6 +249,7 @@ servers:
 
 // TestE2EAccessProxyWithAccessControl 测试代理模式下的访问控制。
 func TestE2EAccessProxyWithAccessControl(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -277,7 +283,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}

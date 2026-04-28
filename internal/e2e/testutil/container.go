@@ -13,6 +13,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -375,7 +377,21 @@ func DockerAvailable(ctx context.Context) bool {
 }
 
 // LollyImageAvailable 检查 lolly:latest 镜像是否可用。
+// 结果被 sync.Once 缓存，避免重复检查。
 func LollyImageAvailable(ctx context.Context) bool {
+	lollyImageCheckOnce.Do(func() {
+		lollyImageAvailable = checkLollyImage(ctx)
+	})
+	return lollyImageAvailable
+}
+
+var (
+	lollyImageCheckOnce sync.Once
+	lollyImageAvailable bool
+)
+
+// checkLollyImage 实际执行镜像检查。
+func checkLollyImage(ctx context.Context) bool {
 	req := testcontainers.ContainerRequest{
 		Image:      "lolly:latest",
 		Cmd:        []string{"/lolly", "-v"},
@@ -488,8 +504,9 @@ func StartBackendPoolWithNetwork(ctx context.Context, count int, network string)
 
 // startMockBackendWithNetwork 启动单个后端容器。
 func startMockBackendWithNetwork(ctx context.Context, network string, index int) (testcontainers.Container, string, string, error) {
-	// 生成容器名称（用于网络通信）
-	containerName := fmt.Sprintf("backend-%d-%d", time.Now().UnixNano(), index)
+	// 生成容器名称（用于网络通信），使用原子计数器避免并行竞态
+	id := atomic.AddInt64(&backendCounter, 1)
+	containerName := fmt.Sprintf("backend-%d-%d", id, index)
 
 	req := testcontainers.ContainerRequest{
 		Image:        "nginx:alpine",
@@ -615,45 +632,51 @@ func CreateNetwork(ctx context.Context, name string) (testcontainers.Network, er
 	return network, nil
 }
 
-// sharedNetworkName 共享网络名称。
-const sharedNetworkName = "lolly-e2e-test"
+// 原子计数器，用于生成唯一的容器名和网络名。
+var (
+	backendCounter int64
+	networkCounter int64
+)
 
 // SetupProxyTest 设置代理测试环境。
 //
-// 创建网络、启动后端池，返回网络名称和后端池。
+// 创建独立网络、启动后端池，返回网络对象、网络名称和后端池。
+// suffix 用于生成唯一网络名（通常传 t.Name()），配合原子计数器确保 -count N 安全。
 // lolly 容器应使用 InternalAddresses() 作为代理目标。
-// 使用共享网络名称，避免网络地址池耗尽。
 //
 // 使用示例：
 //
-//	network, pool, err := testutil.SetupProxyTest(ctx, 2)
+//	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 //	if err != nil {
 //	    t.Fatal(err)
 //	}
-//	defer testutil.CleanupProxyTest(ctx, network, pool)
+//	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 //
 //	lolly, err := testutil.StartLolly(ctx,
 //	    testutil.WithConfigYAML(configYAML),
-//	    testutil.WithNetwork(network),
+//	    testutil.WithNetwork(networkName),
 //	)
-func SetupProxyTest(ctx context.Context, backendCount int) (string, *BackendPool, error) {
-	// 使用共享网络名称
-	networkName := sharedNetworkName
+func SetupProxyTest(ctx context.Context, backendCount int, suffix string) (testcontainers.Network, string, *BackendPool, error) {
+	id := atomic.AddInt64(&networkCounter, 1)
+	// 防御性处理：子测试的 t.Name() 含 '/'，Docker 网络名不支持
+	suffix = strings.ReplaceAll(suffix, "/", "-")
+	networkName := fmt.Sprintf("lolly-e2e-%s-%d", suffix, id)
 
-	// 尝试创建网络（如果不存在）
-	// 忽略"已存在"错误
-	_, err := CreateNetwork(ctx, networkName)
+	network, err := CreateNetwork(ctx, networkName)
 	if err != nil && !isNetworkExistsError(err) {
-		return "", nil, fmt.Errorf("failed to create network: %w", err)
+		return nil, "", nil, fmt.Errorf("failed to create network: %w", err)
 	}
 
 	// 启动后端池并加入网络
 	pool, err := StartBackendPoolWithNetwork(ctx, backendCount, networkName)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to start backend pool: %w", err)
+		if network != nil {
+			network.Remove(ctx)
+		}
+		return nil, "", nil, fmt.Errorf("failed to start backend pool: %w", err)
 	}
 
-	return networkName, pool, nil
+	return network, networkName, pool, nil
 }
 
 // isNetworkExistsError 检查是否是网络已存在错误。
@@ -678,75 +701,11 @@ func containsSubstring(s, substr string) bool {
 }
 
 // CleanupProxyTest 清理代理测试环境。
-func CleanupProxyTest(ctx context.Context, networkName string, pool *BackendPool) {
+func CleanupProxyTest(ctx context.Context, network testcontainers.Network, networkName string, pool *BackendPool) {
 	if pool != nil {
 		pool.Terminate(ctx)
 	}
-	// 网络会随容器终止自动清理
-}
-
-// ProxyTestEnv 代理测试环境。
-//
-// 封装代理测试所需的资源。
-type ProxyTestEnv struct {
-	Network    string
-	Pool       *BackendPool
-	Lolly      *LollyContainer
-	Cleanup    func()
-	HTTPClient *http.Client
-}
-
-// SetupProxyTestEnv 设置完整的代理测试环境。
-//
-// 创建网络、启动后端池、启动 lolly，返回封装的环境。
-// 这是一个便捷函数，简化测试设置。
-//
-// 使用示例：
-//
-//	env, err := testutil.SetupProxyTestEnv(ctx, t, 2, func(pool *testutil.BackendPool) string {
-//	    cfg := testutil.NewConfigBuilder().
-//	        WithServer(":8080").
-//	        WithProxy("/", pool.InternalAddresses())
-//	    yaml, _ := cfg.Build()
-//	    return yaml
-//	})
-func SetupProxyTestEnv(ctx context.Context, backendCount int, configBuilder func(*BackendPool) string) (*ProxyTestEnv, error) {
-	// 设置代理测试环境
-	networkName, pool, err := SetupProxyTest(ctx, backendCount)
-	if err != nil {
-		return nil, err
+	if network != nil {
+		network.Remove(ctx)
 	}
-
-	// 构建配置
-	configYAML := configBuilder(pool)
-
-	// 启动 lolly
-	lolly, err := StartLolly(ctx,
-		WithConfigYAML(configYAML),
-		WithNetwork(networkName),
-	)
-	if err != nil {
-		CleanupProxyTest(ctx, networkName, pool)
-		return nil, fmt.Errorf("failed to start lolly: %w", err)
-	}
-
-	// 等待健康
-	if err := lolly.WaitForHealthy(ctx, 30*time.Second); err != nil {
-		CleanupProxyTest(ctx, networkName, pool)
-		lolly.Terminate(ctx)
-		return nil, fmt.Errorf("lolly not healthy: %w", err)
-	}
-
-	cleanup := func() {
-		lolly.Terminate(ctx)
-		CleanupProxyTest(ctx, networkName, pool)
-	}
-
-	return &ProxyTestEnv{
-		Network:    networkName,
-		Pool:       pool,
-		Lolly:      lolly,
-		Cleanup:    cleanup,
-		HTTPClient: &http.Client{Timeout: 10 * time.Second},
-	}, nil
 }

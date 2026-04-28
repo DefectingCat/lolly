@@ -9,5 +9,6 @@ import (
 )
 
 func TestE2ESetup(t *testing.T) {
+	t.Parallel()
 	t.Log("E2E test infrastructure initialized")
 }

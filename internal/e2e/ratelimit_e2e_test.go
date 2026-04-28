@@ -27,6 +27,7 @@ import (
 
 // TestE2ERateLimitBasic 测试基本请求限流。
 func TestE2ERateLimitBasic(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -58,7 +59,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -96,6 +97,7 @@ servers:
 
 // TestE2ERateLimitBurst 测试突发流量处理。
 func TestE2ERateLimitBurst(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -129,7 +131,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -152,6 +154,7 @@ servers:
 
 // TestE2ERateLimitRecovery 测试限流恢复。
 func TestE2ERateLimitRecovery(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -185,7 +188,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 5 * time.Second}
@@ -222,6 +225,7 @@ servers:
 
 // TestE2ERateLimitDisabled 测试未配置限流时不限制。
 func TestE2ERateLimitDisabled(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -251,7 +255,7 @@ servers:
 	require.NoError(t, err, "Failed to start lolly container")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 5 * time.Second}

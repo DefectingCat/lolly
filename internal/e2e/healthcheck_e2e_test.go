@@ -25,6 +25,7 @@ import (
 //
 // 验证定期探测后端状态，自动剔除不健康后端。
 func TestE2EHealthCheckActive(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -33,9 +34,9 @@ func TestE2EHealthCheckActive(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：启用主动健康检查（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -57,7 +58,7 @@ func TestE2EHealthCheckActive(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -116,6 +117,7 @@ func TestE2EHealthCheckActive(t *testing.T) {
 //
 // 验证失败后自动剔除后端。
 func TestE2EHealthCheckPassive(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -124,9 +126,9 @@ func TestE2EHealthCheckPassive(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：启用被动健康检查（max_fails）（使用内部地址）
 	targetOpts := [][]testutil.ProxyTargetOption{
@@ -151,7 +153,7 @@ func TestE2EHealthCheckPassive(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -170,6 +172,7 @@ func TestE2EHealthCheckPassive(t *testing.T) {
 //
 // 验证后端恢复后重新加入负载均衡。
 func TestE2EHealthCheckRecovery(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -178,9 +181,9 @@ func TestE2EHealthCheckRecovery(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -201,7 +204,7 @@ func TestE2EHealthCheckRecovery(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -268,6 +271,7 @@ func TestE2EHealthCheckRecovery(t *testing.T) {
 //
 // 验证健康检查按配置间隔执行。
 func TestE2EHealthCheckInterval(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -276,9 +280,9 @@ func TestE2EHealthCheckInterval(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：短健康检查间隔（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -298,7 +302,7 @@ func TestE2EHealthCheckInterval(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -315,6 +319,7 @@ func TestE2EHealthCheckInterval(t *testing.T) {
 //
 // 验证健康检查超时正确处理。
 func TestE2EHealthCheckTimeout(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -323,9 +328,9 @@ func TestE2EHealthCheckTimeout(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：短超时（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -345,7 +350,7 @@ func TestE2EHealthCheckTimeout(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -362,6 +367,7 @@ func TestE2EHealthCheckTimeout(t *testing.T) {
 //
 // 验证自定义健康检查路径。
 func TestE2EHealthCheckPath(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -370,9 +376,9 @@ func TestE2EHealthCheckPath(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：使用根路径作为健康检查路径（nginx 默认存在）
 	cfg := testutil.NewConfigBuilder().
@@ -392,7 +398,7 @@ func TestE2EHealthCheckPath(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -409,6 +415,7 @@ func TestE2EHealthCheckPath(t *testing.T) {
 //
 // 验证多个后端的健康检查独立工作。
 func TestE2EHealthCheckMultipleBackends(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -417,9 +424,9 @@ func TestE2EHealthCheckMultipleBackends(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 3)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 3, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -440,7 +447,7 @@ func TestE2EHealthCheckMultipleBackends(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -498,6 +505,7 @@ func TestE2EHealthCheckMultipleBackends(t *testing.T) {
 //
 // 验证后端故障时请求自动转移到健康后端。
 func TestE2EHealthCheckFailover(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -506,9 +514,9 @@ func TestE2EHealthCheckFailover(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：启用故障转移（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -530,7 +538,7 @@ func TestE2EHealthCheckFailover(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -561,6 +569,7 @@ func TestE2EHealthCheckFailover(t *testing.T) {
 //
 // 验证所有后端不可用时的行为。
 func TestE2EHealthCheckAllDown(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -569,9 +578,9 @@ func TestE2EHealthCheckAllDown(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -592,7 +601,7 @@ func TestE2EHealthCheckAllDown(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -630,6 +639,7 @@ func TestE2EHealthCheckAllDown(t *testing.T) {
 //
 // 验证备份服务器在主服务器不可用时启用。
 func TestE2EHealthCheckBackupServer(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -638,9 +648,9 @@ func TestE2EHealthCheckBackupServer(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：第二个后端为备份（使用内部地址）
 	targetOpts := [][]testutil.ProxyTargetOption{
@@ -666,7 +676,7 @@ func TestE2EHealthCheckBackupServer(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -685,6 +695,7 @@ func TestE2EHealthCheckBackupServer(t *testing.T) {
 //
 // 验证新后端逐渐接收流量。
 func TestE2EHealthCheckSlowStart(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -693,9 +704,9 @@ func TestE2EHealthCheckSlowStart(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -715,7 +726,7 @@ func TestE2EHealthCheckSlowStart(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -732,6 +743,7 @@ func TestE2EHealthCheckSlowStart(t *testing.T) {
 //
 // 验证健康检查与各种负载均衡算法配合工作。
 func TestE2EHealthCheckWithLoadBalance(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -740,9 +752,9 @@ func TestE2EHealthCheckWithLoadBalance(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 3)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 3, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	algorithms := []string{"round_robin", "least_conn"}
 
@@ -765,7 +777,7 @@ func TestE2EHealthCheckWithLoadBalance(t *testing.T) {
 			require.NoError(t, err, "Failed to start lolly")
 			defer lolly.Terminate(ctx)
 
-			err = lolly.WaitForHealthy(ctx, 30*time.Second)
+			err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 			require.NoError(t, err, "Lolly not healthy")
 
 			client := &http.Client{Timeout: 10 * time.Second}
@@ -786,6 +798,7 @@ func TestE2EHealthCheckWithLoadBalance(t *testing.T) {
 //
 // 验证并发请求时健康检查正常工作。
 func TestE2EHealthCheckConcurrent(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -794,9 +807,9 @@ func TestE2EHealthCheckConcurrent(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -817,7 +830,7 @@ func TestE2EHealthCheckConcurrent(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 并发请求
@@ -837,6 +850,7 @@ func TestE2EHealthCheckConcurrent(t *testing.T) {
 //
 // 验证健康检查正确匹配状态码。
 func TestE2EHealthCheckStatusCodes(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -845,9 +859,9 @@ func TestE2EHealthCheckStatusCodes(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -867,7 +881,7 @@ func TestE2EHealthCheckStatusCodes(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -885,6 +899,7 @@ func TestE2EHealthCheckStatusCodes(t *testing.T) {
 //
 // 验证健康检查与其他功能的集成。
 func TestE2EHealthCheckIntegration(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
@@ -893,9 +908,9 @@ func TestE2EHealthCheckIntegration(t *testing.T) {
 	}
 
 	// 设置代理测试环境（使用网络模式）
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 2)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 2, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：健康检查 + 负载均衡 + 超时（使用内部地址）
 	cfg := testutil.NewConfigBuilder().
@@ -918,7 +933,7 @@ func TestE2EHealthCheckIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	client := &http.Client{Timeout: 30 * time.Second}

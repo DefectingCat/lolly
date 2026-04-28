@@ -12,18 +12,21 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/testcontainers/testcontainers-go"
 )
 
 // E2ETestEnv E2E 测试环境。
 //
 // 封装测试所需的资源和清理函数。
 type E2ETestEnv struct {
-	Ctx     context.Context
-	Network string
-	Pool    *BackendPool
-	Lolly   *LollyContainer
-	Client  *http.Client
-	cleanup func()
+	Ctx         context.Context
+	Network     testcontainers.Network
+	NetworkName string
+	Pool        *BackendPool
+	Lolly       *LollyContainer
+	Client      *http.Client
+	cleanup     func()
 }
 
 // SetupE2ETest 设置 E2E 测试环境。
@@ -55,7 +58,7 @@ func SetupE2ETest(t *testing.T, backendCount int, cfgBuilder func(*BackendPool) 
 		t.Skip("lolly:latest image not available, run 'make docker-build' first")
 	}
 
-	network, pool, err := SetupProxyTest(ctx, backendCount)
+	netObj, networkName, pool, err := SetupProxyTest(ctx, backendCount, t.Name())
 	if err != nil {
 		cancel()
 		t.Fatalf("Failed to setup proxy test: %v", err)
@@ -65,32 +68,33 @@ func SetupE2ETest(t *testing.T, backendCount int, cfgBuilder func(*BackendPool) 
 
 	lolly, err := StartLolly(ctx,
 		WithConfigYAML(cfgYAML),
-		WithNetwork(network),
+		WithNetwork(networkName),
 	)
 	if err != nil {
-		CleanupProxyTest(ctx, network, pool)
+		CleanupProxyTest(ctx, netObj, networkName, pool)
 		cancel()
 		t.Fatalf("Failed to start lolly: %v", err)
 	}
 
 	if err := lolly.WaitForHealthy(ctx, HealthCheckWaitTimeout); err != nil {
 		lolly.Terminate(ctx)
-		CleanupProxyTest(ctx, network, pool)
+		CleanupProxyTest(ctx, netObj, networkName, pool)
 		cancel()
 		t.Fatalf("Lolly not healthy: %v", err)
 	}
 
 	env := &E2ETestEnv{
-		Ctx:     ctx,
-		Network: network,
-		Pool:    pool,
-		Lolly:   lolly,
-		Client:  CreateDefaultHTTPClient(),
+		Ctx:         ctx,
+		Network:     netObj,
+		NetworkName: networkName,
+		Pool:        pool,
+		Lolly:       lolly,
+		Client:      CreateDefaultHTTPClient(),
 	}
 
 	env.cleanup = func() {
 		lolly.Terminate(ctx)
-		CleanupProxyTest(ctx, network, pool)
+		CleanupProxyTest(ctx, netObj, networkName, pool)
 		cancel()
 	}
 
@@ -109,7 +113,7 @@ func SetupE2ETestWithTimeout(t *testing.T, backendCount int, timeout time.Durati
 		t.Skip("lolly:latest image not available, run 'make docker-build' first")
 	}
 
-	network, pool, err := SetupProxyTest(ctx, backendCount)
+	netObj, networkName, pool, err := SetupProxyTest(ctx, backendCount, t.Name())
 	if err != nil {
 		cancel()
 		t.Fatalf("Failed to setup proxy test: %v", err)
@@ -119,32 +123,33 @@ func SetupE2ETestWithTimeout(t *testing.T, backendCount int, timeout time.Durati
 
 	lolly, err := StartLolly(ctx,
 		WithConfigYAML(cfgYAML),
-		WithNetwork(network),
+		WithNetwork(networkName),
 	)
 	if err != nil {
-		CleanupProxyTest(ctx, network, pool)
+		CleanupProxyTest(ctx, netObj, networkName, pool)
 		cancel()
 		t.Fatalf("Failed to start lolly: %v", err)
 	}
 
 	if err := lolly.WaitForHealthy(ctx, HealthCheckWaitTimeout); err != nil {
 		lolly.Terminate(ctx)
-		CleanupProxyTest(ctx, network, pool)
+		CleanupProxyTest(ctx, netObj, networkName, pool)
 		cancel()
 		t.Fatalf("Lolly not healthy: %v", err)
 	}
 
 	env := &E2ETestEnv{
-		Ctx:     ctx,
-		Network: network,
-		Pool:    pool,
-		Lolly:   lolly,
-		Client:  CreateDefaultHTTPClient(),
+		Ctx:         ctx,
+		Network:     netObj,
+		NetworkName: networkName,
+		Pool:        pool,
+		Lolly:       lolly,
+		Client:      CreateDefaultHTTPClient(),
 	}
 
 	env.cleanup = func() {
 		lolly.Terminate(ctx)
-		CleanupProxyTest(ctx, network, pool)
+		CleanupProxyTest(ctx, netObj, networkName, pool)
 		cancel()
 	}
 

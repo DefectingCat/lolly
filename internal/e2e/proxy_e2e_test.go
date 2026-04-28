@@ -24,6 +24,7 @@ import (
 
 // TestE2EProxyBasic 测试 lolly 基本代理转发。
 func TestE2EProxyBasic(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -46,7 +47,7 @@ func TestE2EProxyBasic(t *testing.T) {
 	t.Logf("Lolly proxy: %s", lolly.HTTPBaseURL())
 
 	// 等待 lolly 健康
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 测试 lolly 服务可达
@@ -62,6 +63,7 @@ func TestE2EProxyBasic(t *testing.T) {
 // TestE2EProxyWithLolly 测试 lolly 代理转发功能。
 // 需要 lolly:latest 镜像。
 func TestE2EProxyWithLolly(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -84,7 +86,7 @@ func TestE2EProxyWithLolly(t *testing.T) {
 	t.Logf("Lolly proxy: %s", lolly.HTTPBaseURL())
 
 	// 等待 lolly 健康
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 通过 lolly 访问
@@ -99,6 +101,7 @@ func TestE2EProxyWithLolly(t *testing.T) {
 
 // TestE2EProxyLoadBalance 测试 lolly 负载均衡。
 func TestE2EProxyLoadBalance(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -144,6 +147,7 @@ func TestE2EProxyLoadBalance(t *testing.T) {
 
 // TestE2EProxyHealthCheck 测试 lolly 健康检查。
 func TestE2EProxyHealthCheck(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -168,6 +172,7 @@ func TestE2EProxyHealthCheck(t *testing.T) {
 
 // TestE2EProxyTimeout 测试 lolly 代理超时处理。
 func TestE2EProxyTimeout(t *testing.T) {
+	t.Parallel()
 	// 使用短超时客户端测试超时场景
 	shortTimeoutClient := &http.Client{Timeout: 1 * time.Second}
 
@@ -180,6 +185,7 @@ func TestE2EProxyTimeout(t *testing.T) {
 
 // TestE2EProxyErrorHandling 测试 lolly 代理错误处理。
 func TestE2EProxyErrorHandling(t *testing.T) {
+	t.Parallel()
 	client := &http.Client{Timeout: 10 * time.Second}
 
 	// 测试连接被拒绝
@@ -189,6 +195,7 @@ func TestE2EProxyErrorHandling(t *testing.T) {
 
 // TestE2EProxyHeaders 测试 lolly 代理头部传递。
 func TestE2EProxyHeaders(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -219,6 +226,7 @@ func TestE2EProxyHeaders(t *testing.T) {
 
 // TestE2EProxyMultipleRequests 测试 lolly 并发代理请求。
 func TestE2EProxyMultipleRequests(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 

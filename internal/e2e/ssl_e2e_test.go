@@ -25,6 +25,7 @@ import (
 //
 // 验证 HTTPS 连接可以成功建立。
 func TestE2ESSLHandshake(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -71,6 +72,7 @@ func TestE2ESSLHandshake(t *testing.T) {
 //
 // 验证 ALPN 协商成功，HTTP/2 正常工作。
 func TestE2ESSLHTTP2(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -116,6 +118,7 @@ func TestE2ESSLHTTP2(t *testing.T) {
 //
 // 验证 TLS 1.2 和 1.3 正常工作。
 func TestE2ESSLProtocolVersions(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -162,6 +165,7 @@ func TestE2ESSLProtocolVersions(t *testing.T) {
 //
 // 验证证书链正确配置。
 func TestE2ESSLCertificateChain(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -206,6 +210,7 @@ func TestE2ESSLCertificateChain(t *testing.T) {
 //
 // 验证可以跳过证书验证连接。
 func TestE2ESSLInsecureSkipVerify(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -249,6 +254,7 @@ func TestE2ESSLInsecureSkipVerify(t *testing.T) {
 //
 // 验证代理可以连接 HTTPS 后端。
 func TestE2ESSLProxyUpstream(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -257,9 +263,9 @@ func TestE2ESSLProxyUpstream(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to setup proxy test")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置：代理到 HTTP 后端
 	cfg := testutil.NewConfigBuilder().
@@ -290,6 +296,7 @@ func TestE2ESSLProxyUpstream(t *testing.T) {
 //
 // 验证并发 SSL 连接正常工作。
 func TestE2ESSLConcurrent(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -337,6 +344,7 @@ func TestE2ESSLConcurrent(t *testing.T) {
 
 // TestE2ESSLWithLolly 测试 lolly SSL/TLS 功能（兼容旧测试）。
 func TestE2ESSLWithLolly(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.MediumTestTimeout)
 	defer cancel()
 
@@ -371,6 +379,7 @@ func TestE2ESSLWithLolly(t *testing.T) {
 
 // TestE2ESSLCertificateGeneration 测试证书生成。
 func TestE2ESSLCertificateGeneration(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 
 	certPath, keyPath, cleanup, err := testutil.GenerateSelfSignedCert(tmpDir)
@@ -388,6 +397,7 @@ func TestE2ESSLCertificateGeneration(t *testing.T) {
 
 // TestE2ESSLHTTP3Placeholder HTTP/3 测试占位符。
 func TestE2ESSLHTTP3Placeholder(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping E2E test in short mode")
 	}
@@ -397,6 +407,7 @@ func TestE2ESSLHTTP3Placeholder(t *testing.T) {
 
 // TestE2ESSLDockerAvailable 测试 Docker 是否可用。
 func TestE2ESSLDockerAvailable(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.ShortTestTimeout)
 	defer cancel()
 
@@ -409,6 +420,7 @@ func TestE2ESSLDockerAvailable(t *testing.T) {
 
 // TestE2ESSLEnvironmentCheck 检查测试环境。
 func TestE2ESSLEnvironmentCheck(t *testing.T) {
+	t.Parallel()
 	dockerHost := os.Getenv("DOCKER_HOST")
 	if dockerHost != "" {
 		t.Logf("DOCKER_HOST: %s", dockerHost)
@@ -425,6 +437,7 @@ func TestE2ESSLEnvironmentCheck(t *testing.T) {
 
 // TestE2ESSLSessionTickets 测试 TLS Session Tickets。
 func TestE2ESSLSessionTickets(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 
@@ -473,6 +486,7 @@ func TestE2ESSLSessionTickets(t *testing.T) {
 
 // TestE2ESSLHSTS 测试 HSTS 头部。
 func TestE2ESSLHSTS(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.DefaultTestTimeout)
 	defer cancel()
 

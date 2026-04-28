@@ -47,6 +47,7 @@ func wsEchoHandler(w http.ResponseWriter, r *http.Request) {
 //
 // 验证 WebSocket 连接可以成功建立和消息传递。
 func TestE2EWebSocketBasic(t *testing.T) {
+	t.Parallel()
 	// 创建本地 WebSocket Echo 服务器
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
@@ -80,6 +81,7 @@ func TestE2EWebSocketBasic(t *testing.T) {
 //
 // 验证二进制消息正确传递。
 func TestE2EWebSocketBinary(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -105,6 +107,7 @@ func TestE2EWebSocketBinary(t *testing.T) {
 //
 // 验证 JSON 消息正确传递。
 func TestE2EWebSocketJSON(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -131,6 +134,7 @@ func TestE2EWebSocketJSON(t *testing.T) {
 //
 // 验证多个并发连接正常工作。
 func TestE2EWebSocketConcurrent(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -166,6 +170,7 @@ func TestE2EWebSocketConcurrent(t *testing.T) {
 //
 // 验证连续发送多条消息正常工作。
 func TestE2EWebSocketMultipleMessages(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -194,6 +199,7 @@ func TestE2EWebSocketMultipleMessages(t *testing.T) {
 //
 // 验证连接正确关闭。
 func TestE2EWebSocketClose(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -226,6 +232,7 @@ func TestE2EWebSocketClose(t *testing.T) {
 //
 // 验证超时配置生效。
 func TestE2EWebSocketTimeout(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -249,6 +256,7 @@ func TestE2EWebSocketTimeout(t *testing.T) {
 //
 // 验证自定义请求头正确传递。
 func TestE2EWebSocketHeaders(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -278,6 +286,7 @@ func TestE2EWebSocketHeaders(t *testing.T) {
 //
 // 验证连接池的各种操作。
 func TestE2EWebSocketPoolOperations(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -303,6 +312,7 @@ func TestE2EWebSocketPoolOperations(t *testing.T) {
 //
 // 验证客户端可以重新建立连接。
 func TestE2EWebSocketReconnect(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -341,6 +351,7 @@ func TestE2EWebSocketReconnect(t *testing.T) {
 //
 // 验证大消息正确传递。
 func TestE2EWebSocketLargeMessage(t *testing.T) {
+	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(wsEchoHandler))
 	defer server.Close()
 
@@ -370,6 +381,7 @@ func TestE2EWebSocketLargeMessage(t *testing.T) {
 //
 // 注意：此测试需要 Docker 环境，验证 lolly WebSocket 代理功能。
 func TestE2EWebSocketProxyIntegration(t *testing.T) {
+	t.Parallel()
 	if testing.Short() {
 		t.Skip("Skipping E2E WebSocket proxy test in short mode")
 	}
@@ -382,9 +394,9 @@ func TestE2EWebSocketProxyIntegration(t *testing.T) {
 	}
 
 	// 启动后端
-	networkName, pool, err := testutil.SetupProxyTest(ctx, 1)
+	netObj, networkName, pool, err := testutil.SetupProxyTest(ctx, 1, t.Name())
 	require.NoError(t, err, "Failed to start backend pool")
-	defer testutil.CleanupProxyTest(ctx, networkName, pool)
+	defer testutil.CleanupProxyTest(ctx, netObj, networkName, pool)
 
 	// 构建配置
 	cfg := testutil.NewConfigBuilder().
@@ -399,7 +411,7 @@ func TestE2EWebSocketProxyIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to start lolly")
 	defer lolly.Terminate(ctx)
 
-	err = lolly.WaitForHealthy(ctx, 30*time.Second)
+	err = lolly.WaitForHealthy(ctx, testutil.HealthCheckWaitTimeout)
 	require.NoError(t, err, "Lolly not healthy")
 
 	// 测试 HTTP 代理（WebSocket 需要 WebSocket 后端）
