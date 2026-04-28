@@ -234,10 +234,17 @@ type CosocketManager struct {
 
 	// stats 统计信息
 	stats CosocketStats
+
+	// DisableSSRFGuard 禁用 SSRF 防护（仅用于测试）
+	DisableSSRFGuard bool
 }
 
 // DefaultCosocketManager 全局默认 Cosocket 管理器
 var DefaultCosocketManager = NewCosocketManager()
+
+// testingSSRFGuardDisabled 测试模式下启用，允许本地回环连接。
+// 由 *_test.go 中的 init() 函数设置。
+var testingSSRFGuardDisabled bool
 
 // NewCosocketManager 创建新的 Cosocket 管理器。
 //
@@ -248,13 +255,14 @@ var DefaultCosocketManager = NewCosocketManager()
 func NewCosocketManager() *CosocketManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	cm := &CosocketManager{
-		operations:      make(map[uint64]*SocketOperation),
-		nextID:          0,
-		timeoutChecker:  time.NewTicker(30 * time.Second),
-		ctx:             ctx,
-		cancel:          cancel,
-		defaultTimeout:  60 * time.Second,
-		cleanupInterval: 30 * time.Second,
+		operations:       make(map[uint64]*SocketOperation),
+		nextID:           0,
+		timeoutChecker:   time.NewTicker(30 * time.Second),
+		ctx:              ctx,
+		cancel:           cancel,
+		defaultTimeout:   60 * time.Second,
+		cleanupInterval:  30 * time.Second,
+		DisableSSRFGuard: testingSSRFGuardDisabled,
 	}
 
 	// 启动清理循环

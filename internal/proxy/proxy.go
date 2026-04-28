@@ -32,11 +32,13 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"hash/fnv"
 	"net"
+	urlpath "path"
 	"slices"
 	"strings"
 	"sync"
@@ -582,6 +584,14 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			path = []byte(target.ProxyURI)
 		}
 
+		// 检查路径中的危险字符（防止 Proxy URI 注入）
+		if bytes.ContainsAny(path, "@\r\n") {
+			logging.Warn().Msgf("rejected suspicious proxy path containing dangerous chars: %s", path)
+			upstreamStatus = 502
+			utils.SendErrorWithDetail(ctx, utils.ErrBadGateway, "invalid proxy path")
+			return
+		}
+
 		targetURI := make([]byte, 0, len(target.URL)+len(path)+len(query)+1)
 		targetURI = append(targetURI, target.URL...)
 		targetURI = append(targetURI, path...)
@@ -725,8 +735,11 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		// 检测 X-Accel-Redirect 头，支持内部重定向
 		if redirectPath := ctx.Response.Header.Peek("X-Accel-Redirect"); len(redirectPath) > 0 {
-			utils.SetInternalRedirect(ctx, string(redirectPath))
-			ctx.Request.SetRequestURI(string(redirectPath))
+			pathStr := urlpath.Clean(string(redirectPath))
+			if !strings.HasPrefix(pathStr, "/internal/") && !strings.HasPrefix(pathStr, "/admin/") {
+				utils.SetInternalRedirect(ctx, pathStr)
+				ctx.Request.SetRequestURI(pathStr)
+			}
 			return
 		}
 
@@ -1110,6 +1123,10 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 		defer variable.ReleaseContext(vc)
 		for key, value := range p.config.Headers.SetRequest {
 			expanded := vc.Expand(value)
+			if containsCRLF(expanded) {
+				logging.Warn().Msgf("rejected CRLF in header value: %s", key)
+				continue
+			}
 			headers.Set(key, expanded)
 		}
 	}
@@ -1176,6 +1193,10 @@ func (p *Proxy) modifyResponseHeaders(ctx *fasthttp.RequestCtx) {
 		defer variable.ReleaseContext(vc)
 		for key, value := range p.config.Headers.SetResponse {
 			expanded := vc.Expand(value)
+			if containsCRLF(expanded) {
+				logging.Warn().Msgf("rejected CRLF in header value: %s", key)
+				continue
+			}
 			respHeaders.Set(key, expanded)
 		}
 	}

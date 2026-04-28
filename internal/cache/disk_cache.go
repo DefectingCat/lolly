@@ -22,6 +22,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"rua.plus/lolly/internal/logging"
 )
 
 // DiskCacheConfig 磁盘缓存配置。
@@ -346,6 +348,7 @@ func (dc *DiskCache) Set(hashKey uint64, origKey string, data []byte, headers ma
 	// 确保目录存在
 	dir := filepath.Dir(dataPath)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
+		logging.Error().Err(err).Str("dir", dir).Msg("disk cache mkdir failed")
 		return
 	}
 
@@ -367,24 +370,29 @@ func (dc *DiskCache) Set(hashKey uint64, origKey string, data []byte, headers ma
 	// 原子写入数据文件：先写临时文件，再重命名
 	tmpDataPath := dataPath + ".tmp"
 	if err := os.WriteFile(tmpDataPath, data, 0o644); err != nil {
+		logging.Error().Err(err).Str("path", tmpDataPath).Msg("disk cache write failed")
 		return
 	}
 	if err := os.Rename(tmpDataPath, dataPath); err != nil {
 		_ = os.Remove(tmpDataPath)
+		logging.Error().Err(err).Str("from", tmpDataPath).Str("to", dataPath).Msg("disk cache rename failed")
 		return
 	}
 
 	// 写入元数据文件
 	metaData, err := json.Marshal(meta)
 	if err != nil {
+		logging.Error().Err(err).Msg("disk cache json marshal failed")
 		return
 	}
 	tmpMetaPath := metaPath + ".tmp"
 	if err := os.WriteFile(tmpMetaPath, metaData, 0o644); err != nil {
+		logging.Error().Err(err).Str("path", tmpMetaPath).Msg("disk cache write meta failed")
 		return
 	}
 	if err := os.Rename(tmpMetaPath, metaPath); err != nil {
 		_ = os.Remove(tmpMetaPath)
+		logging.Error().Err(err).Str("from", tmpMetaPath).Str("to", metaPath).Msg("disk cache rename meta failed")
 		return
 	}
 

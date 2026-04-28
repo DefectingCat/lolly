@@ -124,6 +124,13 @@ func (s *TCPSocket) Connect(host string, port int) error {
 		s.setState(SocketStateError)
 		return fmt.Errorf("resolve address: %w", err)
 	}
+
+	// IP 字面量：立即检查受限地址
+	if !s.manager.DisableSSRFGuard && addr.IP != nil && isRestrictedIP(addr.IP) {
+		s.setState(SocketStateError)
+		return fmt.Errorf("connection to restricted address denied: %s", addr.IP)
+	}
+
 	s.addr = addr
 
 	// 开始操作
@@ -140,7 +147,24 @@ func (s *TCPSocket) Connect(host string, port int) error {
 			Timeout: s.connectTimeout,
 		}
 
-		conn, err := dialer.DialContext(context.Background(), "tcp", addr.String())
+		// 主机名时：解析 DNS 并检查受限 IP（避免 DialContext 二次解析 TOCTOU）
+		connectAddr := addr.String()
+		if addr.IP == nil {
+			tcpAddr, resolveErr := net.ResolveTCPAddr("tcp", addr.String())
+			if resolveErr != nil {
+				s.setState(SocketStateError)
+				s.manager.CompleteOperation(op.ID, nil, fmt.Errorf("resolve: %w", resolveErr))
+				return
+			}
+			if !s.manager.DisableSSRFGuard && isRestrictedIP(tcpAddr.IP) {
+				s.setState(SocketStateError)
+				s.manager.CompleteOperation(op.ID, nil, fmt.Errorf("connection to restricted address denied: %s", tcpAddr.IP))
+				return
+			}
+			connectAddr = tcpAddr.String()
+		}
+
+		conn, err := dialer.DialContext(context.Background(), "tcp", connectAddr)
 		if err != nil {
 			s.setState(SocketStateError)
 			s.manager.CompleteOperation(op.ID, nil, fmt.Errorf("dial: %w", err))

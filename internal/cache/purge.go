@@ -12,6 +12,7 @@
 package cache
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"hash/fnv"
 	"net"
@@ -196,11 +197,11 @@ func (p *PurgeAPI) checkAuth(ctx *fasthttp.RequestCtx) bool {
 		// 支持 Bearer token 格式
 		authStr := string(authHeader)
 		if token, ok := strings.CutPrefix(authStr, "Bearer "); ok {
-			return token == p.auth.Token
+			return subtle.ConstantTimeCompare([]byte(token), []byte(p.auth.Token)) == 1
 		}
 
 		// 也支持直接传递 token
-		return authStr == p.auth.Token
+		return subtle.ConstantTimeCompare([]byte(authStr), []byte(p.auth.Token)) == 1
 	}
 
 	return false

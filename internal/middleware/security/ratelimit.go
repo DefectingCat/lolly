@@ -550,12 +550,12 @@ func NewConnLimiter(maxConns int, perKey bool, keyType string) (*ConnLimiter, er
 //   - bool: true 表示成功获取，false 表示已达上限
 func (cl *ConnLimiter) Acquire(ctx *fasthttp.RequestCtx) bool {
 	if !cl.perKey {
-		// 全局限制
-		current := loadInt64(&cl.current)
-		if current >= int64(cl.max) {
+		// 全局限制（原子递增后检查溢出，避免 TOCTOU 竞态）
+		current := atomic.AddInt64(&cl.current, 1)
+		if current > int64(cl.max) {
+			atomic.AddInt64(&cl.current, -1)
 			return false
 		}
-		addInt64(&cl.current, 1)
 		return true
 	}
 
@@ -639,11 +639,6 @@ func (m *connLimiterMiddleware) Process(next fasthttp.RequestHandler) fasthttp.R
 }
 
 // 连接数原子操作辅助函数
-
-// loadInt64 原子加载 int64 值。
-func loadInt64(ptr *int64) int64 {
-	return atomic.LoadInt64(ptr)
-}
 
 // addInt64 原子添加 int64 增量。
 

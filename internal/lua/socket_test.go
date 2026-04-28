@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+func init() {
+	// 测试环境允许回环地址连接（SSRF 防护对 localhost mock 服务器放宽）
+	DefaultCosocketManager.DisableSSRFGuard = true
+	testingSSRFGuardDisabled = true
+}
+
 // mockEchoServer 模拟 echo 服务器
 func mockEchoServer(t *testing.T, addr string) (net.Listener, func()) {
 	ln, err := net.Listen("tcp", addr)
