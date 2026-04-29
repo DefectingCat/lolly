@@ -291,3 +291,53 @@ func BenchmarkProxyCacheConcurrent(b *testing.B) {
 		}
 	})
 }
+
+// BenchmarkFileCacheSharded 测试分片缓存并发扩展性。
+// 对比单锁 vs 分片在不同 CPU 核数下的性能。
+func BenchmarkFileCacheSharded(b *testing.B) {
+	sizes := []int{100, 1000, 10000}
+
+	for _, size := range sizes {
+		// 单锁缓存
+		b.Run(fmt.Sprintf("SingleLock_Size%d", size), func(b *testing.B) {
+			fc := NewFileCache(int64(size), 0, 1*time.Hour)
+			for i := 0; i < size; i++ {
+				path := fmt.Sprintf("/file%d.txt", i)
+				data := []byte("cached data")
+				_ = fc.Set(path, data, int64(len(data)), time.Now())
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			b.RunParallel(func(pb *testing.PB) {
+				i := 0
+				for pb.Next() {
+					path := fmt.Sprintf("/file%d.txt", i%size)
+					fc.Get(path)
+					i++
+				}
+			})
+		})
+
+		// 分片缓存
+		b.Run(fmt.Sprintf("Sharded_Size%d", size), func(b *testing.B) {
+			sc := NewShardedFileCache(int64(size), 0, 1*time.Hour)
+			for i := 0; i < size; i++ {
+				path := fmt.Sprintf("/file%d.txt", i)
+				data := []byte("cached data")
+				_ = sc.Set(path, data, int64(len(data)), time.Now())
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			b.RunParallel(func(pb *testing.PB) {
+				i := 0
+				for pb.Next() {
+					path := fmt.Sprintf("/file%d.txt", i%size)
+					sc.Get(path)
+					i++
+				}
+			})
+		})
+	}
+}
