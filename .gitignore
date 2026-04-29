@@ -65,6 +65,7 @@ coverage.html
 html/
 default.pgo
 benchmark-*.txt
+bench-*.txt
 lua-nginx-module/
 !docs/lua-nginx-module/
 lib/
