@@ -250,6 +250,36 @@ checkAllow:
 	return ac.defaultAction == ActionAllow
 }
 
+// UpdateList 动态更新允许或拒绝列表。
+//
+// 替换当前的允许或拒绝列表，使用写锁保护并发访问。
+//
+// 参数：
+//   - target: 目标列表类型，"allow" 或 "deny"
+//   - cidrs: 新的 CIDR 字符串列表
+//
+// 返回值：
+//   - error: CIDR 解析失败或目标无效时返回错误
+func (ac *AccessControl) UpdateList(target string, cidrs []string) error {
+	newList, err := parseCIDRList(cidrs)
+	if err != nil {
+		return err
+	}
+
+	ac.mu.Lock()
+	switch target {
+	case accessAllow:
+		ac.allowList = newList
+	case accessDeny:
+		ac.denyList = newList
+	default:
+		ac.mu.Unlock()
+		return fmt.Errorf("invalid target: %s (must be 'allow' or 'deny')", target)
+	}
+	ac.mu.Unlock()
+	return nil
+}
+
 // UpdateAllowList 动态更新允许列表。
 //
 // 替换当前的允许列表，使用写锁保护并发访问。
@@ -260,15 +290,7 @@ checkAllow:
 // 返回值：
 //   - error: CIDR 解析失败时返回错误
 func (ac *AccessControl) UpdateAllowList(cidrs []string) error {
-	newList, err := parseCIDRList(cidrs)
-	if err != nil {
-		return err
-	}
-
-	ac.mu.Lock()
-	ac.allowList = newList
-	ac.mu.Unlock()
-	return nil
+	return ac.UpdateList(accessAllow, cidrs)
 }
 
 // UpdateDenyList 动态更新拒绝列表。
@@ -281,15 +303,7 @@ func (ac *AccessControl) UpdateAllowList(cidrs []string) error {
 // 返回值：
 //   - error: CIDR 解析失败时返回错误
 func (ac *AccessControl) UpdateDenyList(cidrs []string) error {
-	newList, err := parseCIDRList(cidrs)
-	if err != nil {
-		return err
-	}
-
-	ac.mu.Lock()
-	ac.denyList = newList
-	ac.mu.Unlock()
-	return nil
+	return ac.UpdateList(accessDeny, cidrs)
 }
 
 // parseCIDRList 解析 CIDR 字符串列表为 IPNet 列表。
