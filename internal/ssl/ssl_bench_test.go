@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/sslutil"
 )
 
 // BenchmarkTLSHandshake 基准测试 TLS 握手性能。
@@ -660,7 +661,7 @@ func BenchmarkCipherSuiteParsing(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		_, err := parseCipherSuites(ciphers)
+		_, err := sslutil.ParseCipherSuites(ciphers)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -673,7 +674,7 @@ func BenchmarkTLSVersionsParsing(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		_, _, err := parseTLSVersions(protocols)
+		_, _, err := sslutil.ParseTLSVersions(protocols)
 		if err != nil {
 			b.Fatal(err)
 		}

@@ -131,12 +131,12 @@ func (m *SSLManager) GetTLSConfig() *tls.Config {
 
 	// 设置协议版本
 	if len(m.config.Protocols) > 0 {
-		tlsConfig.MinVersion = parseMinTLSVersion(m.config.Protocols)
+	tlsConfig.MinVersion = sslutil.ParseMinTLSVersion(m.config.Protocols)
 	}
 
 	// 设置加密套件
 	if len(m.config.Ciphers) > 0 {
-		tlsConfig.CipherSuites = parseCipherSuites(m.config.Ciphers)
+	tlsConfig.CipherSuites = sslutil.ParseCipherSuitesLenient(m.config.Ciphers)
 	}
 
 	// 配置客户端证书验证（mTLS）
@@ -183,7 +183,7 @@ func (m *ProxySSLManager) GetClientTLSConfig(serverName string) *tls.Config {
 
 	// 设置协议版本
 	if len(m.config.Protocols) > 0 {
-		tlsConfig.MinVersion = parseMinTLSVersion(m.config.Protocols)
+		tlsConfig.MinVersion = sslutil.ParseMinTLSVersion(m.config.Protocols)
 	}
 
 	// 配置服务器证书验证
@@ -211,66 +211,4 @@ func (m *SSLManager) IsEnabled() bool {
 // IsEnabled 检查是否启用代理 SSL。
 func (m *ProxySSLManager) IsEnabled() bool {
 	return m.config.Enabled
-}
-
-// parseMinTLSVersion 解析最小 TLS 版本。
-//
-// 参数：
-//   - protocols: 协议版本列表
-//
-// 返回值：
-//   - uint16: TLS 版本常量
-func parseMinTLSVersion(protocols []string) uint16 {
-	for _, p := range protocols {
-		switch p {
-		case "TLSv1.3":
-			return tls.VersionTLS13
-		case "TLSv1.2":
-			return tls.VersionTLS12
-		}
-	}
-	return tls.VersionTLS12
-}
-
-// parseCipherSuites 解析加密套件列表。
-//
-// 参数：
-//   - ciphers: 加密套件名称列表
-//
-// 返回值：
-//   - []uint16: 加密套件 ID 列表
-func parseCipherSuites(ciphers []string) []uint16 {
-	var suites []uint16
-	for _, c := range ciphers {
-		if id, ok := cipherNameToID[c]; ok {
-			suites = append(suites, id)
-		}
-	}
-	if len(suites) == 0 {
-		return nil // 使用默认值
-	}
-	return suites
-}
-
-// cipherNameToID 加密套件名称到 ID 的映射
-var cipherNameToID = map[string]uint16{
-	"ECDHE-RSA-AES128-GCM-SHA256":   tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	"ECDHE-RSA-AES256-GCM-SHA384":   tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	"ECDHE-ECDSA-AES128-GCM-SHA256": tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	"ECDHE-ECDSA-AES256-GCM-SHA384": tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	"ECDHE-RSA-CHACHA20-POLY1305":   tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-	"ECDHE-ECDSA-CHACHA20-POLY1305": tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-	"AES128-GCM-SHA256":             tls.TLS_AES_128_GCM_SHA256,
-	"AES256-GCM-SHA384":             tls.TLS_AES_256_GCM_SHA384,
-	"CHACHA20-POLY1305":             tls.TLS_CHACHA20_POLY1305_SHA256,
-	"ECDHE-RSA-AES128-CBC-SHA":      tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-	"ECDHE-RSA-AES256-CBC-SHA":      tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-	"ECDHE-ECDSA-AES128-CBC-SHA":    tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-	"ECDHE-ECDSA-AES256-CBC-SHA":    tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-	"RSA-AES128-GCM-SHA256":         tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-	"RSA-AES256-GCM-SHA384":         tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-	"RSA-AES128-CBC-SHA":            tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-	"RSA-AES256-CBC-SHA":            tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-	"ECDHE-RSA-3DES-EDE-CBC-SHA":    tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
-	"RSA-3DES-EDE-CBC-SHA":          tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
 }

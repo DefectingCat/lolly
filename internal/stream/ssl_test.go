@@ -284,7 +284,7 @@ func TestParseMinTLSVersion(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := parseMinTLSVersion(tt.protocols)
+		got := sslutil.ParseMinTLSVersion(tt.protocols)
 		if got != tt.wantVersion {
 			t.Errorf("parseMinTLSVersion(%v) = %v, want %v", tt.protocols, got, tt.wantVersion)
 		}
@@ -316,7 +316,7 @@ func TestParseCipherSuites(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := parseCipherSuites(tt.ciphers)
+			got := sslutil.ParseCipherSuitesLenient(tt.ciphers)
 			if tt.wantLen == 0 && got != nil {
 				t.Errorf("Expected nil, got %v", got)
 			} else if tt.wantLen > 0 && len(got) != tt.wantLen {

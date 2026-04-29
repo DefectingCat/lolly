@@ -31,19 +31,8 @@ import (
 
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/logging"
+	"rua.plus/lolly/internal/sslutil"
 )
-
-// tlsVersionMap TLS 版本字符串到 tls 常量的映射表。
-//
-// 支持 TLSv1.0、TLSv1.1、TLSv1.2、TLSv1.3 格式（大小写不敏感）。
-// 空字符串表示使用 Go 标准库默认值。
-var tlsVersionMap = map[string]uint16{
-	"TLSV1.0": tls.VersionTLS10,
-	"TLSV1.1": tls.VersionTLS11,
-	"TLSV1.2": tls.VersionTLS12,
-	"TLSV1.3": tls.VersionTLS13,
-	"":        0, // 空字符串表示使用默认
-}
 
 // CreateTLSConfig 从 ProxySSLConfig 创建 tls.Config。
 //
@@ -105,7 +94,7 @@ func CreateTLSConfig(cfg *config.ProxySSLConfig, defaultServerName string) (*tls
 	tlsCfg.MinVersion = tls.VersionTLS12
 
 	if cfg.MinVersion != "" {
-		version, ok := tlsVersionMap[strings.ToUpper(cfg.MinVersion)]
+		version, ok := sslutil.TLSVersionMap[strings.ToUpper(cfg.MinVersion)]
 		if !ok {
 			return nil, errors.New("invalid TLS min version: " + cfg.MinVersion)
 		}
@@ -118,7 +107,7 @@ func CreateTLSConfig(cfg *config.ProxySSLConfig, defaultServerName string) (*tls
 	}
 
 	if cfg.MaxVersion != "" {
-		version, ok := tlsVersionMap[strings.ToUpper(cfg.MaxVersion)]
+		version, ok := sslutil.TLSVersionMap[strings.ToUpper(cfg.MaxVersion)]
 		if !ok {
 			return nil, errors.New("invalid TLS max version: " + cfg.MaxVersion)
 		}

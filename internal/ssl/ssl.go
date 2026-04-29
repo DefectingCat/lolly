@@ -43,12 +43,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"sync"
 
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/netutil"
+	"rua.plus/lolly/internal/sslutil"
 )
 
 // TLSManager TLS 配置管理器。
@@ -116,19 +116,19 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 
 	// 应用 TLS 1.2 的加密套件
 	if len(cfg.Ciphers) > 0 {
-		ciphers, err := parseCipherSuites(cfg.Ciphers)
+		ciphers, err := sslutil.ParseCipherSuites(cfg.Ciphers)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cipher suites: %w", err)
 		}
 		tlsCfg.CipherSuites = ciphers
 	} else {
 		// 使用安全的默认加密套件
-		tlsCfg.CipherSuites = defaultCipherSuites()
+		tlsCfg.CipherSuites = sslutil.DefaultCipherSuites()
 	}
 
 	// 解析 TLS 协议版本
 	if len(cfg.Protocols) > 0 {
-		minVer, maxVer, err := parseTLSVersions(cfg.Protocols)
+		minVer, maxVer, err := sslutil.ParseTLSVersions(cfg.Protocols)
 		if err != nil {
 			return nil, fmt.Errorf("invalid TLS protocols: %w", err)
 		}
@@ -590,17 +590,17 @@ func createTLSConfig(cfg *config.SSLConfig) (*tls.Config, error) {
 	}
 
 	if len(cfg.Ciphers) > 0 {
-		ciphers, err := parseCipherSuites(cfg.Ciphers)
+		ciphers, err := sslutil.ParseCipherSuites(cfg.Ciphers)
 		if err != nil {
 			return nil, err
 		}
 		tlsCfg.CipherSuites = ciphers
 	} else {
-		tlsCfg.CipherSuites = defaultCipherSuites()
+		tlsCfg.CipherSuites = sslutil.DefaultCipherSuites()
 	}
 
 	if len(cfg.Protocols) > 0 {
-		minVer, maxVer, err := parseTLSVersions(cfg.Protocols)
+		minVer, maxVer, err := sslutil.ParseTLSVersions(cfg.Protocols)
 		if err != nil {
 			return nil, err
 		}
@@ -609,123 +609,6 @@ func createTLSConfig(cfg *config.SSLConfig) (*tls.Config, error) {
 	}
 
 	return tlsCfg, nil
-}
-
-// parseTLSVersions 解析 TLS 协议版本字符串。
-//
-// 返回最小和最大 TLS 版本。
-//
-// 参数：
-//   - protocols: 协议名称列表（如 "TLSv1.2", "TLSv1.3"）
-//
-// 返回值：
-//   - uint16: 最小版本
-//   - uint16: 最大版本
-//   - error: 无效协议时返回错误
-func parseTLSVersions(protocols []string) (uint16, uint16, error) {
-	var minVer, maxVer uint16
-	minVer = tls.VersionTLS13 // 默认最高版本
-	maxVer = tls.VersionTLS13
-
-	for _, p := range protocols {
-		switch p {
-		case "TLSv1.2":
-			if minVer > tls.VersionTLS12 {
-				minVer = tls.VersionTLS12
-			}
-		case "TLSv1.3":
-			maxVer = tls.VersionTLS13
-		case "TLSv1.0", "TLSv1.1":
-			return 0, 0, fmt.Errorf("insecure TLS version %s is not supported", p)
-		default:
-			return 0, 0, fmt.Errorf("unknown TLS version: %s", p)
-		}
-	}
-
-	return minVer, maxVer, nil
-}
-
-// parseCipherSuites 解析加密套件名称字符串为 TLS ID。
-//
-// 参数：
-//   - ciphers: 加密套件名称列表
-//
-// 返回值：
-//   - []uint16: 加密套件 ID 列表
-//   - error: 未知或不安全的加密套件时返回错误
-func parseCipherSuites(ciphers []string) ([]uint16, error) {
-	result := make([]uint16, 0, len(ciphers))
-
-	for _, c := range ciphers {
-		id, ok := cipherSuiteMap[c]
-		if !ok {
-			return nil, fmt.Errorf("unknown cipher suite: %s", c)
-		}
-		// 检查不安全的加密套件
-		if isInsecureCipher(id) {
-			return nil, fmt.Errorf("insecure cipher suite %s is not allowed", c)
-		}
-		result = append(result, id)
-	}
-
-	return result, nil
-}
-
-// isInsecureCipher 检查加密套件是否不安全。
-//
-// 参数：
-//   - id: 加密套件 ID
-//
-// 返回值：
-//   - bool: 不安全返回 true
-func isInsecureCipher(id uint16) bool {
-	insecureCiphers := []uint16{
-		tls.TLS_RSA_WITH_RC4_128_SHA,
-		tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
-		tls.TLS_RSA_WITH_AES_128_CBC_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,
-		tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA,
-		tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-	}
-
-	return slices.Contains(insecureCiphers, id)
-}
-
-// defaultCipherSuites 返回 TLS 1.2 推荐的加密套件。
-//
-// 优先选择前向保密和 AEAD 加密算法。
-//
-// 返回值：
-//   - []uint16: 加密套件 ID 列表
-func defaultCipherSuites() []uint16 {
-	return []uint16{
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-	}
-}
-
-// cipherSuiteMap 加密套件名称到 TLS ID 的映射。
-var cipherSuiteMap = map[string]uint16{
-	"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256":   tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384":   tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305":    tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-	"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256": tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384": tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305":  tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-	"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA":      tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-	"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA":      tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-	"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA":    tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-	"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA":    tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-	"TLS_RSA_WITH_AES_128_GCM_SHA256":         tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-	"TLS_RSA_WITH_AES_256_GCM_SHA384":         tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-	"TLS_RSA_WITH_AES_128_CBC_SHA":            tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-	"TLS_RSA_WITH_AES_256_CBC_SHA":            tls.TLS_RSA_WITH_AES_256_CBC_SHA,
 }
 
 // ValidateCertificate 验证证书文件。

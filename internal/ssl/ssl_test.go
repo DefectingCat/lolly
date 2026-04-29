@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/sslutil"
 )
 
 func TestNewTLSManager(t *testing.T) {
@@ -172,7 +173,7 @@ func TestParseTLSVersions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			minVer, maxVer, err := parseTLSVersions(tt.protocols)
+			minVer, maxVer, err := sslutil.ParseTLSVersions(tt.protocols)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseTLSVersions() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -218,7 +219,7 @@ func TestParseCipherSuites(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseCipherSuites(tt.ciphers)
+			result, err := sslutil.ParseCipherSuites(tt.ciphers)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseCipherSuites() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -231,14 +232,14 @@ func TestParseCipherSuites(t *testing.T) {
 }
 
 func TestDefaultCipherSuites(t *testing.T) {
-	suites := defaultCipherSuites()
+	suites := sslutil.DefaultCipherSuites()
 	if len(suites) == 0 {
 		t.Error("Expected non-empty default cipher suites")
 	}
 
 	// Check that all default ciphers are secure
 	for _, suite := range suites {
-		if isInsecureCipher(suite) {
+		if sslutil.IsInsecureCipher(suite) {
 			t.Errorf("Default cipher suite %v is insecure", suite)
 		}
 	}
@@ -252,7 +253,7 @@ func TestIsInsecureCipher(t *testing.T) {
 	}
 
 	for _, c := range insecureCiphers {
-		if !isInsecureCipher(c) {
+		if !sslutil.IsInsecureCipher(c) {
 			t.Errorf("Expected cipher %v to be insecure", c)
 		}
 	}
@@ -264,7 +265,7 @@ func TestIsInsecureCipher(t *testing.T) {
 	}
 
 	for _, c := range secureCiphers {
-		if isInsecureCipher(c) {
+		if sslutil.IsInsecureCipher(c) {
 			t.Errorf("Expected cipher %v to be secure", c)
 		}
 	}
