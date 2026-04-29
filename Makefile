@@ -3,6 +3,10 @@
 # 版本信息
 APP_NAME := lolly
 VERSION := 0.2.1
+
+# 临时目录（避免 tmpfs 空间不足）
+TMPDIR := $(shell mkdir -p tmp && realpath tmp)
+export TMPDIR
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u '+%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo "unknown")
