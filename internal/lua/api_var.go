@@ -57,6 +57,11 @@ func newNgxVarAPI(ctx *fasthttp.RequestCtx) *ngxVarAPI {
 // RegisterNgxVarAPI 在 Lua 状态机中注册 ngx.var API
 // 使用元表实现动态读写：ngx.var.key 和 ngx.var[key]
 func RegisterNgxVarAPI(L *glua.LState, api *ngxVarAPI, ngxTable *glua.LTable) {
+	// 检查 ngx 表是否已存在 var 字段，避免重复写入
+	if existing := ngxTable.RawGetString("var"); existing != glua.LNil {
+		return
+	}
+
 	// 创建 ngx.var 表（使用元表实现动态访问）
 	ngxVar := L.NewTable()
 

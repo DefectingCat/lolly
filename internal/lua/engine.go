@@ -77,6 +77,13 @@ type LuaEngine struct {
 	// 回调队列，定时器触发后将回调入队
 	callbackQueue chan *CallbackEntry
 
+	// 缓存：coroutine 库函数（避免并发读取 Engine.L）
+	coroYieldFn  glua.LValue
+	coroStatusFn glua.LValue
+
+	// ngx 表注册锁（保护并发写入共享的全局 ngx 表）
+	ngxRegisterMu sync.Mutex
+
 	// 上下文及取消函数
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -192,6 +199,15 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 	if config.CoroutinePoolWarmup > 0 {
 		for i := 0; i < config.CoroutinePoolWarmup; i++ {
 			engine.coroutinePool.Put(&LuaCoroutine{})
+		}
+	}
+
+	// 步骤7: 缓存 coroutine 库的安全函数（避免并发读取 Engine.L）
+	coroTable := L.GetGlobal("coroutine")
+	if coroTable != glua.LNil {
+		if tbl, ok := coroTable.(*glua.LTable); ok {
+			engine.coroYieldFn = tbl.RawGetString("yield")
+			engine.coroStatusFn = tbl.RawGetString("status")
 		}
 	}
 

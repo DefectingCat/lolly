@@ -23,6 +23,11 @@ import (
 //   - L: Lua 状态
 //   - ngxTable: ngx 全局表
 func RegisterNgxCtxAPI(L *glua.LState, ngxTable *glua.LTable) {
+	// 检查 ngx.ctx 是否已存在，避免并发写入
+	if existing := ngxTable.RawGetString("ctx"); existing != glua.LNil {
+		return
+	}
+
 	// 创建请求级的 ctx table
 	ctxTable := L.NewTable()
 

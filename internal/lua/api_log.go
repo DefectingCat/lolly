@@ -108,7 +108,10 @@ func newNgxLogAPI(ctx *fasthttp.RequestCtx, luaCtx *LuaContext, logger *zerolog.
 	}
 }
 
-// RegisterNgxLogAPI 在 Lua 状态机中注册 ngx.log 和输出控制 API
+// RegisterNgxLogAPI 在 Lua 状态机中注册 ngx.log 和输出控制 API。
+//
+// 常量（日志级别、HTTP状态码等）只在首次注册时写入，避免并发写入冲突。
+// 每次请求都会重新注册请求特定的函数（log, say, print, flush, exit, redirect）。
 func RegisterNgxLogAPI(L *glua.LState, api *ngxLogAPI) {
 	// 获取或创建 ngx 表
 	var ngx *glua.LTable
@@ -124,60 +127,64 @@ func RegisterNgxLogAPI(L *glua.LState, api *ngxLogAPI) {
 		ngx = L.NewTable()
 	}
 
-	// 注册日志级别常量
-	ngx.RawSetString("STDERR", glua.LNumber(LogStderr))
-	ngx.RawSetString("EMERG", glua.LNumber(LogEmerg))
-	ngx.RawSetString("ALERT", glua.LNumber(LogAlert))
-	ngx.RawSetString("CRIT", glua.LNumber(LogCrit))
-	ngx.RawSetString("ERR", glua.LNumber(LogErr))
-	ngx.RawSetString("WARN", glua.LNumber(LogWarn))
-	ngx.RawSetString("NOTICE", glua.LNumber(LogNotice))
-	ngx.RawSetString("INFO", glua.LNumber(LogInfo))
-	ngx.RawSetString("DEBUG", glua.LNumber(LogDebug))
+	// 检查常量是否已注册（通过 STDERR 常量判断）
+	// 如果已注册，跳过常量写入，避免并发写入全局表
+	if ngx.RawGetString("STDERR") == glua.LNil {
+		// 注册日志级别常量
+		ngx.RawSetString("STDERR", glua.LNumber(LogStderr))
+		ngx.RawSetString("EMERG", glua.LNumber(LogEmerg))
+		ngx.RawSetString("ALERT", glua.LNumber(LogAlert))
+		ngx.RawSetString("CRIT", glua.LNumber(LogCrit))
+		ngx.RawSetString("ERR", glua.LNumber(LogErr))
+		ngx.RawSetString("WARN", glua.LNumber(LogWarn))
+		ngx.RawSetString("NOTICE", glua.LNumber(LogNotice))
+		ngx.RawSetString("INFO", glua.LNumber(LogInfo))
+		ngx.RawSetString("DEBUG", glua.LNumber(LogDebug))
 
-	// 注册 HTTP 状态码常量
-	ngx.RawSetString("HTTP_CONTINUE", glua.LNumber(HTTPContinue))
-	ngx.RawSetString("HTTP_SWITCHING_PROTOCOLS", glua.LNumber(HTTPSwitchingProtocols))
-	ngx.RawSetString("HTTP_OK", glua.LNumber(HTTPOK))
-	ngx.RawSetString("HTTP_CREATED", glua.LNumber(HTTPCreated))
-	ngx.RawSetString("HTTP_ACCEPTED", glua.LNumber(HTTPAccepted))
-	ngx.RawSetString("HTTP_NO_CONTENT", glua.LNumber(HTTPNoContent))
-	ngx.RawSetString("HTTP_PARTIAL_CONTENT", glua.LNumber(HTTPPartialContent))
-	ngx.RawSetString("HTTP_MOVED_PERMANENTLY", glua.LNumber(HTTPMovedPermanently))
-	ngx.RawSetString("HTTP_FOUND", glua.LNumber(HTTPFound))
-	ngx.RawSetString("HTTP_SEE_OTHER", glua.LNumber(HTTPSeeOther))
-	ngx.RawSetString("HTTP_NOT_MODIFIED", glua.LNumber(HTTPNotModified))
-	ngx.RawSetString("HTTP_TEMPORARY_REDIRECT", glua.LNumber(HTTPTemporaryRedirect))
-	ngx.RawSetString("HTTP_PERMANENT_REDIRECT", glua.LNumber(HTTPPermanentRedirect))
-	ngx.RawSetString("HTTP_BAD_REQUEST", glua.LNumber(HTTPBadRequest))
-	ngx.RawSetString("HTTP_UNAUTHORIZED", glua.LNumber(HTTPUnauthorized))
-	ngx.RawSetString("HTTP_FORBIDDEN", glua.LNumber(HTTPForbidden))
-	ngx.RawSetString("HTTP_NOT_FOUND", glua.LNumber(HTTPNotFound))
-	ngx.RawSetString("HTTP_METHOD_NOT_ALLOWED", glua.LNumber(HTTPMethodNotAllowed))
-	ngx.RawSetString("HTTP_REQUEST_TIMEOUT", glua.LNumber(HTTPRequestTimeout))
-	ngx.RawSetString("HTTP_CONFLICT", glua.LNumber(HTTPConflict))
-	ngx.RawSetString("HTTP_GONE", glua.LNumber(HTTPGone))
-	ngx.RawSetString("HTTP_LENGTH_REQUIRED", glua.LNumber(HTTPLengthRequired))
-	ngx.RawSetString("HTTP_PAYLOAD_TOO_LARGE", glua.LNumber(HTTPPayloadTooLarge))
-	ngx.RawSetString("HTTP_URI_TOO_LONG", glua.LNumber(HTTPURITooLong))
-	ngx.RawSetString("HTTP_UNSUPPORTED_MEDIA_TYPE", glua.LNumber(HTTPUnsupportedMedia))
-	ngx.RawSetString("HTTP_RANGE_NOT_SATISFIABLE", glua.LNumber(HTTPRangeNotSatisfiable))
-	ngx.RawSetString("HTTP_TOO_MANY_REQUESTS", glua.LNumber(HTTPTooManyRequests))
-	ngx.RawSetString("HTTP_INTERNAL_SERVER_ERROR", glua.LNumber(HTTPInternalServerError))
-	ngx.RawSetString("HTTP_NOT_IMPLEMENTED", glua.LNumber(HTTPNotImplemented))
-	ngx.RawSetString("HTTP_BAD_GATEWAY", glua.LNumber(HTTPBadGateway))
-	ngx.RawSetString("HTTP_SERVICE_UNAVAILABLE", glua.LNumber(HTTPServiceUnavailable))
-	ngx.RawSetString("HTTP_GATEWAY_TIMEOUT", glua.LNumber(HTTPGatewayTimeout))
-	ngx.RawSetString("HTTP_VERSION_NOT_SUPPORTED", glua.LNumber(HTTPHTTPVersionNotSupported))
+		// 注册 HTTP 状态码常量
+		ngx.RawSetString("HTTP_CONTINUE", glua.LNumber(HTTPContinue))
+		ngx.RawSetString("HTTP_SWITCHING_PROTOCOLS", glua.LNumber(HTTPSwitchingProtocols))
+		ngx.RawSetString("HTTP_OK", glua.LNumber(HTTPOK))
+		ngx.RawSetString("HTTP_CREATED", glua.LNumber(HTTPCreated))
+		ngx.RawSetString("HTTP_ACCEPTED", glua.LNumber(HTTPAccepted))
+		ngx.RawSetString("HTTP_NO_CONTENT", glua.LNumber(HTTPNoContent))
+		ngx.RawSetString("HTTP_PARTIAL_CONTENT", glua.LNumber(HTTPPartialContent))
+		ngx.RawSetString("HTTP_MOVED_PERMANENTLY", glua.LNumber(HTTPMovedPermanently))
+		ngx.RawSetString("HTTP_FOUND", glua.LNumber(HTTPFound))
+		ngx.RawSetString("HTTP_SEE_OTHER", glua.LNumber(HTTPSeeOther))
+		ngx.RawSetString("HTTP_NOT_MODIFIED", glua.LNumber(HTTPNotModified))
+		ngx.RawSetString("HTTP_TEMPORARY_REDIRECT", glua.LNumber(HTTPTemporaryRedirect))
+		ngx.RawSetString("HTTP_PERMANENT_REDIRECT", glua.LNumber(HTTPPermanentRedirect))
+		ngx.RawSetString("HTTP_BAD_REQUEST", glua.LNumber(HTTPBadRequest))
+		ngx.RawSetString("HTTP_UNAUTHORIZED", glua.LNumber(HTTPUnauthorized))
+		ngx.RawSetString("HTTP_FORBIDDEN", glua.LNumber(HTTPForbidden))
+		ngx.RawSetString("HTTP_NOT_FOUND", glua.LNumber(HTTPNotFound))
+		ngx.RawSetString("HTTP_METHOD_NOT_ALLOWED", glua.LNumber(HTTPMethodNotAllowed))
+		ngx.RawSetString("HTTP_REQUEST_TIMEOUT", glua.LNumber(HTTPRequestTimeout))
+		ngx.RawSetString("HTTP_CONFLICT", glua.LNumber(HTTPConflict))
+		ngx.RawSetString("HTTP_GONE", glua.LNumber(HTTPGone))
+		ngx.RawSetString("HTTP_LENGTH_REQUIRED", glua.LNumber(HTTPLengthRequired))
+		ngx.RawSetString("HTTP_PAYLOAD_TOO_LARGE", glua.LNumber(HTTPPayloadTooLarge))
+		ngx.RawSetString("HTTP_URI_TOO_LONG", glua.LNumber(HTTPURITooLong))
+		ngx.RawSetString("HTTP_UNSUPPORTED_MEDIA_TYPE", glua.LNumber(HTTPUnsupportedMedia))
+		ngx.RawSetString("HTTP_RANGE_NOT_SATISFIABLE", glua.LNumber(HTTPRangeNotSatisfiable))
+		ngx.RawSetString("HTTP_TOO_MANY_REQUESTS", glua.LNumber(HTTPTooManyRequests))
+		ngx.RawSetString("HTTP_INTERNAL_SERVER_ERROR", glua.LNumber(HTTPInternalServerError))
+		ngx.RawSetString("HTTP_NOT_IMPLEMENTED", glua.LNumber(HTTPNotImplemented))
+		ngx.RawSetString("HTTP_BAD_GATEWAY", glua.LNumber(HTTPBadGateway))
+		ngx.RawSetString("HTTP_SERVICE_UNAVAILABLE", glua.LNumber(HTTPServiceUnavailable))
+		ngx.RawSetString("HTTP_GATEWAY_TIMEOUT", glua.LNumber(HTTPGatewayTimeout))
+		ngx.RawSetString("HTTP_VERSION_NOT_SUPPORTED", glua.LNumber(HTTPHTTPVersionNotSupported))
 
-	// 特殊常量
-	ngx.RawSetString("ERROR", glua.LNumber(-1))
-	ngx.RawSetString("OK", glua.LNumber(0))
-	ngx.RawSetString("AGAIN", glua.LNumber(-2))
-	ngx.RawSetString("DONE", glua.LNumber(-4))
-	ngx.RawSetString("DECLINED", glua.LNumber(-5))
+		// 特殊常量
+		ngx.RawSetString("ERROR", glua.LNumber(-1))
+		ngx.RawSetString("OK", glua.LNumber(0))
+		ngx.RawSetString("AGAIN", glua.LNumber(-2))
+		ngx.RawSetString("DONE", glua.LNumber(-4))
+		ngx.RawSetString("DECLINED", glua.LNumber(-5))
+	}
 
-	// 注册 ngx.log 函数
+	// 注册 ngx.log 函数（每次请求重新注册以绑定正确的 ctx）
 	ngx.RawSetString("log", L.NewFunction(api.luaLog))
 
 	// 注册输出控制函数

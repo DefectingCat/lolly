@@ -135,12 +135,16 @@ func (s *TCPSocket) Connect(host string, port int) error {
 
 	// 开始操作
 	op := s.manager.StartOperation(s, OpConnect, s.connectTimeout)
+	s.mu.Lock()
 	s.currentOp = op
+	s.mu.Unlock()
 
 	// 在 goroutine 中执行连接
 	go func() {
 		defer func() {
+			s.mu.Lock()
 			s.currentOp = nil
+			s.mu.Unlock()
 		}()
 
 		dialer := &net.Dialer{
@@ -533,12 +537,6 @@ const tcpSocketMT = "tcp_socket"
 
 // RegisterTCPSocketAPI 注册 TCP socket API
 func RegisterTCPSocketAPI(L *glua.LState, engine *LuaEngine) {
-	// 创建 ngx.socket 表
-	socket := L.NewTable()
-
-	// ngx.socket.tcp()
-	socket.RawSetString("tcp", L.NewFunction(newTCPSocketFunc(engine)))
-
 	// 确保 ngx 表存在
 	ngx := L.GetGlobal("ngx")
 	var ngxTbl *glua.LTable
@@ -549,9 +547,21 @@ func RegisterTCPSocketAPI(L *glua.LState, engine *LuaEngine) {
 		ngxTbl = L.NewTable()
 		L.SetGlobal("ngx", ngxTbl)
 	}
-	ngxTbl.RawSetString("socket", socket)
 
-	// 注册元表
+	// 检查 ngx.socket 是否已存在，避免并发写入
+	var socket *glua.LTable
+	if existing := ngxTbl.RawGetString("socket"); existing == glua.LNil {
+		// 首次创建 ngx.socket 表
+		socket = L.NewTable()
+		ngxTbl.RawSetString("socket", socket)
+	} else {
+		socket = existing.(*glua.LTable)
+	}
+
+	// 每次请求更新 tcp 函数以绑定正确的 engine
+	socket.RawSetString("tcp", L.NewFunction(newTCPSocketFunc(engine)))
+
+	// 注册元表（仅首次）
 	registerTCPSocketMetaTable(L)
 }
 

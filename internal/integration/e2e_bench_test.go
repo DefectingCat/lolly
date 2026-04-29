@@ -578,15 +578,13 @@ ngx.header["X-Lua-Processed"] = "true"`
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			ctx := &fasthttp.RequestCtx{}
-			ctx.Request.SetRequestURI("/api/test")
-			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
-			ctx.Request.Header.Set("Host", "example.com")
-			finalHandler(ctx)
-		}
-	})
+	for b.Loop() {
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Request.SetRequestURI("/api/test")
+		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+		ctx.Request.Header.Set("Host", "example.com")
+		finalHandler(ctx)
+	}
 }
 
 // BenchmarkE2EMultiLuaPhase 基准测试多 Lua 阶段执行路径。
@@ -650,15 +648,13 @@ func BenchmarkE2EMultiLuaPhase(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			ctx := &fasthttp.RequestCtx{}
-			ctx.Request.SetRequestURI("/api/test")
-			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
-			ctx.Request.Header.Set("Host", "example.com")
-			finalHandler(ctx)
-		}
-	})
+	for b.Loop() {
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Request.SetRequestURI("/api/test")
+		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+		ctx.Request.Header.Set("Host", "example.com")
+		finalHandler(ctx)
+	}
 }
 
 // ============================================================
@@ -1231,8 +1227,9 @@ func BenchmarkE2EStaticWithCompression(b *testing.B) {
 
 	// 创建可压缩的内容
 	jsonContent := make([]byte, 20*1024) // 20KB JSON
+	template := `{"key":"value","data":"repeat"}`
 	for i := range jsonContent {
-		jsonContent[i] = `{"key":"value","data":"repeat"}`[i%32]
+		jsonContent[i] = template[i%len(template)]
 	}
 	jsonPath := filepath.Join(staticDir, "compressible.json")
 	if err := os.WriteFile(jsonPath, jsonContent, 0o644); err != nil {

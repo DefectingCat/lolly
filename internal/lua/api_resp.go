@@ -54,31 +54,28 @@ func RegisterNgxRespAPI(L *glua.LState, api *ngxRespAPI) {
 		L.SetGlobal("ngx", ngx)
 	}
 
-	// 创建 ngx.resp 子表
-	ngxResp := L.NewTable()
-
-	// ngx.resp.get_status() - 获取响应状态码
-	ngxResp.RawSetString("get_status", L.NewFunction(api.luaGetStatus))
-
-	// ngx.resp.set_status(code) - 设置响应状态码
-	ngxResp.RawSetString("set_status", L.NewFunction(api.luaSetStatus))
-
-	// ngx.resp.get_headers(max_headers?) - 获取响应头表
-	ngxResp.RawSetString("get_headers", L.NewFunction(api.luaGetHeaders))
-
-	// ngx.resp.set_header(key, value) - 设置响应头
-	ngxResp.RawSetString("set_header", L.NewFunction(api.luaSetHeader))
-
-	// ngx.resp.clear_header(key) - 清除响应头
-	ngxResp.RawSetString("clear_header", L.NewFunction(api.luaClearHeader))
-
-	// 将 ngx.resp 添加到 ngx
 	// 类型断言检查
 	ngxTable, ok := ngx.(*glua.LTable)
 	if !ok {
 		return
 	}
-	ngxTable.RawSetString("resp", ngxResp)
+
+	// 检查 ngx.resp 是否已存在，避免并发写入
+	var ngxResp *glua.LTable
+	if existingResp := ngxTable.RawGetString("resp"); existingResp == glua.LNil {
+		// 首次创建 ngx.resp 子表
+		ngxResp = L.NewTable()
+		ngxTable.RawSetString("resp", ngxResp)
+	} else {
+		ngxResp = existingResp.(*glua.LTable)
+	}
+
+	// 每次请求更新函数以绑定正确的 ctx
+	ngxResp.RawSetString("get_status", L.NewFunction(api.luaGetStatus))
+	ngxResp.RawSetString("set_status", L.NewFunction(api.luaSetStatus))
+	ngxResp.RawSetString("get_headers", L.NewFunction(api.luaGetHeaders))
+	ngxResp.RawSetString("set_header", L.NewFunction(api.luaSetHeader))
+	ngxResp.RawSetString("clear_header", L.NewFunction(api.luaClearHeader))
 }
 
 // ==================== API 实现 ====================

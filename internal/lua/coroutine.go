@@ -173,26 +173,15 @@ func (c *LuaCoroutine) SetupSandbox() error {
 // 仅保留安全的 yield 和 status 函数。
 // 被拦截的函数返回友好错误消息，而非直接崩溃。
 func (c *LuaCoroutine) setupSecureCoroutineLib() {
-	// 获取原始 coroutine 表
-	originalCoroutine := c.Engine.L.GetGlobal("coroutine")
-	if originalCoroutine == glua.LNil {
-		return // coroutine 库未加载
-	}
-
-	origTable, ok := originalCoroutine.(*glua.LTable)
-	if !ok {
-		return
-	}
-
-	// 创建安全的 coroutine 表
+	// 创建安全的 coroutine 表（使用 Engine 缓存的函数，避免并发读取）
 	safeCoroutine := c.Co.NewTable()
 
-	// 仅保留安全的函数：yield 和 status
-	if yield := origTable.RawGetString("yield"); yield != glua.LNil {
-		safeCoroutine.RawSetString("yield", yield)
+	// 使用缓存的函数（在 Engine.NewEngine 时已获取）
+	if c.Engine.coroYieldFn != nil && c.Engine.coroYieldFn != glua.LNil {
+		safeCoroutine.RawSetString("yield", c.Engine.coroYieldFn)
 	}
-	if status := origTable.RawGetString("status"); status != glua.LNil {
-		safeCoroutine.RawSetString("status", status)
+	if c.Engine.coroStatusFn != nil && c.Engine.coroStatusFn != glua.LNil {
+		safeCoroutine.RawSetString("status", c.Engine.coroStatusFn)
 	}
 
 	// 拦截函数 - 返回友好错误
@@ -226,6 +215,10 @@ func (c *LuaCoroutine) setupSecureCoroutineLib() {
 //   - ngx.timer：定时器
 //   - ngx.location：子请求
 func (c *LuaCoroutine) setupNgxAPI() {
+	// 加锁保护对共享 ngx 表的并发写入
+	c.Engine.ngxRegisterMu.Lock()
+	defer c.Engine.ngxRegisterMu.Unlock()
+
 	// 创建 ngx 表
 	ngx := c.Co.NewTable()
 

@@ -175,13 +175,15 @@ func TestDelayedResponseWriter_WithLuaEngine(t *testing.T) {
 	_ = err
 }
 
-// BenchmarkResponseInterceptor 基准测试响应拦截器
+// BenchmarkResponseInterceptor 基准测试响应拦截器。
+//
+// 注意：每个 goroutine 必须创建独立的 RequestCtx，因为 fasthttp.RequestCtx
+// 不是并发安全的。Flush() 会修改 ResponseHeader 的内部 map。
 func BenchmarkResponseInterceptor(b *testing.B) {
-	ctx := mockRequestCtx()
-
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
+			ctx := mockRequestCtx()
 			ri := NewResponseInterceptor(ctx)
 			ri.Enable()
 			ri.WriteString("Hello, World!")
