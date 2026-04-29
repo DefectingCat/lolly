@@ -214,10 +214,10 @@ act-unit:
 		exit 1; \
 	fi
 
-# 运行基准测试（输出到文件）
+# 运行基准测试（输出到文件，仅扫描 internal 目录）
 bench:
 	@echo "Running benchmarks..."
-	go test -bench=. -benchmem -count=5 ./... 2>&1 | tee bench-results.txt
+	go test -bench=. -benchmem -count=5 -run=^$$ ./internal/... | tee bench-results.txt
 
 # 运行基准测试（统计模式，10次采样）
 bench-stat:
