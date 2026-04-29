@@ -8,18 +8,10 @@
 package handler
 
 import (
-	"io"
-	"net"
 	"os"
 	"syscall"
 
 	"github.com/valyala/fasthttp"
-)
-
-const (
-	// MinSendfileSize 使用 sendfile 的最小文件大小（8KB）。
-	// 小于该值的文件使用普通 io.Copy，避免系统调用开销。
-	MinSendfileSize = 8 * 1024
 )
 
 // SendFile 零拷贝文件传输。
@@ -68,47 +60,6 @@ func SendFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 	return nil
 }
 
-// getNetConn 从 fasthttp.RequestCtx 获取底层 net.Conn。
-//
-// 参数：
-//   - ctx: fasthttp 请求上下文
-//
-// 返回值：
-//   - net.Conn: 底层网络连接，如果无法获取则返回 nil
-func getNetConn(ctx *fasthttp.RequestCtx) net.Conn {
-	// fasthttp 内部使用 net.Conn，通过接口获取
-	return ctx.Conn()
-}
-
-// copyFile 普通文件拷贝（fallback）。
-//
-// 使用 io.Copy 进行文件传输，适用于不支持 sendfile 的平台或小文件。
-//
-// 参数：
-//   - ctx: fasthttp 请求上下文，作为写入目标
-//   - file: 源文件对象
-//   - offset: 文件起始偏移量
-//   - length: 传输长度，0 表示拷贝到文件末尾
-//
-// 返回值：
-//   - error: 拷贝过程中的错误
-func copyFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) error {
-	if offset > 0 {
-		if _, err := file.Seek(offset, io.SeekStart); err != nil {
-			return err
-		}
-	}
-
-	// 使用 io.CopyN 或 io.Copy
-	if length > 0 {
-		_, err := io.CopyN(ctx, file, length)
-		return err
-	}
-
-	_, err := io.Copy(ctx, file)
-	return err
-}
-
 // platformSendfile 非 Linux 平台的 sendfile 实现。
 //
 // macOS 和 Windows 不支持 sendfile 系统调用，返回 ENOTSUP 触发 fallback。
@@ -121,7 +72,7 @@ func copyFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 //
 // 返回值：
 //   - error: 始终返回 ENOTSUP，表示不支持
-func platformSendfile(conn net.Conn, file *os.File, offset, length int64) error {
+func platformSendfile(conn any, file *os.File, offset, length int64) error {
 	// macOS sendfile 签名复杂，简化使用 fallback
 	// Windows TransmitFile 需要特殊 API
 	return syscall.ENOTSUP
