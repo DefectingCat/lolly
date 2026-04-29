@@ -210,10 +210,10 @@ act-unit:
 		exit 1; \
 	fi
 
-# 运行基准测试
+# 运行基准测试（输出到文件）
 bench:
 	@echo "Running benchmarks..."
-	go test -bench=. -benchmem ./...
+	go test -bench=. -benchmem -count=5 ./... 2>&1 | tee bench-results.txt
 
 # 运行基准测试（统计模式，10次采样）
 bench-stat:
@@ -416,3 +416,20 @@ help:
 	@echo "  make install        - Install to GOPATH/bin"
 	@echo "  make clean          - Clean build artifacts"
 	@echo ""
+
+# 回归检测（使用阈值配置文件）
+bench-regression:
+	@echo "Detecting performance regressions with thresholds..."
+	@if [ ! -f .benchmark-thresholds.yaml ]; then \
+		echo "阈值配置文件不存在: .benchmark-thresholds.yaml"; \
+		exit 1; \
+	fi
+	@if [ -f bench-old.txt ] && [ -f bench-new.txt ]; then \
+		benchstat bench-old.txt bench-new.txt | python3 scripts/check_regression.py - --config .benchmark-thresholds.yaml; \
+	elif [ -f benchmark-baseline.txt ] && [ -f benchmark-current.txt ]; then \
+		benchstat benchmark-baseline.txt benchmark-current.txt | python3 scripts/check_regression.py - --config .benchmark-thresholds.yaml; \
+	else \
+		echo "需要 bench-old.txt 和 bench-new.txt 或 baseline/current 文件"; \
+		echo "运行: make bench-stat && mv benchmark-current.txt bench-old.txt && make bench-stat && mv benchmark-current.txt bench-new.txt"; \
+		exit 1; \
+	fi
