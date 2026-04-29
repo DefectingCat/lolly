@@ -113,6 +113,33 @@ func (s *Server) getServerName(cfg *config.ServerConfig) string {
 	return "lolly/" + version.Version
 }
 
+// createFastServer 创建 fasthttp.Server 实例。
+//
+// 根据配置创建并配置 fasthttp.Server，包含所有通用设置。
+//
+// 参数：
+//   - serverCfg: 服务器配置对象
+//   - handler: 请求处理器
+//
+// 返回值：
+//   - *fasthttp.Server: 配置好的 fasthttp.Server 实例
+func (s *Server) createFastServer(serverCfg *config.ServerConfig, handler fasthttp.RequestHandler) *fasthttp.Server {
+	return &fasthttp.Server{
+		Name:               s.getServerName(serverCfg),
+		Handler:            handler,
+		ReadTimeout:        serverCfg.ReadTimeout,
+		WriteTimeout:       serverCfg.WriteTimeout,
+		IdleTimeout:        serverCfg.IdleTimeout,
+		MaxConnsPerIP:      serverCfg.MaxConnsPerIP,
+		MaxRequestsPerConn: serverCfg.MaxRequestsPerConn,
+		CloseOnShutdown:    true,
+		Concurrency:        serverCfg.Concurrency,
+		ReadBufferSize:     serverCfg.ReadBufferSize,
+		WriteBufferSize:    serverCfg.WriteBufferSize,
+		ReduceMemoryUsage:  serverCfg.ReduceMemoryUsage,
+	}
+}
+
 // applyTypesConfig 应用 MIME 类型配置。
 //
 // 根据配置设置自定义 MIME 类型映射和默认类型。
@@ -418,21 +445,8 @@ func (s *Server) startSingleMode() error {
 	handler = s.trackStats(handler)
 	s.handler = handler
 
-	s.fastServer = &fasthttp.Server{
-		Name:               s.getServerName(serverCfg),
-		Handler:            s.handler,
-		ReadTimeout:        serverCfg.ReadTimeout,
-		WriteTimeout:       serverCfg.WriteTimeout,
-		IdleTimeout:        serverCfg.IdleTimeout,
-		MaxConnsPerIP:      serverCfg.MaxConnsPerIP,
-		MaxRequestsPerConn: serverCfg.MaxRequestsPerConn,
-		CloseOnShutdown:    true,
-		// 高并发优化配置
-		Concurrency:       serverCfg.Concurrency,
-		ReadBufferSize:    serverCfg.ReadBufferSize,
-		WriteBufferSize:   serverCfg.WriteBufferSize,
-		ReduceMemoryUsage: serverCfg.ReduceMemoryUsage,
-	}
+	s.fastServer = s.createFastServer(serverCfg, s.handler)
+
 
 	s.running = true
 
@@ -562,21 +576,8 @@ func (s *Server) startVHostMode() error {
 	// 使用 Servers[0] 配置（迁移后 Server 字段为空）
 	serverCfg := &s.config.Servers[0]
 
-	s.fastServer = &fasthttp.Server{
-		Name:               s.getServerName(serverCfg),
-		Handler:            s.handler,
-		ReadTimeout:        serverCfg.ReadTimeout,
-		WriteTimeout:       serverCfg.WriteTimeout,
-		IdleTimeout:        serverCfg.IdleTimeout,
-		MaxConnsPerIP:      serverCfg.MaxConnsPerIP,
-		MaxRequestsPerConn: serverCfg.MaxRequestsPerConn,
-		CloseOnShutdown:    true,
-		// 高并发优化配置
-		Concurrency:       serverCfg.Concurrency,
-		ReadBufferSize:    serverCfg.ReadBufferSize,
-		WriteBufferSize:   serverCfg.WriteBufferSize,
-		ReduceMemoryUsage: serverCfg.ReduceMemoryUsage,
-	}
+	s.fastServer = s.createFastServer(serverCfg, s.handler)
+
 
 	s.running = true
 
@@ -675,16 +676,8 @@ func (s *Server) startMultiServerMode() error {
 			h = s.trackStats(h)
 
 			// 创建 fasthttp.Server
-			fastSrv := &fasthttp.Server{
-				Name:               s.getServerName(serverCfg),
-				Handler:            h,
-				ReadTimeout:        serverCfg.ReadTimeout,
-				WriteTimeout:       serverCfg.WriteTimeout,
-				IdleTimeout:        serverCfg.IdleTimeout,
-				MaxConnsPerIP:      serverCfg.MaxConnsPerIP,
-				MaxRequestsPerConn: serverCfg.MaxRequestsPerConn,
-				CloseOnShutdown:    true,
-			}
+			fastSrv := s.createFastServer(serverCfg, h)
+
 
 			// 检查 SSL 配置
 			if serverCfg.SSL.Cert != "" && serverCfg.SSL.Key != "" {
