@@ -134,7 +134,7 @@ func TestCompressGzip(t *testing.T) {
 	// 测试数据
 	data := []byte("Hello, World! This is a test string that should be compressed.")
 
-	compressed := m.compressGzip(data)
+	compressed := m.compressWithPool(data, m.gzipPool)
 	if len(compressed) == 0 {
 		t.Error("Expected compressed data")
 	}
@@ -153,7 +153,7 @@ func TestCompressBrotli(t *testing.T) {
 
 	data := []byte("Hello, World! This is a test string that should be compressed with brotli.")
 
-	compressed := m.compressBrotli(data)
+	compressed := m.compressWithPool(data, m.brotliPool)
 	if len(compressed) == 0 {
 		t.Error("Expected compressed data")
 	}

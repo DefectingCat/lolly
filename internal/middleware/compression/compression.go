@@ -20,6 +20,7 @@ package compression
 import (
 	"bufio"
 	"bytes"
+	"io"
 	"strings"
 	"sync"
 
@@ -28,6 +29,63 @@ import (
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
 )
+
+// resettableWriteCloser 接口用于统一 gzip.Writer 和 brotli.Writer 的操作。
+// 这两个 writer 都实现了 Reset(io.Writer), Write([]byte) (int, error), Close() error
+type resettableWriteCloser interface {
+	Reset(w io.Writer)
+	Write(data []byte) (int, error)
+	Close() error
+}
+
+// compressorPool 是一个通用的压缩 writer 池。
+type compressorPool struct {
+	pool    sync.Pool
+	level   int
+	factory func(level int) resettableWriteCloser
+}
+
+// newGzipPool 创建 gzip writer 池。
+func newGzipPool(level int) *compressorPool {
+	return &compressorPool{
+		level: level,
+		factory: func(level int) resettableWriteCloser {
+			w, err := gzip.NewWriterLevel(nil, level)
+			if err != nil {
+				w, _ = gzip.NewWriterLevel(nil, gzip.DefaultCompression)
+			}
+			return w
+		},
+	}
+}
+
+// newBrotliPool 创建 brotli writer 池。
+func newBrotliPool(level int) *compressorPool {
+	return &compressorPool{
+		level: level,
+		factory: func(level int) resettableWriteCloser {
+			return brotli.NewWriterOptions(nil, brotli.WriterOptions{
+				Quality: level,
+			})
+		},
+	}
+}
+
+// Get 从池中获取 writer。
+func (p *compressorPool) Get() (resettableWriteCloser, bool) {
+	if p.pool.New == nil {
+		p.pool.New = func() any {
+			return p.factory(p.level)
+		}
+	}
+	v, ok := p.pool.Get().(resettableWriteCloser)
+	return v, ok
+}
+
+// Put 将 writer 放回池中。
+func (p *compressorPool) Put(w resettableWriteCloser) {
+	p.pool.Put(w)
+}
 
 // streamingThreshold 流式压缩阈值。
 // 响应体超过此大小时使用 SetBodyStreamWriter 流式压缩，
@@ -49,9 +107,9 @@ const (
 // Middleware 响应压缩中间件。
 type Middleware struct {
 	// gzipPool gzip.Writer 缓冲池
-	gzipPool sync.Pool
+	gzipPool *compressorPool
 	// brotliPool brotli.Writer 缓冲池
-	brotliPool sync.Pool
+	brotliPool *compressorPool
 	// types 可压缩的 MIME 类型列表
 	types []string
 
@@ -114,25 +172,8 @@ func New(cfg *config.CompressionConfig) (*Middleware, error) {
 	}
 
 	// 初始化缓冲池
-	m.gzipPool = sync.Pool{
-		New: func() any {
-			w, err := gzip.NewWriterLevel(nil, cfg.Level)
-			if err != nil {
-				// 使用默认压缩级别作为回退
-				w, _ = gzip.NewWriterLevel(nil, gzip.DefaultCompression)
-			}
-			return w
-		},
-	}
-
-	// 初始化 brotli 缓冲池
-	m.brotliPool = sync.Pool{
-		New: func() any {
-			return brotli.NewWriterOptions(nil, brotli.WriterOptions{
-				Quality: cfg.Level,
-			})
-		},
-	}
+	m.gzipPool = newGzipPool(cfg.Level)
+	m.brotliPool = newBrotliPool(cfg.Level)
 
 	return m, nil
 }
@@ -224,18 +265,18 @@ func (m *Middleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 		if bodyLen > streamingThreshold {
 			// 大响应：流式压缩，消除 compressed buffer 分配
 			if useBrotli {
-				m.streamBrotli(ctx, encoding)
+				m.streamWithPool(ctx, encoding, m.brotliPool)
 			} else if useGzip {
-				m.streamGzip(ctx, encoding)
+				m.streamWithPool(ctx, encoding, m.gzipPool)
 			}
 		} else {
 			// 小响应：缓冲压缩
 			var compressed []byte
 
 			if useBrotli {
-				compressed = m.compressBrotli(body)
+				compressed = m.compressWithPool(body, m.brotliPool)
 			} else if useGzip {
-				compressed = m.compressGzip(body)
+				compressed = m.compressWithPool(body, m.gzipPool)
 			}
 
 			if len(compressed) > 0 && len(compressed) < bodyLen {
@@ -276,19 +317,20 @@ func (m *Middleware) isCompressible(contentType []byte) bool {
 	return false
 }
 
-// compressGzip 使用 gzip 压缩数据。
+// compressWithPool 使用缓冲池压缩数据。
 //
 // 参数：
 //   - data: 待压缩的原始数据
+//   - pool: 压缩 writer 缓冲池
 //
 // 返回值：
 //   - []byte: 压缩后的数据
-func (m *Middleware) compressGzip(data []byte) []byte {
-	w, ok := m.gzipPool.Get().(*gzip.Writer)
+func (m *Middleware) compressWithPool(data []byte, pool *compressorPool) []byte {
+	w, ok := pool.Get()
 	if !ok {
 		return data // fallback to uncompressed
 	}
-	defer m.gzipPool.Put(w)
+	defer pool.Put(w)
 
 	var buf bytes.Buffer
 	w.Reset(&buf)
@@ -300,28 +342,35 @@ func (m *Middleware) compressGzip(data []byte) []byte {
 	return buf.Bytes()
 }
 
-// compressBrotli 使用 brotli 压缩数据。
+// streamWithPool 使用流式压缩。
+//
+// 通过 SetBodyStreamWriter 将压缩数据直接写入响应流，
+// 消除 compressed buffer 分配，降低内存峰值。
 //
 // 参数：
-//   - data: 待压缩的原始数据
-//
-// 返回值：
-//   - []byte: 压缩后的数据
-func (m *Middleware) compressBrotli(data []byte) []byte {
-	w, ok := m.brotliPool.Get().(*brotli.Writer)
-	if !ok {
-		return data // fallback to uncompressed
-	}
-	defer m.brotliPool.Put(w)
+//   - ctx: fasthttp 请求上下文
+//   - encoding: Content-Encoding 值
+//   - pool: 压缩 writer 缓冲池
+func (m *Middleware) streamWithPool(ctx *fasthttp.RequestCtx, encoding string, pool *compressorPool) {
+	ctx.Response.Header.Set("Content-Encoding", encoding)
+	ctx.Response.Header.Del("Content-Length") // 使用 chunked encoding
 
-	var buf bytes.Buffer
-	w.Reset(&buf)
-	if _, err := w.Write(data); err != nil { //nolint:staticcheck // intentionally empty branch
-		// 忽略写入错误，缓冲到 bytes.Buffer 时不太可能失败
-	}
-	_ = w.Close()
+	body := ctx.Response.Body()
+	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
+		writer, ok := pool.Get()
+		if !ok {
+			// pool 获取失败，直接写原始 body
+			_, _ = w.Write(body)
+			_ = w.Flush()
+			return
+		}
+		defer pool.Put(writer)
 
-	return buf.Bytes()
+		writer.Reset(w)
+		_, _ = writer.Write(body)
+		_ = writer.Close()
+		_ = w.Flush()
+	})
 }
 
 // Types 返回可压缩的 MIME 类型列表。
@@ -346,64 +395,4 @@ func (m *Middleware) Level() int {
 //   - int: 最小压缩大小（字节）
 func (m *Middleware) MinSize() int {
 	return m.minSize
-}
-
-// streamGzip 使用 gzip 流式压缩。
-//
-// 通过 SetBodyStreamWriter 将压缩数据直接写入响应流，
-// 消除 compressed buffer 分配，降低内存峰值。
-//
-// 参数：
-//   - ctx: fasthttp 请求上下文
-//   - encoding: Content-Encoding 值（"gzip"）
-func (m *Middleware) streamGzip(ctx *fasthttp.RequestCtx, encoding string) {
-	ctx.Response.Header.Set("Content-Encoding", encoding)
-	ctx.Response.Header.Del("Content-Length") // 使用 chunked encoding
-
-	body := ctx.Response.Body()
-	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
-		writer, ok := m.gzipPool.Get().(*gzip.Writer)
-		if !ok {
-			// pool 获取失败，直接写原始 body
-			_, _ = w.Write(body)
-			_ = w.Flush()
-			return
-		}
-		defer m.gzipPool.Put(writer)
-
-		writer.Reset(w)
-		_, _ = writer.Write(body)
-		_ = writer.Close()
-		_ = w.Flush()
-	})
-}
-
-// streamBrotli 使用 brotli 流式压缩。
-//
-// 通过 SetBodyStreamWriter 将压缩数据直接写入响应流，
-// 消除 compressed buffer 分配，降低内存峰值。
-//
-// 参数：
-//   - ctx: fasthttp 请求上下文
-//   - encoding: Content-Encoding 值（"br"）
-func (m *Middleware) streamBrotli(ctx *fasthttp.RequestCtx, encoding string) {
-	ctx.Response.Header.Set("Content-Encoding", encoding)
-	ctx.Response.Header.Del("Content-Length") // 使用 chunked encoding
-
-	body := ctx.Response.Body()
-	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
-		writer, ok := m.brotliPool.Get().(*brotli.Writer)
-		if !ok {
-			// pool 获取失败，直接写原始 body
-			_, _ = w.Write(body)
-			_ = w.Flush()
-			return
-		}
-		defer m.brotliPool.Put(writer)
-
-		writer.Reset(w)
-		_, _ = writer.Write(body)
-		_ = writer.Close()
-		_ = w.Flush()
-	})
 }

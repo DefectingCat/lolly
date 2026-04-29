@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/variable"
@@ -119,6 +120,38 @@ func ValidateEnum(value string, validValues []string, fieldName string) error {
 func ValidateNonNegative(value int, fieldName string) error {
 	if value < 0 {
 		return fmt.Errorf("%s 不能为负数", fieldName)
+	}
+	return nil
+}
+
+// ValidateNonNegativeInt64 验证 int64 值为非负数
+func ValidateNonNegativeInt64(value int64, fieldName string) error {
+	if value < 0 {
+		return fmt.Errorf("%s 不能为负数", fieldName)
+	}
+	return nil
+}
+
+// ValidateNonNegativeDuration 验证 time.Duration 值为非负数
+func ValidateNonNegativeDuration(value time.Duration, fieldName string) error {
+	if value < 0 {
+		return fmt.Errorf("%s 不能为负数", fieldName)
+	}
+	return nil
+}
+
+// ValidateNoNullByte 验证字符串不包含 null byte
+func ValidateNoNullByte(s string, fieldName string) error {
+	if strings.Contains(s, "\x00") {
+		return fmt.Errorf("%s 不能包含 null byte", fieldName)
+	}
+	return nil
+}
+
+// ValidatePathTraversal 验证路径不包含路径遍历 '..'
+func ValidatePathTraversal(path string, fieldName string) error {
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("%s不能包含 '..'", fieldName)
 	}
 	return nil
 }
@@ -232,13 +265,13 @@ func validateStatics(statics []StaticConfig) error {
 		}
 
 		// 验证根目录路径安全
-		if s.Root != "" && strings.Contains(s.Root, "..") {
-			return fmt.Errorf("static[%d]: 根目录路径不能包含 '..'", i)
+		if err := ValidatePathTraversal(s.Root, fmt.Sprintf("static[%d]: 根目录路径", i)); err != nil {
+			return err
 		}
 
 		// 验证 alias 路径安全
-		if s.Alias != "" && strings.Contains(s.Alias, "..") {
-			return fmt.Errorf("static[%d]: alias 路径不能包含 '..'", i)
+		if err := ValidatePathTraversal(s.Alias, fmt.Sprintf("static[%d]: alias 路径", i)); err != nil {
+			return err
 		}
 
 		// 验证 try_files 模式
@@ -278,8 +311,8 @@ func validateTryFilesPattern(pattern string) error {
 	}
 
 	// 检查 null byte
-	if strings.Contains(pattern, "\x00") {
-		return errors.New("try_files 模式不能包含 null byte")
+	if err := ValidateNoNullByte(pattern, "try_files 模式"); err != nil {
+		return err
 	}
 
 	// 定义支持的模式类型
@@ -337,8 +370,8 @@ func validateTryFilesExtension(ext string) error {
 	}
 
 	// 检查 null byte
-	if strings.Contains(ext, "\x00") {
-		return errors.New("扩展名不能包含 null byte")
+	if err := ValidateNoNullByte(ext, "扩展名"); err != nil {
+		return err
 	}
 
 	// 白名单字符检查：仅允许字母、数字、点、下划线、连字符
@@ -394,8 +427,8 @@ func validateTryFilesFilename(filename string) error {
 	}
 
 	// 检查 null byte
-	if strings.Contains(filename, "\x00") {
-		return errors.New("文件名不能包含 null byte")
+	if err := ValidateNoNullByte(filename, "文件名"); err != nil {
+		return err
 	}
 
 	return nil
@@ -441,8 +474,8 @@ func validateStatic(s *StaticConfig) error {
 	// 静态文件根目录非空时验证路径有效性
 	if s.Root != "" {
 		// 路径安全检查：不允许包含 ".."
-		if strings.Contains(s.Root, "..") {
-			return errors.New("根目录路径不能包含 '..'")
+		if err := ValidatePathTraversal(s.Root, "根目录路径"); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -711,13 +744,13 @@ func validateGeoIP(g *GeoIPConfig) error {
 	}
 
 	// 验证缓存大小
-	if g.CacheSize < 0 {
-		return errors.New("cache_size 不能为负数")
+	if err := ValidateNonNegative(g.CacheSize, "cache_size"); err != nil {
+		return err
 	}
 
 	// 验证缓存 TTL
-	if g.CacheTTL < 0 {
-		return errors.New("cache_ttl 不能为负数")
+	if err := ValidateNonNegativeDuration(g.CacheTTL, "cache_ttl"); err != nil {
+		return err
 	}
 
 	// 验证默认动作
@@ -883,18 +916,18 @@ func validateHTTP2(h *HTTP2Config, hasSSL bool) error {
 	}
 
 	// 验证并发流数量
-	if h.MaxConcurrentStreams < 0 {
-		return errors.New("max_concurrent_streams 不能为负数")
+	if err := ValidateNonNegative(h.MaxConcurrentStreams, "max_concurrent_streams"); err != nil {
+		return err
 	}
 
 	// 验证头部大小限制
-	if h.MaxHeaderListSize < 0 {
-		return errors.New("max_header_list_size 不能为负数")
+	if err := ValidateNonNegative(h.MaxHeaderListSize, "max_header_list_size"); err != nil {
+		return err
 	}
 
 	// 验证空闲超时
-	if h.IdleTimeout < 0 {
-		return errors.New("idle_timeout 不能为负数")
+	if err := ValidateNonNegativeDuration(h.IdleTimeout, "idle_timeout"); err != nil {
+		return err
 	}
 
 	return nil
@@ -1085,8 +1118,8 @@ func validateStream(s *StreamConfig) error {
 //   - error: 验证失败时返回错误信息，成功返回 nil
 func validatePerformance(p *PerformanceConfig) error {
 	// 检查 Transport 配置（可能导致性能问题）
-	if p.Transport.MaxConnsPerHost < 0 {
-		return errors.New("transport.max_conns_per_host 不能为负数")
+	if err := ValidateNonNegative(p.Transport.MaxConnsPerHost, "transport.max_conns_per_host"); err != nil {
+		return err
 	}
 
 	return nil
@@ -1112,8 +1145,8 @@ func validateNextUpstream(n *NextUpstreamConfig) error {
 	}
 
 	// 验证重试次数
-	if n.Tries < 0 {
-		return errors.New("tries 不能为负数")
+	if err := ValidateNonNegative(n.Tries, "tries"); err != nil {
+		return err
 	}
 
 	// 验证 HTTP 状态码
@@ -1204,26 +1237,26 @@ func validateLua(l *LuaMiddlewareConfig) error {
 		}
 
 		// 超时时间验证
-		if script.Timeout < 0 {
-			return fmt.Errorf("scripts[%d].timeout 不能为负数", i)
+		if err := ValidateNonNegativeDuration(script.Timeout, fmt.Sprintf("scripts[%d].timeout", i)); err != nil {
+			return err
 		}
 	}
 
 	// 验证全局设置
-	if l.GlobalSettings.MaxConcurrentCoroutines < 0 {
-		return errors.New("global_settings.max_concurrent_coroutines 不能为负数")
+	if err := ValidateNonNegative(l.GlobalSettings.MaxConcurrentCoroutines, "global_settings.max_concurrent_coroutines"); err != nil {
+		return err
 	}
 	if l.GlobalSettings.MaxConcurrentCoroutines > 0 && l.GlobalSettings.MaxConcurrentCoroutines < 1 {
 		return errors.New("global_settings.max_concurrent_coroutines 至少为 1")
 	}
-	if l.GlobalSettings.CoroutineTimeout < 0 {
-		return errors.New("global_settings.coroutine_timeout 不能为负数")
+	if err := ValidateNonNegativeDuration(l.GlobalSettings.CoroutineTimeout, "global_settings.coroutine_timeout"); err != nil {
+		return err
 	}
-	if l.GlobalSettings.CodeCacheSize < 0 {
-		return errors.New("global_settings.code_cache_size 不能为负数")
+	if err := ValidateNonNegative(l.GlobalSettings.CodeCacheSize, "global_settings.code_cache_size"); err != nil {
+		return err
 	}
-	if l.GlobalSettings.MaxExecutionTime < 0 {
-		return errors.New("global_settings.max_execution_time 不能为负数")
+	if err := ValidateNonNegativeDuration(l.GlobalSettings.MaxExecutionTime, "global_settings.max_execution_time"); err != nil {
+		return err
 	}
 
 	return nil

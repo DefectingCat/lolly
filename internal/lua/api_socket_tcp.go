@@ -537,26 +537,11 @@ const tcpSocketMT = "tcp_socket"
 
 // RegisterTCPSocketAPI 注册 TCP socket API
 func RegisterTCPSocketAPI(L *glua.LState, engine *LuaEngine) {
-	// 确保 ngx 表存在
-	ngx := L.GetGlobal("ngx")
-	var ngxTbl *glua.LTable
-	if tbl, ok := ngx.(*glua.LTable); ok {
-		ngxTbl = tbl
-	} else {
-		// 创建 ngx 表
-		ngxTbl = L.NewTable()
-		L.SetGlobal("ngx", ngxTbl)
-	}
+	// 获取或创建 ngx 表
+	ngxTbl := GetOrCreateNgxTable(L)
 
-	// 检查 ngx.socket 是否已存在，避免并发写入
-	var socket *glua.LTable
-	if existing := ngxTbl.RawGetString("socket"); existing == glua.LNil {
-		// 首次创建 ngx.socket 表
-		socket = L.NewTable()
-		ngxTbl.RawSetString("socket", socket)
-	} else {
-		socket = existing.(*glua.LTable)
-	}
+	// 获取或创建 ngx.socket 子表
+	socket := GetOrCreateNgxSubTable(ngxTbl, L, "socket")
 
 	// 每次请求更新 tcp 函数以绑定正确的 engine
 	socket.RawSetString("tcp", L.NewFunction(newTCPSocketFunc(engine)))

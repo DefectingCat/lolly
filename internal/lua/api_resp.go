@@ -46,29 +46,11 @@ func newNgxRespAPI(ctx *fasthttp.RequestCtx) *ngxRespAPI {
 // RegisterNgxRespAPI 在 Lua 状态机中注册 ngx.resp API
 // 这是主入口函数，由 LuaEngine 在初始化时调用
 func RegisterNgxRespAPI(L *glua.LState, api *ngxRespAPI) {
-	// 获取已存在的 ngx 表（必须已设置全局）
-	ngx := L.GetGlobal("ngx")
-	if ngx == nil || ngx.Type() != glua.LTTable {
-		// 如果不存在，创建新表并设置全局
-		ngx = L.NewTable()
-		L.SetGlobal("ngx", ngx)
-	}
+	// 获取或创建 ngx 表
+	ngxTable := GetOrCreateNgxTable(L)
 
-	// 类型断言检查
-	ngxTable, ok := ngx.(*glua.LTable)
-	if !ok {
-		return
-	}
-
-	// 检查 ngx.resp 是否已存在，避免并发写入
-	var ngxResp *glua.LTable
-	if existingResp := ngxTable.RawGetString("resp"); existingResp == glua.LNil {
-		// 首次创建 ngx.resp 子表
-		ngxResp = L.NewTable()
-		ngxTable.RawSetString("resp", ngxResp)
-	} else {
-		ngxResp = existingResp.(*glua.LTable)
-	}
+	// 获取或创建 ngx.resp 子表
+	ngxResp := GetOrCreateNgxSubTable(ngxTable, L, "resp")
 
 	// 每次请求更新函数以绑定正确的 ctx
 	ngxResp.RawSetString("get_status", L.NewFunction(api.luaGetStatus))

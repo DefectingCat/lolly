@@ -114,18 +114,7 @@ func newNgxLogAPI(ctx *fasthttp.RequestCtx, luaCtx *LuaContext, logger *zerolog.
 // 每次请求都会重新注册请求特定的函数（log, say, print, flush, exit, redirect）。
 func RegisterNgxLogAPI(L *glua.LState, api *ngxLogAPI) {
 	// 获取或创建 ngx 表
-	var ngx *glua.LTable
-	existingNgx := L.GetGlobal("ngx")
-	if existingNgx != nil && existingNgx.Type() == glua.LTTable {
-		ngxTable, ok := existingNgx.(*glua.LTable)
-		if ok {
-			ngx = ngxTable
-		} else {
-			ngx = L.NewTable()
-		}
-	} else {
-		ngx = L.NewTable()
-	}
+	ngx := GetOrCreateNgxTable(L)
 
 	// 检查常量是否已注册（通过 STDERR 常量判断）
 	// 如果已注册，跳过常量写入，避免并发写入全局表

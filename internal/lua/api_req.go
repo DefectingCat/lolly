@@ -105,15 +105,8 @@ func newNgxReqAPI(ctx *fasthttp.RequestCtx) *ngxReqAPI {
 // RegisterNgxReqAPI 在 Lua 状态机中注册 ngx.req API
 // 这是主入口函数，由 LuaEngine 在初始化时调用
 func RegisterNgxReqAPI(L *glua.LState, api *ngxReqAPI, ngxTable *glua.LTable) {
-	// 检查 ngx.req 是否已存在，避免并发写入
-	var ngxReq *glua.LTable
-	if existingReq := ngxTable.RawGetString("req"); existingReq == glua.LNil {
-		// 首次创建 ngx.req 子表
-		ngxReq = L.NewTable()
-		ngxTable.RawSetString("req", ngxReq)
-	} else {
-		ngxReq = existingReq.(*glua.LTable)
-	}
+	// 获取或创建 ngx.req 子表
+	ngxReq := GetOrCreateNgxSubTable(ngxTable, L, "req")
 
 	// 直接映射层 API：get_method
 	// 特点：直接访问 fasthttp.RequestCtx，零拷贝，最小开销

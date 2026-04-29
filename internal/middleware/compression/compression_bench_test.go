@@ -27,7 +27,7 @@ func BenchmarkGzipCompress_1KB(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		mw.compressGzip(data)
+		mw.compressWithPool(data, mw.gzipPool)
 	}
 }
 
@@ -44,7 +44,7 @@ func BenchmarkGzipCompress_10KB(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		mw.compressGzip(data)
+		mw.compressWithPool(data, mw.gzipPool)
 	}
 }
 
@@ -61,7 +61,7 @@ func BenchmarkGzipCompress_100KB(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		mw.compressGzip(data)
+		mw.compressWithPool(data, mw.gzipPool)
 	}
 }
 
@@ -78,7 +78,7 @@ func BenchmarkBrotliCompress_1KB(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		mw.compressBrotli(data)
+		mw.compressWithPool(data, mw.brotliPool)
 	}
 }
 
@@ -95,7 +95,7 @@ func BenchmarkBrotliCompress_10KB(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		mw.compressBrotli(data)
+		mw.compressWithPool(data, mw.brotliPool)
 	}
 }
 
@@ -114,7 +114,7 @@ func BenchmarkCompressionPool(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		mw.compressGzip(data)
+		mw.compressWithPool(data, mw.gzipPool)
 	}
 }
 
@@ -222,7 +222,7 @@ func BenchmarkCompressionLevelComparison(b *testing.B) {
 		mw, _ := New(cfg)
 		b.ResetTimer()
 		for b.Loop() {
-			mw.compressGzip(data)
+			mw.compressWithPool(data, mw.gzipPool)
 		}
 	})
 
@@ -231,7 +231,7 @@ func BenchmarkCompressionLevelComparison(b *testing.B) {
 		mw, _ := New(cfg)
 		b.ResetTimer()
 		for b.Loop() {
-			mw.compressGzip(data)
+			mw.compressWithPool(data, mw.gzipPool)
 		}
 	})
 
@@ -240,7 +240,7 @@ func BenchmarkCompressionLevelComparison(b *testing.B) {
 		mw, _ := New(cfg)
 		b.ResetTimer()
 		for b.Loop() {
-			mw.compressGzip(data)
+			mw.compressWithPool(data, mw.gzipPool)
 		}
 	})
 }

@@ -83,7 +83,7 @@ func BenchmarkGzipWriter_Pool(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		_ = mw.compressGzip(data)
+		_ = mw.compressWithPool(data, mw.gzipPool)
 	}
 }
 
@@ -145,7 +145,7 @@ func BenchmarkGzipCompress_Sizes(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				_ = mw.compressGzip(tc.data)
+				_ = mw.compressWithPool(tc.data, mw.gzipPool)
 			}
 		})
 	}
