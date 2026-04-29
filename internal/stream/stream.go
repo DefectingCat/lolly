@@ -67,49 +67,36 @@ type roundRobin struct {
 	healthyPool sync.Pool
 }
 
-// newRoundRobin 创建轮询均衡器。
-//
-// 返回实现了简单轮询算法的 Balancer 接口实例。
-//
-// 返回值：
-//   - Balancer: 轮询负载均衡器实例
 func newRoundRobin() Balancer {
 	rr := &roundRobin{}
 	rr.healthyPool = sync.Pool{
 		New: func() any {
-			// 预分配合理容量（典型场景 64 个后端）
-			return make([]*Target, 0, 64)
+			// 用指针包装 slice，避免 Put 时的装箱分配
+			s := make([]*Target, 0, 64)
+			return &s
 		},
 	}
 	return rr
 }
 
-// Select 选择下一个目标。
-//
-// 从健康目标列表中按轮询顺序选择一个目标。
-// 只选择标记为健康的目标，如果无健康目标则返回 nil。
-//
-// 参数：
-//   - targets: 目标服务器列表
-//
-// 返回值：
-//   - *Target: 选中的目标服务器，无可用目标时返回 nil
 func (r *roundRobin) Select(targets []*Target) *Target {
 	// 从池中获取 healthy slice 并复用
-	healthy := r.healthyPool.Get().([]*Target)
+	healthyPtr := r.healthyPool.Get().(*[]*Target)
+	healthy := *healthyPtr
 	healthy = healthy[:0] // 清空但保留容量
 	for _, t := range targets {
 		if t.healthy.Load() {
 			healthy = append(healthy, t)
 		}
 	}
+	*healthyPtr = healthy
 	if len(healthy) == 0 {
-		r.healthyPool.Put(healthy)
+		r.healthyPool.Put(healthyPtr)
 		return nil
 	}
 	idx := atomic.AddUint64(&r.counter, 1) - 1
 	result := healthy[idx%uint64(len(healthy))]
-	r.healthyPool.Put(healthy)
+	r.healthyPool.Put(healthyPtr)
 	return result
 }
 
@@ -174,33 +161,25 @@ func newWeightedRoundRobin() Balancer {
 	w := &weightedRoundRobin{}
 	w.healthyPool = sync.Pool{
 		New: func() any {
-			return make([]*Target, 0, 64)
+			s := make([]*Target, 0, 64)
+			return &s
 		},
 	}
 	return w
 }
 
-// Select 基于权重分布选择目标。
-//
-// 根据目标服务器的权重进行轮询选择，权重决定被选中的概率。
-// 权重为 0 或负数的目标按权重 1 处理。
-// 只选择标记为健康的目标，如果无健康目标则返回 nil。
-//
-// 参数：
-//   - targets: 目标服务器列表
-//
-// 返回值：
-//   - *Target: 选中的目标服务器，无可用目标时返回 nil
 func (w *weightedRoundRobin) Select(targets []*Target) *Target {
-	healthy := w.healthyPool.Get().([]*Target)
+	healthyPtr := w.healthyPool.Get().(*[]*Target)
+	healthy := *healthyPtr
 	healthy = healthy[:0]
 	for _, t := range targets {
 		if t.healthy.Load() {
 			healthy = append(healthy, t)
 		}
 	}
+	*healthyPtr = healthy
 	if len(healthy) == 0 {
-		w.healthyPool.Put(healthy)
+		w.healthyPool.Put(healthyPtr)
 		return nil
 	}
 
@@ -227,13 +206,13 @@ func (w *weightedRoundRobin) Select(targets []*Target) *Target {
 		}
 		currentWeight += weight
 		if pos < currentWeight {
-			w.healthyPool.Put(healthy)
+			w.healthyPool.Put(healthyPtr)
 			return t
 		}
 	}
 
 	result := healthy[len(healthy)-1]
-	w.healthyPool.Put(healthy)
+	w.healthyPool.Put(healthyPtr)
 	return result
 }
 
@@ -255,48 +234,29 @@ func newIPHash() Balancer {
 	ih := &ipHash{}
 	ih.healthyPool = sync.Pool{
 		New: func() any {
-			return make([]*Target, 0, 64)
+			s := make([]*Target, 0, 64)
+			return &s
 		},
 	}
 	return ih
 }
 
-// Select 默认选择（IP Hash 需要具体 IP）。
-//
-// 当无客户端 IP 时，使用空字符串进行哈希计算。
-// 通常应使用 SelectByIP 方法指定客户端 IP。
-//
-// 参数：
-//   - targets: 目标服务器列表
-//
-// 返回值：
-//   - *Target: 选中的目标服务器，无可用目标时返回 nil
 func (i *ipHash) Select(targets []*Target) *Target {
 	return i.SelectByIP(targets, "")
 }
 
-// SelectByIP 基于客户端 IP 哈希选择目标。
-//
-// 使用 FNV-64a 算法计算客户端 IP 的哈希值，对目标数取模选择目标。
-// 同一 IP 总是映射到同一目标（除非目标列表变化）。
-// 只选择标记为健康的目标，如果无健康目标则返回 nil。
-//
-// 参数：
-//   - targets: 目标服务器列表
-//   - clientIP: 客户端 IP 地址字符串
-//
-// 返回值：
-//   - *Target: 选中的目标服务器，无可用目标时返回 nil
 func (i *ipHash) SelectByIP(targets []*Target, clientIP string) *Target {
-	healthy := i.healthyPool.Get().([]*Target)
+	healthyPtr := i.healthyPool.Get().(*[]*Target)
+	healthy := *healthyPtr
 	healthy = healthy[:0]
 	for _, t := range targets {
 		if t.healthy.Load() {
 			healthy = append(healthy, t)
 		}
 	}
+	*healthyPtr = healthy
 	if len(healthy) == 0 {
-		i.healthyPool.Put(healthy)
+		i.healthyPool.Put(healthyPtr)
 		return nil
 	}
 
@@ -307,7 +267,7 @@ func (i *ipHash) SelectByIP(targets []*Target, clientIP string) *Target {
 
 	idx := hash % uint64(len(healthy))
 	result := healthy[idx]
-	i.healthyPool.Put(healthy)
+	i.healthyPool.Put(healthyPtr)
 	return result
 }
 
