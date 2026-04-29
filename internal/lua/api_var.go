@@ -230,91 +230,19 @@ func (api *ngxVarAPI) getVariableLua(name string) glua.LValue {
 }
 
 // getVariable 从 fasthttp RequestCtx 获取变量值（字符串形式）
-// 用于 Go 层调用
+// 用于 Go 层调用，内部复用 getVariableLua 实现
 func (api *ngxVarAPI) getVariable(name string) string {
-	if api.ctx == nil {
+	lv := api.getVariableLua(name)
+	if lv == nil {
 		return ""
 	}
-
-	switch name {
-	case "request_method":
-		return string(api.ctx.Method())
-	case "request_uri":
-		return string(api.ctx.RequestURI())
-	case "uri":
-		return string(api.ctx.URI().Path())
-	case "document_uri":
-		return string(api.ctx.URI().Path())
-	case "query_string", "args":
-		return string(api.ctx.URI().QueryString())
-	case "server_protocol", "protocol":
-		return string(api.ctx.Request.Header.Protocol())
-	case "scheme":
-		return string(api.ctx.URI().Scheme())
-	case "request_length":
-		return strconv.Itoa(api.ctx.Request.Header.ContentLength())
-	case "request_time":
-		return ""
-	case "http_host":
-		return string(api.ctx.Host())
-	case "http_user_agent", "http_user-agent":
-		return string(api.ctx.UserAgent())
-	case "http_referer":
-		return string(api.ctx.Referer())
-	case "http_accept":
-		return string(api.ctx.Request.Header.Peek("Accept"))
-	case "http_accept_encoding", "http_accept-encoding":
-		return string(api.ctx.Request.Header.Peek("Accept-Encoding"))
-	case "http_accept_language", "http_accept-language":
-		return string(api.ctx.Request.Header.Peek("Accept-Language"))
-	case "http_connection":
-		return string(api.ctx.Request.Header.Peek("Connection"))
-	case "http_content_type", "http_content-type":
-		return string(api.ctx.Request.Header.ContentType())
-	case "http_content_length", "http_content-length":
-		return string(api.ctx.Request.Header.Peek("Content-Length"))
-	case "remote_addr":
-		return api.ctx.RemoteAddr().String()
-	case "remote_port":
-		addr := api.ctx.RemoteAddr()
-		if addr != nil {
-			addrStr := addr.String()
-			if idx := strings.LastIndex(addrStr, ":"); idx >= 0 {
-				return addrStr[idx+1:]
-			}
-		}
-		return ""
-	case "binary_remote_addr":
-		return ""
-	case "server_addr":
-		addr := api.ctx.LocalAddr()
-		if addr != nil {
-			return addr.String()
-		}
-		return ""
-	case "server_port":
-		addr := api.ctx.LocalAddr()
-		if addr != nil {
-			addrStr := addr.String()
-			if idx := strings.LastIndex(addrStr, ":"); idx >= 0 {
-				return addrStr[idx+1:]
-			}
-		}
-		return ""
-	case "server_name":
-		return string(api.ctx.Host())
-	case argPrefix:
-		return string(api.ctx.URI().QueryString())
+	switch v := lv.(type) {
+	case glua.LString:
+		return string(v)
+	case glua.LNumber:
+		return strconv.Itoa(int(v))
 	default:
-		if len(name) > len(argPrefix) && name[:len(argPrefix)] == argPrefix {
-			paramName := name[4:]
-			return string(api.ctx.QueryArgs().Peek(paramName))
-		}
-		if len(name) > 5 && name[:5] == "http_" {
-			headerName := name[5:]
-			return string(api.ctx.Request.Header.Peek(headerName))
-		}
-		return ""
+		return lv.String()
 	}
 }
 
