@@ -59,6 +59,27 @@ type AuthRequest struct {
 	mu sync.RWMutex
 }
 
+// applyDefaults 设置配置默认值。
+func applyDefaults(cfg *config.AuthRequestConfig) {
+	if cfg.Method == "" {
+		cfg.Method = "GET"
+	}
+	cfg.Method = strings.ToUpper(cfg.Method)
+
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 5 * time.Second
+	}
+
+	if cfg.ForwardHeaders == nil {
+		cfg.ForwardHeaders = []string{
+			"Cookie",
+			"Authorization",
+			"X-Forwarded-For",
+			"X-Real-Ip",
+		}
+	}
+}
+
 // NewAuthRequest 使用给定的配置创建一个新的 AuthRequest 中间件。
 //
 // 参数：
@@ -76,28 +97,7 @@ func NewAuthRequest(cfg config.AuthRequestConfig) (*AuthRequest, error) {
 		return nil, errors.New("auth_request: uri is required")
 	}
 
-	// 设置默认值
-	method := cfg.Method
-	if method == "" {
-		method = "GET"
-	}
-	cfg.Method = strings.ToUpper(method)
-
-	timeout := cfg.Timeout
-	if timeout == 0 {
-		timeout = 5 * time.Second
-	}
-	cfg.Timeout = timeout
-
-	// 设置默认转发头
-	if cfg.ForwardHeaders == nil {
-		cfg.ForwardHeaders = []string{
-			"Cookie",
-			"Authorization",
-			"X-Forwarded-For",
-			"X-Real-Ip",
-		}
-	}
+	applyDefaults(&cfg)
 
 	ar := &AuthRequest{
 		config: cfg,
@@ -366,27 +366,7 @@ func (a *AuthRequest) UpdateConfig(cfg config.AuthRequestConfig) error {
 		return errors.New("auth_request: uri is required")
 	}
 
-	// 设置默认值
-	method := cfg.Method
-	if method == "" {
-		method = "GET"
-	}
-	cfg.Method = strings.ToUpper(method)
-
-	timeout := cfg.Timeout
-	if timeout == 0 {
-		timeout = 5 * time.Second
-	}
-	cfg.Timeout = timeout
-
-	if cfg.ForwardHeaders == nil {
-		cfg.ForwardHeaders = []string{
-			"Cookie",
-			"Authorization",
-			"X-Forwarded-For",
-			"X-Real-Ip",
-		}
-	}
+	applyDefaults(&cfg)
 
 	a.mu.Lock()
 	a.config = cfg
