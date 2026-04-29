@@ -45,6 +45,7 @@ type FileEntry struct {
 // 注意事项：
 //   - 所有方法均为并发安全
 //   - 支持过期时间自动淘汰
+//   - 使用 sync.Pool 复用 FileEntry，减少内存分配
 type FileCache struct {
 	entries     map[string]*FileEntry
 	lruList     *list.List
@@ -53,6 +54,7 @@ type FileCache struct {
 	inactive    time.Duration
 	currentSize int64
 	mu          sync.RWMutex
+	entryPool   sync.Pool // FileEntry 池，复用条目减少分配
 }
 
 // NewFileCache 创建文件缓存实例。
@@ -67,13 +69,20 @@ type FileCache struct {
 // 返回值：
 //   - *FileCache: 创建的文件缓存实例
 func NewFileCache(maxEntries, maxSize int64, inactive time.Duration) *FileCache {
-	return &FileCache{
+	c := &FileCache{
 		maxEntries: maxEntries,
 		maxSize:    maxSize,
 		inactive:   inactive,
 		entries:    make(map[string]*FileEntry),
 		lruList:    list.New(),
 	}
+	// 初始化 entry 池
+	c.entryPool = sync.Pool{
+		New: func() any {
+			return &FileEntry{}
+		},
+	}
+	return c
 }
 
 // Get 获取缓存的文件。
@@ -170,15 +179,14 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time)
 		return nil
 	}
 
-	// 创建新条目
-	entry := &FileEntry{
-		Path:       path,
-		Data:       data,
-		Size:       size,
-		ModTime:    modTime,
-		CachedAt:   time.Now(), // 设置缓存时间
-		LastAccess: time.Now(),
-	}
+	// 从池中获取条目并初始化
+	entry := c.entryPool.Get().(*FileEntry)
+	entry.Path = path
+	entry.Data = data
+	entry.Size = size
+	entry.ModTime = modTime
+	entry.CachedAt = time.Now()
+	entry.LastAccess = time.Now()
 	entry.element = c.lruList.PushFront(entry)
 	c.entries[path] = entry
 	c.currentSize += size
@@ -230,6 +238,15 @@ func (c *FileCache) removeEntry(entry *FileEntry) {
 	c.lruList.Remove(entry.element)
 	delete(c.entries, entry.Path)
 	c.currentSize -= entry.Size
+	// Reset entry 并放回池中复用
+	entry.Path = ""
+	entry.Data = nil
+	entry.Size = 0
+	entry.ModTime = time.Time{}
+	entry.CachedAt = time.Time{}
+	entry.LastAccess = time.Time{}
+	entry.element = nil
+	c.entryPool.Put(entry)
 }
 
 // evictIfNeeded 根据限制淘汰条目。

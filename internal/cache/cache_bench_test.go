@@ -78,6 +78,33 @@ func BenchmarkFileCacheSet(b *testing.B) {
 	}
 }
 
+// BenchmarkFileCacheSet_Pooled 测试池化后的 Set 性能。
+// 验证 sync.Pool 复用 FileEntry 的效果，目标 allocs/op ≤ 1。
+func BenchmarkFileCacheSet_Pooled(b *testing.B) {
+	sizes := []int{100, 1000, 10000}
+
+	for _, size := range sizes {
+		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
+			fc := NewFileCache(int64(size), 0, 1*time.Hour)
+
+			// 预填充到容量上限，触发淘汰和 entry 复用
+			for i := 0; i < size; i++ {
+				path := fmt.Sprintf("/file%d.txt", i)
+				data := []byte("cached data content")
+				_ = fc.Set(path, data, int64(len(data)), time.Now())
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; b.Loop(); i++ {
+				path := fmt.Sprintf("/newfile%d.txt", i)
+				data := []byte("new cached data content")
+				_ = fc.Set(path, data, int64(len(data)), time.Now())
+			}
+		})
+	}
+}
+
 // BenchmarkFileCacheSetNoEviction 测试无淘汰场景下的 Set 性能。
 // 此时缓存未满，没有 LRU 淘汰开销。
 func BenchmarkFileCacheSetNoEviction(b *testing.B) {
