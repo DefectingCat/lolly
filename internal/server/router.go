@@ -12,6 +12,53 @@ import (
 	"rua.plus/lolly/internal/proxy"
 )
 
+// createProxyForConfig 创建代理实例并配置健康检查。
+// 返回创建的代理实例，如果创建失败则返回 nil。
+func (s *Server) createProxyForConfig(proxyCfg *config.ProxyConfig) *proxy.Proxy {
+	// 转换目标
+	targets := make([]*loadbalance.Target, len(proxyCfg.Targets))
+	for j, t := range proxyCfg.Targets {
+		failTimeout := t.FailTimeout
+		if t.MaxFails > 0 && failTimeout == 0 {
+			failTimeout = 10 * time.Second
+		}
+		targets[j] = loadbalance.NewTargetFromConfig(
+			t.URL, t.Weight,
+			int64(t.MaxConns), int64(t.MaxFails), failTimeout,
+			t.Backup, t.Down, t.ProxyURI,
+		)
+	}
+
+	// 传递 Transport 配置和 Lua 引擎
+	p, err := proxy.NewProxy(proxyCfg, targets, &s.config.Performance.Transport, s.luaEngine)
+	if err != nil {
+		logging.Error().Msg("Failed to create proxy: " + err.Error())
+		return nil
+	}
+
+	// 设置 DNS 解析器（如果已配置）
+	if s.resolver != nil {
+		p.SetResolver(s.resolver)
+		if err := p.Start(); err != nil {
+			logging.Error().Err(err).Msg("Failed to start proxy")
+		}
+	}
+
+	// 启动健康检查
+	if proxyCfg.HealthCheck.Interval > 0 {
+		hc := proxy.NewHealthChecker(targets, &proxyCfg.HealthCheck)
+		hc.Start()
+		s.healthCheckers = append(s.healthCheckers, hc)
+		// 设置被动健康检查
+		p.SetHealthChecker(hc)
+	}
+
+	// 保存代理实例用于缓存统计
+	s.proxies = append(s.proxies, p)
+
+	return p
+}
+
 // registerProxyRoutesWithLocationEngine 使用 LocationEngine 注册代理路由。
 //
 // 根据配置为 LocationEngine 注册代理路径，创建代理处理器和健康检查器。
@@ -20,46 +67,10 @@ func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerC
 	for i := range serverCfg.Proxy {
 		proxyCfg := &serverCfg.Proxy[i]
 
-		// 转换目标
-		targets := make([]*loadbalance.Target, len(proxyCfg.Targets))
-		for j, t := range proxyCfg.Targets {
-			failTimeout := t.FailTimeout
-			if t.MaxFails > 0 && failTimeout == 0 {
-				failTimeout = 10 * time.Second
-			}
-			targets[j] = loadbalance.NewTargetFromConfig(
-				t.URL, t.Weight,
-				int64(t.MaxConns), int64(t.MaxFails), failTimeout,
-				t.Backup, t.Down, t.ProxyURI,
-			)
-		}
-
-		// 传递 Transport 配置和 Lua 引擎
-		p, err := proxy.NewProxy(proxyCfg, targets, &s.config.Performance.Transport, s.luaEngine)
-		if err != nil {
-			logging.Error().Msg("Failed to create proxy: " + err.Error())
+		p := s.createProxyForConfig(proxyCfg)
+		if p == nil {
 			continue
 		}
-
-		// 设置 DNS 解析器（如果已配置）
-		if s.resolver != nil {
-			p.SetResolver(s.resolver)
-			if err := p.Start(); err != nil {
-				logging.Error().Err(err).Msg("Failed to start proxy")
-			}
-		}
-
-		// 启动健康检查
-		if proxyCfg.HealthCheck.Interval > 0 {
-			hc := proxy.NewHealthChecker(targets, &proxyCfg.HealthCheck)
-			hc.Start()
-			s.healthCheckers = append(s.healthCheckers, hc)
-			// 设置被动健康检查
-			p.SetHealthChecker(hc)
-		}
-
-		// 保存代理实例用于缓存统计
-		s.proxies = append(s.proxies, p)
 
 		// 根据 LocationType 注册路由
 		locType := proxyCfg.LocationType
@@ -162,46 +173,10 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 	for i := range serverCfg.Proxy {
 		proxyCfg := &serverCfg.Proxy[i]
 
-		// 转换目标
-		targets := make([]*loadbalance.Target, len(proxyCfg.Targets))
-		for j, t := range proxyCfg.Targets {
-			failTimeout := t.FailTimeout
-			if t.MaxFails > 0 && failTimeout == 0 {
-				failTimeout = 10 * time.Second
-			}
-			targets[j] = loadbalance.NewTargetFromConfig(
-				t.URL, t.Weight,
-				int64(t.MaxConns), int64(t.MaxFails), failTimeout,
-				t.Backup, t.Down, t.ProxyURI,
-			)
-		}
-
-		// 传递 Transport 配置和 Lua 引擎
-		p, err := proxy.NewProxy(proxyCfg, targets, &s.config.Performance.Transport, s.luaEngine)
-		if err != nil {
-			logging.Error().Msg("Failed to create proxy: " + err.Error())
+		p := s.createProxyForConfig(proxyCfg)
+		if p == nil {
 			continue
 		}
-
-		// 设置 DNS 解析器（如果已配置）
-		if s.resolver != nil {
-			p.SetResolver(s.resolver)
-			if err := p.Start(); err != nil {
-				logging.Error().Err(err).Msg("Failed to start proxy")
-			}
-		}
-
-		// 启动健康检查
-		if proxyCfg.HealthCheck.Interval > 0 {
-			hc := proxy.NewHealthChecker(targets, &proxyCfg.HealthCheck)
-			hc.Start()
-			s.healthCheckers = append(s.healthCheckers, hc)
-			// 设置被动健康检查
-			p.SetHealthChecker(hc)
-		}
-
-		// 保存代理实例用于缓存统计
-		s.proxies = append(s.proxies, p)
 
 		// 使用前缀匹配（通配符）注册代理路由
 		// path: / 匹配所有子路径如 /sorry/index
