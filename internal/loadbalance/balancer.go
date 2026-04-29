@@ -399,12 +399,7 @@ func DecrementConnections(t *Target) {
 //
 // 排除判断基于目标的 URL 进行匹配。
 func filterHealthyAndExclude(targets []*Target, excluded []*Target) []*Target {
-	excludeSet := make(map[string]bool, len(excluded))
-	for _, t := range excluded {
-		if t != nil {
-			excludeSet[t.URL] = true
-		}
-	}
+	excludeSet := buildExcludeSet(excluded)
 
 	available := make([]*Target, 0, len(targets))
 	backups := make([]*Target, 0, len(targets))
@@ -485,12 +480,7 @@ func (w *WeightedRoundRobin) SelectExcluding(targets []*Target, excluded []*Targ
 // SelectExcluding 选择连接数最少的目标，排除指定的目标列表。
 // 优先选择非备份目标，仅当无可用非备份目标时选择备份目标。
 func (l *LeastConnections) SelectExcluding(targets []*Target, excluded []*Target) *Target {
-	excludeSet := make(map[string]bool, len(excluded))
-	for _, t := range excluded {
-		if t != nil {
-			excludeSet[t.URL] = true
-		}
-	}
+	excludeSet := buildExcludeSet(excluded)
 
 	var selected *Target
 	var selectedBackup *Target
@@ -637,4 +627,26 @@ func (t *Target) LastResolved() time.Time {
 		return time.Time{}
 	}
 	return time.Unix(0, nano)
+}
+
+// buildExcludeSet 从排除列表构建 URL 集合。
+//
+// 用于负载均衡算法中快速检查目标是否应被排除。
+//
+// 参数：
+//   - excluded: 需要排除的目标列表
+//
+// 返回值：
+//   - map[string]bool: 目标 URL 到 true 的映射
+func buildExcludeSet(excluded []*Target) map[string]bool {
+	if len(excluded) == 0 {
+		return nil
+	}
+	excludeSet := make(map[string]bool, len(excluded))
+	for _, t := range excluded {
+		if t != nil {
+			excludeSet[t.URL] = true
+		}
+	}
+	return excludeSet
 }

@@ -238,12 +238,7 @@ func (c *ConsistentHash) SelectExcludingByKey(targets []*Target, excluded []*Tar
 	defer c.mu.RUnlock()
 
 	// 构建排除集合
-	excludeSet := make(map[string]bool, len(excluded))
-	for _, t := range excluded {
-		if t != nil {
-			excludeSet[t.URL] = true
-		}
-	}
+	excludeSet := buildExcludeSet(excluded)
 
 	// 如果没有排除的目标，使用正常选择
 	if len(excludeSet) == 0 {

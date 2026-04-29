@@ -29,6 +29,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/utils"
 )
 
 // PprofHandler pprof 性能分析处理器。
@@ -38,11 +39,8 @@ type PprofHandler struct {
 	// path 端点路径前缀
 	path string
 
-	// allowedIPs 允许访问的 IP 列表
-	allowedIPs []net.IP
-
-	// allowedNets 允许访问的 CIDR 网络
-	allowedNets []*net.IPNet
+	// allowed 允许访问的 IP 网络列表
+	allowed []net.IPNet
 }
 
 // NewPprofHandler 创建 pprof 处理器。
@@ -68,22 +66,15 @@ func NewPprofHandler(cfg *config.PprofConfig) (*PprofHandler, error) {
 	h := &PprofHandler{path: path}
 
 	// 解析允许的 IP 列表
-	for _, ipStr := range cfg.Allow {
-		if ip := net.ParseIP(ipStr); ip != nil {
-			h.allowedIPs = append(h.allowedIPs, ip)
-			continue
-		}
-		// 尝试解析 CIDR
-		_, net, err := net.ParseCIDR(ipStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse IP/CIDR: %s: %w", ipStr, err)
-		}
-		h.allowedNets = append(h.allowedNets, net)
+	allowed, err := utils.ParseIPAllowList(cfg.Allow)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse IP/CIDR: %w", err)
 	}
+	h.allowed = allowed
 
 	// 默认只允许 localhost
-	if len(h.allowedIPs) == 0 && len(h.allowedNets) == 0 {
-		h.allowedIPs = []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("::1")}
+	if len(h.allowed) == 0 {
+		h.allowed, _ = utils.ParseIPAllowList([]string{"localhost"})
 	}
 
 	return h, nil
@@ -157,7 +148,7 @@ func (h *PprofHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 // 返回值：
 //   - bool: true 表示允许访问，false 表示禁止访问
 func (h *PprofHandler) isAllowed(ctx *fasthttp.RequestCtx) bool {
-	if len(h.allowedIPs) == 0 && len(h.allowedNets) == 0 {
+	if len(h.allowed) == 0 {
 		return true // 无限制
 	}
 
@@ -167,21 +158,7 @@ func (h *PprofHandler) isAllowed(ctx *fasthttp.RequestCtx) bool {
 		return false
 	}
 
-	// 检查精确 IP
-	for _, ip := range h.allowedIPs {
-		if ip.Equal(clientIP) {
-			return true
-		}
-	}
-
-	// 检查 CIDR 网络
-	for _, net := range h.allowedNets {
-		if net.Contains(clientIP) {
-			return true
-		}
-	}
-
-	return false
+	return utils.IPInAllowList(clientIP, h.allowed)
 }
 
 // handleIndex 处理索引页面。

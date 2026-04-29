@@ -134,39 +134,11 @@ func NewStatusHandler(server *Server, cfg *config.StatusConfig) (*StatusHandler,
 	}
 
 	// 解析允许的 IP 列表
-	for _, cidr := range cfg.Allow {
-		// 处理 localhost 特殊情况
-		if cidr == "localhost" {
-			// localhost 解析为 127.0.0.1 和 ::1
-			_, v4Network, _ := net.ParseCIDR("127.0.0.1/32")
-			_, v6Network, _ := net.ParseCIDR("::1/128")
-			if v4Network != nil {
-				h.allowed = append(h.allowed, *v4Network)
-			}
-			if v6Network != nil {
-				h.allowed = append(h.allowed, *v6Network)
-			}
-			continue
-		}
-
-		_, network, err := net.ParseCIDR(cidr)
-		if err != nil {
-			// 尝试作为单个 IP 解析
-			ip := net.ParseIP(cidr)
-			if ip == nil {
-				return nil, err
-			}
-			// 转换为 CIDR 格式
-			if ip.To4() != nil {
-				_, network, _ = net.ParseCIDR(cidr + "/32")
-			} else {
-				_, network, _ = net.ParseCIDR(cidr + "/128")
-			}
-		}
-		if network != nil {
-			h.allowed = append(h.allowed, *network)
-		}
+	allowed, err := utils.ParseIPAllowList(cfg.Allow)
+	if err != nil {
+		return nil, err
 	}
+	h.allowed = allowed
 
 	return h, nil
 }

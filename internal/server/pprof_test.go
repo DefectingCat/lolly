@@ -124,8 +124,8 @@ func TestNewPprofHandler_SingleIP(t *testing.T) {
 				}
 				// 空列表时应该默认允许 localhost
 				if len(tt.allow) == 0 {
-					if len(h.allowedIPs) != 2 {
-						t.Errorf("expected 2 default allowed IPs (127.0.0.1 and ::1), got %d", len(h.allowedIPs))
+					if len(h.allowed) != 2 {
+						t.Errorf("expected 2 default allowed IPs (127.0.0.1 and ::1), got %d", len(h.allowed))
 					}
 				}
 			}
@@ -274,56 +274,48 @@ func TestPprofHandler_isAllowed(t *testing.T) {
 	tests := []struct {
 		name        string
 		clientIP    string
-		allowedIPs  []string
 		allowedNets []string
 		wantAllowed bool
 	}{
 		{
 			name:        "empty allow list - allow all",
-			allowedIPs:  []string{},
 			allowedNets: []string{},
 			clientIP:    "192.168.1.100",
 			wantAllowed: true,
 		},
 		{
-			name:        "IP exact match",
-			allowedIPs:  []string{"127.0.0.1"},
-			allowedNets: []string{},
+			name:        "IP exact match (as /32 CIDR)",
+			allowedNets: []string{"127.0.0.1/32"},
 			clientIP:    "127.0.0.1",
 			wantAllowed: true,
 		},
 		{
 			name:        "IP no match",
-			allowedIPs:  []string{"127.0.0.1"},
-			allowedNets: []string{},
+			allowedNets: []string{"127.0.0.1/32"},
 			clientIP:    "127.0.0.2",
 			wantAllowed: false,
 		},
 		{
 			name:        "CIDR match",
-			allowedIPs:  []string{},
 			allowedNets: []string{"192.168.0.0/16"},
 			clientIP:    "192.168.1.100",
 			wantAllowed: true,
 		},
 		{
 			name:        "CIDR no match",
-			allowedIPs:  []string{},
 			allowedNets: []string{"10.0.0.0/8"},
 			clientIP:    "192.168.1.100",
 			wantAllowed: false,
 		},
 		{
 			name:        "IPv6 CIDR match",
-			allowedIPs:  []string{},
 			allowedNets: []string{"2001:db8::/32"},
 			clientIP:    "2001:db8::1",
 			wantAllowed: true,
 		},
 		{
-			name:        "IPv6 exact match",
-			allowedIPs:  []string{"::1"},
-			allowedNets: []string{},
+			name:        "IPv6 exact match (as /128 CIDR)",
+			allowedNets: []string{"::1/128"},
 			clientIP:    "::1",
 			wantAllowed: true,
 		},
@@ -332,8 +324,7 @@ func TestPprofHandler_isAllowed(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &PprofHandler{
-				allowedIPs:  parseIPs(tt.allowedIPs),
-				allowedNets: parseNets(tt.allowedNets),
+				allowed: parseNets(tt.allowedNets),
 			}
 
 			// 创建请求上下文，模拟客户端 IP
@@ -348,16 +339,10 @@ func TestPprofHandler_isAllowed(t *testing.T) {
 
 			// 复制 isAllowed 的逻辑进行测试
 			allowed := false
-			if len(h.allowedIPs) == 0 && len(h.allowedNets) == 0 {
+			if len(h.allowed) == 0 {
 				allowed = true
 			} else {
-				for _, ip := range h.allowedIPs {
-					if ip.Equal(clientIP) {
-						allowed = true
-						break
-					}
-				}
-				for _, n := range h.allowedNets {
+				for _, n := range h.allowed {
 					if n.Contains(clientIP) {
 						allowed = true
 						break
@@ -372,24 +357,13 @@ func TestPprofHandler_isAllowed(t *testing.T) {
 	}
 }
 
-// parseIPs 辅助函数，解析 IP 字符串列表
-func parseIPs(ips []string) []net.IP {
-	result := make([]net.IP, 0, len(ips))
-	for _, ip := range ips {
-		if parsed := net.ParseIP(ip); parsed != nil {
-			result = append(result, parsed)
-		}
-	}
-	return result
-}
-
 // parseNets 辅助函数，解析 CIDR 字符串列表
-func parseNets(cidrs []string) []*net.IPNet {
-	result := make([]*net.IPNet, 0, len(cidrs))
+func parseNets(cidrs []string) []net.IPNet {
+	result := make([]net.IPNet, 0, len(cidrs))
 	for _, cidr := range cidrs {
 		_, net, err := net.ParseCIDR(cidr)
-		if err == nil {
-			result = append(result, net)
+		if err == nil && net != nil {
+			result = append(result, *net)
 		}
 	}
 	return result
@@ -398,9 +372,8 @@ func parseNets(cidrs []string) []*net.IPNet {
 func TestPprofHandler_ServeHTTP_WithAllowListEmpty(t *testing.T) {
 	// 测试空 allow 列表时允许所有访问
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	ctx := &fasthttp.RequestCtx{}
@@ -417,9 +390,8 @@ func TestPprofHandler_ServeHTTP_WithAllowListEmpty(t *testing.T) {
 func TestPprofHandler_ServeHTTP_ProfileEndpoints(t *testing.T) {
 	// 使用空 allow 列表允许所有访问
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	tests := []struct {
@@ -465,9 +437,8 @@ func TestPprofHandler_ServeHTTP_ProfileEndpoints(t *testing.T) {
 
 func TestPprofHandler_handleIndex(t *testing.T) {
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	ctx := &fasthttp.RequestCtx{}
@@ -510,9 +481,8 @@ func TestPprofHandler_handleIndex(t *testing.T) {
 
 func TestPprofHandler_ServeHTTP_PathRouting(t *testing.T) {
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	tests := []struct {
@@ -564,30 +534,30 @@ func TestPprofHandler_ServeHTTP_PathRouting(t *testing.T) {
 
 func TestPprofHandler_ServeHTTP_Forbidden(t *testing.T) {
 	// 创建只允许特定 IP 的 handler
-	allowedIP := net.ParseIP("10.0.0.1")
+	_, ipNet, _ := net.ParseCIDR("10.0.0.1/32")
 	h := &PprofHandler{
-		allowedIPs: []net.IP{allowedIP},
+		allowed: []net.IPNet{*ipNet},
 	}
 
 	// 由于无法轻松设置 RemoteIP，我们直接测试 isAllowed 返回 false 的情况
-	// 通过构造一个 allowedIPs 非空的情况来触发检查
+	// 通过构造一个 allowed 非空的情况来触发检查
 
 	// 验证 handler 配置正确
-	if len(h.allowedIPs) != 1 {
-		t.Errorf("expected 1 allowed IP, got %d", len(h.allowedIPs))
+	if len(h.allowed) != 1 {
+		t.Errorf("expected 1 allowed IPNet, got %d", len(h.allowed))
 	}
 
-	// 验证 allowed IPs 包含配置的 IP
-	if !h.allowedIPs[0].Equal(allowedIP) {
-		t.Error("expected allowedIPs to contain configured IP")
+	// 验证 allowed 包含配置的 IP
+	expectedIP := net.ParseIP("10.0.0.1")
+	if !h.allowed[0].Contains(expectedIP) {
+		t.Error("expected allowed to contain configured IP")
 	}
 }
 
 func TestPprofHandler_handleCPU_Params(t *testing.T) {
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	tests := []struct {
@@ -687,9 +657,8 @@ func TestPprofHandler_handleCPU_Execute(t *testing.T) {
 	stopCPUProfile()
 
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	ctx := &fasthttp.RequestCtx{}
@@ -781,35 +750,37 @@ func TestPprofHandler_ConfigWithCIDRAndIP(t *testing.T) {
 		t.Fatal("expected non-nil handler")
 	}
 
-	// 验证 IP 和 CIDR 都被正确解析
-	if len(h.allowedIPs) != 2 {
-		t.Errorf("expected 2 allowed IPs, got %d", len(h.allowedIPs))
-	}
-	if len(h.allowedNets) != 1 {
-		t.Errorf("expected 1 allowed net, got %d", len(h.allowedNets))
+	// 验证 IP 和 CIDR 都被正确解析（现在统一存储在 allowed 中）
+	// 127.0.0.1 -> 127.0.0.1/32
+	// ::1 -> ::1/128
+	// 192.168.0.0/24 保持不变
+	if len(h.allowed) != 3 {
+		t.Errorf("expected 3 allowed entries (2 IPs converted to /32 and /128, 1 CIDR), got %d", len(h.allowed))
 	}
 
-	// 验证具体内容
+	// 验证具体内容 - 使用 Contains 检查
 	foundV4 := false
 	foundV6 := false
-	for _, ip := range h.allowedIPs {
-		if ip.Equal(net.ParseIP("127.0.0.1")) {
+	foundCIDR := false
+	for _, ipNet := range h.allowed {
+		if ipNet.Contains(net.ParseIP("127.0.0.1")) && ipNet.String() == "127.0.0.1/32" {
 			foundV4 = true
 		}
-		if ip.Equal(net.ParseIP("::1")) {
+		if ipNet.Contains(net.ParseIP("::1")) && ipNet.String() == "::1/128" {
 			foundV6 = true
+		}
+		if ipNet.String() == "192.168.0.0/24" {
+			foundCIDR = true
 		}
 	}
 	if !foundV4 {
-		t.Error("expected to find 127.0.0.1 in allowedIPs")
+		t.Error("expected to find 127.0.0.1/32 in allowed")
 	}
 	if !foundV6 {
-		t.Error("expected to find ::1 in allowedIPs")
+		t.Error("expected to find ::1/128 in allowed")
 	}
-
-	// 验证 CIDR
-	if h.allowedNets[0].String() != "192.168.0.0/24" {
-		t.Errorf("expected CIDR 192.168.0.0/24, got %s", h.allowedNets[0].String())
+	if !foundCIDR {
+		t.Error("expected to find 192.168.0.0/24 in allowed")
 	}
 }
 
@@ -829,35 +800,34 @@ func TestPprofHandler_DefaultLocalhostBehavior(t *testing.T) {
 		t.Fatal("expected non-nil handler")
 	}
 
-	// 验证默认允许 localhost
-	if len(h.allowedIPs) != 2 {
-		t.Errorf("expected 2 default allowed IPs, got %d", len(h.allowedIPs))
+	// 验证默认允许 localhost (解析为 127.0.0.1/32 和 ::1/128)
+	if len(h.allowed) != 2 {
+		t.Errorf("expected 2 default allowed entries (127.0.0.1/32 and ::1/128), got %d", len(h.allowed))
 	}
 
 	// 验证包含 IPv4 和 IPv6 localhost
 	hasV4 := false
 	hasV6 := false
-	for _, ip := range h.allowedIPs {
-		if ip.Equal(net.ParseIP("127.0.0.1")) {
+	for _, n := range h.allowed {
+		if n.Contains(net.ParseIP("127.0.0.1")) && n.String() == "127.0.0.1/32" {
 			hasV4 = true
 		}
-		if ip.Equal(net.ParseIP("::1")) {
+		if n.Contains(net.ParseIP("::1")) && n.String() == "::1/128" {
 			hasV6 = true
 		}
 	}
 	if !hasV4 {
-		t.Error("expected default to include 127.0.0.1")
+		t.Error("expected default to include 127.0.0.1/32")
 	}
 	if !hasV6 {
-		t.Error("expected default to include ::1")
+		t.Error("expected default to include ::1/128")
 	}
 }
 
 func TestPprofHandler_handleHeap(t *testing.T) {
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	ctx := &fasthttp.RequestCtx{}
@@ -879,9 +849,8 @@ func TestPprofHandler_handleHeap(t *testing.T) {
 
 func TestPprofHandler_handleGoroutine(t *testing.T) {
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	ctx := &fasthttp.RequestCtx{}
@@ -903,9 +872,8 @@ func TestPprofHandler_handleGoroutine(t *testing.T) {
 
 func TestPprofHandler_handleBlock(t *testing.T) {
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	ctx := &fasthttp.RequestCtx{}
@@ -927,9 +895,8 @@ func TestPprofHandler_handleBlock(t *testing.T) {
 
 func TestPprofHandler_handleMutex(t *testing.T) {
 	h := &PprofHandler{
-		path:        "/debug/pprof",
-		allowedIPs:  []net.IP{},
-		allowedNets: []*net.IPNet{},
+		path:    "/debug/pprof",
+		allowed: []net.IPNet{},
 	}
 
 	ctx := &fasthttp.RequestCtx{}
@@ -953,9 +920,8 @@ func TestPprofHandler_handleMutex(t *testing.T) {
 func TestPprofHandler_isAllowed_RemoteIP(t *testing.T) {
 	t.Run("empty allow lists - allow all", func(t *testing.T) {
 		h := &PprofHandler{
-			path:        "/debug/pprof",
-			allowedIPs:  []net.IP{},
-			allowedNets: []*net.IPNet{},
+			path:    "/debug/pprof",
+			allowed: []net.IPNet{},
 		}
 
 		ctx := &fasthttp.RequestCtx{}
@@ -966,11 +932,10 @@ func TestPprofHandler_isAllowed_RemoteIP(t *testing.T) {
 	})
 
 	t.Run("with allow list but cannot parse IP", func(t *testing.T) {
-		allowedIP := net.ParseIP("192.168.1.1")
+		_, ipNet, _ := net.ParseCIDR("192.168.1.1/32")
 		h := &PprofHandler{
-			path:        "/debug/pprof",
-			allowedIPs:  []net.IP{allowedIP},
-			allowedNets: []*net.IPNet{},
+			path:    "/debug/pprof",
+			allowed: []net.IPNet{*ipNet},
 		}
 
 		ctx := &fasthttp.RequestCtx{}
