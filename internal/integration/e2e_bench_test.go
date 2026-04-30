@@ -1449,6 +1449,7 @@ func BenchmarkE2EBasicAuth(b *testing.B) {
 	// 创建 Basic Auth 中间件（使用 bcrypt 哈希）
 	bcryptPassword, _ := security.HashPassword("testpass", security.HashBcrypt)
 	auth, err := security.NewBasicAuth(&config.AuthConfig{
+		Type:       "basic",
 		RequireTLS: false,
 		Users: []config.User{
 			{Name: "admin", Password: bcryptPassword},
