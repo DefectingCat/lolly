@@ -140,7 +140,6 @@ func TestPoolConcurrentSubmit(t *testing.T) {
 
 	for range 100 {
 		wg.Go(func() {
-
 			_ = p.Submit(nil, func(_ *fasthttp.RequestCtx) {
 				counter.Add(1)
 			})

@@ -447,7 +447,6 @@ func (s *Server) startSingleMode() error {
 
 	s.fastServer = s.createFastServer(serverCfg, s.handler)
 
-
 	s.running = true
 
 	// 创建监听器并保存，用于热升级
@@ -578,7 +577,6 @@ func (s *Server) startVHostMode() error {
 
 	s.fastServer = s.createFastServer(serverCfg, s.handler)
 
-
 	s.running = true
 
 	// 创建监听器并保存，用于热升级
@@ -677,7 +675,6 @@ func (s *Server) startMultiServerMode() error {
 
 			// 创建 fasthttp.Server
 			fastSrv := s.createFastServer(serverCfg, h)
-
 
 			// 检查 SSL 配置
 			if serverCfg.SSL.Cert != "" && serverCfg.SSL.Key != "" {

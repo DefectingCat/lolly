@@ -131,12 +131,12 @@ func (m *SSLManager) GetTLSConfig() *tls.Config {
 
 	// 设置协议版本
 	if len(m.config.Protocols) > 0 {
-	tlsConfig.MinVersion = sslutil.ParseMinTLSVersion(m.config.Protocols)
+		tlsConfig.MinVersion = sslutil.ParseMinTLSVersion(m.config.Protocols)
 	}
 
 	// 设置加密套件
 	if len(m.config.Ciphers) > 0 {
-	tlsConfig.CipherSuites = sslutil.ParseCipherSuitesLenient(m.config.Ciphers)
+		tlsConfig.CipherSuites = sslutil.ParseCipherSuitesLenient(m.config.Ciphers)
 	}
 
 	// 配置客户端证书验证（mTLS）
