@@ -25,6 +25,7 @@
 package compression
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -216,13 +217,13 @@ func supportsEncoding(acceptEncoding []byte, ext string) bool {
 	if len(acceptEncoding) == 0 {
 		return false
 	}
-	enc := strings.ToLower(string(acceptEncoding))
 
+	// 使用 bytes 操作避免字符串分配
 	switch ext {
 	case ".br":
-		return strings.Contains(enc, "br")
+		return bytes.Contains(bytes.ToLower(acceptEncoding), []byte("br"))
 	case ".gz":
-		return strings.Contains(enc, "gzip")
+		return bytes.Contains(bytes.ToLower(acceptEncoding), []byte("gzip"))
 	default:
 		return false
 	}
