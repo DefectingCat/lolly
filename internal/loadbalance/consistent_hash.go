@@ -233,67 +233,56 @@ func (c *ConsistentHash) SelectExcluding(targets []*Target, excluded []*Target) 
 //
 // 返回值：
 //   - *Target: 选中的目标，如果没有可用目标则返回 nil
+//
+// 语义说明：此方法假设传入的 targets 列表与主哈希环的目标列表一致。
+// 若不一致（如多上游组场景），targetSet 校验将拒绝所有候选，返回 nil。
+// 调用方应在 targets 列表变化时调用 Rebuild() 更新主哈希环。
 func (c *ConsistentHash) SelectExcludingByKey(targets []*Target, excluded []*Target, key string) *Target {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
+
+	// 如果环为空，尝试重建
+	if len(c.circle) == 0 {
+		c.mu.RUnlock()
+		c.rebuildCircle(targets)
+		c.mu.RLock()
+	}
+
+	// 构建 targets 集合（用于校验返回的目标是否有效）
+	targetSet := make(map[string]bool, len(targets))
+	for _, t := range targets {
+		if t.Healthy.Load() {
+			targetSet[t.URL] = true
+		}
+	}
 
 	// 构建排除集合
 	excludeSet := buildExcludeSet(excluded)
 
-	// 如果没有排除的目标，使用正常选择
-	if len(excludeSet) == 0 {
-		return c.SelectByKey(targets, key)
-	}
-
-	// 使用预计算的虚拟节点哈希构建哈希环
-	// 避免在每次调用时重新计算哈希值
-	circle := make(map[uint64]*Target)
-	sortedHashes := make([]uint64, 0, len(targets)*c.virtualNodes)
-
-	for _, target := range targets {
-		if !target.Healthy.Load() || excludeSet[target.URL] {
-			continue
-		}
-
-		// 确保目标已预计算哈希
-		if len(target.VirtualHashes) == 0 {
-			// 回退到动态计算（不应该发生，但保持安全）
-			c.mu.RUnlock()
-			c.PrecomputeHashes([]*Target{target}, c.virtualNodes)
-			c.mu.RLock()
-		}
-
-		// 使用预计算的哈希值
-		for _, hash := range target.VirtualHashes {
-			circle[hash] = target
-			sortedHashes = append(sortedHashes, hash)
-		}
-	}
-
-	if len(sortedHashes) == 0 {
+	if len(c.sortedHashes) == 0 {
+		c.mu.RUnlock()
 		return nil
 	}
-
-	// 排序哈希值（仅在需要时）
-	// 使用 sort.Slice 进行排序
-	sort.Slice(sortedHashes, func(i, j int) bool {
-		return sortedHashes[i] < sortedHashes[j]
-	})
 
 	// 计算键的哈希值
 	hash := c.hashKeyString(key)
 
-	// 二分查找最近的节点
-	idx := sort.Search(len(sortedHashes), func(i int) bool {
-		return sortedHashes[i] >= hash
+	// 二分查找起始位置
+	idx := sort.Search(len(c.sortedHashes), func(i int) bool {
+		return c.sortedHashes[i] >= hash
 	})
 
-	// 环形回绕
-	if idx >= len(sortedHashes) {
-		idx = 0
+	// 从起始位置开始查找，跳过 excluded 和不在 targetSet 中的目标
+	for i := 0; i < len(c.sortedHashes); i++ {
+		targetIdx := (idx + i) % len(c.sortedHashes)
+		target := c.circle[c.sortedHashes[targetIdx]]
+		if targetSet[target.URL] && !excludeSet[target.URL] {
+			c.mu.RUnlock()
+			return target
+		}
 	}
 
-	return circle[sortedHashes[idx]]
+	c.mu.RUnlock()
+	return nil // 所有目标都被排除或不在 targets 列表中
 }
 
 // 验证接口实现

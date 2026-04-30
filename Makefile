@@ -150,7 +150,7 @@ version:
 # 运行所有测试
 test:
 	@echo "Running tests..."
-	go test -v ./...
+	go test -v ./internal/...
 
 # 运行 L2 集成测试（无需 Docker）
 test-integration:

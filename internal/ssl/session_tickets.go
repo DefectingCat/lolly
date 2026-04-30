@@ -99,6 +99,8 @@ func NewSessionTicketManager(cfg config.SessionTicketsConfig) (*SessionTicketMan
 		}
 	} else {
 		// 没有指定密钥文件，生成内存中的密钥
+		// 警告：服务重启后旧票据将失效，影响前向保密性
+		logging.Warn().Msg("SessionTickets enabled without KeyFile: session tickets will be invalid after restart, consider configuring KeyFile for persistence")
 		key, err := generateTicketKey()
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate session ticket key: %w", err)
