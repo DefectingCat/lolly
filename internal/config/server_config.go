@@ -147,6 +147,23 @@ type StaticConfig struct {
 	// 设置 Cache-Control: max-age 和 Expires 响应头
 	// 示例：expires: 30d → Cache-Control: max-age=2592000
 	Expires string `yaml:"expires"`
+
+	// AutoIndex 是否启用目录列表
+	// 当请求目录且没有索引文件时，生成目录列表页面
+	// 默认为 false，返回 403 Forbidden
+	AutoIndex bool `yaml:"auto_index"`
+
+	// AutoIndexFormat 目录列表输出格式
+	// 可选值：html（默认）、json、xml
+	AutoIndexFormat string `yaml:"auto_index_format"`
+
+	// AutoIndexLocaltime 是否使用本地时间
+	// 默认为 false，使用 GMT 时间
+	AutoIndexLocaltime bool `yaml:"auto_index_localtime"`
+
+	// AutoIndexExactSize 是否显示精确文件大小
+	// 默认为 false，显示人类可读格式（K/M/G）
+	AutoIndexExactSize bool `yaml:"auto_index_exact_size"`
 }
 
 // TypesConfig MIME 类型配置

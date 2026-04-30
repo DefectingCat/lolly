@@ -138,6 +138,16 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 			staticHandler.SetExpires(static.Expires)
 		}
 
+		// 设置目录列表
+		if static.AutoIndex {
+			staticHandler.SetAutoIndex(
+				static.AutoIndex,
+				static.AutoIndexFormat,
+				static.AutoIndexLocaltime,
+				static.AutoIndexExactSize,
+			)
+		}
+
 		// 根据 LocationType 注册路由
 		locType := static.LocationType
 		if locType == "" {

@@ -291,4 +291,3 @@ func BenchmarkProxyCacheConcurrent(b *testing.B) {
 		}
 	})
 }
-

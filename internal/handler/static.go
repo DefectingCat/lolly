@@ -64,9 +64,14 @@ type StaticHandler struct {
 	// 切片字段
 	index    []string
 	tryFiles []string
+	// AutoIndex 配置
+	autoIndex          bool
+	autoIndexFormat    string
+	autoIndexLocaltime bool
+	autoIndexExactSize bool
 	// 基本类型字段
-	pathPrefixLen int            // 预计算的路径前缀长度，用于零分配路径剥离
-	cacheTTL      time.Duration  // 缓存新鲜度 TTL（默认 5s，0 表示每次验证 ModTime）
+	pathPrefixLen int           // 预计算的路径前缀长度，用于零分配路径剥离
+	cacheTTL      time.Duration // 缓存新鲜度 TTL（默认 5s，0 表示每次验证 ModTime）
 	useSendfile   bool
 	tryFilesPass  bool
 	symlinkCheck  bool
@@ -280,6 +285,22 @@ func (h *StaticHandler) SetInternal(enabled bool) {
 //   - expires: 过期时间字符串
 func (h *StaticHandler) SetExpires(expires string) {
 	h.expires = expires
+}
+
+// SetAutoIndex 设置目录列表功能。
+//
+// 启用后，当请求目录且没有索引文件时，生成目录列表页面。
+//
+// 参数：
+//   - enabled: 是否启用
+//   - format: 输出格式（html/json/xml）
+//   - localtime: 使用本地时间
+//   - exactSize: 显示精确大小
+func (h *StaticHandler) SetAutoIndex(enabled bool, format string, localtime, exactSize bool) {
+	h.autoIndex = enabled
+	h.autoIndexFormat = format
+	h.autoIndexLocaltime = localtime
+	h.autoIndexExactSize = exactSize
 }
 
 // SetCacheTTL 设置缓存新鲜度 TTL。
@@ -560,12 +581,22 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 				return
 			}
 		}
+		// 尝试 autoindex
+		if h.autoIndex {
+			config := AutoIndexConfig{
+				Format:    h.autoIndexFormat,
+				Localtime: h.autoIndexLocaltime,
+				ExactSize: h.autoIndexExactSize,
+			}
+			if GenerateAutoIndex(ctx, filePath, reqPath, config) {
+				return
+			}
+		}
 		utils.SendError(ctx, utils.ErrForbidden)
 		return
 	}
 
-	// Phase 2: 缓存查找 + TTL 验证
-	// 在 serveFile 调用前检查缓存，减少 os.ReadFile 调用
+	// Phase 2: 缓存查找 + TTL 验证	// 在 serveFile 调用前检查缓存，减少 os.ReadFile 调用
 	// 注意: CachedAt 迁移已在 FileCache.Get() 内部完成，确保并发安全
 	etag := generateETag(info.ModTime(), info.Size())
 	if isNotModified(ctx, etag, info.ModTime()) {

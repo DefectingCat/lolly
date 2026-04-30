@@ -11,7 +11,7 @@ func TestFileInfoCache(t *testing.T) {
 	// 创建临时文件
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(tmpFile, []byte("hello"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -78,7 +78,7 @@ func TestFileInfoCacheTTL(t *testing.T) {
 	// 创建临时文件
 	tmpDir := t.TempDir()
 	tmpFile := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(tmpFile, []byte("hello"), 0644); err != nil {
+	if err := os.WriteFile(tmpFile, []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,7 +115,7 @@ func TestFileInfoCacheLRU(t *testing.T) {
 	tmpDir := t.TempDir()
 	for i := range fileInfoCacheMaxEntries + 10 {
 		tmpFile := filepath.Join(tmpDir, "test"+string(rune('0'+i%10))+".txt")
-		os.WriteFile(tmpFile, []byte("hello"), 0644)
+		os.WriteFile(tmpFile, []byte("hello"), 0o644)
 		info, _ := os.Stat(tmpFile)
 		cache.Set(tmpFile, info)
 	}

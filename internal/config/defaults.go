@@ -361,6 +361,10 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 		buf.WriteString("        #   epoch → Cache-Control: no-cache\n")
 		buf.WriteString("        # location_type: \"\"         # 位置匹配类型（有效值: exact, prefix, regex, regex_caseless, prefix_priority, named）\n")
 		buf.WriteString("        # internal: false           # 仅允许内部重定向访问\n")
+		buf.WriteString("        # auto_index: false         # 启用目录列表（当目录无索引文件时）\n")
+		buf.WriteString("        # auto_index_format: html   # 输出格式（html/json/xml）\n")
+		buf.WriteString("        # auto_index_localtime: false # 使用本地时间（默认 GMT）\n")
+		buf.WriteString("        # auto_index_exact_size: false # 显示精确大小（默认人类可读 K/M/G）\n")
 	}
 	buf.WriteString("    # 示例：静态资源缓存配置\n")
 	buf.WriteString("    # - path: \"/assets/\"\n")

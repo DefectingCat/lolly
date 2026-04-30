@@ -280,6 +280,14 @@ func validateStatics(statics []StaticConfig) error {
 				return fmt.Errorf("static[%d].try_files[%d]: %w", i, j, err)
 			}
 		}
+
+		// 验证 auto_index_format
+		if s.AutoIndex {
+			validFormats := []string{"", "html", "json", "xml"}
+			if err := ValidateEnum(s.AutoIndexFormat, validFormats, "auto_index_format"); err != nil {
+				return fmt.Errorf("static[%d]: %w", i, err)
+			}
+		}
 	}
 	return nil
 }
