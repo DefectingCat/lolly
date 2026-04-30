@@ -646,19 +646,19 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 
 	// Phase 2: 缓存查找 + TTL 验证	// 在 serveFile 调用前检查缓存，减少 os.ReadFile 调用
 	// 注意: CachedAt 迁移已在 FileCache.Get() 内部完成，确保并发安全
-	etag := generateETag(info.ModTime(), info.Size())
-	if isNotModified(ctx, etag, info.ModTime()) {
-		ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
-		ctx.Response.Header.Set("ETag", etag)
-		ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
-		ctx.Response.SkipBody = true
-		return
-	}
 	if h.fileCache != nil {
 		if entry, ok := h.fileCache.Get(filePath); ok {
 			// TTL 验证（cacheTTL > 0 时启用）
 			if h.cacheTTL > 0 && time.Since(entry.CachedAt) < h.cacheTTL {
 				// TTL 内直接返回（无需验证 ModTime）
+				// 使用缓存的 ETag，避免重新生成
+				if isNotModified(ctx, entry.ETag, info.ModTime()) {
+					ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
+					ctx.Response.Header.Set("ETag", entry.ETag)
+					ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+					ctx.Response.SkipBody = true
+					return
+				}
 				ctx.Response.SetBody(entry.Data)
 				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
 				ctx.Response.Header.Set("ETag", entry.ETag)
@@ -669,6 +669,14 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 			// TTL 过期或未启用 TTL，验证文件新鲜度
 			if entry.ModTime.Equal(info.ModTime()) {
 				// 文件未修改，刷新 TTL 并返回
+				// 使用缓存的 ETag，避免重新生成
+				if isNotModified(ctx, entry.ETag, info.ModTime()) {
+					ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
+					ctx.Response.Header.Set("ETag", entry.ETag)
+					ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+					ctx.Response.SkipBody = true
+					return
+				}
 				if h.cacheTTL > 0 {
 					h.fileCache.RefreshCachedAt(filePath)
 				}
@@ -726,9 +734,10 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 			// 检查文件是否被修改
 			if entry.ModTime.Equal(info.ModTime()) {
 				// 缓存命中且文件未修改
+				// 使用缓存的 ETag，避免重新生成
 				ctx.Response.SetBody(entry.Data)
 				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
-				ctx.Response.Header.Set("ETag", etag)
+				ctx.Response.Header.Set("ETag", entry.ETag)
 				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 				h.setCacheHeaders(ctx)
 				return
