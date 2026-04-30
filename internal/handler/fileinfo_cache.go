@@ -35,7 +35,7 @@ type fileInfoEntry struct {
 type FileInfoCache struct {
 	entries map[string]*fileInfoEntry
 	lruList *list.List
-	mu      sync.Mutex
+	mu      sync.RWMutex
 }
 
 // NewFileInfoCache 创建 FileInfo 缓存
@@ -48,25 +48,39 @@ func NewFileInfoCache() *FileInfoCache {
 
 // Get 获取缓存的 FileInfo
 func (c *FileInfoCache) Get(filePath string) (os.FileInfo, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+	c.mu.RLock()
 	entry, ok := c.entries[filePath]
 	if !ok {
+		c.mu.RUnlock()
 		return nil, false
 	}
 
-	// 检查 TTL
+	// 检查 TTL（只读检查）
 	if time.Since(entry.cachedAt) > fileInfoCacheTTL {
-		// 过期，删除并返回未命中
-		c.lruList.Remove(entry.element)
-		delete(c.entries, filePath)
+		c.mu.RUnlock()
+		// 升级为写锁删除过期条目
+		c.mu.Lock()
+		// double-check：可能已被其他请求删除或更新
+		if entry, ok := c.entries[filePath]; ok && time.Since(entry.cachedAt) > fileInfoCacheTTL {
+			c.lruList.Remove(entry.element)
+			delete(c.entries, filePath)
+		}
+		c.mu.Unlock()
 		return nil, false
 	}
 
-	// 命中，移动到 LRU 头部
-	c.lruList.MoveToFront(entry.element)
-	return entry.info, true
+	c.mu.RUnlock()
+
+	// LRU 移动需要写锁
+	c.mu.Lock()
+	// double-check：条目可能已被删除
+	if entry, ok := c.entries[filePath]; ok {
+		c.lruList.MoveToFront(entry.element)
+		c.mu.Unlock()
+		return entry.info, true
+	}
+	c.mu.Unlock()
+	return nil, false
 }
 
 // Set 缓存 FileInfo
@@ -124,8 +138,8 @@ func (c *FileInfoCache) Clear() {
 
 // Stats 返回缓存统计
 func (c *FileInfoCache) Stats() FileInfoCacheStats {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	return FileInfoCacheStats{
 		Entries: len(c.entries),
