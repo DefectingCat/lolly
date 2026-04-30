@@ -7,12 +7,115 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-04-30
+
 ### Added
 
+#### 核心功能
+
+- autoindex 模块：自动目录列表功能
+- nginx 配置导入功能（converter），支持 listen、server 级别 root/index、alias、try_files 等指令转换
 - internal 指令：防止外部直接访问特定 location，支持 X-Accel-Redirect 内部重定向
-- limit_rate 中间件：响应速率限制，支持令牌桶算法和大文件回退策略
 - server_tokens 配置：控制 Server 响应头是否显示版本号
-- types 配置块：自定义 MIME 类型映射，线程安全实现
+- types 配置块：自定义 MIME 类型映射，线程安全实现 (mimeutil)
+
+#### 静态文件服务
+
+- ETag 和 304 Not Modified 支持，减少带宽消耗
+- expires 缓存控制支持
+- alias 配置支持，路径别名映射
+- gzip_static 默认值改为 true
+
+#### 代理与缓存
+
+- 分层缓存架构实现
+- stale_if_error 和 stale_if_timeout 缓存回退逻辑
+- 健康检查增强和缓存配置扩展
+- ProxyBind / ProxyBuffering / ProxyURI 和响应头控制
+- 上游服务器参数和 random 负载均衡算法
+- 慢启动 (slow start) 负载均衡功能
+
+#### 中间件
+
+- limit_rate 响应速率限制中间件，支持令牌桶算法和大文件回退策略
+
+#### 平台与构建
+
+- act 命令支持本地运行 CI
+- E2E 测试框架集成 testcontainers
+- 分层测试 CI 工作流和基准测试 GitHub Actions workflow
+
+### Changed
+
+- 日志格式参数从布尔值改为字符串，支持 json / text / console 格式
+- 版本信息模块化重构
+- 代码现代化：采用 Go 1.22+ 特性（slices/maps 等）
+- 提取 HTTP/2/3 适配器公共逻辑为 CommonAdapter
+- 提取 TLS 配置生成到 sslutil
+- 提取 createFastServer / createProxyForConfig 辅助函数
+- 统一 IP 白名单解析和 excludeSet 构建
+- 提取公共逻辑、消除重复代码、加强错误处理
+- 缓存处理中消除 goto 语句，用互斥锁替代原子操作保护 Target 失败状态
+- 增强预压缩配置灵活性，提取常量提高代码可读性
+- 精简并重构 README 文档结构
+
+### Performance
+
+- FileInfo 缓存：handleTryFiles 和 handleInternalRedirect 使用缓存减少 stat 调用
+- 缓存 ETag 复用：避免重复生成 ETag
+- FileInfoCache 使用 RWMutex 替代 Mutex 提升并发读性能
+- 预压缩文件存在性缓存：避免重复 os.Stat 调用
+- 压缩中间件使用 bytes 操作避免字符串分配
+- ConsistentHash 和 RateLimiter 并发优化
+- Balancer healthy slice 池化减少分配
+- FileEntry 池化减少 GC 压力
+- 零分配优化与 Dial timeout 支持
+- Cache.Get 方法读锁优先，double-check 升级写锁
+- 静态文件服务性能优化
+
+### Fixed
+
+- Lua 引擎并发安全问题
+- sync.Pool 指针包装消除装箱分配
+- 2 个 CRITICAL + 6 个 HIGH 安全与代码质量问题
+- nginx 配置解析空字符串和 upstream URL 问题
+- 多 listen 指令的 server 块转换
+- 跳过已有 Content-Encoding 的响应压缩
+- ProxyBind 拨号超时和 Cookie 属性匹配
+- HealthChecker 重启支持
+- shutdownServers nil ctx 防御性检查
+- dictReplace key 存在性检查逻辑
+- ParseRegexPattern nginx 风格正则解析
+- remote_port 和 server_port Lua 变量返回空值
+- 配置默认值同步 GenerateConfigYAML 输出
+- coverage.html gitignore 规则
+- 根路径规范化修复相对路径性能问题
+
+### Documentation
+
+- 为多个模块添加标准化 godoc 注释（lua / matcher / proxy / middleware / logging 等）
+- 更新 README.md 配置示例和文档
+- 更新 AGENTS.md 文档，添加新模块说明
+- 添加子目录 AGENTS.md 文档
+
+### Tests
+
+- E2E 测试完整覆盖：代理、静态文件、SSL/TLS、缓存、健康检查、负载均衡、WebSocket
+- 缓存和代理集成测试
+- DNS 解析器 Mock 测试
+- Lua 边界场景和 Scheduler 模式测试
+- HTTP/2 E2E 和 TLS 集成测试
+- 正则 location 配置集成测试
+- 多模块单元测试覆盖率扩展
+- 分片缓存原型与扩展性对比测试
+- 多项专项基准测试（缓存键零分配、FileCache Set 分配热点、变量展开分配追踪等）
+
+### Build
+
+- 分层测试 CI 工作流
+- 基准测试 GitHub Actions workflow
+- check 目标改为使用 test-all
+- bench 目标限制到 internal 目录
 
 ## [0.2.1] - 2026-04-17
 

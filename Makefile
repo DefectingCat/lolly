@@ -2,7 +2,7 @@
 
 # 版本信息
 APP_NAME := lolly
-VERSION := 0.2.1
+VERSION := 0.2.2
 
 # 临时目录（避免 tmpfs 空间不足）
 TMPDIR := $(shell mkdir -p tmp && realpath tmp)
