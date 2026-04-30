@@ -145,7 +145,7 @@ func DefaultConfig() *Config {
 				Type:                 "gzip",
 				Level:                6,
 				MinSize:              1024,
-				GzipStatic:           false,
+				GzipStatic:           true,
 				GzipStaticExtensions: []string{".br", ".gz"},
 				Types: []string{
 					"text/html",
