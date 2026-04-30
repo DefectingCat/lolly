@@ -404,7 +404,7 @@ func BenchmarkGenerateAutoIndex_HTML(b *testing.B) {
 	defer os.RemoveAll(tmpDir)
 
 	// 创建 100 个文件
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		if err := os.WriteFile(filepath.Join(tmpDir, fmt.Sprintf("file%d.txt", i)), []byte("content"), 0o644); err != nil {
 			b.Fatal(err)
 		}

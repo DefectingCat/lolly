@@ -80,7 +80,7 @@ func readDirectory(dirPath string) ([]dirEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 
 	infos, err := dir.Readdir(-1)
 	if err != nil {
@@ -117,7 +117,7 @@ func generateHTMLIndex(ctx *fasthttp.RequestCtx, reqPath string, entries []dirEn
 	// HTML 头部
 	buf.WriteString("<!DOCTYPE html>\n")
 	buf.WriteString("<html>\n<head>\n")
-	buf.WriteString(fmt.Sprintf("<title>Index of %s</title>\n", html.EscapeString(reqPath)))
+	fmt.Fprintf(&buf, "<title>Index of %s</title>\n", html.EscapeString(reqPath))
 	buf.WriteString("<style>\n")
 	buf.WriteString("body { font-family: monospace; margin: 20px; }\n")
 	buf.WriteString("h1 { border-bottom: 1px solid #ccc; padding-bottom: 10px; }\n")
@@ -128,7 +128,7 @@ func generateHTMLIndex(ctx *fasthttp.RequestCtx, reqPath string, entries []dirEn
 	buf.WriteString("a:hover { text-decoration: underline; }\n")
 	buf.WriteString("</style>\n")
 	buf.WriteString("</head>\n<body>\n")
-	buf.WriteString(fmt.Sprintf("<h1>Index of %s</h1>\n", html.EscapeString(reqPath)))
+	fmt.Fprintf(&buf, "<h1>Index of %s</h1>\n", html.EscapeString(reqPath))
 	buf.WriteString("<hr>\n<table>\n")
 	buf.WriteString("<thead><tr><th>Name</th><th>Modified</th><th>Size</th></tr></thead>\n")
 	buf.WriteString("<tbody>\n")
@@ -167,8 +167,8 @@ func generateHTMLIndex(ctx *fasthttp.RequestCtx, reqPath string, entries []dirEn
 			sizeStr = formatSize(entry.Size)
 		}
 
-		buf.WriteString(fmt.Sprintf("<tr><td><a href=\"%s\">%s</a></td><td>%s</td><td class=\"size\">%s</td></tr>\n",
-			href, html.EscapeString(displayName), timeStr, sizeStr))
+		fmt.Fprintf(&buf, "<tr><td><a href=\"%s\">%s</a></td><td>%s</td><td class=\"size\">%s</td></tr>\n",
+			href, html.EscapeString(displayName), timeStr, sizeStr)
 	}
 
 	buf.WriteString("</tbody>\n</table>\n<hr>\n</body>\n</html>\n")
@@ -179,7 +179,7 @@ func generateHTMLIndex(ctx *fasthttp.RequestCtx, reqPath string, entries []dirEn
 }
 
 // generateJSONIndex 生成 JSON 格式的目录列表。
-func generateJSONIndex(ctx *fasthttp.RequestCtx, reqPath string, entries []dirEntry) {
+func generateJSONIndex(ctx *fasthttp.RequestCtx, _ string, entries []dirEntry) {
 	type jsonEntry struct {
 		Name  string `json:"name"`
 		Type  string `json:"type"`
@@ -277,4 +277,3 @@ func formatSize(size int64) string {
 		return fmt.Sprintf("%d", size)
 	}
 }
-
