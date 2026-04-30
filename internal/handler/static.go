@@ -396,16 +396,47 @@ func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string)
 		}
 
 		// 检查文件/目录是否存在
-		info, err := os.Stat(filePath)
-		if err != nil {
-			continue // 不存在，尝试下一个
+		// 先查 FileInfo 缓存
+		var info os.FileInfo
+		var err error
+
+		if h.fileInfoCache != nil {
+			if cachedInfo, ok := h.fileInfoCache.Get(filePath); ok {
+				info = cachedInfo
+			}
+		}
+
+		if info == nil {
+			// 缓存未命中，调用 os.Stat
+			info, err = os.Stat(filePath)
+			if err != nil {
+				continue // 不存在，尝试下一个
+			}
+			if h.fileInfoCache != nil {
+				h.fileInfoCache.Set(filePath, info)
+			}
 		}
 
 		if info.IsDir() {
 			// 如果是目录，尝试查找索引文件
 			for _, idx := range h.index {
 				idxPath := filepath.Join(filePath, idx)
-				if idxInfo, err := os.Stat(idxPath); err == nil && !idxInfo.IsDir() {
+				var idxInfo os.FileInfo
+				if h.fileInfoCache != nil {
+					if cachedInfo, ok := h.fileInfoCache.Get(idxPath); ok {
+						idxInfo = cachedInfo
+					}
+				}
+				if idxInfo == nil {
+					idxInfo, err = os.Stat(idxPath)
+					if err != nil {
+						continue
+					}
+					if h.fileInfoCache != nil {
+						h.fileInfoCache.Set(idxPath, idxInfo)
+					}
+				}
+				if !idxInfo.IsDir() {
 					h.serveFile(ctx, idxPath, idxInfo, false)
 					return
 				}
@@ -503,11 +534,28 @@ func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetP
 	} else {
 		filePath = filepath.Join(h.root, targetPath)
 	}
-	info, err := os.Stat(filePath)
-	if err != nil {
-		utils.SendError(ctx, utils.ErrNotFound)
-		return
+
+	// 先查 FileInfo 缓存
+	var info os.FileInfo
+	var err error
+
+	if h.fileInfoCache != nil {
+		if cachedInfo, ok := h.fileInfoCache.Get(filePath); ok {
+			info = cachedInfo
+		}
 	}
+
+	if info == nil {
+		info, err = os.Stat(filePath)
+		if err != nil {
+			utils.SendError(ctx, utils.ErrNotFound)
+			return
+		}
+		if h.fileInfoCache != nil {
+			h.fileInfoCache.Set(filePath, info)
+		}
+	}
+
 	if info.IsDir() {
 		utils.SendError(ctx, utils.ErrForbidden)
 		return
