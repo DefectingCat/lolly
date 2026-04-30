@@ -52,9 +52,10 @@ const (
 //   - alias 与 root 互斥，同时配置时 alias 优先
 type StaticHandler struct {
 	// 指针类型字段（按大小排列）
-	fileCache  *cache.FileCache
-	gzipStatic *compression.GzipStatic
-	router     *Router
+	fileCache     *cache.FileCache
+	fileInfoCache *FileInfoCache // FileInfo 缓存，减少 os.Stat 调用
+	gzipStatic    *compression.GzipStatic
+	router        *Router
 	// 字符串字段
 	root       string
 	alias      string
@@ -64,11 +65,12 @@ type StaticHandler struct {
 	index    []string
 	tryFiles []string
 	// 基本类型字段
-	cacheTTL     time.Duration // 缓存新鲜度 TTL（默认 5s，0 表示每次验证 ModTime）
-	useSendfile  bool
-	tryFilesPass bool
-	symlinkCheck bool
-	internal     bool
+	pathPrefixLen int            // 预计算的路径前缀长度，用于零分配路径剥离
+	cacheTTL      time.Duration  // 缓存新鲜度 TTL（默认 5s，0 表示每次验证 ModTime）
+	useSendfile   bool
+	tryFilesPass  bool
+	symlinkCheck  bool
+	internal      bool
 }
 
 // NewStaticHandler 创建静态文件处理器。
@@ -94,11 +96,19 @@ func NewStaticHandler(root, pathPrefix string, index []string, useSendfile bool)
 	if !strings.HasSuffix(cleanRoot, string(filepath.Separator)) {
 		cleanRoot += string(filepath.Separator)
 	}
+
+	// 预计算前缀长度，用于零分配路径剥离
+	prefixLen := len(pathPrefix)
+	if pathPrefix == "/" {
+		prefixLen = 0 // 根路径无需剥离
+	}
+
 	return &StaticHandler{
-		root:        cleanRoot,
-		pathPrefix:  pathPrefix,
-		index:       index,
-		useSendfile: useSendfile,
+		root:          cleanRoot,
+		pathPrefix:    pathPrefix,
+		pathPrefixLen: prefixLen,
+		index:         index,
+		useSendfile:   useSendfile,
 	}
 }
 
@@ -120,11 +130,18 @@ func NewStaticHandler(root, pathPrefix string, index []string, useSendfile bool)
 //
 //	handler := handler.NewStaticHandlerWithAlias("/var/www/img/", "/images/", []string{"index.html"}, true)
 func NewStaticHandlerWithAlias(alias, pathPrefix string, index []string, useSendfile bool) *StaticHandler {
+	// 预计算前缀长度
+	prefixLen := len(pathPrefix)
+	if pathPrefix == "/" {
+		prefixLen = 0
+	}
+
 	return &StaticHandler{
-		alias:       alias,
-		pathPrefix:  pathPrefix,
-		index:       index,
-		useSendfile: useSendfile,
+		alias:         alias,
+		pathPrefix:    pathPrefix,
+		pathPrefixLen: prefixLen,
+		index:         index,
+		useSendfile:   useSendfile,
 	}
 }
 
@@ -182,6 +199,17 @@ func (h *StaticHandler) GetRoot() string {
 //   - 缓存会自动检测文件修改并更新
 func (h *StaticHandler) SetFileCache(fc *cache.FileCache) {
 	h.fileCache = fc
+}
+
+// SetFileInfoCache 设置 FileInfo 缓存。
+//
+// 为静态文件处理器启用 FileInfo 缓存功能。
+// 缓存可以减少 os.Stat 调用，提升性能。
+//
+// 参数：
+//   - fic: FileInfo 缓存实例
+func (h *StaticHandler) SetFileInfoCache(fic *FileInfoCache) {
+	h.fileInfoCache = fic
 }
 
 // SetGzipStatic 设置预压缩文件支持。
@@ -325,11 +353,11 @@ func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 //   - ctx: fasthttp 请求上下文
 //   - reqPath: 原始请求路径
 func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string) {
-	// 获取相对路径（剥离路径前缀）
+	// 零分配路径剥离：使用切片替代 strings.TrimPrefix
 	relPath := reqPath
-	if h.pathPrefix != "" && h.pathPrefix != "/" {
-		relPath = strings.TrimPrefix(reqPath, h.pathPrefix)
-		if !strings.HasPrefix(relPath, "/") {
+	if h.pathPrefixLen > 0 {
+		relPath = reqPath[h.pathPrefixLen:]
+		if len(relPath) > 0 && relPath[0] != '/' {
 			relPath = "/" + relPath
 		}
 	}
@@ -475,39 +503,44 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 	// 计算文件路径
 	var filePath string
 
+	// 零分配路径剥离：使用切片替代 strings.TrimPrefix
+	relPath := reqPath
+	if h.pathPrefixLen > 0 {
+		relPath = reqPath[h.pathPrefixLen:]
+		if len(relPath) > 0 && relPath[0] != '/' {
+			relPath = "/" + relPath
+		}
+	}
+
 	if h.alias != "" {
 		// alias 模式：将匹配的路径前缀替换为 alias
-		// 例如：path: "/images/", alias: "/var/www/img/"
-		// 请求 "/images/logo.png" -> 文件 "/var/www/img/logo.png"
-		relPath := reqPath
-		if h.pathPrefix != "" && h.pathPrefix != "/" {
-			relPath = strings.TrimPrefix(reqPath, h.pathPrefix)
-			if !strings.HasPrefix(relPath, "/") {
-				relPath = "/" + relPath
-			}
-		}
-		// 使用 alias 替换匹配部分
 		filePath = filepath.Join(h.alias, relPath)
 	} else {
 		// root 模式：将请求路径附加到 root
-		// 剥离路径前缀
-		relPath := reqPath
-		if h.pathPrefix != "" && h.pathPrefix != "/" {
-			relPath = strings.TrimPrefix(reqPath, h.pathPrefix)
-			if !strings.HasPrefix(relPath, "/") {
-				relPath = "/" + relPath
-			}
-		}
-
-		// 拼接文件路径
 		filePath = filepath.Join(h.root, relPath)
 	}
 
 	// 检查文件/目录是否存在
-	info, err := os.Stat(filePath)
-	if err != nil {
-		utils.SendError(ctx, utils.ErrNotFound)
-		return
+	// 先查 FileInfo 缓存（TTL 内信任缓存，不验证 ModTime）
+	var info os.FileInfo
+	var err error
+
+	if h.fileInfoCache != nil {
+		if cachedInfo, ok := h.fileInfoCache.Get(filePath); ok {
+			info = cachedInfo
+		}
+	}
+
+	if info == nil {
+		// 缓存未命中，调用 os.Stat
+		info, err = os.Stat(filePath)
+		if err != nil {
+			utils.SendError(ctx, utils.ErrNotFound)
+			return
+		}
+		if h.fileInfoCache != nil {
+			h.fileInfoCache.Set(filePath, info)
+		}
 	}
 
 	// 符号链接安全检查
@@ -549,7 +582,7 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 				// TTL 内直接返回（无需验证 ModTime）
 				ctx.Response.SetBody(entry.Data)
 				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
-				ctx.Response.Header.Set("ETag", etag)
+				ctx.Response.Header.Set("ETag", entry.ETag)
 				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 				return
 			}
@@ -562,7 +595,7 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 				}
 				ctx.Response.SetBody(entry.Data)
 				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
-				ctx.Response.Header.Set("ETag", etag)
+				ctx.Response.Header.Set("ETag", entry.ETag)
 				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 				return
 			}

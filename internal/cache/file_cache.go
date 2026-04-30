@@ -20,6 +20,7 @@ package cache
 import (
 	"container/list"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,6 +36,20 @@ type FileEntry struct {
 	Path       string
 	Data       []byte
 	Size       int64
+	ETag       string // 预计算的 ETag，避免每次请求重新计算
+}
+
+// generateETag 基于 ModTime 和 Size 生成 ETag。
+// 使用 strconv.AppendInt 避免 fmt.Sprintf 分配。
+func generateETag(modTime time.Time, size int64) string {
+	var buf [32]byte
+	b := buf[:0]
+	b = append(b, '"')
+	b = strconv.AppendInt(b, modTime.Unix(), 16)
+	b = append(b, '-')
+	b = strconv.AppendInt(b, size, 16)
+	b = append(b, '"')
+	return string(b)
 }
 
 // FileCache 文件缓存，支持 LRU 淘汰策略。
@@ -165,12 +180,16 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// 预计算 ETag
+	etag := generateETag(modTime, size)
+
 	// 检查是否已存在
 	if entry, ok := c.entries[path]; ok {
 		c.currentSize -= entry.Size
 		entry.Data = data
 		entry.Size = size
 		entry.ModTime = modTime
+		entry.ETag = etag
 		entry.CachedAt = time.Now() // 更新缓存时间
 		entry.LastAccess = time.Now()
 		c.currentSize += size
@@ -185,6 +204,7 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time)
 	entry.Data = data
 	entry.Size = size
 	entry.ModTime = modTime
+	entry.ETag = etag
 	entry.CachedAt = time.Now()
 	entry.LastAccess = time.Now()
 	entry.element = c.lruList.PushFront(entry)
@@ -245,6 +265,7 @@ func (c *FileCache) removeEntry(entry *FileEntry) {
 	entry.ModTime = time.Time{}
 	entry.CachedAt = time.Time{}
 	entry.LastAccess = time.Time{}
+	entry.ETag = ""
 	entry.element = nil
 	c.entryPool.Put(entry)
 }

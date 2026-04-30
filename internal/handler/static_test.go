@@ -411,8 +411,10 @@ func TestNewStaticHandler(t *testing.T) {
 		if handler == nil {
 			t.Fatal("NewStaticHandler() 返回 nil")
 		}
-		if handler.root != root {
-			t.Errorf("handler.root = %q, want %q", handler.root, root)
+		// root 被规范化为带尾部斜杠的形式
+		expectedRoot := "/var/www/"
+		if handler.root != expectedRoot {
+			t.Errorf("handler.root = %q, want %q", handler.root, expectedRoot)
 		}
 		if len(handler.index) != len(index) {
 			t.Errorf("len(handler.index) = %d, want %d", len(handler.index), len(index))
@@ -1301,8 +1303,10 @@ func TestStaticHandler_SetAlias(t *testing.T) {
 
 		handler.SetRoot("/root")
 
-		if handler.GetRoot() != "/root" {
-			t.Errorf("GetRoot() = %q, want %q", handler.GetRoot(), "/root")
+		// root 被规范化为带尾部斜杠的形式
+		expectedRoot := "/root/"
+		if handler.GetRoot() != expectedRoot {
+			t.Errorf("GetRoot() = %q, want %q", handler.GetRoot(), expectedRoot)
 		}
 		if handler.GetAlias() != "" {
 			t.Error("设置 root 后 alias 应被清空")
