@@ -174,7 +174,7 @@ func TestLuaMiddlewarePerformanceOverhead(t *testing.T) {
 	// 测量 100 次执行的总时间
 	iterations := 100
 	start := time.Now()
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		ctx := &fasthttp.RequestCtx{}
 		handler(ctx)
 	}

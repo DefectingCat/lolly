@@ -109,7 +109,7 @@ func TestStopAfterStop(t *testing.T) {
 	s := New(cfg)
 
 	// 多次调用 StopWithTimeout 应该都是安全的
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		err := s.StopWithTimeout(5 * time.Second)
 		if err != nil {
 			t.Errorf("StopWithTimeout() call %d returned error: %v", i+1, err)
@@ -375,7 +375,7 @@ func TestTrackStats_MultipleRequests(t *testing.T) {
 	wrappedHandler := s.trackStats(handler)
 
 	// 执行多次请求
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Init(&fasthttp.Request{}, nil, nil)
 		wrappedHandler(ctx)
@@ -1508,7 +1508,7 @@ func TestServer_GetProxyCacheStats_AllProxiesWithCache(t *testing.T) {
 
 	// 创建多个带缓存的代理
 	proxies := make([]*proxy.Proxy, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		proxyCfg := &config.ProxyConfig{
 			Path:        fmt.Sprintf("/api%d", i),
 			LoadBalance: "round_robin",
@@ -1552,7 +1552,7 @@ func TestServer_GetProxyCacheStats_AllProxiesNoCache(t *testing.T) {
 
 	// 创建多个不带缓存的代理
 	proxies := make([]*proxy.Proxy, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		proxyCfg := &config.ProxyConfig{
 			Path:        fmt.Sprintf("/api%d", i),
 			LoadBalance: "round_robin",
@@ -2731,7 +2731,7 @@ func TestShutdownServers_RunningServers(t *testing.T) {
 	servers := make([]*fasthttp.Server, 2)
 	listeners := make([]net.Listener, 2)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		ln, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("failed to create listener: %v", err)
@@ -2773,7 +2773,7 @@ func TestShutdownServers_ManyServers(t *testing.T) {
 	// 创建大量服务器
 	count := 50
 	servers := make([]*fasthttp.Server, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		servers[i] = &fasthttp.Server{
 			Handler: func(ctx *fasthttp.RequestCtx) { ctx.SetBodyString("test") },
 		}
@@ -2792,7 +2792,7 @@ func TestShutdownServers_MixedNilAndRealServers(t *testing.T) {
 
 	count := 20
 	servers := make([]*fasthttp.Server, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		if i%2 == 0 {
 			servers[i] = nil
 		} else {
@@ -2814,16 +2814,14 @@ func TestShutdownServers_ConcurrentSafety(t *testing.T) {
 
 	// 并发调用 shutdownServers
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			servers := []*fasthttp.Server{
 				{Handler: func(ctx *fasthttp.RequestCtx) { ctx.SetBodyString("test") }},
 				{Handler: func(ctx *fasthttp.RequestCtx) { ctx.SetBodyString("test") }},
 			}
 			_ = shutdownServers(ctx, servers)
-		}()
+		})
 	}
 	wg.Wait()
 }

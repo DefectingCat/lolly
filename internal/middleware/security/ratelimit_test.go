@@ -112,7 +112,7 @@ func TestRateLimiterAllow(t *testing.T) {
 	key := "test-key"
 
 	// Should allow burst requests
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if !rl.Allow(key) {
 			t.Errorf("Expected request %d to be allowed", i+1)
 		}
@@ -141,7 +141,7 @@ func TestRateLimiterTokenRefill(t *testing.T) {
 	key := "refill-test"
 
 	// Exhaust the burst
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		rl.Allow(key)
 	}
 
@@ -607,7 +607,7 @@ func TestRateLimiter_GetRetryAfter(t *testing.T) {
 
 	// 创建一个桶并消耗令牌
 	key := "test-key"
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		rl.Allow(key)
 	}
 

@@ -18,6 +18,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -232,13 +233,7 @@ func TestALPNNegotiationH2(t *testing.T) {
 		t.Fatal("ALPN config should not be nil")
 	}
 
-	foundH2 := false
-	for _, proto := range alpnConfig.NextProtos {
-		if proto == "h2" {
-			foundH2 = true
-			break
-		}
-	}
+	foundH2 := slices.Contains(alpnConfig.NextProtos, "h2")
 	if !foundH2 {
 		t.Error("ALPN config should include h2 protocol")
 	}
@@ -397,11 +392,9 @@ func TestServeHTTP1Fallback(t *testing.T) {
 	}()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		server.serveHTTP1(serverConn)
-	}()
+	})
 
 	// 发送 HTTP/1.1 请求
 	request := "GET /test HTTP/1.1\r\nHost: localhost\r\n\r\n"

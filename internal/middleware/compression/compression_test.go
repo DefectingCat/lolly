@@ -13,6 +13,7 @@ package compression
 import (
 	"bytes"
 	"io"
+	"slices"
 	"testing"
 
 	"github.com/andybalholm/brotli"
@@ -82,13 +83,7 @@ func TestDefaultCompressibleTypes(t *testing.T) {
 	// 检查关键类型
 	expected := []string{"text/html", "text/css", "application/json"}
 	for _, e := range expected {
-		found := false
-		for _, t := range types {
-			if t == e {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(types, e)
 		if !found {
 			t.Errorf("Expected type %s in default list", e)
 		}

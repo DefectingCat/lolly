@@ -77,7 +77,7 @@ func TestRoundRobinBalancer(t *testing.T) {
 
 	// 测试轮询
 	results := make(map[string]int)
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		selected := rr.Select(targets)
 		if selected == nil {
 			t.Error("Expected non-nil target")
@@ -147,7 +147,7 @@ func TestWeightedRoundRobinBalancer(t *testing.T) {
 
 	// 测试加权分布：3:1 比例
 	results := make(map[string]int)
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		selected := wrr.Select(targets)
 		if selected == nil {
 			t.Error("Expected non-nil target")
@@ -306,12 +306,10 @@ func TestConcurrentConnections(t *testing.T) {
 
 	// 并发增加连接数
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			atomic.AddInt64(&s.connCount, 1)
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -498,7 +496,7 @@ func TestRoundRobinBalancerWithSingleTarget(t *testing.T) {
 	targets[0].healthy.Store(true)
 
 	// 测试单个健康目标
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		target := rb.Select(targets)
 		if target == nil {
 			t.Error("Expected non-nil target")

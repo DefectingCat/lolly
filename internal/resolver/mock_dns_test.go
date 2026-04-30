@@ -395,14 +395,12 @@ func TestMockDNSConcurrentAccess(t *testing.T) {
 	concurrency := 10
 	iterations := 100
 
-	for i := 0; i < concurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+	for range concurrency {
+		wg.Go(func() {
+			for range iterations {
 				_, _ = resolver.LookupHostWithCache(context.Background(), "localhost")
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -492,16 +490,14 @@ func TestMockDNSCacheEntryConcurrency(t *testing.T) {
 	var readCount atomic.Int64
 
 	// 并发读取
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			entry.mu.RLock()
 			_ = entry.IPs
 			_ = entry.ExpiresAt
 			entry.mu.RUnlock()
 			readCount.Add(1)
-		}()
+		})
 	}
 
 	wg.Wait()

@@ -37,7 +37,7 @@ func setupFailoverBackends(b *testing.B, count, healthyCount int) ([]*loadbalanc
 	targets := make([]*loadbalance.Target, count)
 	cleanups := make([]func(), count)
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		addr, cleanup := setupNetworkBackend(b, fasthttp.StatusOK, []byte(`{"backend":`+strconv.Itoa(i)+`}`))
 		cleanups[i] = cleanup
 		targets[i] = &loadbalance.Target{
@@ -215,8 +215,8 @@ func BenchmarkE2EFailover_DynamicToggle(b *testing.B) {
 		for pb.Next() {
 			// 每 100 次请求切换一个后端的健康状态
 			count := toggleCounter.Add(1)
-			if count % 100 == 0 {
-				targetIdx := int(count / 100) % len(targets)
+			if count%100 == 0 {
+				targetIdx := int(count/100) % len(targets)
 				current := targets[targetIdx].Healthy.Load()
 				targets[targetIdx].Healthy.Store(!current)
 			}
@@ -271,7 +271,7 @@ func BenchmarkE2EFailover_AllUnhealthy(b *testing.B) {
 // 验证负载均衡器选择逻辑的分配。
 func BenchmarkE2EFailover_SelectOnly(b *testing.B) {
 	targets := make([]*loadbalance.Target, 5)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		targets[i] = &loadbalance.Target{
 			URL:    "http://backend" + strconv.Itoa(i) + ":8080",
 			Weight: 1,

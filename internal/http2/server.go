@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"slices"
 	"sync"
 	"time"
 
@@ -330,13 +331,7 @@ func WrapTLSListener(ln net.Listener, tlsConfig *tls.Config) net.Listener {
 	originalGetConfig := tlsConfig.GetConfigForClient
 	tlsConfig.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 		// 检查客户端是否支持 h2
-		supportsH2 := false
-		for _, proto := range hello.SupportedProtos {
-			if proto == "h2" {
-				supportsH2 = true
-				break
-			}
-		}
+		supportsH2 := slices.Contains(hello.SupportedProtos, "h2")
 
 		// 如果有原始回调，先调用它
 		var cfg *tls.Config

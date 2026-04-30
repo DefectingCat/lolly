@@ -27,7 +27,7 @@ func createTestResolver() *DNSResolver {
 	r := New(cfg).(*DNSResolver)
 
 	// 预填充缓存条目，模拟真实的解析场景
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		host := fmt.Sprintf("host%d.example.com", i)
 		r.storeCache(host, &DNSCacheEntry{
 			IPs:        []string{fmt.Sprintf("192.168.1.%d", i%256), fmt.Sprintf("192.168.2.%d", i%256)},
@@ -214,7 +214,7 @@ func BenchmarkDNSResolverMixedWorkload(b *testing.B) {
 	ctx := context.Background()
 
 	// 预填充一些缓存
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		host := fmt.Sprintf("cached%d.example.com", i)
 		r.storeCache(host, &DNSCacheEntry{
 			IPs:       []string{fmt.Sprintf("192.168.1.%d", i%256)},

@@ -94,7 +94,7 @@ func NewSlidingWindowLimiter(window time.Duration, limit int, precise bool) *Sli
 		precise: precise,
 	}
 	// 初始化16个分段锁桶
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		s.buckets[i] = &limiterBucket{
 			counters: make(map[string]*windowCounter),
 		}
@@ -225,7 +225,7 @@ func (s *SlidingWindowLimiter) Reset(key string) {
 
 // ResetAll 重置所有计数器。
 func (s *SlidingWindowLimiter) ResetAll() {
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		bucket := s.buckets[i]
 		bucket.mu.Lock()
 		bucket.counters = make(map[string]*windowCounter)
@@ -239,7 +239,7 @@ func (s *SlidingWindowLimiter) ResetAll() {
 //   - maxAge: 未使用计数器的最大保留时间
 func (s *SlidingWindowLimiter) Cleanup(maxAge time.Duration) {
 	now := time.Now()
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		bucket := s.buckets[i]
 		bucket.mu.Lock()
 		for key, counter := range bucket.counters {
@@ -267,7 +267,7 @@ type SlidingWindowStats struct {
 // GetStats 返回统计信息。
 func (s *SlidingWindowLimiter) GetStats() SlidingWindowStats {
 	totalKeys := 0
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		bucket := s.buckets[i]
 		bucket.mu.RLock()
 		totalKeys += len(bucket.counters)

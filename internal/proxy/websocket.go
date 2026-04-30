@@ -39,7 +39,7 @@ import (
 // wsBufPool WebSocket 数据转发 buffer pool。
 // 复用 32KB buffer 避免每次 copyData 调用分配。
 var wsBufPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		buf := make([]byte, 32*1024)
 		return &buf
 	},

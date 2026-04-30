@@ -70,7 +70,7 @@ type TCPSocket struct {
 	mu sync.RWMutex
 
 	// closed 关闭标记（原子操作）
-	closed int32
+	closed atomic.Int32
 }
 
 // NewTCPSocket 创建新的 TCP socket 实例。
@@ -416,7 +416,7 @@ func (s *TCPSocket) ReceiveUntil(pattern string, inclusive bool) ([]byte, error)
 		// 检查是否匹配模式
 		if len(result) >= patternLen {
 			matched := true
-			for i := 0; i < patternLen; i++ {
+			for i := range patternLen {
 				if result[len(result)-patternLen+i] != patternBytes[i] {
 					matched = false
 					break
@@ -442,7 +442,7 @@ func (s *TCPSocket) Close() error {
 	if s == nil {
 		return nil
 	}
-	if !atomic.CompareAndSwapInt32(&s.closed, 0, 1) {
+	if !s.closed.CompareAndSwap(0, 1) {
 		return nil // 已经关闭
 	}
 
@@ -507,7 +507,7 @@ func (s *TCPSocket) setState(state SocketState) {
 
 // IsClosed 检查是否已关闭
 func (s *TCPSocket) IsClosed() bool {
-	return atomic.LoadInt32(&s.closed) == 1
+	return s.closed.Load() == 1
 }
 
 // LocalAddr 获取本地地址

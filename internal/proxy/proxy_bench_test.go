@@ -187,7 +187,7 @@ func BenchmarkProxyForwardMultipleTargets(b *testing.B) {
 	targets := make([]*loadbalance.Target, numTargets)
 	cleanups := make([]func(), numTargets)
 
-	for i := 0; i < numTargets; i++ {
+	for i := range numTargets {
 		addr, cleanup := setupMockBackend(smallBody)
 		cleanups[i] = cleanup
 		targets[i] = &loadbalance.Target{

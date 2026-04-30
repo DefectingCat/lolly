@@ -165,7 +165,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 	// 并发调用 DetectContentType
 	wg.Add(numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		go func() {
 			defer wg.Done()
 			DetectContentType("test.html")
@@ -174,7 +174,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 	// 并发调用 AddTypes
 	wg.Add(numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		go func(i int) {
 			defer wg.Done()
 			AddTypes(map[string]string{".test": "application/x-test"})
@@ -183,7 +183,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 	// 并发调用 SetDefaultType 和 GetDefaultType
 	wg.Add(numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		go func() {
 			defer wg.Done()
 			SetDefaultType("text/plain")

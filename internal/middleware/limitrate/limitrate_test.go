@@ -429,14 +429,12 @@ func TestRateLimitedWriter_Concurrent(t *testing.T) {
 	writesPerGoroutine := 10
 	data := []byte("test")
 
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for j := 0; j < writesPerGoroutine; j++ {
+	for range goroutines {
+		wg.Go(func() {
+			for range writesPerGoroutine {
 				_, _ = w.Write(data)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

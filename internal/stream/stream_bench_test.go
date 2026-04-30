@@ -71,7 +71,7 @@ func BenchmarkStreamFilterHealthyPreallocated(b *testing.B) {
 
 	// 创建目标列表
 	targets := make([]*Target, targetCount)
-	for i := 0; i < targetCount; i++ {
+	for i := range targetCount {
 		targets[i] = &Target{
 			addr:   fmt.Sprintf("backend%d:8080", i),
 			weight: 1,
@@ -119,7 +119,7 @@ func BenchmarkUDPSessionAllocations(b *testing.B) {
 			var pool *sync.Pool
 			if tc.poolSize > 0 {
 				pool = &sync.Pool{
-					New: func() interface{} {
+					New: func() any {
 						return make([]byte, tc.bufSize)
 					},
 				}
@@ -168,7 +168,7 @@ func BenchmarkUDPSessionGetOrCreate(b *testing.B) {
 
 	// 预创建一些客户端地址
 	clientAddrs := make([]*net.UDPAddr, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		clientAddrs[i], _ = net.ResolveUDPAddr("udp", fmt.Sprintf("127.0.0.1:%d", 20000+i))
 	}
 
@@ -206,7 +206,7 @@ func BenchmarkUDPSessionGetOnly(b *testing.B) {
 
 	// 预创建会话
 	clientAddrs := make([]*net.UDPAddr, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		clientAddrs[i], _ = net.ResolveUDPAddr("udp", fmt.Sprintf("127.0.0.1:%d", 30000+i))
 		// 手动创建会话
 		targetAddr, _ := net.ResolveUDPAddr("udp", upstream.targets[0].addr)

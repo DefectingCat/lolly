@@ -17,6 +17,7 @@ package loadbalance
 import (
 	"fmt"
 	"hash/fnv"
+	"slices"
 	"sort"
 	"sync"
 )
@@ -138,9 +139,7 @@ func (c *ConsistentHash) rebuildCircle(targets []*Target) {
 	}
 
 	// 排序哈希值
-	sort.Slice(c.sortedHashes, func(i, j int) bool {
-		return c.sortedHashes[i] < c.sortedHashes[j]
-	})
+	slices.Sort(c.sortedHashes)
 }
 
 // hashKeyString 计算字符串的哈希值（使用 FNV-64a）。

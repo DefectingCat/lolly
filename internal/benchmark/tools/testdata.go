@@ -50,7 +50,7 @@ func createTestTargets(n int) ([]TestTarget, func()) {
 	targets := make([]TestTarget, n)
 	cleanups := make([]func(), n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		body := GenerateTestData(Size1KB)
 		addr, cleanup := SimpleMockBackend(200, body)
 		targets[i] = TestTarget{
@@ -83,7 +83,7 @@ func CreateWeightedTestTargets(n int) ([]TestTarget, func()) {
 	targets := make([]TestTarget, n)
 	cleanups := make([]func(), n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		body := GenerateTestData(Size1KB)
 		addr, cleanup := SimpleMockBackend(200, body)
 		// Vary weights: 1, 2, 3, etc.
@@ -111,7 +111,7 @@ func CreateDelayedTestTargets(n int, baseDelay time.Duration) ([]TestTarget, fun
 	targets := make([]TestTarget, n)
 	cleanups := make([]func(), n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		body := GenerateTestData(Size1KB)
 		// Each target has increasing delay
 		delay := baseDelay * time.Duration(i+1)
@@ -140,7 +140,7 @@ func CreateErrorTestTargets(n int, baseErrorRate float64) ([]TestTarget, func())
 	targets := make([]TestTarget, n)
 	cleanups := make([]func(), n)
 
-	for i := 0; i < n; i++ {
+	for i := range n {
 		body := GenerateTestData(Size1KB)
 		// Vary error rates slightly per target
 		errorRate := baseErrorRate + float64(i)*0.05

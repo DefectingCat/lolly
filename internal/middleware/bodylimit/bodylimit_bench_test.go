@@ -91,7 +91,7 @@ func BenchmarkBodyLimitPathMatching(b *testing.B) {
 	}
 
 	// 添加大量路径配置
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		path := "/api/v" + string(rune('0'+i%10)) + "/resource" + string(rune('0'+i%10))
 		size := "1mb"
 		if i%3 == 0 {

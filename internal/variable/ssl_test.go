@@ -353,7 +353,7 @@ func TestSetSSLClientInfoInContext_WithPeerCert(t *testing.T) {
 		Raw:            make([]byte, 25), // 模拟原始数据（25字节）
 	}
 	// 填充可预测的原始数据
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		cert.Raw[i] = byte(i + 1)
 	}
 
@@ -367,7 +367,7 @@ func TestSetSSLClientInfoInContext_WithPeerCert(t *testing.T) {
 	tests := []struct {
 		name     string
 		key      string
-		expected interface{}
+		expected any
 	}{
 		{"verify", VarSSLClientVerify, "SUCCESS"},
 		{"peer_cert_present", "tls_peer_cert_present", true},

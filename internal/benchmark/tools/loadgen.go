@@ -3,7 +3,7 @@ package tools
 
 import (
 	"math"
-	"sort"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -61,16 +61,14 @@ func (lg *FasthttpLoadGenerator) Run(n int, concurrency int) *LoadGenStats {
 
 	start := time.Now()
 
-	for i := 0; i < concurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range concurrency {
+		wg.Go(func() {
 			req := fasthttp.AcquireRequest()
 			resp := fasthttp.AcquireResponse()
 			defer fasthttp.ReleaseRequest(req)
 			defer fasthttp.ReleaseResponse(resp)
 
-			for j := 0; j < requestsPerWorker; j++ {
+			for range requestsPerWorker {
 				req.SetRequestURI("http://" + lg.addr + "/")
 				req.Header.SetMethod("GET")
 
@@ -83,7 +81,7 @@ func (lg *FasthttpLoadGenerator) Run(n int, concurrency int) *LoadGenStats {
 					errorChan <- err
 				}
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -118,9 +116,7 @@ func (lg *FasthttpLoadGenerator) Run(n int, concurrency int) *LoadGenStats {
 
 	// Calculate latency distribution
 	if len(latencies) > 0 {
-		sort.Slice(latencies, func(i, j int) bool {
-			return latencies[i] < latencies[j]
-		})
+		slices.Sort(latencies)
 
 		lg.stats.MinLatency = latencies[0]
 		lg.stats.MaxLatency = latencies[len(latencies)-1]

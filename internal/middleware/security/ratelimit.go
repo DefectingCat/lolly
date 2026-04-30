@@ -142,7 +142,7 @@ func newTokenBucketLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
 	}
 
 	// 初始化 16 个分段锁桶
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		rl.shards[i] = shardedBucket{
 			buckets: make(map[string]*tokenBucket),
 		}
@@ -437,7 +437,7 @@ func (rl *RateLimiter) Reset(key string) {
 //
 // 清空所有桶记录，所有客户端将重新开始计数。
 func (rl *RateLimiter) ResetAll() {
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		rl.shards[i].mu.Lock()
 		rl.shards[i].buckets = make(map[string]*tokenBucket)
 		rl.shards[i].mu.Unlock()
@@ -453,7 +453,7 @@ func (rl *RateLimiter) ResetAll() {
 //   - maxAge: 未使用桶的最大保留时间
 func (rl *RateLimiter) Cleanup(maxAge time.Duration) {
 	now := time.Now()
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		shard := &rl.shards[i]
 		shard.mu.Lock()
 		for key, bucket := range shard.buckets {
@@ -526,7 +526,7 @@ type RateLimitStats struct {
 //   - RateLimitStats: 包含桶数量、速率和容量的统计对象
 func (rl *RateLimiter) GetStats() RateLimitStats {
 	totalBuckets := 0
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		rl.shards[i].mu.RLock()
 		totalBuckets += len(rl.shards[i].buckets)
 		rl.shards[i].mu.RUnlock()
@@ -551,7 +551,7 @@ type ConnLimiter struct {
 	keyFunc KeyFunc
 	counts  map[string]int64
 	max     int
-	current int64
+	current atomic.Int64
 	mu      sync.RWMutex
 	perKey  bool
 }
@@ -601,9 +601,9 @@ func NewConnLimiter(maxConns int, perKey bool, keyType string) (*ConnLimiter, er
 func (cl *ConnLimiter) Acquire(ctx *fasthttp.RequestCtx) bool {
 	if !cl.perKey {
 		// 全局限制（原子递增后检查溢出，避免 TOCTOU 竞态）
-		current := atomic.AddInt64(&cl.current, 1)
+		current := cl.current.Add(1)
 		if current > int64(cl.max) {
-			atomic.AddInt64(&cl.current, -1)
+			cl.current.Add(-1)
 			return false
 		}
 		return true
@@ -632,7 +632,7 @@ func (cl *ConnLimiter) Acquire(ctx *fasthttp.RequestCtx) bool {
 //   - ctx: FastHTTP 请求上下文
 func (cl *ConnLimiter) Release(ctx *fasthttp.RequestCtx) {
 	if !cl.perKey {
-		atomic.AddInt64(&cl.current, -1)
+		cl.current.Add(-1)
 		return
 	}
 

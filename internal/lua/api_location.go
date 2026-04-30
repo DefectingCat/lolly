@@ -81,7 +81,7 @@ func (m *LocationManager) Register(location string, handler fasthttp.RequestHand
 // 返回值：
 //   - *LocationCaptureResult: 子请求响应结果
 //   - error: 当前实现始终返回 nil
-func (m *LocationManager) Capture(parentCtx *fasthttp.RequestCtx, location string, opts map[string]interface{}) (*LocationCaptureResult, error) {
+func (m *LocationManager) Capture(parentCtx *fasthttp.RequestCtx, location string, opts map[string]any) (*LocationCaptureResult, error) {
 	m.mu.Lock()
 	handler, ok := m.handlers[location]
 	m.mu.Unlock()
@@ -175,7 +175,7 @@ func RegisterLocationAPI(L *glua.LState, manager *LocationManager, ngx *glua.LTa
 		uri := L.CheckString(1)
 
 		// 解析选项
-		opts := make(map[string]interface{})
+		opts := make(map[string]any)
 		if L.GetTop() >= 2 {
 			optionsTable := L.CheckTable(2)
 			optionsTable.ForEach(func(key, value glua.LValue) {

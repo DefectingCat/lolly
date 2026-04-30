@@ -122,12 +122,10 @@ func TestWriteGoroutineProfile(t *testing.T) {
 
 		// 启动一些 goroutine
 		var wg sync.WaitGroup
-		for i := 0; i < 5; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 5 {
+			wg.Go(func() {
 				select {}
-			}()
+			})
 		}
 
 		writeGoroutineProfile(&buf)
@@ -242,7 +240,7 @@ func TestCPUProfileMutex(t *testing.T) {
 		var buf bytes.Buffer
 
 		// 启动多个 goroutine 同时操作
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			wg.Add(2)
 			go func() {
 				defer wg.Done()

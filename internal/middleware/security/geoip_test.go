@@ -329,7 +329,7 @@ func TestGeoIPLookup_ConcurrentAccess(t *testing.T) {
 	geoip := setupTestGeoIP(t, "allow")
 
 	done := make(chan bool, 10)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			_, err := geoip.LookupCountry(net.ParseIP("2.125.160.216"))
 			assert.NoError(t, err)
@@ -337,7 +337,7 @@ func TestGeoIPLookup_ConcurrentAccess(t *testing.T) {
 		}()
 	}
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 }

@@ -73,7 +73,7 @@ func BenchmarkSlidingWindowCleanup(b *testing.B) {
 	sw := NewSlidingWindowLimiter(time.Second, 1000, false)
 
 	// 预创建 100 个键
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		sw.Allow("192.168.0." + string(rune(i)))
 	}
 
@@ -89,7 +89,7 @@ func BenchmarkSlidingWindowGetCount(b *testing.B) {
 	key := "192.168.1.100"
 
 	// 预先添加一些请求
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		sw.Allow(key)
 	}
 
@@ -131,7 +131,7 @@ func BenchmarkSlidingWindowStats(b *testing.B) {
 	sw := NewSlidingWindowLimiter(time.Second, 10000, false)
 
 	// 预创建一些键
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		sw.Allow("192.168.0." + string(rune(i)))
 	}
 

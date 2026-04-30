@@ -34,7 +34,7 @@ import (
 //   - 包含 count 个健康目标的切片，权重均为 1
 func generateTargets(count int) []*Target {
 	targets := make([]*Target, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		targets[i] = &Target{
 			URL:    fmt.Sprintf("http://backend%d:8080", i),
 			Weight: 1,
@@ -54,7 +54,7 @@ func generateTargets(count int) []*Target {
 //   - 包含 count 个健康目标的切片，按 weights 分配权重
 func generateWeightedTargets(count int, weights []int) []*Target {
 	targets := make([]*Target, count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		weight := 1
 		if i < len(weights) {
 			weight = weights[i]
@@ -160,7 +160,7 @@ func BenchmarkConsistentHashSelect(b *testing.B) {
 			ch.Rebuild(targets)
 
 			keys := make([]string, 100)
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				keys[i] = fmt.Sprintf("192.168.1.%d", i)
 			}
 
@@ -284,7 +284,7 @@ func BenchmarkIPHashSelect(b *testing.B) {
 			iph := NewIPHash()
 
 			ips := make([]string, 100)
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				ips[i] = fmt.Sprintf("192.168.1.%d", i)
 			}
 

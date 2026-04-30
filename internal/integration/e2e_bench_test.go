@@ -249,7 +249,7 @@ func createTestProxy(backendAddr, path string) (*proxy.Proxy, error) {
 //   - path: 请求路径
 //   - count: 预热请求数量
 func warmupProxy(p *proxy.Proxy, path string, count int) {
-	for i := 0; i < count; i++ {
+	for range count {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI(path)
 		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -299,11 +299,11 @@ func BenchmarkE2EStaticFile(b *testing.B) {
 	b.ReportAllocs()
 
 	paths := []string{"/small.css", "/medium.json", "/assets/app.js", "/index.html"}
-	var counter uint64
+	var counter atomic.Uint64
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			idx := atomic.AddUint64(&counter, 1)
+			idx := counter.Add(1)
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Request.SetRequestURI(paths[idx%uint64(len(paths))])
 			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -336,11 +336,11 @@ func BenchmarkE2EStaticFileCacheHit(b *testing.B) {
 	b.ReportAllocs()
 
 	paths := []string{"/small.css", "/medium.json", "/assets/app.js", "/index.html"}
-	var counter uint64
+	var counter atomic.Uint64
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			idx := atomic.AddUint64(&counter, 1)
+			idx := counter.Add(1)
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Request.SetRequestURI(paths[idx%uint64(len(paths))])
 			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -568,7 +568,7 @@ ngx.header["X-Lua-Processed"] = "true"`
 	finalHandler := chain.Apply(wrappedByLua)
 
 	// 预热 Lua 引擎（字节码缓存）
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/api/test")
 		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -638,7 +638,7 @@ func BenchmarkE2EMultiLuaPhase(b *testing.B) {
 	finalHandler := baseChain.Apply(wrappedByLua)
 
 	// 预热
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/api/test")
 		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -884,7 +884,7 @@ func BenchmarkE2EMultipleRoutes(b *testing.B) {
 	b.ReportAllocs()
 
 	// 使用原子计数器轮询不同路径
-	var counter uint64
+	var counter atomic.Uint64
 	paths := []string{
 		"/api/v1/users",
 		"/api/v2/items",
@@ -899,7 +899,7 @@ func BenchmarkE2EMultipleRoutes(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			idx := atomic.AddUint64(&counter, 1)
+			idx := counter.Add(1)
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Request.SetRequestURI(paths[idx%uint64(len(paths))])
 			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -955,7 +955,7 @@ func BenchmarkE2EMultipleRoutesWithMiddleware(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	var counter uint64
+	var counter atomic.Uint64
 	testPaths := []string{
 		"/api/users",
 		"/api/users/42",
@@ -968,7 +968,7 @@ func BenchmarkE2EMultipleRoutesWithMiddleware(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			idx := atomic.AddUint64(&counter, 1)
+			idx := counter.Add(1)
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Request.SetRequestURI(testPaths[idx%uint64(len(testPaths))])
 			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -1152,7 +1152,7 @@ func BenchmarkE2EInmemoryServer(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	var counter uint64
+	var counter atomic.Uint64
 	paths := []string{"/api/test", "/static/small.css", "/static/medium.json", "/health", "/api/data"}
 
 	b.RunParallel(func(pb *testing.PB) {
@@ -1162,7 +1162,7 @@ func BenchmarkE2EInmemoryServer(b *testing.B) {
 		defer fasthttp.ReleaseResponse(resp)
 
 		for pb.Next() {
-			idx := atomic.AddUint64(&counter, 1)
+			idx := counter.Add(1)
 			req.SetRequestURI("http://localhost" + paths[idx%uint64(len(paths))])
 			req.Header.SetMethod(fasthttp.MethodGet)
 			req.Header.Set("Host", "example.com")
@@ -1316,11 +1316,11 @@ func BenchmarkE2ERewriteMiddleware(b *testing.B) {
 		"/old-api/settings",
 		"/v1/data/123",
 	}
-	var counter uint64
+	var counter atomic.Uint64
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			idx := atomic.AddUint64(&counter, 1)
+			idx := counter.Add(1)
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Request.SetRequestURI(paths[idx%uint64(len(paths))])
 			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -1365,11 +1365,11 @@ func BenchmarkE2EAccessControl(b *testing.B) {
 	allowedIPs := []string{"192.168.1.50", "192.168.1.200", "10.0.0.1", "10.1.2.3"}
 	deniedIPs := []string{"192.168.1.100", "172.16.0.1", "8.8.8.8"}
 	allIPs := append(allowedIPs, deniedIPs...)
-	var counter uint64
+	var counter atomic.Uint64
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			idx := atomic.AddUint64(&counter, 1)
+			idx := counter.Add(1)
 			clientIP := allIPs[idx%uint64(len(allIPs))]
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Request.SetRequestURI("/api/test")
@@ -1416,11 +1416,11 @@ func BenchmarkE2ERateLimiter(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 
-	var counter uint64
+	var counter atomic.Uint64
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			idx := atomic.AddUint64(&counter, 1)
+			idx := counter.Add(1)
 			ctx := &fasthttp.RequestCtx{}
 			ctx.Request.SetRequestURI("/api/test")
 			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -1470,7 +1470,7 @@ func BenchmarkE2EBasicAuth(b *testing.B) {
 	b.ReportAllocs()
 
 	// 预热认证（缓存 bcrypt 结果）
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/api/test")
 		ctx.Request.Header.SetMethod(fasthttp.MethodGet)

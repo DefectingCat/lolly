@@ -669,15 +669,13 @@ func TestLinuxSendfile_WithTCPConn(t *testing.T) {
 
 	var serverConn net.Conn
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		serverConn, _ = ln.Accept()
 		// 读取所有数据
 		buf := make([]byte, len(content))
 		_, _ = io.ReadFull(serverConn, buf)
 		serverConn.Close()
-	}()
+	})
 
 	clientConn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
@@ -827,15 +825,13 @@ func TestLinuxSendfile_PartialTransfer(t *testing.T) {
 	var serverConn net.Conn
 	var received []byte
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		serverConn, _ = ln.Accept()
 		buf := make([]byte, len(content))
 		n, _ := serverConn.Read(buf)
 		received = buf[:n]
 		serverConn.Close()
-	}()
+	})
 
 	clientConn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
@@ -888,14 +884,12 @@ func TestLinuxSendfile_WithOffset(t *testing.T) {
 
 	var serverConn net.Conn
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		serverConn, _ = ln.Accept()
 		buf := make([]byte, 8*1024)
 		_, _ = serverConn.Read(buf)
 		serverConn.Close()
-	}()
+	})
 
 	clientConn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {

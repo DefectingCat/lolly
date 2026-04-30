@@ -78,7 +78,7 @@ func TestLocationManagerCaptureWithOptions(t *testing.T) {
 	parentCtx.Request.SetRequestURI("/parent")
 
 	// 使用自定义选项
-	opts := map[string]interface{}{
+	opts := map[string]any{
 		"method": "POST",
 		"body":   "test body",
 	}

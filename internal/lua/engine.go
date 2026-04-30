@@ -90,7 +90,7 @@ type LuaEngine struct {
 
 	// 并发控制
 	maxCoroutines int
-	activeCount   int32
+	activeCount   atomic.Int32
 
 	// 引擎统计
 	stats EngineStats
@@ -181,7 +181,7 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 		cancel:            cancel,
 		sharedDictManager: NewSharedDictManager(),
 		coroutinePool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				// 注意：这里只是创建空的协程对象结构
 				// 实际的协程通过 L.NewThread() 创建
 				return &LuaCoroutine{}
@@ -262,9 +262,9 @@ func (e *LuaEngine) Close() {
 //   - 使用完毕后必须调用 Close() 或 releaseCoroutine() 释放资源
 func (e *LuaEngine) NewCoroutine(req *fasthttp.RequestCtx) (*LuaCoroutine, error) {
 	// 步骤1: 检查并发限制
-	current := atomic.AddInt32(&e.activeCount, 1)
+	current := e.activeCount.Add(1)
 	if current > int32(e.maxCoroutines) {
-		atomic.AddInt32(&e.activeCount, -1)
+		e.activeCount.Add(-1)
 		return nil, fmt.Errorf("max concurrent coroutines exceeded: %d/%d", current, e.maxCoroutines)
 	}
 
@@ -272,7 +272,7 @@ func (e *LuaEngine) NewCoroutine(req *fasthttp.RequestCtx) (*LuaCoroutine, error
 	// 协程继承主 LState 的全局环境
 	co, cancel := e.L.NewThread()
 	if co == nil {
-		atomic.AddInt32(&e.activeCount, -1)
+		e.activeCount.Add(-1)
 		return nil, fmt.Errorf("failed to create coroutine")
 	}
 
@@ -330,7 +330,7 @@ func (e *LuaEngine) releaseCoroutine(coro *LuaCoroutine) {
 	coro.executionCancel = nil
 
 	// 步骤4: 更新计数
-	atomic.AddInt32(&e.activeCount, -1)
+	e.activeCount.Add(-1)
 	atomic.AddUint64(&e.stats.CoroutinesClosed, 1)
 
 	// 步骤5: 放回池中（仅复用 LuaCoroutine 结构体内存）
@@ -365,7 +365,7 @@ func (e *LuaEngine) Stats() EngineStats {
 // 返回值：
 //   - int32: 当前正在执行的协程数
 func (e *LuaEngine) ActiveCoroutines() int32 {
-	return atomic.LoadInt32(&e.activeCount)
+	return e.activeCount.Load()
 }
 
 // SharedDictManager 返回共享字典管理器实例。

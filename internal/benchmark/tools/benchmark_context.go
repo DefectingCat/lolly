@@ -327,7 +327,7 @@ func NewBenchmarkContextPool(size int) *BenchmarkContextPool {
 		pool: make(chan *BenchmarkContext, size),
 	}
 	// 预填充池
-	for i := 0; i < size; i++ {
+	for range size {
 		p.pool <- DefaultBenchmarkContext()
 	}
 	return p

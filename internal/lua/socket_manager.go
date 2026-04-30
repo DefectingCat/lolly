@@ -116,7 +116,7 @@ type SocketOperation struct {
 	LastActivity time.Time
 
 	// Result 操作结果
-	Result interface{}
+	Result any
 
 	// Error 操作错误
 	Error error
@@ -125,7 +125,7 @@ type SocketOperation struct {
 	Done chan struct{}
 
 	// completed 原子标记，1=已完成，0=未完成
-	completed int32
+	completed atomic.Int32
 }
 
 // IsCompleted 检查操作是否已完成。
@@ -133,7 +133,7 @@ type SocketOperation struct {
 // 返回值：
 //   - bool: true 表示已完成
 func (op *SocketOperation) IsCompleted() bool {
-	return atomic.LoadInt32(&op.completed) == 1
+	return op.completed.Load() == 1
 }
 
 // Complete 标记操作完成。
@@ -143,8 +143,8 @@ func (op *SocketOperation) IsCompleted() bool {
 // 参数：
 //   - result: 操作结果
 //   - err: 操作错误（nil 表示成功）
-func (op *SocketOperation) Complete(result interface{}, err error) {
-	if atomic.CompareAndSwapInt32(&op.completed, 0, 1) {
+func (op *SocketOperation) Complete(result any, err error) {
+	if op.completed.CompareAndSwap(0, 1) {
 		op.Result = result
 		op.Error = err
 		close(op.Done)
@@ -161,7 +161,7 @@ func (op *SocketOperation) Complete(result interface{}, err error) {
 // 返回值：
 //   - interface{}: 操作结果
 //   - error: 操作错误或上下文取消错误
-func (op *SocketOperation) Wait(ctx context.Context) (interface{}, error) {
+func (op *SocketOperation) Wait(ctx context.Context) (any, error) {
 	select {
 	case <-op.Done:
 		return op.Result, op.Error
@@ -319,7 +319,7 @@ func (cm *CosocketManager) StartOperation(socket *TCPSocket, opType OperationTyp
 //   - id: 操作 ID
 //   - result: 操作结果
 //   - err: 操作错误
-func (cm *CosocketManager) CompleteOperation(id uint64, result interface{}, err error) {
+func (cm *CosocketManager) CompleteOperation(id uint64, result any, err error) {
 	cm.mu.Lock()
 	op, exists := cm.operations[id]
 	if exists {

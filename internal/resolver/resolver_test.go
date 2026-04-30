@@ -203,7 +203,7 @@ func TestCacheHitRate(t *testing.T) {
 	r.mu.Unlock()
 
 	// 3 次命中
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_, _ = r.LookupHostWithCache(context.Background(), "test.example.com")
 	}
 
@@ -356,7 +356,7 @@ func TestClearCache(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加多个缓存
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		host := fmt.Sprintf("test%d.example.com", i)
 		r.storeCache(host, &DNSCacheEntry{
 			IPs:       []string{fmt.Sprintf("192.168.1.%d", i)},
@@ -397,12 +397,10 @@ func TestConcurrentAccess(t *testing.T) {
 
 	// 并发读取
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			_, _ = r.LookupHostWithCache(context.Background(), "test.example.com")
-		}()
+		})
 	}
 	wg.Wait()
 
@@ -578,7 +576,7 @@ func TestCacheSizeLimit(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加 5 个缓存条目，应淘汰 2 个
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		host := fmt.Sprintf("host%d.example.com", i)
 		r.storeCache(host, &DNSCacheEntry{
 			IPs:       []string{fmt.Sprintf("192.168.1.%d", i)},
@@ -623,7 +621,7 @@ func TestCacheSizeZero(t *testing.T) {
 	r := New(cfg).(*DNSResolver)
 
 	// 添加大量缓存条目
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		host := fmt.Sprintf("host%d.example.com", i)
 		r.storeCache(host, &DNSCacheEntry{
 			IPs:       []string{fmt.Sprintf("192.168.1.%d", i%256)},

@@ -57,7 +57,7 @@ func BenchmarkGoroutinePoolParallel(b *testing.B) {
 	task := func(_ *fasthttp.RequestCtx) {
 		// 模拟微小工作负载
 		sum := 0
-		for j := 0; j < 100; j++ {
+		for j := range 100 {
 			sum += j
 		}
 		_ = sum
@@ -91,7 +91,7 @@ func BenchmarkGoroutinePoolSubmit_BlockingPath(b *testing.B) {
 	}
 
 	// 提交任务使队列保持满状态
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		go func() {
 			for {
 				_ = pool.Submit(ctx, slowTask)
@@ -136,7 +136,7 @@ func BenchmarkGoroutinePoolQueueFull(b *testing.B) {
 	task := func(_ *fasthttp.RequestCtx) {
 		// 模拟微小工作负载
 		sum := 0
-		for j := 0; j < 10; j++ {
+		for j := range 10 {
 			sum += j
 		}
 		_ = sum
@@ -167,7 +167,7 @@ func BenchmarkGoroutinePoolWorkerRecycle(b *testing.B) {
 			time.Sleep(100 * time.Microsecond)
 		}
 
-		for j := 0; j < 30; j++ {
+		for range 30 {
 			go pool.Submit(ctx, task)
 		}
 
@@ -201,7 +201,7 @@ func BenchmarkGoroutinePoolSubmitWithWork(b *testing.B) {
 			task := func(_ *fasthttp.RequestCtx) {
 				// 模拟中等计算量
 				sum := 0
-				for i := 0; i < 1000; i++ {
+				for i := range 1000 {
 					sum += i
 				}
 				_ = sum

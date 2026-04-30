@@ -324,11 +324,11 @@ func TestBoundarySharedDictConcurrentAccess(t *testing.T) {
 	concurrency := 10
 	iterations := 100
 
-	for i := 0; i < concurrency; i++ {
+	for i := range concurrency {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				key := "key-" + string(rune('0'+id%10))
 				_, _ = dict.Set(key, "value", 0)
 				_, _, _ = dict.Get(key)

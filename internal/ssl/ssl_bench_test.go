@@ -368,7 +368,7 @@ func BenchmarkOCSPStapling_GetStatus(b *testing.B) {
 	defer ocspMgr.Stop()
 
 	// 注册一些模拟状态
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		serial := string(rune('0' + i))
 		ocspMgr.mu.Lock()
 		ocspMgr.responses[serial] = &ocspResponse{
@@ -430,7 +430,7 @@ func BenchmarkSessionResumption(b *testing.B) {
 	defer sessionMgr.Stop()
 
 	// 预热密钥轮换
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = sessionMgr.RotateKey()
 	}
 
@@ -566,7 +566,7 @@ func BenchmarkSessionTicketManager_ApplyToTLSConfig(b *testing.B) {
 	}
 	defer sessionMgr.Stop()
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = sessionMgr.RotateKey()
 	}
 

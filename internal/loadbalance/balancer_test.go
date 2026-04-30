@@ -124,12 +124,10 @@ func TestRoundRobin_Select(t *testing.T) {
 		}
 
 		var wg sync.WaitGroup
-		for i := 0; i < 100; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 100 {
+			wg.Go(func() {
 				_ = rr.Select(targets)
-			}()
+			})
 		}
 		wg.Wait()
 	})
@@ -148,7 +146,7 @@ func TestWeightedRoundRobin_Select(t *testing.T) {
 
 		// 统计选择次数
 		counts := make(map[string]int)
-		for i := 0; i < 400; i++ {
+		for range 400 {
 			got := wrr.Select(targets)
 			if got == nil {
 				t.Fatal("Select() = nil, want non-nil")
@@ -175,7 +173,7 @@ func TestWeightedRoundRobin_Select(t *testing.T) {
 
 		// 权重为0的目标应该被当作权重为1处理
 		counts := make(map[string]int)
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			got := wrr.Select(targets)
 			if got == nil {
 				t.Fatal("Select() = nil, want non-nil")
@@ -225,7 +223,7 @@ func TestWeightedRoundRobin_Select(t *testing.T) {
 		targets[1].Healthy.Store(true)
 
 		// 所有选择都应该落在健康目标上
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			got := wrr.Select(targets)
 			if got == nil {
 				t.Fatal("Select() = nil, want non-nil")
@@ -331,7 +329,7 @@ func TestIPHash_Select(t *testing.T) {
 		// 使用相同的IP地址多次选择
 		clientIP := "192.168.1.100"
 		var firstSelection *Target
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			got := ih.SelectByIP(targets, clientIP)
 			if got == nil {
 				t.Fatal("SelectByIP() = nil, want non-nil")
@@ -447,12 +445,10 @@ func TestConnectionsAtomic(t *testing.T) {
 		target.Healthy.Store(true)
 
 		var wg sync.WaitGroup
-		for i := 0; i < 1000; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 1000 {
+			wg.Go(func() {
 				IncrementConnections(target)
-			}()
+			})
 		}
 		wg.Wait()
 
@@ -466,12 +462,10 @@ func TestConnectionsAtomic(t *testing.T) {
 		target.Healthy.Store(true)
 
 		var wg sync.WaitGroup
-		for i := 0; i < 1000; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 1000 {
+			wg.Go(func() {
 				DecrementConnections(target)
-			}()
+			})
 		}
 		wg.Wait()
 
@@ -486,20 +480,16 @@ func TestConnectionsAtomic(t *testing.T) {
 
 		var wg sync.WaitGroup
 		// 500个增加
-		for i := 0; i < 500; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 500 {
+			wg.Go(func() {
 				IncrementConnections(target)
-			}()
+			})
 		}
 		// 300个减少
-		for i := 0; i < 300; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 300 {
+			wg.Go(func() {
 				DecrementConnections(target)
-			}()
+			})
 		}
 		wg.Wait()
 
@@ -727,7 +717,7 @@ func TestConsistentHash(t *testing.T) {
 		// 相同的键应该选择相同的目标
 		key := "192.168.1.100"
 		first := ch.SelectByKey(targets, key)
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			got := ch.SelectByKey(targets, key)
 			if got == nil {
 				t.Fatal("SelectByKey() = nil")
@@ -814,7 +804,7 @@ func TestConsistentHashSelectExcludingByKey(t *testing.T) {
 		key := "192.168.1.100"
 
 		// 多次选择，验证不会选中排除的目标
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			got := ch.SelectExcludingByKey(targets, excluded, key)
 			if got == nil {
 				t.Fatal("SelectExcludingByKey() = nil, want non-nil")
@@ -877,17 +867,15 @@ func TestConsistentHashSelectExcludingByKey(t *testing.T) {
 		key := "192.168.1.100"
 
 		var wg sync.WaitGroup
-		for i := 0; i < 100; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				for j := 0; j < 100; j++ {
+		for range 100 {
+			wg.Go(func() {
+				for range 100 {
 					got := ch.SelectExcludingByKey(targets, excluded, key)
 					if got != nil && got.URL == targets[0].URL {
 						t.Errorf("并发时选中了被排除的目标: %q", got.URL)
 					}
 				}
-			}()
+			})
 		}
 		wg.Wait()
 	})
@@ -906,7 +894,7 @@ func TestConsistentHashSelectExcludingByKey(t *testing.T) {
 
 		// 相同键应该始终返回相同的目标
 		var firstSelection *Target
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			got := ch.SelectExcludingByKey(targets, excluded, key)
 			if got == nil {
 				t.Fatal("SelectExcludingByKey() = nil, want non-nil")
@@ -1021,15 +1009,13 @@ func TestRoundRobin_SelectExcluding(t *testing.T) {
 		excluded := []*Target{targets[0]}
 
 		var wg sync.WaitGroup
-		for i := 0; i < 100; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+		for range 100 {
+			wg.Go(func() {
 				got := rr.SelectExcluding(targets, excluded)
 				if got != nil && got.URL == targets[0].URL {
 					t.Errorf("选中了被排除的目标: %q", got.URL)
 				}
-			}()
+			})
 		}
 		wg.Wait()
 	})
@@ -1066,7 +1052,7 @@ func TestWeightedRoundRobin_SelectExcluding(t *testing.T) {
 		excluded := []*Target{targets[1]}
 
 		// 排除高权重目标后，只应选低权重目标
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			got := wrr.SelectExcluding(targets, excluded)
 			if got == nil {
 				t.Fatal("SelectExcluding() = nil, want non-nil")
@@ -1518,15 +1504,13 @@ func TestLeastConnections_ConcurrentSelection(t *testing.T) {
 	lc := NewLeastConnections()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			got := lc.Select(targets)
 			if got == nil {
 				t.Error("并发Select() = nil, want non-nil")
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -1542,15 +1526,13 @@ func TestWeightedRoundRobin_ConcurrentSelection(t *testing.T) {
 	wrr := NewWeightedRoundRobin()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 			got := wrr.Select(targets)
 			if got == nil {
 				t.Error("并发Select() = nil, want non-nil")
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -1564,7 +1546,7 @@ func TestIPHash_ConcurrentSelection(t *testing.T) {
 	ih := NewIPHash()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(ip string) {
 			defer wg.Done()
@@ -1691,7 +1673,7 @@ func TestWeightedRoundRobin_NegativeWeight(t *testing.T) {
 
 	// 负权重要被当作1处理
 	counts := make(map[string]int)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		got := wrr.Select(targets)
 		if got == nil {
 			t.Fatal("Select() = nil, want non-nil")
@@ -1885,7 +1867,7 @@ func TestConsistentHash_Select(t *testing.T) {
 
 		// 多次调用应该返回相同结果（空键的一致性）
 		first := ch.Select(targets)
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			got := ch.Select(targets)
 			if got == nil {
 				t.Fatal("Select() = nil, want non-nil")
@@ -2013,7 +1995,7 @@ func TestRandomBalancer(t *testing.T) {
 		b := NewRandom()
 
 		// 多次选择，验证总是选择连接数少的目标
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			selected := b.Select(targets)
 			if selected == nil {
 				t.Error("should select a target")
@@ -2037,7 +2019,7 @@ func TestRandomBalancer(t *testing.T) {
 
 		// 连接数相等时，两个目标都应该被选中
 		counts := make(map[string]int)
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			selected := b.Select(targets)
 			if selected != nil {
 				counts[selected.URL]++

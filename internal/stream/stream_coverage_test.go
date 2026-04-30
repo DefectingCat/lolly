@@ -77,7 +77,7 @@ func TestWeightedRoundRobinZeroWeight(t *testing.T) {
 	wrr := newWeightedRoundRobin().(*weightedRoundRobin)
 
 	// 权重为 0 或负数应视为权重 1
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		selected := wrr.Select(targets)
 		if selected == nil {
 			t.Error("Select() should return target with zero/negative weight")

@@ -71,7 +71,7 @@ func BenchmarkConnectionPool_Normal(b *testing.B) {
 	}
 
 	// 预热连接池
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/api/test")
 		ctx.Request.Header.SetMethod(fasthttp.MethodGet)
@@ -156,7 +156,7 @@ func BenchmarkConnectionPool_SmallBody(b *testing.B) {
 	}
 
 	// 预热
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/api/test")
 		p.ServeHTTP(ctx)
@@ -221,7 +221,7 @@ func BenchmarkConnectionPool_MultiTarget(b *testing.B) {
 	targets := make([]*loadbalance.Target, 3)
 	cleanups := make([]func(), 3)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		addr, cleanup := setupInmemoryBackend([]byte("backend" + strconv.Itoa(i)))
 		cleanups[i] = cleanup
 		targets[i] = &loadbalance.Target{

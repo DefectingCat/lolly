@@ -5,6 +5,8 @@
 // 作者：xfy
 package matcher
 
+import "maps"
+
 import "fmt"
 
 // ConflictDetector 路径冲突检测器。
@@ -61,9 +63,7 @@ func (cd *ConflictDetector) Exists(path string) bool {
 //   - map[string]string: 路径到 location 类型的映射
 func (cd *ConflictDetector) GetRegisteredPaths() map[string]string {
 	result := make(map[string]string, len(cd.registeredPaths))
-	for k, v := range cd.registeredPaths {
-		result[k] = v
-	}
+	maps.Copy(result, cd.registeredPaths)
 	return result
 }
 

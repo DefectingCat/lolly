@@ -42,7 +42,7 @@ func TestSlidingWindowLimiter_Allow(t *testing.T) {
 	t.Run("近似模式-允许请求", func(t *testing.T) {
 		limiter := NewSlidingWindowLimiter(time.Second, 10, false)
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			if !limiter.Allow("test-key") {
 				t.Errorf("请求 %d 应该被允许", i+1)
 			}
@@ -53,7 +53,7 @@ func TestSlidingWindowLimiter_Allow(t *testing.T) {
 		limiter := NewSlidingWindowLimiter(time.Second, 5, false)
 
 		// 发送 5 个请求
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			limiter.Allow("test-key")
 		}
 
@@ -67,7 +67,7 @@ func TestSlidingWindowLimiter_Allow(t *testing.T) {
 	t.Run("精确模式-允许请求", func(t *testing.T) {
 		limiter := NewSlidingWindowLimiter(time.Second, 10, true)
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			if !limiter.Allow("test-key") {
 				t.Errorf("请求 %d 应该被允许", i+1)
 			}
@@ -78,7 +78,7 @@ func TestSlidingWindowLimiter_Allow(t *testing.T) {
 		limiter := NewSlidingWindowLimiter(time.Second, 3, true)
 
 		// 发送 3 个请求
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			if !limiter.Allow("test-key") {
 				t.Errorf("请求 %d 应该被允许", i+1)
 			}
@@ -108,7 +108,7 @@ func TestSlidingWindowLimiter_Reset(t *testing.T) {
 	limiter := NewSlidingWindowLimiter(time.Second, 5, true)
 
 	// 发送一些请求
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		limiter.Allow("test-key")
 	}
 
@@ -173,7 +173,7 @@ func TestSlidingWindowLimiter_GetCount(t *testing.T) {
 	limiter := NewSlidingWindowLimiter(time.Second, 10, true)
 
 	// 发送 3 个请求
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		limiter.Allow("test-key")
 	}
 

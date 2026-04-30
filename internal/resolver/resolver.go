@@ -373,10 +373,7 @@ func (r *DNSResolver) Start() error {
 // refreshLoop 后台刷新循环。
 func (r *DNSResolver) refreshLoop() {
 	// 刷新间隔为 TTL / 2
-	interval := r.config.TTL() / 2
-	if interval < time.Second {
-		interval = time.Second
-	}
+	interval := max(r.config.TTL()/2, time.Second)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

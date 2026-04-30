@@ -67,7 +67,7 @@ type TimerManager struct {
 	schedulerL *glua.LState
 
 	// nextID 下一个定时器 ID（原子操作）
-	nextID uint64
+	nextID atomic.Uint64
 
 	// mu 定时器映射读写锁
 	mu sync.Mutex
@@ -76,10 +76,10 @@ type TimerManager struct {
 	queueMu sync.Mutex
 
 	// active 活跃定时器计数（原子操作）
-	active int32
+	active atomic.Int32
 
 	// stopping 停止标记（原子操作）
-	stopping int32
+	stopping atomic.Int32
 
 	// queueClosed 队列是否已关闭
 	queueClosed bool
@@ -181,14 +181,14 @@ func NewTimerManager(engine *LuaEngine) *TimerManager {
 //   - 回调不能捕获 upvalue（闭包变量），因为它们会在不同 goroutine 中执行
 //   - 跨协程数据共享应使用 shared dict
 func (m *TimerManager) At(delay time.Duration, callback *glua.LFunction, args []glua.LValue) (*TimerHandle, error) {
-	if atomic.LoadInt32(&m.stopping) != 0 {
+	if m.stopping.Load() != 0 {
 		return nil, nil // 服务器正在关闭，不接受新定时器
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	id := atomic.AddUint64(&m.nextID, 1)
+	id := m.nextID.Add(1)
 
 	// 编译回调为 FunctionProto
 	var proto *glua.FunctionProto
@@ -216,7 +216,7 @@ func (m *TimerManager) At(delay time.Duration, callback *glua.LFunction, args []
 	})
 
 	m.timers[id] = entry
-	atomic.AddInt32(&m.active, 1)
+	m.active.Add(1)
 
 	return &TimerHandle{id: id, manager: m}, nil
 }
@@ -227,7 +227,7 @@ func (m *TimerManager) At(delay time.Duration, callback *glua.LFunction, args []
 // 检查取消信号，清理条目，并在队列满时丢弃回调。
 func (m *TimerManager) executeTimer(entry *TimerEntry) {
 	defer func() {
-		atomic.AddInt32(&m.active, -1)
+		m.active.Add(-1)
 		close(entry.done)
 	}()
 
@@ -319,7 +319,7 @@ func (m *TimerManager) Cancel(handle *TimerHandle) bool {
 
 	// 清理
 	delete(m.timers, entry.id)
-	atomic.AddInt32(&m.active, -1)
+	m.active.Add(-1)
 
 	return true
 }
@@ -336,11 +336,11 @@ func (m *TimerManager) Cancel(handle *TimerHandle) bool {
 //   - bool: true 表示所有定时器已正常完成，false 表示超时
 func (m *TimerManager) WaitAll(timeout time.Duration) bool {
 	// 设置停止标志
-	atomic.StoreInt32(&m.stopping, 1)
+	m.stopping.Store(1)
 
 	// 等待所有定时器完成
 	start := time.Now()
-	for atomic.LoadInt32(&m.active) > 0 {
+	for m.active.Load() > 0 {
 		if time.Since(start) > timeout {
 			// 超时，强制取消所有
 			m.mu.Lock()
@@ -369,12 +369,12 @@ func (m *TimerManager) WaitAll(timeout time.Duration) bool {
 //
 // 注意：该方法是幂等的，可安全调用多次。
 func (m *TimerManager) Close() {
-	if m == nil || atomic.LoadInt32(&m.stopping) != 0 {
+	if m == nil || m.stopping.Load() != 0 {
 		return // 已关闭或 nil
 	}
 
 	// 1. 停止接受新定时器
-	atomic.StoreInt32(&m.stopping, 1)
+	m.stopping.Store(1)
 
 	// 2. 优雅关闭：等待回调队列排空
 	m.gracefulShutdown(5 * time.Second)
@@ -415,7 +415,7 @@ func (m *TimerManager) gracefulShutdown(timeout time.Duration) {
 // 返回值：
 //   - int32: 活跃定时器数量
 func (m *TimerManager) ActiveCount() int32 {
-	return atomic.LoadInt32(&m.active)
+	return m.active.Load()
 }
 
 // RegisterTimerAPI 注册 ngx.timer API 到 Lua 状态机。

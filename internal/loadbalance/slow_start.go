@@ -13,6 +13,7 @@
 package loadbalance
 
 import (
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -143,13 +144,7 @@ func (m *SlowStartManager) updateEffectiveWeights() {
 
 		// 线性增长：从 1 增加到 BaseWeight
 		progress := float64(elapsed) / float64(state.SlowStart)
-		effectiveWeight := int(1 + progress*float64(state.BaseWeight-1))
-		if effectiveWeight < 1 {
-			effectiveWeight = 1
-		}
-		if effectiveWeight > state.BaseWeight {
-			effectiveWeight = state.BaseWeight
-		}
+		effectiveWeight := min(max(int(1+progress*float64(state.BaseWeight-1)), 1), state.BaseWeight)
 
 		// 查找目标并更新 EffectiveWeight
 		if m.findTarget != nil {
@@ -184,8 +179,6 @@ func (m *SlowStartManager) GetAllStates() map[string]*SlowStartState {
 	defer m.mu.RUnlock()
 
 	result := make(map[string]*SlowStartState, len(m.targets))
-	for k, v := range m.targets {
-		result[k] = v
-	}
+	maps.Copy(result, m.targets)
 	return result
 }

@@ -186,7 +186,7 @@ func BenchmarkTimerGracefulShutdown(b *testing.B) {
 		})
 
 		// 创建一些定时器
-		for j := 0; j < 10; j++ {
+		for range 10 {
 			manager.At(1*time.Millisecond, callback, nil)
 		}
 

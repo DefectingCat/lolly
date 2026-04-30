@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -218,10 +219,8 @@ func (ac *AccessControl) Check(ip net.IP) bool {
 				return false
 			}
 
-			for _, c := range ac.geoipConfig.DenyCountries {
-				if country == c {
-					return false
-				}
+			if slices.Contains(ac.geoipConfig.DenyCountries, country) {
+				return false
 			}
 		}
 	}
@@ -238,10 +237,8 @@ checkAllow:
 	if ac.geoip != nil && ac.geoipConfig.Enabled {
 		country, err := ac.geoip.LookupCountry(ip)
 		if err == nil && country != geoPrivateDeny {
-			for _, c := range ac.geoipConfig.AllowCountries {
-				if country == c {
-					return true
-				}
+			if slices.Contains(ac.geoipConfig.AllowCountries, country) {
+				return true
 			}
 		}
 	}
@@ -415,8 +412,8 @@ func (ac *AccessControl) getClientIP(ctx *fasthttp.RequestCtx) net.IP {
 			// 使用右侧（最接近客户端）的非可信 IP
 			if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
 				ips := strings.Split(string(xff), ",")
-				for i := len(ips) - 1; i >= 0; i-- {
-					ipStr := strings.TrimSpace(ips[i])
+				for _, v := range slices.Backward(ips) {
+					ipStr := strings.TrimSpace(v)
 					if ip := net.ParseIP(ipStr); ip != nil {
 						// 检查该 IP 是否在可信代理列表中
 						trusted := false

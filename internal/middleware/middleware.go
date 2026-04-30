@@ -15,6 +15,8 @@
 // 作者：xfy
 package middleware
 
+import "slices"
+
 import "github.com/valyala/fasthttp"
 
 // Middleware 中间件接口，定义中间件的标准方法。
@@ -72,8 +74,8 @@ func NewChain(middlewares ...Middleware) *Chain {
 //	A -> B -> C -> H -> C -> B -> A
 func (c *Chain) Apply(final fasthttp.RequestHandler) fasthttp.RequestHandler {
 	handler := final
-	for i := len(c.middlewares) - 1; i >= 0; i-- {
-		handler = c.middlewares[i].Process(handler)
+	for _, v := range slices.Backward(c.middlewares) {
+		handler = v.Process(handler)
 	}
 	return handler
 }

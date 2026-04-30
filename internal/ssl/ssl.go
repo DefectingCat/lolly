@@ -557,7 +557,7 @@ func matchMarker(data []byte, marker []byte) bool {
 	if len(data) < len(marker) {
 		return false
 	}
-	for i := 0; i < len(marker); i++ {
+	for i := range marker {
 		if data[i] != marker[i] {
 			return false
 		}

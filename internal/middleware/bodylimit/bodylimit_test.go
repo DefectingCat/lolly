@@ -260,13 +260,7 @@ func (r *slowReader) Read(p []byte) (n int, err error) {
 
 	// 每次只读取 chunkSize 字节
 	remaining := len(r.data) - r.pos
-	toRead := r.chunkSize
-	if toRead > remaining {
-		toRead = remaining
-	}
-	if toRead > len(p) {
-		toRead = len(p)
-	}
+	toRead := min(min(r.chunkSize, remaining), len(p))
 
 	n = toRead
 	copy(p, r.data[r.pos:r.pos+toRead])

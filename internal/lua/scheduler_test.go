@@ -460,7 +460,7 @@ func TestSchedulerConcurrentAccess(t *testing.T) {
 	// 创建多个 LState 并发访问
 	done := make(chan bool, 10)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
 			L := glua.NewState()
 			defer L.Close()
@@ -477,7 +477,7 @@ func TestSchedulerConcurrentAccess(t *testing.T) {
 	}
 
 	// 等待所有 goroutine 完成
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 }

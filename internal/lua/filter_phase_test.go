@@ -244,14 +244,14 @@ func TestDelayedResponseWriter_Pool(t *testing.T) {
 	ctx := mockRequestCtx()
 
 	// 预热池
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		ri := AcquireResponseInterceptor(ctx)
 		ReleaseResponseInterceptor(ri)
 	}
 
 	// 测试从池获取的性能
 	start := time.Now()
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		ri := AcquireResponseInterceptor(ctx)
 		ri.WriteString("test")
 		ReleaseResponseInterceptor(ri)
@@ -270,7 +270,7 @@ func TestConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	errors := make(chan error, 100)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -464,7 +464,7 @@ func TestBodyFilterPhase(t *testing.T) {
 			name:      "large body",
 			inputBody: strings.Repeat("x", 10000),
 			filterFunc: func(b []byte) []byte {
-				return append([]byte("size="), []byte(fmt.Sprintf("%d ", len(b)))...)
+				return append([]byte("size="), fmt.Appendf(nil, "%d ", len(b))...)
 			},
 			expectedOutput: "size=10000 ",
 		},
@@ -501,7 +501,7 @@ func TestFilterPhaseSuccessRate(t *testing.T) {
 	successCount := 0
 	var mu sync.Mutex
 
-	for i := 0; i < totalRequests; i++ {
+	for i := range totalRequests {
 		ctx := mockRequestCtx()
 		drw := NewDelayedResponseWriter(ctx)
 		drw.EnableFilterPhase()
@@ -537,14 +537,14 @@ func TestPerformanceOverhead(t *testing.T) {
 	// 基准：正常写入
 	ctx1 := mockRequestCtx()
 	start := time.Now()
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		ctx1.Response.SetBodyString("Hello, World!")
 	}
 	baselineDuration := time.Since(start)
 
 	// 测试：延迟写入
 	start = time.Now()
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		ctx := mockRequestCtx()
 		drw := NewDelayedResponseWriter(ctx)
 		drw.EnableFilterPhase()
@@ -896,7 +896,7 @@ func TestFilterPhaseFeasibility(t *testing.T) {
 		const iterations = 100
 		success := 0
 
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			ctx := mockRequestCtx()
 			drw := NewDelayedResponseWriter(ctx)
 			drw.EnableFilterPhase()
@@ -963,7 +963,7 @@ func TestFilterPhaseFeasibility(t *testing.T) {
 
 		// 基准
 		start := time.Now()
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			ctx := mockRequestCtx()
 			ctx.Response.SetBodyString("test")
 		}
@@ -971,7 +971,7 @@ func TestFilterPhaseFeasibility(t *testing.T) {
 
 		// 延迟写入
 		start = time.Now()
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			ctx := mockRequestCtx()
 			drw := NewDelayedResponseWriter(ctx)
 			drw.EnableFilterPhase()
@@ -1019,7 +1019,7 @@ func TestFilterPhaseMetrics(t *testing.T) {
 	const iterations = 100
 
 	start := time.Now()
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		ctx := mockRequestCtx()
 		drw := NewDelayedResponseWriter(ctx)
 		drw.EnableFilterPhase()
@@ -1177,13 +1177,11 @@ func BenchmarkFilterPhaseScalability(b *testing.B) {
 		b.Run(fmt.Sprintf("goroutines-%d", goroutines), func(b *testing.B) {
 			var wg sync.WaitGroup
 			errors := make(chan error, b.N)
-			var completed int32
+			var completed atomic.Int32
 
 			b.ResetTimer()
-			for i := 0; i < goroutines; i++ {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+			for range goroutines {
+				wg.Go(func() {
 					for j := 0; j < b.N/goroutines; j++ {
 						ctx := mockRequestCtx()
 						drw := NewDelayedResponseWriter(ctx)
@@ -1193,10 +1191,10 @@ func BenchmarkFilterPhaseScalability(b *testing.B) {
 						if err := drw.Flush(); err != nil {
 							errors <- err
 						} else {
-							atomic.AddInt32(&completed, 1)
+							completed.Add(1)
 						}
 					}
-				}()
+				})
 			}
 			wg.Wait()
 			close(errors)
@@ -1373,7 +1371,7 @@ func TestFinalVerification(t *testing.T) {
 		const total = 1000
 		success := 0
 
-		for i := 0; i < total; i++ {
+		for range total {
 			ctx := mockRequestCtx()
 			drw := NewDelayedResponseWriter(ctx)
 			drw.EnableFilterPhase()
@@ -1439,7 +1437,7 @@ func TestFinalVerification(t *testing.T) {
 
 		// 基准
 		start := time.Now()
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			ctx := mockRequestCtx()
 			ctx.Response.SetBodyString("test")
 			ctx.Response.Header.Set("X-Test", "value")
@@ -1448,7 +1446,7 @@ func TestFinalVerification(t *testing.T) {
 
 		// Filter phase
 		start = time.Now()
-		for i := 0; i < iterations; i++ {
+		for range iterations {
 			ctx := mockRequestCtx()
 			drw := NewDelayedResponseWriter(ctx)
 			drw.EnableFilterPhase()

@@ -195,10 +195,8 @@ func (p *GoroutinePool) Submit(ctx *fasthttp.RequestCtx, task Task) error {
 // worker 从任务队列获取任务执行，空闲超时后自动退出（保持最小数量）。
 func (p *GoroutinePool) startWorker() {
 	atomic.AddInt32(&p.workers, 1)
-	p.wg.Add(1)
 
-	go func() {
-		defer p.wg.Done()
+	p.wg.Go(func() {
 		defer atomic.AddInt32(&p.workers, -1)
 
 		idleTimer := time.NewTimer(p.idleTimeout)
@@ -233,7 +231,7 @@ func (p *GoroutinePool) startWorker() {
 				return
 			}
 		}
-	}()
+	})
 }
 
 // Stats 返回池的统计信息。

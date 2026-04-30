@@ -169,8 +169,8 @@ func parseAuthURL(url string) (string, bool, error) {
 	if strings.HasPrefix(url, "https://") {
 		isTLS = true
 		url = strings.TrimPrefix(url, "https://")
-	} else if strings.HasPrefix(url, "http://") {
-		url = strings.TrimPrefix(url, "http://")
+	} else if after, ok := strings.CutPrefix(url, "http://"); ok {
+		url = after
 	}
 
 	// 提取主机部分

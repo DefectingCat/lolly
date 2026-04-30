@@ -296,8 +296,8 @@ func parseArgon2idHash(hash string) (argon2Params, []byte, []byte, error) {
 	paramsStr := parts[3]
 	params := defaultArgon2Params
 
-	paramParts := strings.Split(paramsStr, ",")
-	for _, p := range paramParts {
+	paramParts := strings.SplitSeq(paramsStr, ",")
+	for p := range paramParts {
 		kv := strings.Split(p, "=")
 		if len(kv) != 2 {
 			continue
@@ -362,13 +362,13 @@ func (ba *BasicAuth) extractCredentials(ctx *fasthttp.RequestCtx) (string, strin
 
 	// 分割用户名:密码
 	credentials := string(decoded)
-	idx := strings.Index(credentials, ":")
-	if idx == -1 {
+	before, after, ok := strings.Cut(credentials, ":")
+	if !ok {
 		return "", "", false
 	}
 
-	username := credentials[:idx]
-	password := credentials[idx+1:]
+	username := before
+	password := after
 
 	return username, password, true
 }

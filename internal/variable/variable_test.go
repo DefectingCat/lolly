@@ -9,6 +9,7 @@
 package variable
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -455,7 +456,7 @@ func TestPoolReuse(t *testing.T) {
 	ctx := mockRequestCtx(t)
 
 	// 获取和释放多个 context，确保没有 panic
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		vc := NewContext(ctx)
 		vc.Set("key", "value")
 		if v, ok := vc.Get("key"); !ok || v != "value" {
@@ -813,12 +814,7 @@ func TestBuiltinVarNames(t *testing.T) {
 
 	// 检查是否包含一些已知变量
 	hasVar := func(name string) bool {
-		for _, n := range names {
-			if n == name {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(names, name)
 	}
 
 	if !hasVar("host") {
@@ -1109,9 +1105,9 @@ func TestGlobalVariablesConcurrent(_ *testing.T) {
 	done := make(chan bool)
 
 	// 并发读取
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		go func() {
-			for j := 0; j < 100; j++ {
+			for range 100 {
 				_, _ = GetGlobalVariable("counter")
 			}
 			done <- true
@@ -1119,9 +1115,9 @@ func TestGlobalVariablesConcurrent(_ *testing.T) {
 	}
 
 	// 并发写入
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		go func() {
-			for j := 0; j < 50; j++ {
+			for range 50 {
 				SetGlobalVariables(map[string]string{"counter": "updated"})
 			}
 			done <- true
@@ -1129,7 +1125,7 @@ func TestGlobalVariablesConcurrent(_ *testing.T) {
 	}
 
 	// 等待所有 goroutine 完成
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		<-done
 	}
 }

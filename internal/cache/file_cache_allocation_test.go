@@ -50,7 +50,7 @@ func BenchmarkFileCacheSetAllocation_Update(b *testing.B) {
 	// 预填充缓存
 	data := []byte("test data content for benchmark")
 	size := int64(len(data))
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		path := fmt.Sprintf("/update/file%d.txt", i)
 		fc.Set(path, data, size, time.Now())
 	}
@@ -78,7 +78,7 @@ func BenchmarkFileCacheSetAllocation_Eviction(b *testing.B) {
 	// 预填充到容量上限
 	data := []byte("test data content for benchmark")
 	size := int64(len(data))
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		path := fmt.Sprintf("/evict/file%d.txt", i)
 		fc.Set(path, data, size, time.Now())
 	}
@@ -103,7 +103,7 @@ func BenchmarkFileCacheSetAllocation_EvictionWithPool(b *testing.B) {
 	size := int64(len(data))
 
 	// 预填充
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		path := fmt.Sprintf("/pool/file%d.txt", i)
 		fc.Set(path, data, size, time.Now())
 	}
@@ -128,7 +128,7 @@ func BenchmarkFileCacheSetAllocation_MemoryLimit(b *testing.B) {
 	size := int64(len(data))
 
 	// 预填充到接近上限
-	for i := 0; i < 900; i++ {
+	for i := range 900 {
 		path := fmt.Sprintf("/mem/file%d.txt", i)
 		fc.Set(path, data, size, time.Now())
 	}
@@ -172,7 +172,7 @@ func BenchmarkFileCacheSetAllocation_ConcurrentEviction(b *testing.B) {
 	size := int64(len(data))
 
 	// 预填充
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		path := fmt.Sprintf("/concevict/file%d.txt", i)
 		fc.Set(path, data, size, time.Now())
 	}
@@ -201,7 +201,7 @@ func BenchmarkFileCacheEntryPool_GetPut(b *testing.B) {
 	}
 
 	// 预填充池
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		pool.Put(&FileEntry{})
 	}
 

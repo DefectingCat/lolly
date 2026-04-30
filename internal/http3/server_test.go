@@ -339,7 +339,7 @@ func TestServer_MultipleStop(t *testing.T) {
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
 	// 多次调用 Stop 应该都是安全的
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		err := server.Stop()
 		if err != nil {
 			t.Errorf("Stop call %d returned error: %v", i+1, err)
@@ -358,7 +358,7 @@ func TestServer_MultipleGracefulStop(t *testing.T) {
 	server, _ := NewServer(cfg, handler, &tls.Config{})
 
 	// 多次调用 GracefulStop 应该都是安全的
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		err := server.GracefulStop(1 * time.Second)
 		if err != nil {
 			t.Errorf("GracefulStop call %d returned error: %v", i+1, err)

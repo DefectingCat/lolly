@@ -32,7 +32,7 @@ func BenchmarkFileCacheGet(b *testing.B) {
 			fc := NewFileCache(int64(size), 0, 1*time.Hour)
 
 			// 预填充缓存
-			for i := 0; i < size; i++ {
+			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data content")
 				_ = fc.Set(path, data, int64(len(data)), time.Now())
@@ -62,7 +62,7 @@ func BenchmarkFileCacheSet(b *testing.B) {
 			fc := NewFileCache(int64(size), 0, 1*time.Hour)
 
 			// 预填充到容量上限
-			for i := 0; i < size; i++ {
+			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data content")
 				_ = fc.Set(path, data, int64(len(data)), time.Now())
@@ -88,7 +88,7 @@ func BenchmarkFileCacheSet_Pooled(b *testing.B) {
 			fc := NewFileCache(int64(size), 0, 1*time.Hour)
 
 			// 预填充到容量上限，触发淘汰和 entry 复用
-			for i := 0; i < size; i++ {
+			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data content")
 				_ = fc.Set(path, data, int64(len(data)), time.Now())
@@ -128,7 +128,7 @@ func BenchmarkFileCacheConcurrent(b *testing.B) {
 			fc := NewFileCache(int64(size), 0, 1*time.Hour)
 
 			// 预填充缓存
-			for i := 0; i < size; i++ {
+			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data content")
 				_ = fc.Set(path, data, int64(len(data)), time.Now())
@@ -160,7 +160,7 @@ func BenchmarkFileCacheGetOnly(b *testing.B) {
 	fc := NewFileCache(1000, 0, 1*time.Hour)
 
 	// 预填充缓存
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		path := fmt.Sprintf("/static/file%d.css", i)
 		data := make([]byte, 1024) // 1KB 数据
 		_ = fc.Set(path, data, int64(len(data)), time.Now())
@@ -186,7 +186,7 @@ func BenchmarkFileCacheSizeEviction(b *testing.B) {
 
 	// 预填充到接近容量上限
 	data := make([]byte, 1024) // 1KB 每条
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		path := fmt.Sprintf("/file%d.txt", i)
 		_ = fc.Set(path, data, int64(len(data)), time.Now())
 	}
@@ -205,7 +205,7 @@ func BenchmarkFileCacheLRUTouch(b *testing.B) {
 	fc := NewFileCache(100, 0, 1*time.Hour)
 
 	// 预填充缓存
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		path := fmt.Sprintf("/file%d.txt", i)
 		data := []byte("cached data")
 		_ = fc.Set(path, data, int64(len(data)), time.Now())
@@ -224,7 +224,7 @@ func BenchmarkProxyCacheGet(b *testing.B) {
 	pc := NewProxyCache(nil, false, 0, 0, 0)
 
 	// 预填充缓存
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		origKey := fmt.Sprintf("key%d", i)
 		hashKey := hashKeyBench(origKey)
 		data := []byte("response body")
@@ -264,7 +264,7 @@ func BenchmarkProxyCacheConcurrent(b *testing.B) {
 	pc := NewProxyCache(nil, false, 0, 0, 0)
 
 	// 预填充缓存
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		origKey := fmt.Sprintf("key%d", i)
 		hashKey := hashKeyBench(origKey)
 		data := []byte("response body")
@@ -301,7 +301,7 @@ func BenchmarkFileCacheSharded(b *testing.B) {
 		// 单锁缓存
 		b.Run(fmt.Sprintf("SingleLock_Size%d", size), func(b *testing.B) {
 			fc := NewFileCache(int64(size), 0, 1*time.Hour)
-			for i := 0; i < size; i++ {
+			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data")
 				_ = fc.Set(path, data, int64(len(data)), time.Now())
@@ -322,7 +322,7 @@ func BenchmarkFileCacheSharded(b *testing.B) {
 		// 分片缓存
 		b.Run(fmt.Sprintf("Sharded_Size%d", size), func(b *testing.B) {
 			sc := NewShardedFileCache(int64(size), 0, 1*time.Hour)
-			for i := 0; i < size; i++ {
+			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data")
 				_ = sc.Set(path, data, int64(len(data)), time.Now())

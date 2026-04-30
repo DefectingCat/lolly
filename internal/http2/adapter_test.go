@@ -439,7 +439,7 @@ func TestAdapterConcurrentRequests(t *testing.T) {
 	concurrency := 10
 	done := make(chan bool, concurrency)
 
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		go func() {
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			rec := httptest.NewRecorder()
@@ -453,7 +453,7 @@ func TestAdapterConcurrentRequests(t *testing.T) {
 	}
 
 	// 等待所有请求完成
-	for i := 0; i < concurrency; i++ {
+	for range concurrency {
 		<-done
 	}
 }

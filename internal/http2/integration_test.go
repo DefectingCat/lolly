@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 	"time"
 
@@ -101,13 +102,7 @@ func TestIntegrationALPN(t *testing.T) {
 	}
 
 	// 验证协议列表
-	foundH2 := false
-	for _, proto := range tlsConfig.NextProtos {
-		if proto == "h2" {
-			foundH2 = true
-			break
-		}
-	}
+	foundH2 := slices.Contains(tlsConfig.NextProtos, "h2")
 	if !foundH2 {
 		t.Error("ALPN config should include h2 protocol")
 	}

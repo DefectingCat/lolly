@@ -199,7 +199,7 @@ func TestVariablePerformance(t *testing.T) {
 	// 执行多次展开
 	start := time.Now()
 	iterations := 10000
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		_ = vc.Expand(template)
 	}
 	elapsed := time.Since(start)

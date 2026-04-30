@@ -65,7 +65,7 @@ func generateMultipleCerts(t *testing.T, count int) []byte {
 	t.Helper()
 
 	var pemData []byte
-	for i := 0; i < count; i++ {
+	for i := range count {
 		priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
 			t.Fatalf("Failed to generate private key: %v", err)

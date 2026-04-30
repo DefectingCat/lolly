@@ -136,7 +136,7 @@ func TestLuaContextPoolMultipleReuse(t *testing.T) {
 	defer engine.Close()
 
 	// 循环多次 release/acquire，验证状态始终正确
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		ctx := NewContext(engine, nil)
 		ctx.SetVariable("iter", "val")
 		ctx.Write([]byte("data"))

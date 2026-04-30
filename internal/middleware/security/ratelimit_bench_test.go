@@ -128,7 +128,7 @@ func BenchmarkRateLimiterCleanup_1000Buckets(b *testing.B) {
 	defer rl.StopCleanup()
 
 	// 预创建 1000 个桶
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		rl.Allow("192.168.0." + string(rune(i)))
 	}
 
@@ -136,7 +136,7 @@ func BenchmarkRateLimiterCleanup_1000Buckets(b *testing.B) {
 	for b.Loop() {
 		rl.Cleanup(0) // 清理所有桶
 		// 重新创建桶以保持测试一致性
-		for j := 0; j < 1000; j++ {
+		for j := range 1000 {
 			rl.Allow("192.168.0." + string(rune(j)))
 		}
 	}
@@ -217,7 +217,7 @@ func BenchmarkRateLimiterStats(b *testing.B) {
 	defer rl.StopCleanup()
 
 	// 预创建一些桶
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		rl.Allow("192.168.0." + string(rune(i)))
 	}
 

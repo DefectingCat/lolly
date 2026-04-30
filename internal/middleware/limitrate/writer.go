@@ -65,10 +65,7 @@ func (w *RateLimitedWriter) Write(p []byte) (int, error) {
 			w.bucket = w.rate // 简化：每秒补充 rate 个令牌
 		}
 
-		chunk := int64(n - written)
-		if chunk > w.bucket {
-			chunk = w.bucket
-		}
+		chunk := min(int64(n-written), w.bucket)
 
 		nw, err := w.writer.Write(p[written : written+int(chunk)])
 		written += nw

@@ -432,7 +432,7 @@ func (drw *DelayedResponseWriter) DelHeader(key string) {
 
 // ResponseInterceptorPool 响应拦截器对象池。
 var ResponseInterceptorPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &ResponseInterceptor{}
 	},
 }
@@ -666,7 +666,7 @@ func (drw *DelayedResponseWriter) Redirect(uri string, statusCode int) {
 
 // bufferPool body 缓冲区对象池。
 var bufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		buf := make([]byte, 0, 4096) // 4KB 初始容量
 		return &buf
 	},
@@ -747,10 +747,7 @@ func (bw *BufferedWriter) Write(p []byte) (int, error) {
 	// 检查是否需要扩容
 	if len(bw.buf)+len(p) > cap(bw.buf) {
 		// 扩容
-		newCap := cap(bw.buf) * 2
-		if newCap < len(bw.buf)+len(p) {
-			newCap = len(bw.buf) + len(p)
-		}
+		newCap := max(cap(bw.buf)*2, len(bw.buf)+len(p))
 		newBuf := make([]byte, len(bw.buf), newCap)
 		copy(newBuf, bw.buf)
 		releaseBuffer(bw.buf)

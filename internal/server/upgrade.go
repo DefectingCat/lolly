@@ -94,7 +94,7 @@ func (u *UpgradeManager) WritePid() error {
 	}
 
 	pid := os.Getpid()
-	return os.WriteFile(u.pidFile, []byte(fmt.Sprintf("%d", pid)), 0o644)
+	return os.WriteFile(u.pidFile, fmt.Appendf(nil, "%d", pid), 0o644)
 }
 
 // ReadOldPid 读取旧进程 PID。
@@ -223,7 +223,7 @@ func (u *UpgradeManager) GracefulUpgrade(newBinary string) error {
 
 	// 写入新 PID 到文件
 	if u.pidFile != "" {
-		_ = os.WriteFile(u.pidFile, []byte(fmt.Sprintf("%d", newPid)), 0o644)
+		_ = os.WriteFile(u.pidFile, fmt.Appendf(nil, "%d", newPid), 0o644)
 	}
 
 	// 启动 goroutine 等待子进程结束，避免产生僵尸进程

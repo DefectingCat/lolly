@@ -36,7 +36,7 @@ const DefaultBodyThreshold = 64 * 1024 // 64KB
 // 使用 singleton 模式避免多个适配器实例创建多个 pool，
 // 提高内存复用效率。该 pool 被 HTTP/2 和 HTTP/3 适配器共享。
 var bufferPoolInstance = &sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		buf := make([]byte, 4096) // 4KB 初始缓冲区
 		return &buf
 	},
@@ -73,7 +73,7 @@ type CommonAdapter struct {
 func NewCommonAdapter() *CommonAdapter {
 	return &CommonAdapter{
 		CtxPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return &fasthttp.RequestCtx{}
 			},
 		},

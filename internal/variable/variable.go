@@ -53,7 +53,7 @@ type Context struct {
 
 // pool 用于复用 Context
 var pool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &Context{
 			store:      make(map[string]string),
 			cache:      make(map[string]string),

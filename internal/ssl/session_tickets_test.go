@@ -184,7 +184,7 @@ func TestSessionTicketManager_KeyRetention(t *testing.T) {
 	defer mgr.Stop()
 
 	// 生成多个密钥
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := mgr.RotateKey(); err != nil {
 			t.Fatalf("RotateKey() failed at iteration %d: %v", i, err)
 		}
@@ -382,7 +382,7 @@ func TestSessionTicketManager_ConcurrentAccess(t *testing.T) {
 
 	// 协程 1: 持续获取密钥
 	go func() {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			_ = mgr.GetKeys()
 			time.Sleep(time.Millisecond)
 		}
@@ -391,7 +391,7 @@ func TestSessionTicketManager_ConcurrentAccess(t *testing.T) {
 
 	// 协程 2: 持续获取状态
 	go func() {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			_ = mgr.GetStatus()
 			time.Sleep(time.Millisecond)
 		}
@@ -400,7 +400,7 @@ func TestSessionTicketManager_ConcurrentAccess(t *testing.T) {
 
 	// 协程 3: 手动轮换
 	go func() {
-		for i := 0; i < 20; i++ {
+		for range 20 {
 			_ = mgr.RotateKey()
 			time.Sleep(5 * time.Millisecond)
 		}
@@ -408,7 +408,7 @@ func TestSessionTicketManager_ConcurrentAccess(t *testing.T) {
 	}()
 
 	// 等待所有协程完成
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		<-done
 	}
 
@@ -442,7 +442,7 @@ func BenchmarkSessionTicketManager_GetKeys(b *testing.B) {
 	defer mgr.Stop()
 
 	// 预生成多个密钥
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = mgr.RotateKey()
 	}
 

@@ -110,10 +110,7 @@ func (p *Proxy) startDNSRefreshLoop() {
 	}
 
 	// 刷新间隔为 TTL / 2
-	interval := ttl / 2
-	if interval < time.Second {
-		interval = time.Second
-	}
+	interval := max(ttl/2, time.Second)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()

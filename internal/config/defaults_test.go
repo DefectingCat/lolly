@@ -89,22 +89,22 @@ func TestGenerateConfigYAMLFieldsCoverage(t *testing.T) {
 		typ  reflect.Type
 		name string
 	}{
-		{reflect.TypeOf(GeoIPConfig{}), "GeoIPConfig"},
-		{reflect.TypeOf(AuthRequestConfig{}), "AuthRequestConfig"},
-		{reflect.TypeOf(LuaGlobalSettings{}), "LuaGlobalSettings"},
-		{reflect.TypeOf(LimitRateConfig{}), "LimitRateConfig"},
-		{reflect.TypeOf(TypesConfig{}), "TypesConfig"},
+		{reflect.TypeFor[GeoIPConfig](), "GeoIPConfig"},
+		{reflect.TypeFor[AuthRequestConfig](), "AuthRequestConfig"},
+		{reflect.TypeFor[LuaGlobalSettings](), "LuaGlobalSettings"},
+		{reflect.TypeFor[LimitRateConfig](), "LimitRateConfig"},
+		{reflect.TypeFor[TypesConfig](), "TypesConfig"},
 	}
 
 	for _, c := range checks {
-		for i := 0; i < c.typ.NumField(); i++ {
-			tag := c.typ.Field(i).Tag.Get("yaml")
+		for field := range c.typ.Fields() {
+			tag := field.Tag.Get("yaml")
 			fieldName := strings.Split(tag, ",")[0]
 			if fieldName == "" || fieldName == "-" {
 				continue
 			}
 			if !strings.Contains(yamlStr, fieldName) {
-				t.Errorf("%s.%s (yaml:%q) not found in GenerateConfigYAML output", c.name, c.typ.Field(i).Name, fieldName)
+				t.Errorf("%s.%s (yaml:%q) not found in GenerateConfigYAML output", c.name, field.Name, fieldName)
 			}
 		}
 	}

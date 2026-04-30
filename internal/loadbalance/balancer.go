@@ -105,7 +105,7 @@ type Balancer interface {
 // 并发安全：counter 使用 atomic 操作，支持多 goroutine 并发调用。
 type RoundRobin struct {
 	// counter 请求计数器，原子递增，用于确定轮询位置
-	counter uint64
+	counter atomic.Uint64
 }
 
 // NewRoundRobin 创建一个新的轮询负载均衡器。
@@ -128,7 +128,7 @@ func (r *RoundRobin) Select(targets []*Target) *Target {
 	}
 
 	// 原子地递增并获取计数器值
-	idx := atomic.AddUint64(&r.counter, 1) - 1
+	idx := r.counter.Add(1) - 1
 	return healthy[idx%uint64(len(healthy))]
 }
 
@@ -139,7 +139,7 @@ func (r *RoundRobin) Select(targets []*Target) *Target {
 // 并发安全：counter 使用 atomic 操作，支持多 goroutine 并发调用。
 type WeightedRoundRobin struct {
 	// counter 请求计数器，原子递增，用于确定权重分布位置
-	counter uint64
+	counter atomic.Uint64
 }
 
 // NewWeightedRoundRobin 创建一个新的权重轮询负载均衡器。
@@ -176,7 +176,7 @@ func (w *WeightedRoundRobin) Select(targets []*Target) *Target {
 	}
 
 	// 使用原子计数器确定权重分布中的位置
-	idx := atomic.AddUint64(&w.counter, 1) - 1
+	idx := w.counter.Add(1) - 1
 	pos := int(idx % uint64(totalWeight))
 
 	// 找到计算位置处的目标
@@ -430,7 +430,7 @@ func (r *RoundRobin) SelectExcluding(targets []*Target, excluded []*Target) *Tar
 	}
 
 	// 原子地递增并获取计数器值
-	idx := atomic.AddUint64(&r.counter, 1) - 1
+	idx := r.counter.Add(1) - 1
 	return available[idx%uint64(len(available))]
 }
 
@@ -457,7 +457,7 @@ func (w *WeightedRoundRobin) SelectExcluding(targets []*Target, excluded []*Targ
 	}
 
 	// 使用原子计数器确定权重分布中的位置
-	idx := atomic.AddUint64(&w.counter, 1) - 1
+	idx := w.counter.Add(1) - 1
 	pos := int(idx % uint64(totalWeight))
 
 	// 找到计算位置处的目标

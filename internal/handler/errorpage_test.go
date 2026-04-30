@@ -615,7 +615,7 @@ func TestErrorPageManager_SuccessfulLoad(t *testing.T) {
 	defaultPage := filepath.Join(tmpDir, "default.html")
 
 	for code, path := range pages {
-		content := []byte(fmt.Sprintf("Error %d page", code))
+		content := fmt.Appendf(nil, "Error %d page", code)
 		if err := os.WriteFile(path, content, 0o644); err != nil {
 			t.Fatalf("创建页面 %d 失败: %v", code, err)
 		}

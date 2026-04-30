@@ -138,15 +138,13 @@ func TestPoolConcurrentSubmit(t *testing.T) {
 	var counter atomic.Int32
 	var wg sync.WaitGroup
 
-	for i := 0; i < 100; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 100 {
+		wg.Go(func() {
 
 			_ = p.Submit(nil, func(_ *fasthttp.RequestCtx) {
 				counter.Add(1)
 			})
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -395,7 +393,7 @@ func TestPoolSubmit_MultipleQueuedTasks(t *testing.T) {
 	var counter atomic.Int32
 
 	// 快速提交多个任务
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_ = p.Submit(nil, func(*fasthttp.RequestCtx) {
 			counter.Add(1)
 		})

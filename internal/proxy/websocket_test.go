@@ -682,7 +682,7 @@ func TestWebSocketBridge_Concurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	errCh := make(chan error, numBridges)
 
-	for i := 0; i < numBridges; i++ {
+	for i := range numBridges {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()

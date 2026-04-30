@@ -74,7 +74,7 @@ const (
 // 注意：从 pool 获取的 map 使用后不能 Put 回 pool，
 // 因为 cache.Set 存储了 map 引用。
 var headersPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return make(map[string]string, 20)
 	},
 }

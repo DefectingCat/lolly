@@ -26,19 +26,19 @@ const shardCount = 16
 
 // FileCacheShard 单个缓存分片。
 type FileCacheShard struct {
-	entries    map[string]*FileEntry
-	lruList    *list.List
-	maxEntries int64
-	maxSize    int64
-	inactive   time.Duration
+	entries     map[string]*FileEntry
+	lruList     *list.List
+	maxEntries  int64
+	maxSize     int64
+	inactive    time.Duration
 	currentSize int64
-	mu         sync.RWMutex
-	entryPool  sync.Pool
+	mu          sync.RWMutex
+	entryPool   sync.Pool
 }
 
 // ShardedFileCache 分片文件缓存。
 type ShardedFileCache struct {
-	shards    [shardCount]*FileCacheShard
+	shards     [shardCount]*FileCacheShard
 	maxEntries int64
 	maxSize    int64
 	inactive   time.Duration
@@ -61,7 +61,7 @@ func NewShardedFileCache(maxEntries, maxSize int64, inactive time.Duration) *Sha
 		perShardSize = maxSize
 	}
 
-	for i := 0; i < shardCount; i++ {
+	for i := range shardCount {
 		shard := &FileCacheShard{
 			maxEntries: perShardEntries,
 			maxSize:    perShardSize,
@@ -83,7 +83,7 @@ func NewShardedFileCache(maxEntries, maxSize int64, inactive time.Duration) *Sha
 func (s *ShardedFileCache) getShard(path string) *FileCacheShard {
 	h := fnv.New64a()
 	h.Write([]byte(path))
-	return s.shards[h.Sum64() % shardCount]
+	return s.shards[h.Sum64()%shardCount]
 }
 
 // Get 获取缓存的文件。

@@ -289,6 +289,26 @@ lint:
 		go vet ./...; \
 	fi
 
+# 现代化检查（检测可使用新 Go 特性的代码）
+modernize:
+	@echo "Running modernize analyzer..."
+	@if command -v modernize >/dev/null 2>&1; then \
+		modernize ./internal/...; \
+	else \
+		echo "modernize not installed. Run: go install golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest"; \
+		exit 1; \
+	fi
+
+# 现代化检查并自动修复
+modernize-fix:
+	@echo "Running modernize analyzer with auto-fix..."
+	@if command -v modernize >/dev/null 2>&1; then \
+		modernize -fix ./internal/...; \
+	else \
+		echo "modernize not installed. Run: go install golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest"; \
+		exit 1; \
+	fi
+
 # 代码检查
 check: fmt lint test-all
 	@echo "All checks passed."
@@ -405,6 +425,8 @@ help:
 	@echo "Quality:"
 	@echo "  make fmt            - Format code"
 	@echo "  make lint           - Run linter"
+	@echo "  make modernize      - Check for modern Go patterns"
+	@echo "  make modernize-fix  - Auto-fix modern Go patterns"
 	@echo "  make check          - Format + lint + test"
 	@echo ""
 	@echo "Dependencies:"

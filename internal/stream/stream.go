@@ -63,7 +63,7 @@ type Balancer interface {
 // 使用原子计数器实现线程安全的轮询选择，每次选择后计数器递增，
 // 确保请求均匀分布到所有健康目标。
 type roundRobin struct {
-	counter     uint64
+	counter     atomic.Uint64
 	healthyPool sync.Pool
 }
 
@@ -94,7 +94,7 @@ func (r *roundRobin) Select(targets []*Target) *Target {
 		r.healthyPool.Put(healthyPtr)
 		return nil
 	}
-	idx := atomic.AddUint64(&r.counter, 1) - 1
+	idx := r.counter.Add(1) - 1
 	result := healthy[idx%uint64(len(healthy))]
 	r.healthyPool.Put(healthyPtr)
 	return result
@@ -147,7 +147,7 @@ func (l *leastConn) Select(targets []*Target) *Target {
 // 根据目标服务器的权重分配请求，权重高的目标获得更多请求。
 // 使用原子计数器确保线程安全，支持不同权重的目标混合使用。
 type weightedRoundRobin struct {
-	counter     uint64
+	counter     atomic.Uint64
 	healthyPool sync.Pool
 }
 
@@ -194,7 +194,7 @@ func (w *weightedRoundRobin) Select(targets []*Target) *Target {
 	}
 
 	// 使用原子计数器确定位置
-	idx := atomic.AddUint64(&w.counter, 1) - 1
+	idx := w.counter.Add(1) - 1
 	pos := int(idx % uint64(totalWeight))
 
 	// 找到对应位置的目标

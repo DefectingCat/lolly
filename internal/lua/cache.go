@@ -87,10 +87,10 @@ type CodeCache struct {
 	ttl time.Duration
 
 	// 缓存命中次数
-	hits uint64
+	hits atomic.Uint64
 
 	// 缓存未命中次数
-	misses uint64
+	misses atomic.Uint64
 
 	// 读写锁
 	mu sync.RWMutex
@@ -156,12 +156,12 @@ func (c *CodeCache) GetOrCompileInline(src string) (*glua.FunctionProto, error) 
 	c.mu.RUnlock()
 
 	if ok && !c.isExpired(cached) {
-		atomic.AddUint64(&c.hits, 1)
+		c.hits.Add(1)
 		cached.AccessAt.Store(time.Now())
 		return cached.Proto, nil
 	}
 
-	atomic.AddUint64(&c.misses, 1)
+	c.misses.Add(1)
 
 	// 编译脚本
 	chunk, err := parse.Parse(strings.NewReader(src), "<inline>")
@@ -210,12 +210,12 @@ func (c *CodeCache) GetOrCompileFile(path string) (*glua.FunctionProto, error) {
 
 	// 检查是否需要重新加载
 	if ok && !c.isExpired(cached) && !c.isFileChanged(cached) {
-		atomic.AddUint64(&c.hits, 1)
+		c.hits.Add(1)
 		cached.AccessAt.Store(time.Now())
 		return cached.Proto, nil
 	}
 
-	atomic.AddUint64(&c.misses, 1)
+	c.misses.Add(1)
 
 	// 读取文件
 	content, err := os.ReadFile(path)
@@ -345,13 +345,13 @@ func (c *CodeCache) isFileChanged(cached *CachedProto) bool {
 func (c *CodeCache) Stats() (hits, misses uint64, size int) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return atomic.LoadUint64(&c.hits), atomic.LoadUint64(&c.misses), len(c.protos)
+	return c.hits.Load(), c.misses.Load(), len(c.protos)
 }
 
 // HitRate 返回缓存命中率
 func (c *CodeCache) HitRate() float64 {
-	hits := atomic.LoadUint64(&c.hits)
-	misses := atomic.LoadUint64(&c.misses)
+	hits := c.hits.Load()
+	misses := c.misses.Load()
 	total := hits + misses
 	if total == 0 {
 		return 0
