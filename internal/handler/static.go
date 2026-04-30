@@ -660,7 +660,7 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 					return
 				}
 				ctx.Response.SetBody(entry.Data)
-				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+				ctx.Response.Header.SetContentType(entry.ContentType)
 				ctx.Response.Header.Set("ETag", entry.ETag)
 				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 				return
@@ -681,7 +681,7 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 					h.fileCache.RefreshCachedAt(filePath)
 				}
 				ctx.Response.SetBody(entry.Data)
-				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+				ctx.Response.Header.SetContentType(entry.ContentType)
 				ctx.Response.Header.Set("ETag", entry.ETag)
 				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 				return
@@ -734,9 +734,9 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 			// 检查文件是否被修改
 			if entry.ModTime.Equal(info.ModTime()) {
 				// 缓存命中且文件未修改
-				// 使用缓存的 ETag，避免重新生成
+				// 使用缓存的 ETag 和 ContentType，避免重新生成
 				ctx.Response.SetBody(entry.Data)
-				ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+				ctx.Response.Header.SetContentType(entry.ContentType)
 				ctx.Response.Header.Set("ETag", entry.ETag)
 				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 				h.setCacheHeaders(ctx)
@@ -776,12 +776,13 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 	}
 
 	// 存入缓存（仅对小文件缓存）
+	contentType := mimeutil.DetectContentType(filePath)
 	if h.fileCache != nil && info.Size() < 1024*1024 { // < 1MB
-		_ = h.fileCache.Set(filePath, data, info.Size(), info.ModTime())
+		_ = h.fileCache.Set(filePath, data, info.Size(), info.ModTime(), contentType)
 	}
 
 	ctx.Response.SetBody(data)
-	ctx.Response.Header.SetContentType(mimeutil.DetectContentType(filePath))
+	ctx.Response.Header.SetContentType(contentType)
 	ctx.Response.Header.Set("ETag", etag)
 	ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
 	h.setCacheHeaders(ctx)

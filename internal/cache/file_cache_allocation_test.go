@@ -37,7 +37,7 @@ func BenchmarkFileCacheSetAllocation_New(b *testing.B) {
 
 	for i := 0; b.Loop(); i++ {
 		path := fmt.Sprintf("/new/file%d.txt", i)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 }
 
@@ -52,7 +52,7 @@ func BenchmarkFileCacheSetAllocation_Update(b *testing.B) {
 	size := int64(len(data))
 	for i := range 1000 {
 		path := fmt.Sprintf("/update/file%d.txt", i)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 
 	b.ReportAllocs()
@@ -61,7 +61,7 @@ func BenchmarkFileCacheSetAllocation_Update(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		// 循环更新已有条目
 		path := fmt.Sprintf("/update/file%d.txt", i%1000)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 }
 
@@ -80,7 +80,7 @@ func BenchmarkFileCacheSetAllocation_Eviction(b *testing.B) {
 	size := int64(len(data))
 	for i := range 100 {
 		path := fmt.Sprintf("/evict/file%d.txt", i)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 
 	b.ReportAllocs()
@@ -89,7 +89,7 @@ func BenchmarkFileCacheSetAllocation_Eviction(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		// 每个 Set 都触发淘汰
 		path := fmt.Sprintf("/evict/new%d.txt", i)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 }
 
@@ -105,7 +105,7 @@ func BenchmarkFileCacheSetAllocation_EvictionWithPool(b *testing.B) {
 	// 预填充
 	for i := range 100 {
 		path := fmt.Sprintf("/pool/file%d.txt", i)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 
 	b.ReportAllocs()
@@ -113,7 +113,7 @@ func BenchmarkFileCacheSetAllocation_EvictionWithPool(b *testing.B) {
 
 	for i := 0; b.Loop(); i++ {
 		path := fmt.Sprintf("/pool/new%d.txt", i)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 }
 
@@ -130,7 +130,7 @@ func BenchmarkFileCacheSetAllocation_MemoryLimit(b *testing.B) {
 	// 预填充到接近上限
 	for i := range 900 {
 		path := fmt.Sprintf("/mem/file%d.txt", i)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 
 	b.ReportAllocs()
@@ -138,7 +138,7 @@ func BenchmarkFileCacheSetAllocation_MemoryLimit(b *testing.B) {
 
 	for i := 0; b.Loop(); i++ {
 		path := fmt.Sprintf("/mem/new%d.txt", i)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 }
 
@@ -158,7 +158,7 @@ func BenchmarkFileCacheSetAllocation_Concurrent(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			path := fmt.Sprintf("/conc/file%d.txt", i)
-			fc.Set(path, data, size, time.Now())
+			fc.Set(path, data, size, time.Now(), "text/plain")
 			i++
 		}
 	})
@@ -174,7 +174,7 @@ func BenchmarkFileCacheSetAllocation_ConcurrentEviction(b *testing.B) {
 	// 预填充
 	for i := range 100 {
 		path := fmt.Sprintf("/concevict/file%d.txt", i)
-		fc.Set(path, data, size, time.Now())
+		fc.Set(path, data, size, time.Now(), "text/plain")
 	}
 
 	b.ReportAllocs()
@@ -184,7 +184,7 @@ func BenchmarkFileCacheSetAllocation_ConcurrentEviction(b *testing.B) {
 		i := 0
 		for pb.Next() {
 			path := fmt.Sprintf("/concevict/new%d.txt", i)
-			fc.Set(path, data, size, time.Now())
+			fc.Set(path, data, size, time.Now(), "text/plain")
 			i++
 		}
 	})

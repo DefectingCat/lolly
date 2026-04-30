@@ -29,14 +29,15 @@ import (
 
 // FileEntry 文件缓存条目，存储单个文件的缓存信息。
 type FileEntry struct {
-	ModTime    time.Time
-	CachedAt   time.Time // 缓存时间，用于 TTL 验证（新鲜度）
-	LastAccess time.Time
-	element    *list.Element
-	Path       string
-	Data       []byte
-	Size       int64
-	ETag       string // 预计算的 ETag，避免每次请求重新计算
+	ModTime     time.Time
+	CachedAt    time.Time // 缓存时间，用于 TTL 验证（新鲜度）
+	LastAccess  time.Time
+	element     *list.Element
+	Path        string
+	Data        []byte
+	Size        int64
+	ETag        string // 预计算的 ETag，避免每次请求重新计算
+	ContentType string // 预计算的 MIME 类型，避免每次请求重新检测
 }
 
 // generateETag 基于 ModTime 和 Size 生成 ETag。
@@ -173,10 +174,11 @@ func (c *FileCache) Get(path string) (*FileEntry, bool) {
 //   - data: 文件内容字节
 //   - size: 文件大小（字节）
 //   - modTime: 文件最后修改时间
+//   - contentType: MIME 类型
 //
 // 返回值：
 //   - error: 当前实现始终返回 nil
-func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time) error {
+func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time, contentType string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -190,6 +192,7 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time)
 		entry.Size = size
 		entry.ModTime = modTime
 		entry.ETag = etag
+		entry.ContentType = contentType
 		entry.CachedAt = time.Now() // 更新缓存时间
 		entry.LastAccess = time.Now()
 		c.currentSize += size
@@ -205,6 +208,7 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time)
 	entry.Size = size
 	entry.ModTime = modTime
 	entry.ETag = etag
+	entry.ContentType = contentType
 	entry.CachedAt = time.Now()
 	entry.LastAccess = time.Now()
 	entry.element = c.lruList.PushFront(entry)
@@ -266,6 +270,7 @@ func (c *FileCache) removeEntry(entry *FileEntry) {
 	entry.CachedAt = time.Time{}
 	entry.LastAccess = time.Time{}
 	entry.ETag = ""
+	entry.ContentType = ""
 	entry.element = nil
 	c.entryPool.Put(entry)
 }

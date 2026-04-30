@@ -35,7 +35,7 @@ func BenchmarkFileCacheGet(b *testing.B) {
 			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data content")
-				_ = fc.Set(path, data, int64(len(data)), time.Now())
+				_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 			}
 
 			b.ResetTimer()
@@ -65,14 +65,14 @@ func BenchmarkFileCacheSet(b *testing.B) {
 			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data content")
-				_ = fc.Set(path, data, int64(len(data)), time.Now())
+				_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 			}
 
 			b.ResetTimer()
 			for i := 0; b.Loop(); i++ {
 				path := fmt.Sprintf("/newfile%d.txt", i)
 				data := []byte("new cached data content")
-				_ = fc.Set(path, data, int64(len(data)), time.Now())
+				_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 			}
 		})
 	}
@@ -91,7 +91,7 @@ func BenchmarkFileCacheSet_Pooled(b *testing.B) {
 			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data content")
-				_ = fc.Set(path, data, int64(len(data)), time.Now())
+				_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 			}
 
 			b.ReportAllocs()
@@ -99,7 +99,7 @@ func BenchmarkFileCacheSet_Pooled(b *testing.B) {
 			for i := 0; b.Loop(); i++ {
 				path := fmt.Sprintf("/newfile%d.txt", i)
 				data := []byte("new cached data content")
-				_ = fc.Set(path, data, int64(len(data)), time.Now())
+				_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 			}
 		})
 	}
@@ -114,7 +114,7 @@ func BenchmarkFileCacheSetNoEviction(b *testing.B) {
 	for i := 0; b.Loop(); i++ {
 		path := fmt.Sprintf("/file%d.txt", i)
 		data := []byte("cached data content")
-		_ = fc.Set(path, data, int64(len(data)), time.Now())
+		_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 	}
 }
 
@@ -131,7 +131,7 @@ func BenchmarkFileCacheConcurrent(b *testing.B) {
 			for i := range size {
 				path := fmt.Sprintf("/file%d.txt", i)
 				data := []byte("cached data content")
-				_ = fc.Set(path, data, int64(len(data)), time.Now())
+				_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 			}
 
 			b.ResetTimer()
@@ -142,7 +142,7 @@ func BenchmarkFileCacheConcurrent(b *testing.B) {
 					if i%10 == 0 {
 						path := fmt.Sprintf("/newfile%d.txt", i)
 						data := []byte("updated data content")
-						_ = fc.Set(path, data, int64(len(data)), time.Now())
+						_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 					} else {
 						path := fmt.Sprintf("/file%d.txt", i%size)
 						fc.Get(path)
@@ -163,7 +163,7 @@ func BenchmarkFileCacheGetOnly(b *testing.B) {
 	for i := range 1000 {
 		path := fmt.Sprintf("/static/file%d.css", i)
 		data := make([]byte, 1024) // 1KB 数据
-		_ = fc.Set(path, data, int64(len(data)), time.Now())
+		_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 	}
 
 	b.ResetTimer()
@@ -188,14 +188,14 @@ func BenchmarkFileCacheSizeEviction(b *testing.B) {
 	data := make([]byte, 1024) // 1KB 每条
 	for i := range 1000 {
 		path := fmt.Sprintf("/file%d.txt", i)
-		_ = fc.Set(path, data, int64(len(data)), time.Now())
+		_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 	}
 
 	b.ResetTimer()
 	for i := 0; b.Loop(); i++ {
 		path := fmt.Sprintf("/newfile%d.txt", i)
 		newData := make([]byte, 1024)
-		_ = fc.Set(path, newData, int64(len(newData)), time.Now())
+		_ = fc.Set(path, newData, int64(len(newData)), time.Now(), "text/plain")
 	}
 }
 
@@ -208,7 +208,7 @@ func BenchmarkFileCacheLRUTouch(b *testing.B) {
 	for i := range 100 {
 		path := fmt.Sprintf("/file%d.txt", i)
 		data := []byte("cached data")
-		_ = fc.Set(path, data, int64(len(data)), time.Now())
+		_ = fc.Set(path, data, int64(len(data)), time.Now(), "text/plain")
 	}
 
 	b.ResetTimer()
