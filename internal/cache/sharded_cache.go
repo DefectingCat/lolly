@@ -177,7 +177,7 @@ func (sh *FileCacheShard) Set(path string, data []byte, size int64, modTime time
 		return nil
 	}
 
-	entry := sh.entryPool.Get().(*FileEntry)
+	entry := sh.entryPool.Get().(*FileEntry) //nolint:errcheck // pool always returns valid *FileEntry
 	entry.Path = path
 	entry.Data = data
 	entry.Size = size

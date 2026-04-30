@@ -35,6 +35,12 @@ import (
 
 const httpTimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 
+// Expires directive constants
+const (
+	expiresOff = "off"
+	expiresMax = "max"
+)
+
 // StaticHandler 静态文件处理器。
 //
 // 提供静态文件服务，支持目录索引、文件缓存和零拷贝传输。
@@ -662,7 +668,7 @@ func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, inf
 
 // setCacheHeaders 设置缓存控制响应头。
 func (h *StaticHandler) setCacheHeaders(ctx *fasthttp.RequestCtx) {
-	if h.expires == "" || h.expires == "off" {
+	if h.expires == "" || h.expires == expiresOff {
 		return
 	}
 
@@ -672,7 +678,7 @@ func (h *StaticHandler) setCacheHeaders(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if h.expires == "max" {
+	if h.expires == expiresMax {
 		ctx.Response.Header.Set("Cache-Control", "public, max-age=315360000, immutable")
 		ctx.Response.Header.Set("Expires", time.Now().Add(315360000*time.Second).UTC().Format(httpTimeFormat))
 		return
@@ -689,10 +695,10 @@ func (h *StaticHandler) setCacheHeaders(ctx *fasthttp.RequestCtx) {
 // 支持格式：30d, 1h, 1m, 1s, 30d1h 等
 // 返回秒数。
 func parseExpires(expires string) int64 {
-	if expires == "" || expires == "off" {
+	if expires == "" || expires == expiresOff {
 		return 0
 	}
-	if expires == "max" {
+	if expires == expiresMax {
 		return 315360000
 	}
 	if expires == "epoch" {

@@ -52,5 +52,5 @@ func GetOrCreateNgxSubTable(ngx *glua.LTable, L *glua.LState, name string) *glua
 		ngx.RawSetString(name, sub)
 		return sub
 	}
-	return existing.(*glua.LTable)
+	return existing.(*glua.LTable) //nolint:errcheck // RawGetString returns LNil or valid LValue
 }

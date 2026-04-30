@@ -7,6 +7,14 @@ import (
 	"slices"
 )
 
+// TLS version string constants
+const (
+	tlsV12Lower = "TLSv1.2"
+	tlsV13Lower = "TLSv1.3"
+	tlsV12Upper = "TLSV1.2"
+	tlsV13Upper = "TLSV1.3"
+)
+
 // ParseTLSVersion parses a TLS version string to a tls constant.
 //
 // Parameters:
@@ -21,9 +29,9 @@ func ParseTLSVersion(version string) (uint16, error) {
 		return tls.VersionTLS10, nil
 	case "TLSv1.1", "TLSV1.1":
 		return tls.VersionTLS11, nil
-	case "TLSv1.2", "TLSV1.2":
+	case tlsV12Lower, tlsV12Upper:
 		return tls.VersionTLS12, nil
-	case "TLSv1.3", "TLSV1.3":
+	case tlsV13Lower, tlsV13Upper:
 		return tls.VersionTLS13, nil
 	case "":
 		return 0, nil // Empty string means use default
@@ -50,11 +58,11 @@ func ParseTLSVersions(protocols []string) (uint16, uint16, error) {
 
 	for _, p := range protocols {
 		switch p {
-		case "TLSv1.2", "TLSV1.2":
+		case tlsV12Lower, tlsV12Upper:
 			if minVer > tls.VersionTLS12 {
 				minVer = tls.VersionTLS12
 			}
-		case "TLSv1.3", "TLSV1.3":
+		case tlsV13Lower, tlsV13Upper:
 			maxVer = tls.VersionTLS13
 		case "TLSv1.0", "TLSV1.0", "TLSv1.1", "TLSV1.1":
 			return 0, 0, fmt.Errorf("insecure TLS version %s is not supported", p)
@@ -76,9 +84,9 @@ func ParseTLSVersions(protocols []string) (uint16, uint16, error) {
 func ParseMinTLSVersion(protocols []string) uint16 {
 	for _, p := range protocols {
 		switch p {
-		case "TLSv1.3", "TLSV1.3":
+		case tlsV13Lower, tlsV13Upper:
 			return tls.VersionTLS13
-		case "TLSv1.2", "TLSV1.2":
+		case tlsV12Lower, tlsV12Upper:
 			return tls.VersionTLS12
 		}
 	}

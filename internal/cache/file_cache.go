@@ -180,7 +180,7 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time)
 	}
 
 	// 从池中获取条目并初始化
-	entry := c.entryPool.Get().(*FileEntry)
+	entry := c.entryPool.Get().(*FileEntry) //nolint:errcheck // pool always returns valid *FileEntry
 	entry.Path = path
 	entry.Data = data
 	entry.Size = size

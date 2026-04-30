@@ -127,7 +127,7 @@ func (b *WebSocketBridge) Bridge() error {
 // 返回值：
 //   - error: 读写错误，连接正常关闭返回 nil
 func (b *WebSocketBridge) copyData(dst, src net.Conn, direction string) error {
-	bufPtr := wsBufPool.Get().(*[]byte)
+	bufPtr := wsBufPool.Get().(*[]byte) //nolint:errcheck // pool always returns valid *[]byte
 	buf := *bufPtr
 	defer wsBufPool.Put(bufPtr)
 

@@ -81,7 +81,7 @@ func newRoundRobin() Balancer {
 
 func (r *roundRobin) Select(targets []*Target) *Target {
 	// 从池中获取 healthy slice 并复用
-	healthyPtr := r.healthyPool.Get().(*[]*Target)
+	healthyPtr := r.healthyPool.Get().(*[]*Target) //nolint:errcheck // pool always returns valid *[]*Target
 	healthy := *healthyPtr
 	healthy = healthy[:0] // 清空但保留容量
 	for _, t := range targets {
@@ -169,7 +169,7 @@ func newWeightedRoundRobin() Balancer {
 }
 
 func (w *weightedRoundRobin) Select(targets []*Target) *Target {
-	healthyPtr := w.healthyPool.Get().(*[]*Target)
+	healthyPtr := w.healthyPool.Get().(*[]*Target) //nolint:errcheck // pool always returns valid *[]*Target
 	healthy := *healthyPtr
 	healthy = healthy[:0]
 	for _, t := range targets {
@@ -246,7 +246,7 @@ func (i *ipHash) Select(targets []*Target) *Target {
 }
 
 func (i *ipHash) SelectByIP(targets []*Target, clientIP string) *Target {
-	healthyPtr := i.healthyPool.Get().(*[]*Target)
+	healthyPtr := i.healthyPool.Get().(*[]*Target) //nolint:errcheck // pool always returns valid *[]*Target
 	healthy := *healthyPtr
 	healthy = healthy[:0]
 	for _, t := range targets {
