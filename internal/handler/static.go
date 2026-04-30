@@ -82,8 +82,14 @@ type StaticHandler struct {
 //
 //	handler := handler.NewStaticHandler("/var/www", "/", []string{"index.html"}, true)
 func NewStaticHandler(root, pathPrefix string, index []string, useSendfile bool) *StaticHandler {
+	// 规范化 root 路径，确保 TrimPrefix 能正确工作
+	// filepath.Clean 会去掉 ./ 并规范化路径分隔符
+	cleanRoot := filepath.Clean(root)
+	if !strings.HasSuffix(cleanRoot, string(filepath.Separator)) {
+		cleanRoot += string(filepath.Separator)
+	}
 	return &StaticHandler{
-		root:        root,
+		root:        cleanRoot,
 		pathPrefix:  pathPrefix,
 		index:       index,
 		useSendfile: useSendfile,
@@ -136,8 +142,13 @@ func (h *StaticHandler) SetAlias(alias string) {
 // 参数：
 //   - root: 静态文件根目录
 func (h *StaticHandler) SetRoot(root string) {
-	h.root = root
-	if root != "" {
+	// 规范化 root 路径
+	cleanRoot := filepath.Clean(root)
+	if !strings.HasSuffix(cleanRoot, string(filepath.Separator)) {
+		cleanRoot += string(filepath.Separator)
+	}
+	h.root = cleanRoot
+	if cleanRoot != "" {
 		h.alias = ""
 	}
 }
