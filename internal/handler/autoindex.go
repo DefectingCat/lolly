@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"html"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -115,7 +117,7 @@ func generateHTMLIndex(ctx *fasthttp.RequestCtx, reqPath string, entries []dirEn
 	// HTML 头部
 	buf.WriteString("<!DOCTYPE html>\n")
 	buf.WriteString("<html>\n<head>\n")
-	buf.WriteString(fmt.Sprintf("<title>Index of %s</title>\n", escapeHTML(reqPath)))
+	buf.WriteString(fmt.Sprintf("<title>Index of %s</title>\n", html.EscapeString(reqPath)))
 	buf.WriteString("<style>\n")
 	buf.WriteString("body { font-family: monospace; margin: 20px; }\n")
 	buf.WriteString("h1 { border-bottom: 1px solid #ccc; padding-bottom: 10px; }\n")
@@ -126,7 +128,7 @@ func generateHTMLIndex(ctx *fasthttp.RequestCtx, reqPath string, entries []dirEn
 	buf.WriteString("a:hover { text-decoration: underline; }\n")
 	buf.WriteString("</style>\n")
 	buf.WriteString("</head>\n<body>\n")
-	buf.WriteString(fmt.Sprintf("<h1>Index of %s</h1>\n", escapeHTML(reqPath)))
+	buf.WriteString(fmt.Sprintf("<h1>Index of %s</h1>\n", html.EscapeString(reqPath)))
 	buf.WriteString("<hr>\n<table>\n")
 	buf.WriteString("<thead><tr><th>Name</th><th>Modified</th><th>Size</th></tr></thead>\n")
 	buf.WriteString("<tbody>\n")
@@ -140,7 +142,7 @@ func generateHTMLIndex(ctx *fasthttp.RequestCtx, reqPath string, entries []dirEn
 	for _, entry := range entries {
 		name := entry.Name
 		displayName := name
-		href := escapeURL(name)
+		href := url.PathEscape(name)
 
 		if entry.IsDir {
 			displayName += "/"
@@ -166,11 +168,12 @@ func generateHTMLIndex(ctx *fasthttp.RequestCtx, reqPath string, entries []dirEn
 		}
 
 		buf.WriteString(fmt.Sprintf("<tr><td><a href=\"%s\">%s</a></td><td>%s</td><td class=\"size\">%s</td></tr>\n",
-			href, escapeHTML(displayName), timeStr, sizeStr))
+			href, html.EscapeString(displayName), timeStr, sizeStr))
 	}
 
 	buf.WriteString("</tbody>\n</table>\n<hr>\n</body>\n</html>\n")
 
+	ctx.Response.Header.Set("Content-Security-Policy", "default-src 'self'")
 	ctx.Response.Header.SetContentType("text/html; charset=utf-8")
 	ctx.Response.SetBody(buf.Bytes())
 }
@@ -275,27 +278,3 @@ func formatSize(size int64) string {
 	}
 }
 
-// escapeHTML 转义 HTML 特殊字符。
-func escapeHTML(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	s = strings.ReplaceAll(s, "\"", "&quot;")
-	s = strings.ReplaceAll(s, "'", "&#39;")
-	return s
-}
-
-// escapeURL 转义 URL 特殊字符。
-func escapeURL(s string) string {
-	var buf bytes.Buffer
-	for _, c := range s {
-		// 保留安全字符
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-			c == '-' || c == '_' || c == '.' || c == '~' || c == '/' {
-			buf.WriteRune(c)
-		} else {
-			buf.WriteString(fmt.Sprintf("%%%02X", c))
-		}
-	}
-	return buf.String()
-}

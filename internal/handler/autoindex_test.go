@@ -2,6 +2,7 @@
 package handler
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -233,42 +234,25 @@ func TestFormatSize(t *testing.T) {
 	}
 }
 
-func TestEscapeHTML(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"normal", "normal"},
-		{"<script>", "&lt;script&gt;"},
-		{`"quoted"`, "&quot;quoted&quot;"},
-		{"a&b", "a&amp;b"},
-		{"'single'", "&#39;single&#39;"},
+// TestGenerateAutoIndex_EmptyDirectory 测试空目录
+func TestGenerateAutoIndex_EmptyDirectory(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "autoindex_empty_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	ctx := &fasthttp.RequestCtx{}
+	config := AutoIndexConfig{Format: "json"}
+
+	if !GenerateAutoIndex(ctx, tmpDir, "/", config) {
+		t.Fatal("GenerateAutoIndex returned false for empty directory")
 	}
 
-	for _, tt := range tests {
-		result := escapeHTML(tt.input)
-		if result != tt.expected {
-			t.Errorf("escapeHTML(%q) = %q, want %q", tt.input, result, tt.expected)
-		}
-	}
-}
-
-func TestEscapeURL(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"normal", "normal"},
-		{"file name.txt", "file%20name.txt"},
-		{"file?name.txt", "file%3Fname.txt"},
-		{"safe-file_123.txt", "safe-file_123.txt"},
-	}
-
-	for _, tt := range tests {
-		result := escapeURL(tt.input)
-		if result != tt.expected {
-			t.Errorf("escapeURL(%q) = %q, want %q", tt.input, result, tt.expected)
-		}
+	body := string(ctx.Response.Body())
+	// JSON 格式空数组
+	if !containsAll(body, "[]") {
+		t.Errorf("Empty directory JSON = %s, should contain []", body)
 	}
 }
 
@@ -421,7 +405,7 @@ func BenchmarkGenerateAutoIndex_HTML(b *testing.B) {
 
 	// 创建 100 个文件
 	for i := 0; i < 100; i++ {
-		if err := os.WriteFile(filepath.Join(tmpDir, "file"+string(rune('0'+i%10))+string(rune('0'+i/10))+".txt"), []byte("content"), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(tmpDir, fmt.Sprintf("file%d.txt", i)), []byte("content"), 0o644); err != nil {
 			b.Fatal(err)
 		}
 	}
