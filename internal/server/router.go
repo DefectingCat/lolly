@@ -243,9 +243,22 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 		// 设置符号链接安全检查
 		staticHandler.SetSymlinkCheck(static.SymlinkCheck)
 
+		// 设置 internal 限制
+		staticHandler.SetInternal(static.Internal)
+
 		// 设置缓存过期时间
 		if static.Expires != "" {
 			staticHandler.SetExpires(static.Expires)
+		}
+
+		// 设置目录列表
+		if static.AutoIndex {
+			staticHandler.SetAutoIndex(
+				static.AutoIndex,
+				static.AutoIndexFormat,
+				static.AutoIndexLocaltime,
+				static.AutoIndexExactSize,
+			)
 		}
 
 		// 设置 try_files 配置
