@@ -22,6 +22,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/utils"
+	"rua.plus/lolly/internal/version"
 )
 
 // StatusHandler 状态监控处理器。
@@ -488,7 +489,7 @@ func (h *StatusHandler) serveHTML(ctx *fasthttp.RequestCtx, status *Status) {
 //   - *Status: 包含服务器运行状态的结构体
 func (h *StatusHandler) collectStatus() *Status {
 	status := &Status{
-		Version:       "1.0.0",
+		Version:       version.Version,
 		Uptime:        time.Since(h.server.startTime),
 		Connections:   h.server.connections.Load(),
 		Requests:      h.server.requests.Load(),
