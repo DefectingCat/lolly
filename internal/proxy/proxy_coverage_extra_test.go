@@ -1055,7 +1055,7 @@ func TestWebSocket_ErrorCases(t *testing.T) {
 		target.Healthy.Store(true)
 
 		// 使用很短的超时
-		err := WebSocket(ctx, target, 10*time.Millisecond)
+		err := WebSocket(ctx, target, 10*time.Millisecond, nil)
 		if err == nil {
 			t.Error("WebSocket() should return error for invalid backend")
 		}

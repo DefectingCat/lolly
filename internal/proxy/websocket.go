@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/netutil"
 )
@@ -260,10 +261,11 @@ func dialTarget(targetURL string, timeout time.Duration) (net.Conn, error) {
 // 参数：
 //   - ctx: FastHTTP 请求上下文
 //   - targetHost: 目标主机地址
+//   - headersConfig: 代理头配置，控制 X-Forwarded-Host/Proto 的设置
 //
 // 返回值：
 //   - string: 完整的 HTTP 请求字符串
-func buildWebSocketUpgradeRequest(ctx *fasthttp.RequestCtx, targetHost string) string {
+func buildWebSocketUpgradeRequest(ctx *fasthttp.RequestCtx, targetHost string, headersConfig *config.ProxyHeaders) string {
 	// 构建请求行
 	path := string(ctx.Path())
 	if path == "" {
@@ -300,7 +302,18 @@ func buildWebSocketUpgradeRequest(ctx *fasthttp.RequestCtx, targetHost string) s
 
 	// 添加 X-Forwarded 头
 	fh := ExtractForwardedHeaders(ctx)
-	WriteForwardedHeaders(&req, fh)
+
+	// 根据配置决定是否设置 X-Forwarded-Host 和 X-Forwarded-Proto
+	setHost := true // 默认值（向后兼容）
+	if headersConfig != nil && headersConfig.SetForwardedHost != nil {
+		setHost = *headersConfig.SetForwardedHost
+	}
+	setProto := true // 默认值（向后兼容）
+	if headersConfig != nil && headersConfig.SetForwardedProto != nil {
+		setProto = *headersConfig.SetForwardedProto
+	}
+
+	WriteForwardedHeaders(&req, fh, setHost, setProto)
 
 	// 结束请求头
 	req.WriteString("\r\n")
@@ -348,10 +361,11 @@ func readWebSocketUpgradeResponse(conn net.Conn, timeout time.Duration) (*http.R
 //   - ctx: FastHTTP 请求上下文
 //   - target: 负载均衡目标，包含后端 URL
 //   - timeout: 连接和 I/O 超时时间
+//   - headersConfig: 代理头配置，控制 X-Forwarded-Host/Proto 的设置
 //
 // 返回值：
 //   - error: 代理过程中的错误
-func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout time.Duration) error {
+func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout time.Duration, headersConfig *config.ProxyHeaders) error {
 	// 使用 Hijack 获取客户端 TCP 连接
 	var clientConn net.Conn
 
@@ -380,7 +394,7 @@ func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout tim
 	targetHost := extractHost(target.URL)
 
 	// 步骤3: 构建并发送 WebSocket 升级请求
-	upgradeReq := buildWebSocketUpgradeRequest(ctx, targetHost)
+	upgradeReq := buildWebSocketUpgradeRequest(ctx, targetHost, headersConfig)
 	if _, writeErr := targetConn.Write([]byte(upgradeReq)); writeErr != nil {
 		return fmt.Errorf("failed to send upgrade request: %w", writeErr)
 	}

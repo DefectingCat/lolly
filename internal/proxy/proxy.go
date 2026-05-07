@@ -572,7 +572,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			// WebSocket 使用 defer 确保连接计数释放
 			defer loadbalance.DecrementConnections(target)
 			timing.MarkConnectStart()
-			err := WebSocket(ctx, target, p.config.Timeout.Connect)
+			err := WebSocket(ctx, target, p.config.Timeout.Connect, &p.config.Headers)
 			timing.MarkConnectEnd()
 			if err != nil {
 				upstreamStatus = 502

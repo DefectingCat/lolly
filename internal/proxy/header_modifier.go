@@ -32,7 +32,18 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 
 	// 提取并设置 X-Forwarded 系列头
 	fh := ExtractForwardedHeaders(ctx)
-	SetForwardedHeaders(headers, fh, true)
+
+	// 根据配置决定是否设置 X-Forwarded-Host 和 X-Forwarded-Proto
+	setHost := true // 默认值（向后兼容）
+	if p.config.Headers.SetForwardedHost != nil {
+		setHost = *p.config.Headers.SetForwardedHost
+	}
+	setProto := true // 默认值（向后兼容）
+	if p.config.Headers.SetForwardedProto != nil {
+		setProto = *p.config.Headers.SetForwardedProto
+	}
+
+	SetForwardedHeaders(headers, fh, true, setHost, setProto)
 
 	// 从配置设置自定义请求头（支持变量展开）
 	if p.config.Headers.SetRequest != nil {

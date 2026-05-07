@@ -373,7 +373,7 @@ func TestBuildWebSocketUpgradeRequest(t *testing.T) {
 			}
 			ctx.Request.Header.SetHost(tt.host)
 
-			result := buildWebSocketUpgradeRequest(ctx, tt.targetHost)
+			result := buildWebSocketUpgradeRequest(ctx, tt.targetHost, nil)
 
 			for _, want := range tt.wantContains {
 				if !strings.Contains(result, want) {
@@ -394,7 +394,7 @@ func TestBuildWebSocketUpgradeRequest_WithHeaders(t *testing.T) {
 	ctx.Request.Header.Set("Sec-WebSocket-Version", "13")
 	ctx.Request.Header.Set("Sec-WebSocket-Protocol", "chat")
 
-	result := buildWebSocketUpgradeRequest(ctx, "backend.example.com")
+	result := buildWebSocketUpgradeRequest(ctx, "backend.example.com", nil)
 
 	// 验证关键头被复制
 	expectedHeaders := []string{
@@ -434,7 +434,7 @@ func TestBuildWebSocketUpgradeRequest_TLSProto(t *testing.T) {
 			// 注意：fasthttp.RequestCtx 默认 IsTLS() 返回 false
 			// 无法在单元测试中直接模拟 TLS 连接
 
-			result := buildWebSocketUpgradeRequest(ctx, "backend.example.com")
+			result := buildWebSocketUpgradeRequest(ctx, "backend.example.com", nil)
 
 			if !strings.Contains(result, tt.wantProto) {
 				t.Errorf("Missing %q in:\n%s", tt.wantProto, result)

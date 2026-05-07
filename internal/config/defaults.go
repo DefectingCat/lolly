@@ -412,6 +412,8 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("    #       hide_response: []        # 隐藏的响应头列表\n")
 	buf.WriteString("    #       pass_response: []        # 白名单传递的响应头\n")
 	buf.WriteString("    #       ignore_headers: []       # 完全忽略的头部（不传递给客户端也不记录）\n")
+	buf.WriteString("    #       set_forwarded_host: true # 是否设置 X-Forwarded-Host（nil/true=设置，false=不设置）\n")
+	buf.WriteString("    #       set_forwarded_proto: true # 是否设置 X-Forwarded-Proto（nil/true=设置，false=不设置）\n")
 	buf.WriteString("    #       cookie_domain: \"\"        # Cookie 域重写\n")
 	buf.WriteString("    #       cookie_path: \"\"          # Cookie 路径重写\n")
 	buf.WriteString("    #     cache:                      # 代理缓存\n")

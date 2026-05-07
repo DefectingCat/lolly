@@ -69,7 +69,9 @@ func ExtractForwardedHeaders(ctx *fasthttp.RequestCtx) ForwardedHeaders {
 //   - headers: 目标请求头
 //   - fh: ForwardedHeaders 结构体
 //   - appendXFF: 是否追加到已有的 X-Forwarded-For 头
-func SetForwardedHeaders(headers *fasthttp.RequestHeader, fh ForwardedHeaders, appendXFF bool) {
+//   - setHost: 是否设置 X-Forwarded-Host
+//   - setProto: 是否设置 X-Forwarded-Proto
+func SetForwardedHeaders(headers *fasthttp.RequestHeader, fh ForwardedHeaders, appendXFF, setHost, setProto bool) {
 	// 设置 X-Real-IP
 	if fh.ClientIP != "" {
 		headers.Set("X-Real-IP", fh.ClientIP)
@@ -94,13 +96,13 @@ func SetForwardedHeaders(headers *fasthttp.RequestHeader, fh ForwardedHeaders, a
 		}
 	}
 
-	// 设置 X-Forwarded-Host
-	if fh.Host != "" {
+	// 设置 X-Forwarded-Host（仅在 setHost 为 true 时）
+	if setHost && fh.Host != "" {
 		headers.Set("X-Forwarded-Host", fh.Host)
 	}
 
-	// 设置 X-Forwarded-Proto
-	if fh.Proto != "" {
+	// 设置 X-Forwarded-Proto（仅在 setProto 为 true 时）
+	if setProto && fh.Proto != "" {
 		headers.Set("X-Forwarded-Proto", fh.Proto)
 	}
 }
@@ -111,7 +113,9 @@ func SetForwardedHeaders(headers *fasthttp.RequestHeader, fh ForwardedHeaders, a
 // 参数：
 //   - builder: strings.Builder 实例
 //   - fh: ForwardedHeaders 结构体
-func WriteForwardedHeaders(builder *strings.Builder, fh ForwardedHeaders) {
+//   - setHost: 是否设置 X-Forwarded-Host
+//   - setProto: 是否设置 X-Forwarded-Proto
+func WriteForwardedHeaders(builder *strings.Builder, fh ForwardedHeaders, setHost, setProto bool) {
 	if fh.ClientIP != "" {
 		builder.WriteString("X-Forwarded-For: ")
 		builder.WriteString(fh.ClientIP)
@@ -121,13 +125,13 @@ func WriteForwardedHeaders(builder *strings.Builder, fh ForwardedHeaders) {
 		builder.WriteString("\r\n")
 	}
 
-	if fh.Host != "" {
+	if setHost && fh.Host != "" {
 		builder.WriteString("X-Forwarded-Host: ")
 		builder.WriteString(fh.Host)
 		builder.WriteString("\r\n")
 	}
 
-	if fh.Proto != "" {
+	if setProto && fh.Proto != "" {
 		builder.WriteString("X-Forwarded-Proto: ")
 		builder.WriteString(fh.Proto)
 		builder.WriteString("\r\n")

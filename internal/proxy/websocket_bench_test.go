@@ -46,7 +46,7 @@ func BenchmarkWebSocketHandshake(b *testing.B) {
 		ctx.Request.Header.Set("Sec-WebSocket-Extensions", "permessage-deflate")
 		ctx.Request.Header.Set("Origin", "https://example.com")
 
-		result := buildWebSocketUpgradeRequest(ctx, "backend.example.com:8080")
+		result := buildWebSocketUpgradeRequest(ctx, "backend.example.com:8080", nil)
 
 		// 验证握手请求包含关键头
 		if !strings.Contains(result, "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==") {

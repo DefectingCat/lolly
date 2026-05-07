@@ -334,6 +334,18 @@ type ProxyHeaders struct {
 	// CookiePath Cookie 路径重写
 	// 将响应中 Set-Cookie 的 path 替换为此值
 	CookiePath string `yaml:"cookie_path"`
+
+	// SetForwardedHost 控制 X-Forwarded-Host 头的设置
+	// nil (默认): 设置 X-Forwarded-Host（向后兼容）
+	// true: 显式设置 X-Forwarded-Host
+	// false: 不设置 X-Forwarded-Host
+	SetForwardedHost *bool `yaml:"set_forwarded_host"`
+
+	// SetForwardedProto 控制 X-Forwarded-Proto 头的设置
+	// nil (默认): 设置 X-Forwarded-Proto（向后兼容）
+	// true: 显式设置 X-Forwarded-Proto
+	// false: 不设置 X-Forwarded-Proto
+	SetForwardedProto *bool `yaml:"set_forwarded_proto"`
 }
 
 // ProxySSLConfig 上游 SSL/TLS 配置。
