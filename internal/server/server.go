@@ -644,8 +644,29 @@ func (s *Server) startMultiServerMode() error {
 			// 创建路由器
 			router := handler.NewRouter()
 
-			// 注册缓存清理 API（仅第一个服务器）
-			if idx == 0 && serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
+			// 注册状态监控端点（仅默认服务器）
+			if serverCfg.Default && s.config.Monitoring.Status.Enabled {
+				statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
+				if err != nil {
+					logging.Error().Msg("Failed to create status handler: " + err.Error())
+				} else {
+					router.GET(statusHandler.Path(), statusHandler.ServeHTTP)
+				}
+			}
+
+			// 注册 pprof 性能分析端点（仅默认服务器）
+			if serverCfg.Default && s.config.Monitoring.Pprof.Enabled {
+				pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
+				if err != nil {
+					logging.Error().Msg("Failed to create pprof handler: " + err.Error())
+				} else {
+					router.GET(pprofHandler.Path(), pprofHandler.ServeHTTP)
+					router.GET(pprofHandler.Path()+"/{profile:*}", pprofHandler.ServeHTTP)
+				}
+			}
+
+			// 注册缓存清理 API（仅默认服务器）
+			if serverCfg.Default && serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
 				purgeHandler, purgeErr := NewPurgeHandler(s, serverCfg.CacheAPI)
 				if purgeErr != nil {
 					errCh <- fmt.Errorf("failed to create cache purge handler (server[%d]): %w", idx, purgeErr)
