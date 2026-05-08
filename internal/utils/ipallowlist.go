@@ -2,7 +2,9 @@
 package utils
 
 import (
+	"fmt"
 	"net"
+	"strings"
 )
 
 // ParseIPAllowList 解析 IP/CIDR 白名单列表。
@@ -66,10 +68,49 @@ func ParseIPAllowList(allow []string) ([]net.IPNet, error) {
 	return result, nil
 }
 
-// parseCIDR 是 net.ParseCIDR 的包装，返回 *net.IPNet 而不返回 net.IP
+// ParseCIDR 解析 CIDR 字符串或单个 IP 地址。
+//
+// 支持格式：
+//   - CIDR 格式：192.168.1.0/24、::1/128
+//   - 单个 IP：192.168.1.1（自动转换为 /32 或 /128）
+//
+// 参数：
+//   - cidr: CIDR 字符串或单个 IP 地址
+//
+// 返回值：
+//   - *net.IPNet: 解析后的 IP 网络对象
+//   - error: 解析失败时返回错误
+func ParseCIDR(cidr string) (*net.IPNet, error) {
+	// 处理单个 IP（没有 /前缀）
+	if !strings.Contains(cidr, "/") {
+		ip := net.ParseIP(cidr)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid IP address: %s", cidr)
+		}
+
+		// 转换为完整掩码的 CIDR
+		if ip.To4() != nil {
+			cidr = cidr + "/32"
+		} else {
+			cidr = cidr + "/128"
+		}
+	}
+
+	// 解析 CIDR
+	ip, network, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, err
+	}
+
+	// 确保 IP 为规范形式
+	network.IP = ip
+
+	return network, nil
+}
+
+// parseCIDR 是 ParseCIDR 的内部别名，保持向后兼容
 func parseCIDR(cidr string) (*net.IPNet, error) {
-	_, network, err := net.ParseCIDR(cidr)
-	return network, err
+	return ParseCIDR(cidr)
 }
 
 // IPInAllowList 检查 IP 是否在白名单中。

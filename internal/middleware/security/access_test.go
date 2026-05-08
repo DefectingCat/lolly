@@ -16,6 +16,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/utils"
 )
 
 func TestNewAccessControl(t *testing.T) {
@@ -244,9 +245,9 @@ func TestParseCIDR(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			network, err := parseCIDR(tt.cidr)
+			network, err := utils.ParseCIDR(tt.cidr)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseCIDR() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("utils.ParseCIDR() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !tt.wantErr && network == nil {
 				t.Error("Expected non-nil network")
