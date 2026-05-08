@@ -20,11 +20,12 @@ package cache
 import (
 	"container/list"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"rua.plus/lolly/internal/utils"
 )
 
 // FileEntry 文件缓存条目，存储单个文件的缓存信息。
@@ -43,14 +44,7 @@ type FileEntry struct {
 // generateETag 基于 ModTime 和 Size 生成 ETag。
 // 使用 strconv.AppendInt 避免 fmt.Sprintf 分配。
 func generateETag(modTime time.Time, size int64) string {
-	var buf [32]byte
-	b := buf[:0]
-	b = append(b, '"')
-	b = strconv.AppendInt(b, modTime.Unix(), 16)
-	b = append(b, '-')
-	b = strconv.AppendInt(b, size, 16)
-	b = append(b, '"')
-	return string(b)
+	return utils.GenerateETag(modTime, size)
 }
 
 // FileCache 文件缓存，支持 LRU 淘汰策略。
