@@ -28,7 +28,6 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/http2"
 	"rua.plus/lolly/internal/http3"
-	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/server"
 	"rua.plus/lolly/internal/version"
 )
@@ -411,7 +410,7 @@ func TestHandleSignal_SIGQUIT(t *testing.T) {
 			Listen: ":0", // 使用随机端口
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 创建 mock server
 	app.srv = server.New(app.cfg)
@@ -432,7 +431,7 @@ func TestHandleSignal_SIGTERM(t *testing.T) {
 			Listen: ":0",
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 
 	result := app.handleSignal(syscall.SIGTERM)
@@ -450,7 +449,7 @@ func TestHandleSignal_SIGINT(t *testing.T) {
 			Listen: ":0",
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 
 	result := app.handleSignal(syscall.SIGINT)
@@ -482,7 +481,7 @@ logging:
 			Listen: ":8080",
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	result := app.handleSignal(syscall.SIGHUP)
 
@@ -504,7 +503,7 @@ func TestHandleSignal_SIGUSR1(t *testing.T) {
 			},
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	result := app.handleSignal(syscall.SIGUSR1)
 
@@ -521,7 +520,7 @@ func TestHandleSignal_Unknown(t *testing.T) {
 			Listen: ":8080",
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 使用一个未处理的信号
 	result := app.handleSignal(syscall.SIGCHLD)
@@ -534,7 +533,7 @@ func TestHandleSignal_Unknown(t *testing.T) {
 // TestShutdownHTTP3_NilServer 测试 HTTP/3 服务器为 nil 时关闭
 func TestShutdownHTTP3_NilServer(_ *testing.T) {
 	app := NewApp("")
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 不应 panic
 	app.shutdownHTTP3()
@@ -550,7 +549,7 @@ func TestReopenLogs(_ *testing.T) {
 			},
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 不应 panic
 	app.reopenLogs()
@@ -559,7 +558,7 @@ func TestReopenLogs(_ *testing.T) {
 // TestReloadConfig_FileNotFound 测试重载不存在的配置
 func TestReloadConfig_FileNotFound(_ *testing.T) {
 	app := NewApp("/nonexistent/config.yaml")
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 不应 panic，只是记录错误
 	app.reloadConfig()
@@ -587,7 +586,7 @@ logging:
 			Listen: ":8080",
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	app.reloadConfig()
 
@@ -605,7 +604,7 @@ func TestSetupSignalHandlers(_ *testing.T) {
 			Listen: ":0",
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	sigChan := make(chan os.Signal, 1)
 	app.setupSignalHandlers(sigChan)
@@ -621,7 +620,7 @@ func TestHandleSignal_SIGUSR2(t *testing.T) {
 			Listen: ":0",
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 	app.upgradeMgr = server.NewUpgradeManager(app.srv)
 
@@ -641,7 +640,7 @@ func TestGracefulUpgrade_NoListener(_ *testing.T) {
 			Listen: ":0",
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 	app.upgradeMgr = server.NewUpgradeManager(app.srv)
 
@@ -711,7 +710,7 @@ func TestShutdownHTTP3_WithServer(_ *testing.T) {
 			Enabled: false, // 禁用，避免实际启动
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 
 	// 创建但不启动 http3 服务器
@@ -724,7 +723,7 @@ func TestShutdownHTTP3_WithServer(_ *testing.T) {
 // TestReopenLogs_WithNilConfig 测试配置为 nil 时重开日志
 func TestReopenLogs_WithNilConfig(_ *testing.T) {
 	app := NewApp("")
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	app.reopenLogs()
 	// 应正常执行无 panic
@@ -766,7 +765,7 @@ logging:
 			Listen: ":7070",
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 第一次重载
 	app.reloadConfig()
@@ -819,7 +818,7 @@ logging:
 					Listen: ":0",
 				}},
 			}
-			app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+			app.logger = setupTestLogger()
 			app.srv = server.New(app.cfg)
 			app.upgradeMgr = server.NewUpgradeManager(app.srv)
 
@@ -851,7 +850,7 @@ func TestHandleSignal_NilConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			app := NewApp("")
 			// 故意不设置 cfg，保持 nil
-			app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+			app.logger = setupTestLogger()
 			app.srv = server.New(config.DefaultConfig())
 			app.upgradeMgr = server.NewUpgradeManager(app.srv)
 
@@ -874,7 +873,7 @@ func TestHandleSignal_TimeoutDefaults(t *testing.T) {
 				GracefulTimeout: 0, // 使用默认值
 			},
 		}
-		app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+		app.logger = setupTestLogger()
 		app.srv = server.New(app.cfg)
 
 		result := app.handleSignal(syscall.SIGQUIT)
@@ -892,7 +891,7 @@ func TestHandleSignal_TimeoutDefaults(t *testing.T) {
 				FastTimeout: 0, // 使用默认值
 			},
 		}
-		app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+		app.logger = setupTestLogger()
 		app.srv = server.New(app.cfg)
 
 		result := app.handleSignal(syscall.SIGTERM)
@@ -909,7 +908,7 @@ func TestHandleSignal_TimeoutDefaults(t *testing.T) {
 				GracefulTimeout: -1 * time.Second, // 负数也使用默认值
 			},
 		}
-		app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+		app.logger = setupTestLogger()
 		app.srv = server.New(app.cfg)
 
 		result := app.handleSignal(syscall.SIGQUIT)
@@ -926,7 +925,7 @@ func TestHandleSignal_TimeoutDefaults(t *testing.T) {
 				FastTimeout: -1 * time.Second,
 			},
 		}
-		app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+		app.logger = setupTestLogger()
 		app.srv = server.New(app.cfg)
 
 		result := app.handleSignal(syscall.SIGTERM)
@@ -942,7 +941,7 @@ func TestGracefulUpgrade_NilServer(t *testing.T) {
 	app.cfg = &config.Config{
 		Servers: []config.ServerConfig{{Listen: ":0"}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	// 故意不设置 srv，保持 nil
 
 	app.gracefulUpgrade()
@@ -953,7 +952,7 @@ func TestGracefulUpgrade_NilServer(t *testing.T) {
 func TestShutdownHTTP2_WithServer(t *testing.T) {
 	t.Run("nil server", func(t *testing.T) {
 		app := NewApp("")
-		app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+		app.logger = setupTestLogger()
 		app.http2Srv = nil
 
 		app.shutdownHTTP2()
@@ -962,7 +961,7 @@ func TestShutdownHTTP2_WithServer(t *testing.T) {
 
 	t.Run("with stopped server", func(t *testing.T) {
 		app := NewApp("")
-		app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+		app.logger = setupTestLogger()
 
 		// 创建一个 HTTP/2 服务器（不启动）
 		h2Cfg := &config.HTTP2Config{
@@ -983,7 +982,7 @@ func TestShutdownHTTP2_WithServer(t *testing.T) {
 func TestShutdownHTTP3_WithActualServer(t *testing.T) {
 	t.Run("with stopped server", func(t *testing.T) {
 		app := NewApp("")
-		app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+		app.logger = setupTestLogger()
 
 		// 创建一个 HTTP/3 服务器（不启动）
 		h3Cfg := &config.HTTP3Config{
@@ -1014,7 +1013,7 @@ func TestHandleSignal_SignalTypeAssertion(t *testing.T) {
 	app.cfg = &config.Config{
 		Servers: []config.ServerConfig{{Listen: ":0"}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 
 	// handleSignal 期望 syscall.Signal，传入自定义信号会触发类型断言失败
@@ -1045,7 +1044,7 @@ func TestHandleSignal_PositiveTimeout(t *testing.T) {
 				GracefulTimeout: 5 * time.Second, // 正数超时值
 			},
 		}
-		app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+		app.logger = setupTestLogger()
 		app.srv = server.New(app.cfg)
 
 		result := app.handleSignal(syscall.SIGQUIT)
@@ -1062,7 +1061,7 @@ func TestHandleSignal_PositiveTimeout(t *testing.T) {
 				FastTimeout: 3 * time.Second, // 正数超时值
 			},
 		}
-		app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+		app.logger = setupTestLogger()
 		app.srv = server.New(app.cfg)
 
 		result := app.handleSignal(syscall.SIGTERM)
@@ -1081,7 +1080,7 @@ func TestGracefulUpgrade_PositiveTimeout(t *testing.T) {
 			GracefulTimeout: 5 * time.Second, // 正数超时值
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 	app.upgradeMgr = server.NewUpgradeManager(app.srv)
 
@@ -1099,7 +1098,7 @@ func TestGracefulUpgrade_ZeroTimeout(t *testing.T) {
 			GracefulTimeout: 0, // 零值，使用默认 30s
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 	app.upgradeMgr = server.NewUpgradeManager(app.srv)
 
@@ -1113,7 +1112,7 @@ func TestSetPidFileAndWrite(t *testing.T) {
 	app.cfg = &config.Config{
 		Servers: []config.ServerConfig{{Listen: ":0"}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 
 	tmpDir := t.TempDir()
@@ -1148,7 +1147,7 @@ func TestApp_LoggerOperations(t *testing.T) {
 			},
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 测试各种日志方法
 	app.logger.LogStartup("测试启动", map[string]string{"key": "value"})
@@ -1182,7 +1181,7 @@ logging:
 	app.cfg.Variables.Set = map[string]string{
 		"TEST_VAR": "test_value",
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 验证变量配置存在
 	if len(app.cfg.Variables.Set) != 1 {
@@ -1206,7 +1205,7 @@ func TestHandleSignal_AllSignalsWithServer(t *testing.T) {
 			Enabled: false,
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 	app.upgradeMgr = server.NewUpgradeManager(app.srv)
 
@@ -1263,7 +1262,7 @@ func TestApp_ResolverEnabled(t *testing.T) {
 			Addresses: []string{"8.8.8.8:53"},
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 验证配置
 	if !app.cfg.Resolver.Enabled {
@@ -1283,7 +1282,7 @@ func TestApp_MultiServerMode(t *testing.T) {
 			{Listen: ":8081", Name: "server2"},
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 验证多服务器配置
 	if len(app.cfg.Servers) != 2 {
@@ -1314,7 +1313,7 @@ func TestApp_StreamConfig(t *testing.T) {
 			},
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 验证 Stream 配置
 	if len(app.cfg.Stream) != 1 {
@@ -1338,7 +1337,7 @@ func TestApp_HTTP3Config(t *testing.T) {
 			Listen:  ":443",
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 验证 HTTP/3 配置
 	if !app.cfg.HTTP3.Enabled {
@@ -1363,7 +1362,7 @@ func TestApp_HTTP2Config(t *testing.T) {
 			},
 		}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 验证 HTTP/2 配置
 	if !app.cfg.Servers[0].SSL.HTTP2.Enabled {
@@ -1379,7 +1378,7 @@ func TestGracefulUpgrade_GetExecutableError(t *testing.T) {
 	app.cfg = &config.Config{
 		Servers: []config.ServerConfig{{Listen: ":0"}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 	app.srv = server.New(app.cfg)
 	app.upgradeMgr = server.NewUpgradeManager(app.srv)
 
@@ -1412,7 +1411,7 @@ logging:
 			Format: "text",
 		},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 重载配置
 	app.reloadConfig()
@@ -1447,7 +1446,7 @@ logging:
 	app.cfg = &config.Config{
 		Servers: []config.ServerConfig{{Listen: ":8080"}},
 	}
-	app.logger = logging.NewAppLogger(&config.LoggingConfig{})
+	app.logger = setupTestLogger()
 
 	// 发送 SIGHUP 信号
 	result := app.handleSignal(syscall.SIGHUP)
