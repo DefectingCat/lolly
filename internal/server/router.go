@@ -98,54 +98,66 @@ func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerC
 	}
 }
 
+// configureStaticHandler 配置静态文件处理器。
+// 返回配置好的 StaticHandler，由调用者执行路由注册。
+func (s *Server) configureStaticHandler(static *config.StaticConfig, cfg *config.ServerConfig) *handler.StaticHandler {
+	path := static.Path
+	if path == "" {
+		path = "/"
+	}
+
+	staticHandler := handler.NewStaticHandler(
+		static.Root,
+		path,
+		static.Index,
+		true, // useSendfile
+	)
+	// 设置 alias（与 root 互斥）
+	if static.Alias != "" {
+		staticHandler.SetAlias(static.Alias)
+	}
+	if s.fileCache != nil {
+		staticHandler.SetFileCache(s.fileCache)
+		// 设置默认缓存 TTL (5s)
+		staticHandler.SetCacheTTL(5 * time.Second)
+	}
+	if cfg.Compression.GzipStatic {
+		// extensions: 源文件类型，为空使用默认值
+		// GzipStaticExtensions: 预压缩文件扩展名（如 .br, .gz）
+		staticHandler.SetGzipStatic(true, nil, cfg.Compression.GzipStaticExtensions)
+	}
+
+	// 设置符号链接安全检查
+	staticHandler.SetSymlinkCheck(static.SymlinkCheck)
+
+	// 设置 internal 限制
+	staticHandler.SetInternal(static.Internal)
+
+	// 设置缓存过期时间
+	if static.Expires != "" {
+		staticHandler.SetExpires(static.Expires)
+	}
+
+	// 设置目录列表
+	if static.AutoIndex {
+		staticHandler.SetAutoIndex(
+			static.AutoIndex,
+			static.AutoIndexFormat,
+			static.AutoIndexLocaltime,
+			static.AutoIndexExactSize,
+		)
+	}
+
+	return staticHandler
+}
+
 // registerStaticHandlersWithLocationEngine 使用 LocationEngine 注册静态文件处理器。
 func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConfig) {
 	for _, static := range cfg.Static {
+		staticHandler := s.configureStaticHandler(&static, cfg)
 		path := static.Path
 		if path == "" {
 			path = "/"
-		}
-
-		staticHandler := handler.NewStaticHandler(
-			static.Root,
-			path,
-			static.Index,
-			true, // useSendfile
-		)
-		// 设置 alias（与 root 互斥）
-		if static.Alias != "" {
-			staticHandler.SetAlias(static.Alias)
-		}
-		if s.fileCache != nil {
-			staticHandler.SetFileCache(s.fileCache)
-			// 设置默认缓存 TTL (5s)
-			staticHandler.SetCacheTTL(5 * time.Second)
-		}
-		if cfg.Compression.GzipStatic {
-			// extensions: 源文件类型，为空使用默认值
-			// GzipStaticExtensions: 预压缩文件扩展名（如 .br, .gz）
-			staticHandler.SetGzipStatic(true, nil, cfg.Compression.GzipStaticExtensions)
-		}
-
-		// 设置符号链接安全检查
-		staticHandler.SetSymlinkCheck(static.SymlinkCheck)
-
-		// 设置 internal 限制
-		staticHandler.SetInternal(static.Internal)
-
-		// 设置缓存过期时间
-		if static.Expires != "" {
-			staticHandler.SetExpires(static.Expires)
-		}
-
-		// 设置目录列表
-		if static.AutoIndex {
-			staticHandler.SetAutoIndex(
-				static.AutoIndex,
-				static.AutoIndexFormat,
-				static.AutoIndexLocaltime,
-				static.AutoIndexExactSize,
-			)
 		}
 
 		// 根据 LocationType 注册路由
@@ -214,51 +226,10 @@ func (s *Server) registerProxyRoutes(router *handler.Router, serverCfg *config.S
 //   - cfg: 服务器配置，包含静态文件和压缩设置
 func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.ServerConfig) {
 	for _, static := range cfg.Static {
+		staticHandler := s.configureStaticHandler(&static, cfg)
 		path := static.Path
 		if path == "" {
 			path = "/"
-		}
-
-		staticHandler := handler.NewStaticHandler(
-			static.Root,
-			path,
-			static.Index,
-			true, // useSendfile
-		)
-		// 设置 alias（与 root 互斥）
-		if static.Alias != "" {
-			staticHandler.SetAlias(static.Alias)
-		}
-		if s.fileCache != nil {
-			staticHandler.SetFileCache(s.fileCache)
-			// 设置默认缓存 TTL (5s)
-			staticHandler.SetCacheTTL(5 * time.Second)
-		}
-		if cfg.Compression.GzipStatic {
-			// extensions: 源文件类型，为空使用默认值
-			// GzipStaticExtensions: 预压缩文件扩展名（如 .br, .gz）
-			staticHandler.SetGzipStatic(true, nil, cfg.Compression.GzipStaticExtensions)
-		}
-
-		// 设置符号链接安全检查
-		staticHandler.SetSymlinkCheck(static.SymlinkCheck)
-
-		// 设置 internal 限制
-		staticHandler.SetInternal(static.Internal)
-
-		// 设置缓存过期时间
-		if static.Expires != "" {
-			staticHandler.SetExpires(static.Expires)
-		}
-
-		// 设置目录列表
-		if static.AutoIndex {
-			staticHandler.SetAutoIndex(
-				static.AutoIndex,
-				static.AutoIndexFormat,
-				static.AutoIndexLocaltime,
-				static.AutoIndexExactSize,
-			)
 		}
 
 		// 设置 try_files 配置
