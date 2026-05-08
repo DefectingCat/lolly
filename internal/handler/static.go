@@ -190,6 +190,28 @@ func (h *StaticHandler) GetRoot() string {
 	return h.root
 }
 
+// stripPathPrefix 剥离路径前缀（零分配）。
+// 使用切片替代 strings.TrimPrefix，避免内存分配。
+func (h *StaticHandler) stripPathPrefix(reqPath string) string {
+	relPath := reqPath
+	if h.pathPrefixLen > 0 {
+		relPath = reqPath[h.pathPrefixLen:]
+		if len(relPath) > 0 && relPath[0] != '/' {
+			relPath = "/" + relPath
+		}
+	}
+	return relPath
+}
+
+// buildFilePath 构建完整文件路径。
+// 支持 alias 和 root 两种模式。
+func (h *StaticHandler) buildFilePath(relPath string) string {
+	if h.alias != "" {
+		return filepath.Join(h.alias, relPath)
+	}
+	return filepath.Join(h.root, relPath)
+}
+
 // SetFileCache 设置文件缓存。
 //
 // 为静态文件处理器启用文件缓存功能。
@@ -373,26 +395,15 @@ func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 //   - ctx: fasthttp 请求上下文
 //   - reqPath: 原始请求路径
 func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string) {
-	// 零分配路径剥离：使用切片替代 strings.TrimPrefix
-	relPath := reqPath
-	if h.pathPrefixLen > 0 {
-		relPath = reqPath[h.pathPrefixLen:]
-		if len(relPath) > 0 && relPath[0] != '/' {
-			relPath = "/" + relPath
-		}
-	}
+	// 零分配路径剥离
+	relPath := h.stripPathPrefix(reqPath)
 
 	for _, tryFile := range h.tryFiles {
 		// 解析占位符
 		targetPath := h.resolveTryFilePath(tryFile, relPath)
 
-		// 构建完整文件路径（支持 alias 和 root）
-		var filePath string
-		if h.alias != "" {
-			filePath = filepath.Join(h.alias, targetPath)
-		} else {
-			filePath = filepath.Join(h.root, targetPath)
-		}
+		// 构建完整文件路径
+		filePath := h.buildFilePath(targetPath)
 
 		// 检查文件/目录是否存在
 		// 先查 FileInfo 缓存
@@ -527,12 +538,7 @@ func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetP
 	}
 
 	// tryFilesPass 为 false（默认），直接服务文件，不触发中间件
-	var filePath string
-	if h.alias != "" {
-		filePath = filepath.Join(h.alias, targetPath)
-	} else {
-		filePath = filepath.Join(h.root, targetPath)
-	}
+	filePath := h.buildFilePath(targetPath)
 
 	// 先查 FileInfo 缓存
 	var info os.FileInfo
@@ -568,25 +574,11 @@ func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetP
 //   - ctx: fasthttp 请求上下文
 //   - reqPath: 请求路径
 func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string) {
-	// 计算文件路径
-	var filePath string
+	// 零分配路径剥离
+	relPath := h.stripPathPrefix(reqPath)
 
-	// 零分配路径剥离：使用切片替代 strings.TrimPrefix
-	relPath := reqPath
-	if h.pathPrefixLen > 0 {
-		relPath = reqPath[h.pathPrefixLen:]
-		if len(relPath) > 0 && relPath[0] != '/' {
-			relPath = "/" + relPath
-		}
-	}
-
-	if h.alias != "" {
-		// alias 模式：将匹配的路径前缀替换为 alias
-		filePath = filepath.Join(h.alias, relPath)
-	} else {
-		// root 模式：将请求路径附加到 root
-		filePath = filepath.Join(h.root, relPath)
-	}
+	// 构建完整文件路径
+	filePath := h.buildFilePath(relPath)
 
 	// 检查文件/目录是否存在
 	// 先查 FileInfo 缓存（TTL 内信任缓存，不验证 ModTime）
