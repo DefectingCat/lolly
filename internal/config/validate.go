@@ -116,8 +116,13 @@ func ValidateEnum(value string, validValues []string, fieldName string) error {
 	return fmt.Errorf("无效的 %s: %s（仅支持 %v）", fieldName, value, validValues)
 }
 
-// ValidateNonNegative 验证值为非负数
-func ValidateNonNegative(value int, fieldName string) error {
+// SignedInteger 约束：有符号整数类型
+type SignedInteger interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64
+}
+
+// ValidateNonNegative 验证值为非负数（泛型版本）
+func ValidateNonNegative[T SignedInteger](value T, fieldName string) error {
 	if value < 0 {
 		return fmt.Errorf("%s 不能为负数", fieldName)
 	}
@@ -125,19 +130,15 @@ func ValidateNonNegative(value int, fieldName string) error {
 }
 
 // ValidateNonNegativeInt64 验证 int64 值为非负数
+// Deprecated: 使用 ValidateNonNegative[int64] 代替
 func ValidateNonNegativeInt64(value int64, fieldName string) error {
-	if value < 0 {
-		return fmt.Errorf("%s 不能为负数", fieldName)
-	}
-	return nil
+	return ValidateNonNegative(value, fieldName)
 }
 
 // ValidateNonNegativeDuration 验证 time.Duration 值为非负数
+// Deprecated: 使用 ValidateNonNegative[int64] 代替（time.Duration 是 int64 别名）
 func ValidateNonNegativeDuration(value time.Duration, fieldName string) error {
-	if value < 0 {
-		return fmt.Errorf("%s 不能为负数", fieldName)
-	}
-	return nil
+	return ValidateNonNegative(int64(value), fieldName)
 }
 
 // ValidateNoNullByte 验证字符串不包含 null byte
