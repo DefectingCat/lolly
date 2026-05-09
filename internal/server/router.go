@@ -4,11 +4,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/handler"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/logging"
+	"rua.plus/lolly/internal/lua"
 	"rua.plus/lolly/internal/matcher"
+	"rua.plus/lolly/internal/middleware"
+	"rua.plus/lolly/internal/middleware/errorintercept"
 	"rua.plus/lolly/internal/proxy"
 )
 
@@ -247,4 +251,80 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 		router.GET(routePath+"{filepath:*}", staticHandler.Handle)
 		router.HEAD(routePath+"{filepath:*}", staticHandler.Handle)
 	}
+}
+
+// registerLuaRoutesWithLocationEngine 使用 LocationEngine 注册 Lua 路由。
+//
+// 遍历 Lua 配置中的脚本，为带有 Route 配置的脚本创建 LuaRouteHandler
+// 并注册到 LocationEngine。
+//
+// 参数：
+//   - serverCfg: 服务器配置，包含 Lua 脚本配置
+//
+// 注意事项：
+//   - 只有设置了 Route 字段的脚本才会被注册
+//   - 路由脚本不经过完整中间件链，只应用 accesslog 和 errorintercept
+//   - 支持 exact、prefix、prefix_priority、regex、regex_caseless 匹配类型
+func (s *Server) registerLuaRoutesWithLocationEngine(serverCfg *config.ServerConfig) {
+	if s.luaEngine == nil || serverCfg.Lua == nil || !serverCfg.Lua.Enabled {
+		return
+	}
+
+	for _, script := range serverCfg.Lua.Scripts {
+		if script.Route == "" {
+			continue
+		}
+
+		timeout := script.Timeout
+		if timeout == 0 {
+			timeout = 30 * time.Second
+		}
+		luaHandler := lua.NewLuaRouteHandler(s.luaEngine, script.Path, timeout)
+		handler := s.wrapRoutedHandler(luaHandler.ServeHTTP)
+
+		routeType := script.RouteType
+		if routeType == "" {
+			routeType = matcher.LocationTypePrefix
+		}
+
+		switch routeType {
+		case matcher.LocationTypeExact:
+			_ = s.locationEngine.AddExact(script.Route, handler, false)
+		case matcher.LocationTypePrefixPriority:
+			_ = s.locationEngine.AddPrefixPriority(script.Route, handler, false)
+		case matcher.LocationTypeRegex:
+			_ = s.locationEngine.AddRegex(script.Route, handler, false, false)
+		case matcher.LocationTypeRegexCaseless:
+			_ = s.locationEngine.AddRegex(script.Route, handler, true, false)
+		default:
+			_ = s.locationEngine.AddPrefix(script.Route, handler, false)
+		}
+	}
+}
+
+// wrapRoutedHandler 为路由处理器包装基础中间件链。
+//
+// 路由处理器（如 LuaRouteHandler）需要基础的访问日志和错误页面处理，
+// 但不需要完整的中间件链（如认证、限流等）。
+//
+// 参数：
+//   - handler: 原始请求处理器
+//
+// 返回值：
+//   - fasthttp.RequestHandler: 包装后的处理器
+func (s *Server) wrapRoutedHandler(handler fasthttp.RequestHandler) fasthttp.RequestHandler {
+	var chain []middleware.Middleware
+
+	if s.accessLogMiddleware != nil {
+		chain = append(chain, s.accessLogMiddleware)
+	}
+
+	if s.errorPageManager != nil && s.errorPageManager.IsConfigured() {
+		chain = append(chain, errorintercept.New(s.errorPageManager))
+	}
+
+	if len(chain) == 0 {
+		return handler
+	}
+	return middleware.NewChain(chain...).Apply(handler)
 }
