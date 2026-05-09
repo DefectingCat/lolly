@@ -151,11 +151,11 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	engine := &LuaEngine{
-		config:        config,
-		codeCache:     NewCodeCache(config.CodeCacheSize, config.CodeCacheTTL, config.EnableFileWatch),
-		maxCoroutines: config.MaxConcurrentCoroutines,
-		ctx:           ctx,
-		cancel:        cancel,
+		config:            config,
+		codeCache:         NewCodeCache(config.CodeCacheSize, config.CodeCacheTTL, config.EnableFileWatch),
+		maxCoroutines:     config.MaxConcurrentCoroutines,
+		ctx:               ctx,
+		cancel:            cancel,
 		sharedDictManager: NewSharedDictManager(),
 		coroutinePool: sync.Pool{
 			New: func() any {

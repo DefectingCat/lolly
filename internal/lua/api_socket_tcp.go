@@ -869,7 +869,6 @@ func (c *LuaCoroutine) handleCosocketConnect(values []glua.LValue) ([]glua.LValu
 		return []glua.LValue{glua.LNil, glua.LNil}, nil
 	}
 
-	_ = result // 连接成功，返回 1
 	return []glua.LValue{glua.LNumber(1)}, nil
 }
 

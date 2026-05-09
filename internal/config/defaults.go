@@ -69,8 +69,8 @@ func DefaultConfig() *Config {
 					CodeCacheSize:           1000,
 					EnableFileWatch:         true,
 					MaxExecutionTime:        30 * time.Second,
-						LStatePoolInitialSize:   100,
-						LStatePoolMaxSize:       1000,
+					LStatePoolInitialSize:   100,
+					LStatePoolMaxSize:       1000,
 				},
 			},
 			Static: []StaticConfig{{

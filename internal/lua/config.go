@@ -87,8 +87,8 @@ func DefaultConfig() *Config {
 		EnableLoadLib:           false,
 		CoroutineStackSize:      64, // 优化：较小的栈减少内存分配
 		MinimizeStackMemory:     true,
-		CoroutinePoolWarmup:     4,   // 预热4个协程结构
-		LStatePoolInitialSize:   100, // LState 池预热 100 个
+		CoroutinePoolWarmup:     4,    // 预热4个协程结构
+		LStatePoolInitialSize:   100,  // LState 池预热 100 个
 		LStatePoolMaxSize:       1000, // LState 池最大 1000 个（与 MaxConcurrentCoroutines 匹配）
 	}
 }

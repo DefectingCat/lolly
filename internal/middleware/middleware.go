@@ -15,9 +15,11 @@
 // 作者：xfy
 package middleware
 
-import "slices"
+import (
+	"slices"
 
-import "github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp"
+)
 
 // Middleware 中间件接口，定义中间件的标准方法。
 //

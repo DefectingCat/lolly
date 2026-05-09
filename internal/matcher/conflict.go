@@ -5,9 +5,10 @@
 // 作者：xfy
 package matcher
 
-import "maps"
-
-import "fmt"
+import (
+	"fmt"
+	"maps"
+)
 
 // ConflictDetector 路径冲突检测器。
 //

@@ -111,8 +111,8 @@ func initLuaEngine(luaCfg *config.LuaMiddlewareConfig) (*lua.LuaEngine, error) {
 		EnableOSLib:             false, // 安全默认值
 		EnableIOLib:             false,
 		EnableLoadLib:           false,
-			LStatePoolInitialSize:   luaCfg.GlobalSettings.LStatePoolInitialSize,
-			LStatePoolMaxSize:       luaCfg.GlobalSettings.LStatePoolMaxSize,
+		LStatePoolInitialSize:   luaCfg.GlobalSettings.LStatePoolInitialSize,
+		LStatePoolMaxSize:       luaCfg.GlobalSettings.LStatePoolMaxSize,
 	}
 
 	// 设置协程栈优化选项
