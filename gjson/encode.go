@@ -267,4 +267,3 @@ func formatNumber(n float64, precision int) string {
 	// Use 'g' format for floating point
 	return strconv.FormatFloat(n, 'g', precision, 64)
 }
-

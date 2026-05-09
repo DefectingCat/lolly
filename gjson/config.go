@@ -2,14 +2,14 @@ package gjson
 
 // Default configuration values (matching lua-cjson defaults)
 const (
-	defaultEncodeSparseConvert  = false
-	defaultEncodeSparseRatio    = 2
-	defaultEncodeSparseSafe     = 10
-	defaultEncodeMaxDepth       = 1000
-	defaultDecodeMaxDepth       = 1000
+	defaultEncodeSparseConvert   = false
+	defaultEncodeSparseRatio     = 2
+	defaultEncodeSparseSafe      = 10
+	defaultEncodeMaxDepth        = 1000
+	defaultDecodeMaxDepth        = 1000
 	defaultEncodeNumberPrecision = 14
-	defaultEncodeKeepBuffer     = true
-	defaultEncodeSortKeys       = false // 默认不排序，保持高性能
+	defaultEncodeKeepBuffer      = true
+	defaultEncodeSortKeys        = false // 默认不排序，保持高性能
 )
 
 // sparseArrayConfig controls sparse array handling during encoding.
@@ -21,12 +21,12 @@ type sparseArrayConfig struct {
 
 // Config holds all configuration options for a GJSON instance.
 type Config struct {
-	encodeSparseArray    sparseArrayConfig
-	encodeMaxDepth       int
-	decodeMaxDepth       int
+	encodeSparseArray     sparseArrayConfig
+	encodeMaxDepth        int
+	decodeMaxDepth        int
 	encodeNumberPrecision int
-	encodeKeepBuffer     bool
-	encodeSortKeys       bool // 是否对 object 键排序（稳定输出）
+	encodeKeepBuffer      bool
+	encodeSortKeys        bool // 是否对 object 键排序（稳定输出）
 }
 
 // defaultConfig returns a new Config with default values.
@@ -37,11 +37,11 @@ func defaultConfig() *Config {
 			ratio:   defaultEncodeSparseRatio,
 			safe:    defaultEncodeSparseSafe,
 		},
-		encodeMaxDepth:       defaultEncodeMaxDepth,
-		decodeMaxDepth:       defaultDecodeMaxDepth,
+		encodeMaxDepth:        defaultEncodeMaxDepth,
+		decodeMaxDepth:        defaultDecodeMaxDepth,
 		encodeNumberPrecision: defaultEncodeNumberPrecision,
-		encodeKeepBuffer:     defaultEncodeKeepBuffer,
-		encodeSortKeys:       defaultEncodeSortKeys,
+		encodeKeepBuffer:      defaultEncodeKeepBuffer,
+		encodeSortKeys:        defaultEncodeSortKeys,
 	}
 }
 
@@ -53,10 +53,10 @@ func (c *Config) Clone() *Config {
 			ratio:   c.encodeSparseArray.ratio,
 			safe:    c.encodeSparseArray.safe,
 		},
-		encodeMaxDepth:       c.encodeMaxDepth,
-		decodeMaxDepth:       c.decodeMaxDepth,
+		encodeMaxDepth:        c.encodeMaxDepth,
+		decodeMaxDepth:        c.decodeMaxDepth,
 		encodeNumberPrecision: c.encodeNumberPrecision,
-		encodeKeepBuffer:     c.encodeKeepBuffer,
-		encodeSortKeys:       c.encodeSortKeys,
+		encodeKeepBuffer:      c.encodeKeepBuffer,
+		encodeSortKeys:        c.encodeSortKeys,
 	}
 }

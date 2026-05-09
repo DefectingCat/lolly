@@ -50,7 +50,7 @@ func NewLStatePool(factory func() *glua.LState, initialSize, maxSize int) *LStat
 	}
 
 	// 预热：预先创建 initialSize 个 LState
-	for i := 0; i < initialSize; i++ {
+	for range initialSize {
 		L := p.factory()
 		p.pool = append(p.pool, L)
 		p.current++

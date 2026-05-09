@@ -368,7 +368,6 @@ func (c *LuaCoroutine) executeProto(proto *glua.FunctionProto) error {
 	fn := c.Co.NewFunctionFromProto(proto)
 	c.Co.Push(fn)
 	err := c.Co.PCall(0, 0, nil)
-
 	if err != nil {
 		atomic.AddUint64(&c.Engine.stats.ScriptsErrors, 1)
 		return fmt.Errorf("lua execution error: %w", err)
