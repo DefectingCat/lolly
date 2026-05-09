@@ -2,6 +2,7 @@ package gjson
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -159,7 +160,51 @@ func encodeArray(L *glua.LState, tbl *glua.LTable, maxIndex int, config *Config,
 
 // encodeObject encodes a Lua table as a JSON object.
 func encodeObject(L *glua.LState, tbl *glua.LTable, config *Config, depth int) (string, error) {
-	elements := make([]string, 0)
+	// 快速路径：不需要排序时直接编码
+	if !config.encodeSortKeys {
+		elements := make([]string, 0)
+		var encodeErr error
+		tbl.ForEach(func(key, value glua.LValue) {
+			if encodeErr != nil {
+				return
+			}
+
+			// Encode key
+			var keyStr string
+			switch k := key.(type) {
+			case glua.LString:
+				encoded, _ := json.Marshal(string(k))
+				keyStr = string(encoded)
+			case glua.LNumber:
+				keyStr = formatNumber(float64(k), config.encodeNumberPrecision)
+				keyStr = "\"" + keyStr + "\""
+			default:
+				return
+			}
+
+			// Encode value
+			valStr, err := encodeLuaValue(L, value, config, depth+1)
+			if err != nil {
+				encodeErr = err
+				return
+			}
+
+			elements = append(elements, keyStr+":"+valStr)
+		})
+
+		if encodeErr != nil {
+			return "", encodeErr
+		}
+
+		return "{" + strings.Join(elements, ",") + "}", nil
+	}
+
+	// 排序路径：收集所有键值对后排序
+	type kv struct {
+		key   string
+		value glua.LValue
+	}
+	pairs := make([]kv, 0)
 
 	var encodeErr error
 	tbl.ForEach(func(key, value glua.LValue) {
@@ -174,26 +219,32 @@ func encodeObject(L *glua.LState, tbl *glua.LTable, config *Config, depth int) (
 			encoded, _ := json.Marshal(string(k))
 			keyStr = string(encoded)
 		case glua.LNumber:
-			// Numeric keys are converted to strings
 			keyStr = formatNumber(float64(k), config.encodeNumberPrecision)
-			// Quote the numeric key for JSON object
 			keyStr = "\"" + keyStr + "\""
 		default:
-			return // Skip invalid keys
-		}
-
-		// Encode value
-		valStr, err := encodeLuaValue(L, value, config, depth+1)
-		if err != nil {
-			encodeErr = err
 			return
 		}
 
-		elements = append(elements, keyStr+":"+valStr)
+		pairs = append(pairs, kv{key: keyStr, value: value})
 	})
 
 	if encodeErr != nil {
 		return "", encodeErr
+	}
+
+	// 按键排序（保证输出顺序稳定）
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].key < pairs[j].key
+	})
+
+	// 编码值
+	elements := make([]string, 0, len(pairs))
+	for _, p := range pairs {
+		valStr, err := encodeLuaValue(L, p.value, config, depth+1)
+		if err != nil {
+			return "", err
+		}
+		elements = append(elements, p.key+":"+valStr)
 	}
 
 	return "{" + strings.Join(elements, ",") + "}", nil

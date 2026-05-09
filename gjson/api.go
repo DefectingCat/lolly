@@ -111,6 +111,23 @@ func (g *GJSON) cfgEncodeKeepBuffer(L *glua.LState) int {
 	return 1
 }
 
+// cfgEncodeSortKeys configures whether to sort object keys for stable output.
+// Lua: gjson.encode_sort_keys([sort])
+// Returns current value when called without arguments.
+// When enabled, object keys are sorted alphabetically for deterministic output.
+// When disabled (default), keys are output in arbitrary order for better performance.
+func (g *GJSON) cfgEncodeSortKeys(L *glua.LState) int {
+	if L.GetTop() == 0 {
+		L.Push(glua.LBool(g.config.encodeSortKeys))
+		return 1
+	}
+
+	g.config.encodeSortKeys = L.CheckBool(1)
+
+	L.Push(glua.LBool(g.config.encodeSortKeys))
+	return 1
+}
+
 // encode is the Lua function for gjson.encode(value).
 // Returns (json_string, nil) on success or (nil, error_message) on failure.
 func (g *GJSON) encode(L *glua.LState) int {

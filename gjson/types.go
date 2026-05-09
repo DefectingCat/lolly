@@ -49,6 +49,7 @@ func gjsonNew(L *glua.LState) int {
 	L.SetField(tbl, "decode_max_depth", L.NewFunction(instance.cfgDecodeMaxDepth))
 	L.SetField(tbl, "encode_number_precision", L.NewFunction(instance.cfgEncodeNumberPrecision))
 	L.SetField(tbl, "encode_keep_buffer", L.NewFunction(instance.cfgEncodeKeepBuffer))
+	L.SetField(tbl, "encode_sort_keys", L.NewFunction(instance.cfgEncodeSortKeys))
 	L.SetField(tbl, "new", L.NewFunction(gjsonNew))
 
 	// Set null

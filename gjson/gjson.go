@@ -63,6 +63,7 @@ func Loader(L *glua.LState) int {
 	L.SetField(mod, "decode_max_depth", L.NewFunction(instance.cfgDecodeMaxDepth))
 	L.SetField(mod, "encode_number_precision", L.NewFunction(instance.cfgEncodeNumberPrecision))
 	L.SetField(mod, "encode_keep_buffer", L.NewFunction(instance.cfgEncodeKeepBuffer))
+	L.SetField(mod, "encode_sort_keys", L.NewFunction(instance.cfgEncodeSortKeys))
 	L.SetField(mod, "new", L.NewFunction(gjsonNew))
 
 	// Set gjson.null (lightuserdata representing JSON null)
@@ -94,6 +95,7 @@ func RegisterGlobal(L *glua.LState) {
 	L.SetField(mod, "decode_max_depth", L.NewFunction(instance.cfgDecodeMaxDepth))
 	L.SetField(mod, "encode_number_precision", L.NewFunction(instance.cfgEncodeNumberPrecision))
 	L.SetField(mod, "encode_keep_buffer", L.NewFunction(instance.cfgEncodeKeepBuffer))
+	L.SetField(mod, "encode_sort_keys", L.NewFunction(instance.cfgEncodeSortKeys))
 	L.SetField(mod, "new", L.NewFunction(gjsonNew))
 	L.SetField(mod, "null", instance.null)
 	L.SetField(mod, "_NAME", glua.LString(ModuleName))

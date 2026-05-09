@@ -349,3 +349,40 @@ func TestEncodeSparseArray(t *testing.T) {
 		t.Fatalf("test failed: %v", err)
 	}
 }
+
+func TestEncodeSortKeys(t *testing.T) {
+	L := glua.NewState()
+	defer L.Close()
+
+	Preload(L)
+
+	err := L.DoString(`
+		local gjson = require("gjson")
+
+		-- Test default (no sorting)
+		local default_sort = gjson.encode_sort_keys()
+		assert(default_sort == false, "default should be false")
+
+		-- Enable sorting (returns new value)
+		local new_val = gjson.encode_sort_keys(true)
+		assert(new_val == true, "should return new value")
+		assert(gjson.encode_sort_keys() == true, "should be true now")
+
+		-- Test sorted output
+		local data = {c = 3, a = 1, b = 2}
+		local result = gjson.encode(data)
+		-- Keys should be in alphabetical order: a, b, c
+		local a_pos = string.find(result, '"a"')
+		local b_pos = string.find(result, '"b"')
+		local c_pos = string.find(result, '"c"')
+		assert(a_pos < b_pos, "a should come before b")
+		assert(b_pos < c_pos, "b should come before c")
+
+		-- Disable sorting (back to fast mode)
+		gjson.encode_sort_keys(false)
+		assert(gjson.encode_sort_keys() == false, "should be false again")
+	`)
+	if err != nil {
+		t.Fatalf("test failed: %v", err)
+	}
+}

@@ -9,6 +9,7 @@ const (
 	defaultDecodeMaxDepth       = 1000
 	defaultEncodeNumberPrecision = 14
 	defaultEncodeKeepBuffer     = true
+	defaultEncodeSortKeys       = false // 默认不排序，保持高性能
 )
 
 // sparseArrayConfig controls sparse array handling during encoding.
@@ -25,6 +26,7 @@ type Config struct {
 	decodeMaxDepth       int
 	encodeNumberPrecision int
 	encodeKeepBuffer     bool
+	encodeSortKeys       bool // 是否对 object 键排序（稳定输出）
 }
 
 // defaultConfig returns a new Config with default values.
@@ -39,6 +41,7 @@ func defaultConfig() *Config {
 		decodeMaxDepth:       defaultDecodeMaxDepth,
 		encodeNumberPrecision: defaultEncodeNumberPrecision,
 		encodeKeepBuffer:     defaultEncodeKeepBuffer,
+		encodeSortKeys:       defaultEncodeSortKeys,
 	}
 }
 
@@ -54,5 +57,6 @@ func (c *Config) Clone() *Config {
 		decodeMaxDepth:       c.decodeMaxDepth,
 		encodeNumberPrecision: c.encodeNumberPrecision,
 		encodeKeepBuffer:     c.encodeKeepBuffer,
+		encodeSortKeys:       c.encodeSortKeys,
 	}
 }
