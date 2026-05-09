@@ -28,6 +28,7 @@ import (
 )
 
 func TestNewStatusHandler_CIDR(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		allow   []string
@@ -80,6 +81,7 @@ func TestNewStatusHandler_CIDR(t *testing.T) {
 }
 
 func TestNewStatusHandler_SingleIP(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		allow   []string
@@ -130,6 +132,7 @@ func TestNewStatusHandler_SingleIP(t *testing.T) {
 }
 
 func TestNewStatusHandler_InvalidIP(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		allow []string
@@ -164,6 +167,7 @@ func TestNewStatusHandler_InvalidIP(t *testing.T) {
 }
 
 func TestStatusHandler_Path(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		cfgPath  string
@@ -206,6 +210,7 @@ func TestStatusHandler_Path(t *testing.T) {
 }
 
 func TestStatusHandler_checkAccess(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		clientIP   string
@@ -292,6 +297,7 @@ func TestStatusHandler_checkAccess(t *testing.T) {
 }
 
 func TestStatusHandler_ServeHTTP_NoAllowList(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:  "/_status",
 		Allow: []string{},
@@ -318,6 +324,7 @@ func TestStatusHandler_ServeHTTP_NoAllowList(t *testing.T) {
 }
 
 func TestGetClientIPForStatus_XForwardedFor(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		xff    string
@@ -360,6 +367,7 @@ func TestGetClientIPForStatus_XForwardedFor(t *testing.T) {
 // 在没有初始化连接的情况下，行为取决于 fasthttp 的默认值
 
 func TestGetClientIPForStatus_XRealIP(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		xri    string
@@ -393,6 +401,7 @@ func TestGetClientIPForStatus_XRealIP(t *testing.T) {
 }
 
 func TestGetClientIPForStatus_Priority(t *testing.T) {
+	t.Parallel()
 	// X-Forwarded-For 优先级高于 X-Real-IP
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.Header.Set("X-Forwarded-For", "10.0.0.1")
@@ -407,6 +416,7 @@ func TestGetClientIPForStatus_Priority(t *testing.T) {
 }
 
 func TestCollectStatus(t *testing.T) {
+	t.Parallel()
 	// 创建服务器实例用于测试
 	srv := New(nil)
 	srv.startTime = time.Now()
@@ -448,6 +458,7 @@ func TestCollectStatus(t *testing.T) {
 }
 
 func TestCollectStatus_WithPool(t *testing.T) {
+	t.Parallel()
 	srv := New(nil)
 	srv.startTime = time.Now()
 	srv.pool = NewGoroutinePool(PoolConfig{
@@ -480,6 +491,7 @@ func TestCollectStatus_WithPool(t *testing.T) {
 }
 
 func TestCollectStatus_WithFileCache(t *testing.T) {
+	t.Parallel()
 	srv := New(nil)
 	srv.startTime = time.Now()
 
@@ -503,6 +515,7 @@ func TestCollectStatus_WithFileCache(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestStatusHandler_ServeHTTP_JSONFormat(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "json",
@@ -556,6 +569,7 @@ func TestStatusHandler_ServeHTTP_JSONFormat(t *testing.T) {
 }
 
 func TestStatusHandler_ServeHTTP_HTMLFormat(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "html",
@@ -603,6 +617,7 @@ func TestStatusHandler_ServeHTTP_HTMLFormat(t *testing.T) {
 }
 
 func TestStatusHandler_ServeHTTP_TextFormat(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "text",
@@ -656,6 +671,7 @@ func TestStatusHandler_ServeHTTP_TextFormat(t *testing.T) {
 }
 
 func TestStatusHandler_ServeHTTP_PrometheusFormat(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "prometheus",
@@ -713,6 +729,7 @@ func TestStatusHandler_ServeHTTP_PrometheusFormat(t *testing.T) {
 }
 
 func TestStatusHandler_ServeHTTP_DefaultFormat(t *testing.T) {
+	t.Parallel()
 	// Format 为空时应回退到 JSON
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
@@ -749,6 +766,7 @@ func TestStatusHandler_ServeHTTP_DefaultFormat(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestStatusHandler_ServeHTTP_AccessDenied(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "json",
@@ -776,6 +794,7 @@ func TestStatusHandler_ServeHTTP_AccessDenied(t *testing.T) {
 }
 
 func TestStatusHandler_ServeHTTP_AccessAllowed_ByCIDR(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "json",
@@ -802,6 +821,7 @@ func TestStatusHandler_ServeHTTP_AccessAllowed_ByCIDR(t *testing.T) {
 }
 
 func TestStatusHandler_New_localhost(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:  "/_status",
 		Allow: []string{"localhost"},
@@ -845,6 +865,7 @@ func TestStatusHandler_New_localhost(t *testing.T) {
 }
 
 func TestStatusHandler_checkAccess_AllowList(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		allow      []string
@@ -910,6 +931,7 @@ func TestStatusHandler_checkAccess_AllowList(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCollectStatus_WithFullData(t *testing.T) {
+	t.Parallel()
 	srv := New(nil)
 	srv.startTime = time.Now()
 	srv.connections.Store(42)
@@ -981,6 +1003,7 @@ func TestCollectStatus_WithFullData(t *testing.T) {
 }
 
 func TestCollectStatus_NilServerFields(t *testing.T) {
+	t.Parallel()
 	srv := New(nil)
 	srv.startTime = time.Now()
 	// fileCache 和 pool 都为 nil
@@ -1005,6 +1028,7 @@ func TestCollectStatus_NilServerFields(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestStatusHandler_ServeHTTP_HTMLWithAllSections(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "html",
@@ -1062,6 +1086,7 @@ func TestStatusHandler_ServeHTTP_HTMLWithAllSections(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestStatusHandler_ServeHTTP_TextWithPool(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "text",
@@ -1105,6 +1130,7 @@ func TestStatusHandler_ServeHTTP_TextWithPool(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestStatusHandler_ServeHTTP_PrometheusWithCache(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "prometheus",
@@ -1161,6 +1187,7 @@ func TestStatusHandler_ServeHTTP_PrometheusWithCache(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestStatusHandler_ServeHTTP_AccessDenied_XForwardedFor(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "json",
@@ -1188,6 +1215,7 @@ func TestStatusHandler_ServeHTTP_AccessDenied_XForwardedFor(t *testing.T) {
 }
 
 func TestStatusHandler_ServeHTTP_AccessAllowed_XForwardedFor(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "json",
@@ -1218,6 +1246,7 @@ func TestStatusHandler_ServeHTTP_AccessAllowed_XForwardedFor(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestServePrometheus_WithUpstreams(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "prometheus",
@@ -1281,6 +1310,7 @@ func TestServePrometheus_WithUpstreams(t *testing.T) {
 }
 
 func TestServePrometheus_WithSSL(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "prometheus",
@@ -1326,6 +1356,7 @@ func TestServePrometheus_WithSSL(t *testing.T) {
 }
 
 func TestServePrometheus_WithRateLimits(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "prometheus",
@@ -1383,6 +1414,7 @@ func TestServePrometheus_WithRateLimits(t *testing.T) {
 }
 
 func TestServePrometheus_WithProxyCache(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "prometheus",
@@ -1438,6 +1470,7 @@ func TestServePrometheus_WithProxyCache(t *testing.T) {
 }
 
 func TestServeJSON_WithFullStatus(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "json",
@@ -1554,6 +1587,7 @@ func TestServeJSON_WithFullStatus(t *testing.T) {
 }
 
 func TestServeText_WithAllSections(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "text",
@@ -1696,6 +1730,7 @@ func TestServeText_WithAllSections(t *testing.T) {
 }
 
 func TestServeHTML_WithAllSections(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "html",
@@ -1853,6 +1888,7 @@ func TestServeHTML_WithAllSections(t *testing.T) {
 }
 
 func TestServeText_WithEmptyUpstreams(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "text",
@@ -1889,6 +1925,7 @@ func TestServeText_WithEmptyUpstreams(t *testing.T) {
 }
 
 func TestServeHTML_WithEmptyRateLimits(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "html",
@@ -1925,6 +1962,7 @@ func TestServeHTML_WithEmptyRateLimits(t *testing.T) {
 }
 
 func TestServePrometheus_WithMultipleUpstreams(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "prometheus",
@@ -1984,6 +2022,7 @@ func TestServePrometheus_WithMultipleUpstreams(t *testing.T) {
 }
 
 func TestServeText_WithCacheOnly(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "text",
@@ -2046,6 +2085,7 @@ func TestServeText_WithCacheOnly(t *testing.T) {
 }
 
 func TestServeHTML_WithSSLAndRateLimits(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "html",
@@ -2114,6 +2154,7 @@ func TestServeHTML_WithSSLAndRateLimits(t *testing.T) {
 }
 
 func TestServePrometheus_WithPool(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "prometheus",
@@ -2162,6 +2203,7 @@ func TestServePrometheus_WithPool(t *testing.T) {
 }
 
 func TestServePrometheus_ZeroValues(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "prometheus",
@@ -2204,6 +2246,7 @@ func TestServePrometheus_ZeroValues(t *testing.T) {
 }
 
 func TestServeText_ZeroValues(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "text",
@@ -2245,6 +2288,7 @@ func TestServeText_ZeroValues(t *testing.T) {
 }
 
 func TestServeHTML_ZeroValues(t *testing.T) {
+	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
 		Format: "html",

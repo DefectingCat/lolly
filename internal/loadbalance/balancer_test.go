@@ -35,6 +35,7 @@ func createHealthyTarget(url string, healthy bool) *Target {
 
 // TestRoundRobin_Select 测试轮询负载均衡选择器。
 func TestRoundRobin_Select(t *testing.T) {
+	t.Parallel()
 	t.Run("多目标轮询", func(_ *testing.T) {
 		rr := NewRoundRobin()
 		targets := []*Target{
@@ -135,6 +136,7 @@ func TestRoundRobin_Select(t *testing.T) {
 
 // TestWeightedRoundRobin_Select 测试加权轮询负载均衡选择器。
 func TestWeightedRoundRobin_Select(t *testing.T) {
+	t.Parallel()
 	t.Run("权重分配", func(_ *testing.T) {
 		wrr := NewWeightedRoundRobin()
 		targets := []*Target{
@@ -237,6 +239,7 @@ func TestWeightedRoundRobin_Select(t *testing.T) {
 
 // TestLeastConnections_Select 测试最少连接负载均衡选择器。
 func TestLeastConnections_Select(t *testing.T) {
+	t.Parallel()
 	t.Run("选择最少连接", func(_ *testing.T) {
 		lc := NewLeastConnections()
 		target1 := &Target{URL: "http://backend1:8080", Connections: 10}
@@ -318,6 +321,7 @@ func TestLeastConnections_Select(t *testing.T) {
 
 // TestIPHash_Select 测试IP哈希负载均衡选择器。
 func TestIPHash_Select(t *testing.T) {
+	t.Parallel()
 	t.Run("相同IP返回相同目标", func(_ *testing.T) {
 		ih := NewIPHash()
 		targets := []*Target{
@@ -410,6 +414,7 @@ func TestIPHash_Select(t *testing.T) {
 
 // TestConnectionsAtomic 测试连接数的原子操作。
 func TestConnectionsAtomic(t *testing.T) {
+	t.Parallel()
 	t.Run("IncrementConnections", func(_ *testing.T) {
 		target := &Target{URL: "http://backend1:8080", Connections: 0}
 		target.Healthy.Store(true)
@@ -512,6 +517,7 @@ func TestConnectionsAtomic(t *testing.T) {
 
 // TestHealthStatus 测试健康状态操作。
 func TestHealthStatus(t *testing.T) {
+	t.Parallel()
 	t.Run("IsHealthy", func(_ *testing.T) {
 		tests := []struct {
 			target *Target
@@ -560,6 +566,7 @@ func TestHealthStatus(t *testing.T) {
 
 // TestFilterHealthy 测试filterHealthy辅助函数。
 func TestFilterHealthy(t *testing.T) {
+	t.Parallel()
 	t.Run("过滤健康目标", func(_ *testing.T) {
 		targets := []*Target{
 			createHealthyTarget("http://backend1:8080", true),
@@ -622,6 +629,7 @@ func TestFilterHealthy(t *testing.T) {
 
 // TestBalancerInterface 测试各种负载均衡器都实现了Balancer接口。
 func TestBalancerInterface(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		balancer Balancer
 		name     string
@@ -663,6 +671,7 @@ func TestBalancerInterface(t *testing.T) {
 
 // TestConsistentHash 测试一致性哈希负载均衡器。
 func TestConsistentHash(t *testing.T) {
+	t.Parallel()
 	t.Run("创建默认配置", func(_ *testing.T) {
 		ch := NewConsistentHash(0, "ip")
 		if ch == nil {
@@ -764,6 +773,7 @@ func TestConsistentHash(t *testing.T) {
 
 // TestConsistentHashSelectExcludingByKey 测试一致性哈希排除选择功能。
 func TestConsistentHashSelectExcludingByKey(t *testing.T) {
+	t.Parallel()
 	t.Run("空排除列表", func(_ *testing.T) {
 		ch := NewConsistentHash(150, "ip")
 		targets := []*Target{
@@ -909,6 +919,7 @@ func TestConsistentHashSelectExcludingByKey(t *testing.T) {
 }
 
 func TestIsValidAlgorithm(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		algorithm string
@@ -937,6 +948,7 @@ func TestIsValidAlgorithm(t *testing.T) {
 
 // TestRoundRobin_SelectExcluding 测试轮询排除选择功能。
 func TestRoundRobin_SelectExcluding(t *testing.T) {
+	t.Parallel()
 	t.Run("空排除列表", func(_ *testing.T) {
 		rr := NewRoundRobin()
 		targets := []*Target{
@@ -1041,6 +1053,7 @@ func TestRoundRobin_SelectExcluding(t *testing.T) {
 
 // TestWeightedRoundRobin_SelectExcluding 测试加权轮询排除选择功能。
 func TestWeightedRoundRobin_SelectExcluding(t *testing.T) {
+	t.Parallel()
 	t.Run("排除高权重目标", func(_ *testing.T) {
 		wrr := NewWeightedRoundRobin()
 		targets := []*Target{
@@ -1099,6 +1112,7 @@ func TestWeightedRoundRobin_SelectExcluding(t *testing.T) {
 
 // TestLeastConnections_SelectExcluding 测试最少连接排除选择功能。
 func TestLeastConnections_SelectExcluding(t *testing.T) {
+	t.Parallel()
 	t.Run("排除连接最少的目标", func(_ *testing.T) {
 		lc := NewLeastConnections()
 		targets := []*Target{
@@ -1157,6 +1171,7 @@ func TestLeastConnections_SelectExcluding(t *testing.T) {
 
 // TestIPHash_SelectExcluding 测试IP哈希排除选择功能。
 func TestIPHash_SelectExcluding(t *testing.T) {
+	t.Parallel()
 	t.Run("排除命中目标", func(_ *testing.T) {
 		ih := NewIPHash()
 		targets := []*Target{
@@ -1231,6 +1246,7 @@ func TestIPHash_SelectExcluding(t *testing.T) {
 
 // TestFilterHealthyAndExclude 测试filterHealthyAndExclude辅助函数。
 func TestFilterHealthyAndExclude(t *testing.T) {
+	t.Parallel()
 	t.Run("基本过滤和排除", func(_ *testing.T) {
 		targets := []*Target{
 			createHealthyTarget("http://backend1:8080", true),
@@ -1282,6 +1298,7 @@ func TestFilterHealthyAndExclude(t *testing.T) {
 
 // TestTarget_Hostname 测试Target.Hostname方法。
 func TestTarget_Hostname(t *testing.T) {
+	t.Parallel()
 	t.Run("从URL提取主机名", func(_ *testing.T) {
 		target := NewTargetFromConfig("http://example.com:8080/api", 1, 0, 0, 0, false, false, "")
 		got := target.Hostname()
@@ -1321,6 +1338,7 @@ func TestTarget_Hostname(t *testing.T) {
 
 // TestTarget_ResolvedIPs 测试Target.ResolvedIPs和SetResolvedIPs方法。
 func TestTarget_ResolvedIPs(t *testing.T) {
+	t.Parallel()
 	t.Run("未设置时返回nil", func(_ *testing.T) {
 		target := &Target{URL: "http://example.com"}
 		got := target.ResolvedIPs()
@@ -1362,6 +1380,7 @@ func TestTarget_ResolvedIPs(t *testing.T) {
 
 // TestTarget_NeedsResolve 测试Target.NeedsResolve方法。
 func TestTarget_NeedsResolve(t *testing.T) {
+	t.Parallel()
 	t.Run("IP地址不需要解析", func(_ *testing.T) {
 		target := NewTargetFromConfig("http://192.168.1.1:8080", 1, 0, 0, 0, false, false, "")
 		if target.NeedsResolve(time.Minute) {
@@ -1397,6 +1416,7 @@ func TestTarget_NeedsResolve(t *testing.T) {
 
 // TestTarget_LastResolved 测试Target.LastResolved方法。
 func TestTarget_LastResolved(t *testing.T) {
+	t.Parallel()
 	t.Run("未设置时返回零值", func(_ *testing.T) {
 		target := &Target{URL: "http://example.com"}
 		got := target.LastResolved()
@@ -1420,6 +1440,7 @@ func TestTarget_LastResolved(t *testing.T) {
 
 // TestNewTargetFromConfig 测试NewTargetFromConfig函数。
 func TestNewTargetFromConfig(t *testing.T) {
+	t.Parallel()
 	t.Run("创建健康目标", func(_ *testing.T) {
 		target := NewTargetFromConfig("http://backend:8080", 5, 0, 0, 0, false, false, "")
 		if target.URL != "http://backend:8080" {
@@ -1444,6 +1465,7 @@ func TestNewTargetFromConfig(t *testing.T) {
 
 // TestConsistentHash_PrecomputeHashes 测试预计算哈希功能。
 func TestConsistentHash_PrecomputeHashes(t *testing.T) {
+	t.Parallel()
 	t.Run("预计算哈希值", func(_ *testing.T) {
 		ch := NewConsistentHash(50, "ip")
 		targets := []*Target{
@@ -1496,6 +1518,7 @@ func TestConsistentHash_PrecomputeHashes(t *testing.T) {
 
 // TestLeastConnections_ConcurrentSelection 测试最少连接并发选择。
 func TestLeastConnections_ConcurrentSelection(t *testing.T) {
+	t.Parallel()
 	targets := []*Target{
 		createHealthyTarget("http://backend1:8080", true),
 		createHealthyTarget("http://backend2:8080", true),
@@ -1517,6 +1540,7 @@ func TestLeastConnections_ConcurrentSelection(t *testing.T) {
 
 // TestWeightedRoundRobin_ConcurrentSelection 测试加权轮询并发选择。
 func TestWeightedRoundRobin_ConcurrentSelection(t *testing.T) {
+	t.Parallel()
 	targets := []*Target{
 		createHealthyTarget("http://backend1:8080", true),
 		createHealthyTarget("http://backend2:8080", true),
@@ -1539,6 +1563,7 @@ func TestWeightedRoundRobin_ConcurrentSelection(t *testing.T) {
 
 // TestIPHash_ConcurrentSelection 测试IP哈希并发选择。
 func TestIPHash_ConcurrentSelection(t *testing.T) {
+	t.Parallel()
 	targets := []*Target{
 		createHealthyTarget("http://backend1:8080", true),
 		createHealthyTarget("http://backend2:8080", true),
@@ -1561,6 +1586,7 @@ func TestIPHash_ConcurrentSelection(t *testing.T) {
 
 // TestTarget_Hostname_IPURL 测试纯IP地址URL的主机名提取。
 func TestTarget_Hostname_IPURL(t *testing.T) {
+	t.Parallel()
 	target := NewTargetFromConfig("http://10.0.0.1:8080", 1, 0, 0, 0, false, false, "")
 	got := target.Hostname()
 	if got != "10.0.0.1" {
@@ -1570,6 +1596,7 @@ func TestTarget_Hostname_IPURL(t *testing.T) {
 
 // TestConsistentHash_SelectByKey_EmptyKey 测试空键选择行为。
 func TestConsistentHash_SelectByKey_EmptyKey(t *testing.T) {
+	t.Parallel()
 	ch := NewConsistentHash(100, "ip")
 	targets := []*Target{
 		createHealthyTarget("http://backend1:8080", true),
@@ -1584,6 +1611,7 @@ func TestConsistentHash_SelectByKey_EmptyKey(t *testing.T) {
 
 // TestConsistentHash_RebuildWithAllUnhealthy 测试所有目标不健康时重建。
 func TestConsistentHash_RebuildWithAllUnhealthy(t *testing.T) {
+	t.Parallel()
 	ch := NewConsistentHash(10, "ip")
 	targets := []*Target{
 		createHealthyTarget("http://backend1:8080", false),
@@ -1603,6 +1631,7 @@ func TestConsistentHash_RebuildWithAllUnhealthy(t *testing.T) {
 
 // TestConsistentHash_GetStats 测试统计信息完整性。
 func TestConsistentHash_GetStats(t *testing.T) {
+	t.Parallel()
 	ch := NewConsistentHash(50, "uri")
 	targets := []*Target{
 		createHealthyTarget("http://backend1:8080", true),
@@ -1626,6 +1655,7 @@ func TestConsistentHash_GetStats(t *testing.T) {
 
 // TestConsistentHash_GetHashKey 测试哈希键配置获取。
 func TestConsistentHash_GetHashKey(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		hashKey string
@@ -1648,6 +1678,7 @@ func TestConsistentHash_GetHashKey(t *testing.T) {
 
 // TestSelectExcluding_DynamicRebuild 测试SelectByKey触发的动态重建。
 func TestSelectExcluding_DynamicRebuild(t *testing.T) {
+	t.Parallel()
 	ch := NewConsistentHash(10, "ip")
 	targets := []*Target{
 		createHealthyTarget("http://backend1:8080", true),
@@ -1663,6 +1694,7 @@ func TestSelectExcluding_DynamicRebuild(t *testing.T) {
 
 // TestWeightedRoundRobin_NegativeWeight 测试负权重行为。
 func TestWeightedRoundRobin_NegativeWeight(t *testing.T) {
+	t.Parallel()
 	wrr := NewWeightedRoundRobin()
 	targets := []*Target{
 		createHealthyTarget("http://backend1:8080", true),
@@ -1692,6 +1724,7 @@ func TestWeightedRoundRobin_NegativeWeight(t *testing.T) {
 
 // TestRoundRobin_NilTargets 测试nil切片输入。
 func TestRoundRobin_NilTargets(t *testing.T) {
+	t.Parallel()
 	rr := NewRoundRobin()
 	got := rr.Select(nil)
 	if got != nil {
@@ -1701,6 +1734,7 @@ func TestRoundRobin_NilTargets(t *testing.T) {
 
 // TestLeastConnections_NilTargets 测试nil切片输入。
 func TestLeastConnections_NilTargets(t *testing.T) {
+	t.Parallel()
 	lc := NewLeastConnections()
 	got := lc.Select(nil)
 	if got != nil {
@@ -1709,6 +1743,7 @@ func TestLeastConnections_NilTargets(t *testing.T) {
 }
 
 func TestTargetIsAvailable(t *testing.T) {
+	t.Parallel()
 	t.Run("healthy target is available", func(t *testing.T) {
 		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 0, 0, false, false, "")
 		if !target.IsAvailable() {
@@ -1750,6 +1785,7 @@ func TestTargetIsAvailable(t *testing.T) {
 }
 
 func TestTargetRecordFailure(t *testing.T) {
+	t.Parallel()
 	t.Run("record failure increments count", func(t *testing.T) {
 		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 3, 10*time.Second, false, false, "")
 		count := target.RecordFailure()
@@ -1777,6 +1813,7 @@ func TestTargetRecordFailure(t *testing.T) {
 }
 
 func TestTargetRecordSuccess(t *testing.T) {
+	t.Parallel()
 	t.Run("record success resets fail count", func(t *testing.T) {
 		target := NewTargetFromConfig("http://localhost:8080", 1, 0, 3, 10*time.Second, false, false, "")
 		target.RecordFailure()
@@ -1794,6 +1831,7 @@ func TestTargetRecordSuccess(t *testing.T) {
 }
 
 func TestFilterHealthyBackup(t *testing.T) {
+	t.Parallel()
 	t.Run("prefers non-backup targets", func(t *testing.T) {
 		primary := NewTargetFromConfig("http://primary:8080", 1, 0, 0, 0, false, false, "")
 		backup := NewTargetFromConfig("http://backup:8080", 1, 0, 0, 0, true, false, "")
@@ -1820,6 +1858,7 @@ func TestFilterHealthyBackup(t *testing.T) {
 
 // TestConsistentHash_Select 测试一致性哈希 Select 方法（委托给 SelectByKey）。
 func TestConsistentHash_Select(t *testing.T) {
+	t.Parallel()
 	t.Run("委托给SelectByKey", func(_ *testing.T) {
 		ch := NewConsistentHash(100, "ip")
 		targets := []*Target{
@@ -1881,6 +1920,7 @@ func TestConsistentHash_Select(t *testing.T) {
 
 // TestConsistentHash_SelectExcluding 测试一致性哈希 SelectExcluding 方法。
 func TestConsistentHash_SelectExcluding(t *testing.T) {
+	t.Parallel()
 	t.Run("委托给SelectExcludingByKey", func(_ *testing.T) {
 		ch := NewConsistentHash(100, "ip")
 		targets := []*Target{
@@ -1915,6 +1955,7 @@ func TestConsistentHash_SelectExcluding(t *testing.T) {
 
 // TestRandomBalancer 测试随机负载均衡器。
 func TestRandomBalancer(t *testing.T) {
+	t.Parallel()
 	t.Run("selects from available targets", func(t *testing.T) {
 		targets := []*Target{
 			NewTargetFromConfig("http://a:8080", 1, 0, 0, 0, false, false, ""),

@@ -20,6 +20,7 @@ import (
 )
 
 func TestValidateServer(t *testing.T) {
+	t.Parallel()
 	// TestValidateServer 测试服务器配置验证。
 	tests := []struct {
 		name      string
@@ -99,6 +100,7 @@ func TestValidateServer(t *testing.T) {
 }
 
 func TestValidateProxy(t *testing.T) {
+	t.Parallel()
 	// TestValidateProxy 测试代理配置验证。
 	tests := []struct {
 		name    string
@@ -191,6 +193,7 @@ func TestValidateProxy(t *testing.T) {
 }
 
 func TestValidateSSL(t *testing.T) {
+	t.Parallel()
 	// TestValidateSSL 测试 SSL 配置验证。
 	tests := []struct {
 		name    string
@@ -303,6 +306,7 @@ func TestValidateSSL(t *testing.T) {
 }
 
 func TestValidateAuth(t *testing.T) {
+	t.Parallel()
 	// TestValidateAuth 测试认证配置验证。
 	tests := []struct {
 		name    string
@@ -452,6 +456,7 @@ func TestValidateAuth(t *testing.T) {
 }
 
 func TestValidateRateLimit(t *testing.T) {
+	t.Parallel()
 	// TestValidateRateLimit 测试速率限制配置验证。
 	tests := []struct {
 		name    string
@@ -537,6 +542,7 @@ func TestValidateRateLimit(t *testing.T) {
 }
 
 func TestValidateCompression(t *testing.T) {
+	t.Parallel()
 	// TestValidateCompression 测试压缩配置验证。
 	tests := []struct {
 		name    string
@@ -641,6 +647,7 @@ func TestValidateCompression(t *testing.T) {
 }
 
 func TestValidateAccess(t *testing.T) {
+	t.Parallel()
 	// TestValidateAccess 测试访问控制配置验证。
 	tests := []struct {
 		name    string
@@ -743,6 +750,7 @@ func TestValidateAccess(t *testing.T) {
 }
 
 func TestValidateStatic(t *testing.T) {
+	t.Parallel()
 	// TestValidateStatic 测试静态文件配置验证。
 	tests := []struct {
 		name    string
@@ -801,6 +809,7 @@ func TestValidateStatic(t *testing.T) {
 }
 
 func TestValidateSecurity(t *testing.T) {
+	t.Parallel()
 	// TestValidateSecurity 测试安全配置验证。
 	tests := []struct {
 		name    string
@@ -883,6 +892,7 @@ func TestValidateSecurity(t *testing.T) {
 }
 
 func TestValidateStream(t *testing.T) {
+	t.Parallel()
 	// TestValidateStream 测试 Stream 代理配置验证。
 	tests := []struct {
 		name    string
@@ -1016,6 +1026,7 @@ func TestValidateStream(t *testing.T) {
 }
 
 func TestValidatePerformance(t *testing.T) {
+	t.Parallel()
 	// TestValidatePerformance 测试性能配置验证。
 	tests := []struct {
 		name    string
@@ -1095,6 +1106,7 @@ func TestValidatePerformance(t *testing.T) {
 }
 
 func TestValidateVariables(t *testing.T) {
+	t.Parallel()
 	// TestValidateVariables 测试自定义变量配置验证。
 	tests := []struct {
 		config  VariablesConfig
@@ -1201,6 +1213,7 @@ func TestValidateVariables(t *testing.T) {
 }
 
 func TestValidateTryFilesPattern(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		pattern string
@@ -1284,6 +1297,7 @@ func TestValidateTryFilesPattern(t *testing.T) {
 }
 
 func TestValidateStaticsWithTryFiles(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		errMsg  string
@@ -1373,6 +1387,7 @@ func TestValidateStaticsWithTryFiles(t *testing.T) {
 }
 
 func TestValidateRewrite(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		errMsg  string
@@ -1464,6 +1479,7 @@ func TestValidateRewrite(t *testing.T) {
 }
 
 func TestValidateNextUpstream(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		errMsg  string
@@ -1558,6 +1574,7 @@ func TestValidateNextUpstream(t *testing.T) {
 }
 
 func TestValidateDefaultServer(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		errMsg  string
@@ -1617,6 +1634,7 @@ func TestValidateDefaultServer(t *testing.T) {
 }
 
 func TestValidateMode(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		errMsg  string
@@ -1652,6 +1670,7 @@ func TestValidateMode(t *testing.T) {
 }
 
 func TestValidateListenConflicts(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		errMsg  string
@@ -1714,6 +1733,7 @@ func TestValidateListenConflicts(t *testing.T) {
 }
 
 func TestValidateHTTP2(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		errMsg  string
@@ -1790,6 +1810,7 @@ func TestValidateHTTP2(t *testing.T) {
 }
 
 func TestValidateRedirectRewrite(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		errMsg  string
