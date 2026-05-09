@@ -61,10 +61,14 @@ func SimpleMockBackend(statusCode int, responseBody []byte) (string, func()) {
 		ctx.SetBody(responseBody)
 	}
 
-	go fasthttp.Serve(ln, handler)
+	go func() {
+		if serveErr := fasthttp.Serve(ln, handler); serveErr != nil {
+			panic(serveErr)
+		}
+	}()
 
 	return ln.Addr().String(), func() {
-		ln.Close()
+		_ = ln.Close()
 	}
 }
 
@@ -87,10 +91,14 @@ func ErrorMockBackend(errorRate float64, errorBody []byte) (string, func()) {
 		ctx.SetBody([]byte("OK"))
 	}
 
-	go fasthttp.Serve(ln, handler)
+	go func() {
+		if serveErr := fasthttp.Serve(ln, handler); serveErr != nil {
+			panic(serveErr)
+		}
+	}()
 
 	return ln.Addr().String(), func() {
-		ln.Close()
+		_ = ln.Close()
 	}
 }
 
@@ -107,10 +115,14 @@ func DelayedMockBackend(delay time.Duration, statusCode int, responseBody []byte
 		ctx.SetBody(responseBody)
 	}
 
-	go fasthttp.Serve(ln, handler)
+	go func() {
+		if serveErr := fasthttp.Serve(ln, handler); serveErr != nil {
+			panic(serveErr)
+		}
+	}()
 
 	return ln.Addr().String(), func() {
-		ln.Close()
+		_ = ln.Close()
 	}
 }
 
@@ -154,9 +166,13 @@ func StartMockFasthttpBackend(config MockBackendConfig) (string, func()) {
 		}
 	}
 
-	go fasthttp.Serve(ln, handler)
+	go func() {
+		if serveErr := fasthttp.Serve(ln, handler); serveErr != nil {
+			panic(serveErr)
+		}
+	}()
 
 	return ln.Addr().String(), func() {
-		ln.Close()
+		_ = ln.Close()
 	}
 }

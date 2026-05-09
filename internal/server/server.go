@@ -649,9 +649,9 @@ func (s *Server) startMultiServerMode() error {
 
 			// 注册状态监控端点（仅默认服务器）
 			if serverCfg.Default && s.config.Monitoring.Status.Enabled {
-				statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
-				if err != nil {
-					logging.Error().Msg("Failed to create status handler: " + err.Error())
+				statusHandler, statusErr := NewStatusHandler(s, &s.config.Monitoring.Status)
+				if statusErr != nil {
+					logging.Error().Msg("Failed to create status handler: " + statusErr.Error())
 				} else {
 					router.GET(statusHandler.Path(), statusHandler.ServeHTTP)
 				}
@@ -659,9 +659,9 @@ func (s *Server) startMultiServerMode() error {
 
 			// 注册 pprof 性能分析端点（仅默认服务器）
 			if serverCfg.Default && s.config.Monitoring.Pprof.Enabled {
-				pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
-				if err != nil {
-					logging.Error().Msg("Failed to create pprof handler: " + err.Error())
+				pprofHandler, pprofErr := NewPprofHandler(&s.config.Monitoring.Pprof)
+				if pprofErr != nil {
+					logging.Error().Msg("Failed to create pprof handler: " + pprofErr.Error())
 				} else {
 					router.GET(pprofHandler.Path(), pprofHandler.ServeHTTP)
 					router.GET(pprofHandler.Path()+"/{profile:*}", pprofHandler.ServeHTTP)

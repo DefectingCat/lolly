@@ -23,11 +23,11 @@ func encodeLuaValue(L *glua.LState, value glua.LValue, config *Config, depth int
 		return "false", nil
 
 	case glua.LTNumber:
-		num := float64(value.(glua.LNumber))
+		num := float64(value.(glua.LNumber)) //nolint:errcheck // switch case guarantees type
 		return formatNumber(num, config.encodeNumberPrecision), nil
 
 	case glua.LTString:
-		str := string(value.(glua.LString))
+		str := string(value.(glua.LString)) //nolint:errcheck // switch case guarantees type
 		// Use go-json for proper string escaping
 		result, err := json.Marshal(str)
 		if err != nil {
@@ -36,7 +36,7 @@ func encodeLuaValue(L *glua.LState, value glua.LValue, config *Config, depth int
 		return string(result), nil
 
 	case glua.LTTable:
-		return encodeTable(L, value.(*glua.LTable), config, depth)
+		return encodeTable(L, value.(*glua.LTable), config, depth) //nolint:errcheck // switch case guarantees type
 
 	case glua.LTUserData:
 		if isNull(value) {
@@ -82,7 +82,7 @@ func checkArrayType(tbl *glua.LTable, config *Config) (bool, int, int) {
 	count := 0
 	hasStringKey := false
 
-	tbl.ForEach(func(key, value glua.LValue) {
+	tbl.ForEach(func(key, _ glua.LValue) {
 		switch k := key.(type) {
 		case glua.LNumber:
 			// Protect against integer overflow - only accept positive integers within int range
