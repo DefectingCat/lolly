@@ -140,13 +140,16 @@ func initLuaEngine(luaCfg *config.LuaMiddlewareConfig) (*lua.LuaEngine, error) {
 	}
 	if engineCfg.MaxExecutionTime == 0 {
 		engineCfg.MaxExecutionTime = 30 * time.Second
-		}
-		if engineCfg.LStatePoolInitialSize == 0 {
-			engineCfg.LStatePoolInitialSize = 100
-		}
-		if engineCfg.LStatePoolMaxSize == 0 {
-			engineCfg.LStatePoolMaxSize = 1000
 	}
+	if engineCfg.LStatePoolInitialSize == 0 {
+		engineCfg.LStatePoolInitialSize = 100
+	}
+	if engineCfg.LStatePoolMaxSize == 0 {
+		engineCfg.LStatePoolMaxSize = 1000
+	}
+	// EnableFileWatch 默认启用（用于 Lua 脚本热更新）
+	// 由于 bool 零值是 false，当配置未设置时默认启用文件监控
+	engineCfg.EnableFileWatch = true
 
 	engine, err := lua.NewEngine(engineCfg)
 	if err != nil {
