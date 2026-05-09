@@ -17,7 +17,8 @@ func TestSharedDictLuaReplace(t *testing.T) {
 
 	_ = engine.CreateSharedDict("testdict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -59,7 +60,8 @@ func TestSharedDictLuaReplaceWithTTL(t *testing.T) {
 
 	_ = engine.CreateSharedDict("ttldict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -94,7 +96,8 @@ func TestSharedDictLuaIndexAccess(t *testing.T) {
 
 	_ = engine.CreateSharedDict("idxdict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -125,7 +128,8 @@ func TestSharedDictLuaIndexNotFound(t *testing.T) {
 
 	_ = engine.CreateSharedDict("idxdict2", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -148,7 +152,8 @@ func TestSharedDictLuaIndexMethodAccess(t *testing.T) {
 
 	_ = engine.CreateSharedDict("metdict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -174,7 +179,8 @@ func TestSharedDictLuaFlushExpired(t *testing.T) {
 
 	_ = engine.CreateSharedDict("flushdict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -220,7 +226,8 @@ func TestSharedDictLuaGetKeys(t *testing.T) {
 
 	_ = engine.CreateSharedDict("keysdict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -246,7 +253,8 @@ func TestSharedDictLuaSize(t *testing.T) {
 
 	_ = engine.CreateSharedDict("sizedict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -274,7 +282,8 @@ func TestSharedDictLuaFreeSpace(t *testing.T) {
 
 	_ = engine.CreateSharedDict("freedict", 50)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -302,7 +311,8 @@ func TestSharedDictLuaFlushAll(t *testing.T) {
 
 	_ = engine.CreateSharedDict("flushalldict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -327,7 +337,8 @@ func TestSharedDictLuaDictNotFound(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -348,7 +359,8 @@ func TestSharedDictLuaToString(t *testing.T) {
 
 	_ = engine.CreateSharedDict("tostringdict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -370,7 +382,8 @@ func TestSharedDictLuaIncrNonNumber(t *testing.T) {
 
 	_ = engine.CreateSharedDict("incrdict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -396,7 +409,8 @@ func TestSharedDictLuaAddMultipleKeys(t *testing.T) {
 
 	_ = engine.CreateSharedDict("multiadd", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -448,7 +462,8 @@ func TestSharedDictLuaSetWithTTL(t *testing.T) {
 
 	_ = engine.CreateSharedDict("setttldict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)
@@ -487,7 +502,8 @@ func TestSharedDictLuaAddWithTTL(t *testing.T) {
 
 	_ = engine.CreateSharedDict("addttldict", 100)
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterSharedDictAPI(L, engine.SharedDictManager(), ngx)

@@ -206,7 +206,7 @@ func TestSharedDictLuaAPI(t *testing.T) {
 	_ = engine.CreateSharedDict("mydict", 100)
 
 	// 测试 Lua 脚本
-	L := engine.L
+	L := engine.GetLStateForTest()
 
 	// 手动注册 ngx.shared API（用于测试）
 	ngx := L.NewTable()

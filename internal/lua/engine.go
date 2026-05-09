@@ -8,9 +8,8 @@
 //
 // 架构设计：
 //
-//	采用 Server 级单 LState + 请求级临时协程架构。
-//	所有请求共享一个主 LState 的全局环境，但各自拥有独立的协程状态，
-//	确保请求间的数据隔离性和并发安全性。
+//	采用 LState Pool 架构，每个请求从池中获取完全独立的 LState。
+//	彻底消除共享状态，解决 gopher-lua 的并发竞态问题。
 //
 // 主要用途：
 //
@@ -20,7 +19,7 @@
 // 注意事项：
 //   - LuaEngine 非并发安全，NewEngine/Close 应在初始化/关闭阶段调用
 //   - LuaCoroutine 为请求级独占，不可跨请求复用
-//   - 协程在 ResumeOK 后变成 dead 状态，不能复用
+//   - 每个 LState 独立创建，拥有独立的 Global 表
 //
 // 作者：xfy
 package lua
@@ -39,7 +38,7 @@ import (
 // LuaEngine 全局 Lua 引擎。
 //
 // 每个 HTTP Server 实例持有一个 LuaEngine，负责：
-//   - 管理主 LState（全局 Lua 状态机）
+//   - 管理 LState 池（解决并发竞态问题）
 //   - 创建和回收请求级协程（LuaCoroutine）
 //   - 管理字节码缓存（CodeCache）
 //   - 管理共享字典、定时器、location 等子系统
@@ -50,9 +49,6 @@ import (
 // 2) 明确区分 Lua 引擎与其他引擎类型
 // 3) 保持向后兼容性
 type LuaEngine struct {
-	// 主 LState，所有协程通过 NewThread 继承其全局环境
-	L *glua.LState
-
 	// 引擎配置
 	config *Config
 
@@ -77,12 +73,8 @@ type LuaEngine struct {
 	// 回调队列，定时器触发后将回调入队
 	callbackQueue chan *CallbackEntry
 
-	// 缓存：coroutine 库函数（避免并发读取 Engine.L）
-	coroYieldFn  glua.LValue
-	coroStatusFn glua.LValue
-
-	// ngx 表注册锁（保护并发写入共享的全局 ngx 表）
-	ngxRegisterMu sync.Mutex
+	// LState 池（解决并发竞态问题）
+	lstatePool *LStatePool
 
 	// 上下文及取消函数
 	ctx    context.Context
@@ -146,68 +138,69 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 		config = DefaultConfig()
 	}
 
-	// 步骤1: 创建主 LState（使用优化后的栈配置）
-	// 协程通过 NewThread 继承这些配置
-	L := glua.NewState(glua.Options{
-		SkipOpenLibs:        true, // 禁用默认库，手动加载安全库
-		CallStackSize:       config.CoroutineStackSize,
-		MinimizeStackMemory: config.MinimizeStackMemory,
-	})
-
-	// 步骤2: 加载安全的标准库
-	glua.OpenBase(L)
-	glua.OpenTable(L)
-	glua.OpenString(L)
-	glua.OpenMath(L)
-	glua.OpenCoroutine(L) // 加载 coroutine 库支持 yield
-
-	// 步骤3: 可选加载危险库
-	if config.EnableOSLib {
-		glua.OpenOs(L)
+	// 设置池默认值
+	if config.LStatePoolInitialSize <= 0 {
+		config.LStatePoolInitialSize = 10
 	}
-	if config.EnableIOLib {
-		glua.OpenIo(L)
+	if config.LStatePoolMaxSize <= 0 {
+		config.LStatePoolMaxSize = 100
 	}
-	// 注意：package 库默认不加载，禁止 require 外部模块
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	engine := &LuaEngine{
-		L:                 L,
-		config:            config,
-		codeCache:         NewCodeCache(config.CodeCacheSize, config.CodeCacheTTL, config.EnableFileWatch),
-		maxCoroutines:     config.MaxConcurrentCoroutines,
-		ctx:               ctx,
-		cancel:            cancel,
+		config:        config,
+		codeCache:     NewCodeCache(config.CodeCacheSize, config.CodeCacheTTL, config.EnableFileWatch),
+		maxCoroutines: config.MaxConcurrentCoroutines,
+		ctx:           ctx,
+		cancel:        cancel,
 		sharedDictManager: NewSharedDictManager(),
 		coroutinePool: sync.Pool{
 			New: func() any {
-				// 注意：这里只是创建空的协程对象结构
-				// 实际的协程通过 L.NewThread() 创建
 				return &LuaCoroutine{}
 			},
 		},
 	}
 
-	// 步骤4: 创建定时器管理器（需要在 engine 创建后初始化）
+	// 创建 LState 池工厂函数
+	poolFactory := func() *glua.LState {
+		L := glua.NewState(glua.Options{
+			SkipOpenLibs:        true,
+			CallStackSize:       config.CoroutineStackSize,
+			MinimizeStackMemory: config.MinimizeStackMemory,
+		})
+
+		// 加载安全的标准库
+		glua.OpenBase(L)
+		glua.OpenTable(L)
+		glua.OpenString(L)
+		glua.OpenMath(L)
+		glua.OpenCoroutine(L)
+
+		// 可选加载危险库
+		if config.EnableOSLib {
+			glua.OpenOs(L)
+		}
+		if config.EnableIOLib {
+			glua.OpenIo(L)
+		}
+
+		return L
+	}
+
+	// 创建 LState 池
+	engine.lstatePool = NewLStatePool(poolFactory, config.LStatePoolInitialSize, config.LStatePoolMaxSize)
+
+	// 创建定时器管理器
 	engine.timerManager = NewTimerManager(engine)
 
-	// 步骤5: 创建 location 管理器
+	// 创建 location 管理器
 	engine.locationManager = NewLocationManager()
 
-	// 步骤6: 协程池预热：预创建 LuaCoroutine 结构体对象
+	// 协程池预热
 	if config.CoroutinePoolWarmup > 0 {
 		for i := 0; i < config.CoroutinePoolWarmup; i++ {
 			engine.coroutinePool.Put(&LuaCoroutine{})
-		}
-	}
-
-	// 步骤7: 缓存 coroutine 库的安全函数（避免并发读取 Engine.L）
-	coroTable := L.GetGlobal("coroutine")
-	if coroTable != glua.LNil {
-		if tbl, ok := coroTable.(*glua.LTable); ok {
-			engine.coroYieldFn = tbl.RawGetString("yield")
-			engine.coroStatusFn = tbl.RawGetString("status")
 		}
 	}
 
@@ -224,7 +217,7 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 //
 // 注意：该方法是幂等的，可安全调用多次。
 func (e *LuaEngine) Close() {
-	if e == nil || e.L == nil {
+	if e == nil {
 		return // 已关闭或 nil
 	}
 
@@ -235,11 +228,11 @@ func (e *LuaEngine) Close() {
 	if e.sharedDictManager != nil {
 		e.sharedDictManager.Close()
 	}
-	if e.L != nil {
-		e.L.Close()
+	if e.lstatePool != nil {
+		e.lstatePool.Close()
 	}
-	// 标记为已关闭，防止重复关闭
-	e.L = nil
+	// 标记为已关闭
+	e.lstatePool = nil
 }
 
 // NewCoroutine 创建请求级临时协程。
@@ -268,30 +261,27 @@ func (e *LuaEngine) NewCoroutine(req *fasthttp.RequestCtx) (*LuaCoroutine, error
 		return nil, fmt.Errorf("max concurrent coroutines exceeded: %d/%d", current, e.maxCoroutines)
 	}
 
-	// 步骤2: 通过 NewThread 创建协程
-	// 协程继承主 LState 的全局环境
-	co, cancel := e.L.NewThread()
-	if co == nil {
+	// 步骤2: 从池中获取独立的 LState
+	L := e.lstatePool.Get()
+	if L == nil {
 		e.activeCount.Add(-1)
-		return nil, fmt.Errorf("failed to create coroutine")
+		return nil, fmt.Errorf("lstate pool exhausted")
 	}
 
-	// 步骤3: 从池中获取协程对象结构（复用内存，不复用协程状态）
+	// 步骤3: 从池中获取协程对象结构
 	coro, ok := e.coroutinePool.Get().(*LuaCoroutine)
 	if !ok {
 		coro = &LuaCoroutine{}
 	}
 	coro.Engine = e
-	coro.Co = co
-	coro.Cancel = cancel
+	coro.Co = L
+	coro.Cancel = nil // 不再使用 NewThread 的 cancel
 	coro.RequestCtx = req
 	coro.CreatedAt = time.Now()
 	coro.ExecutionContext, coro.executionCancel = context.WithTimeout(e.ctx, e.config.MaxExecutionTime)
 
-	// 步骤4: 设置 LState 的上下文为执行上下文（用于超时控制）
-	// 注意：不直接使用 RequestCtx，因为 RequestCtx.Done() 依赖服务器连接
-	// RequestCtx 通过 coro.RequestCtx 字段访问，而不是 L.Context()
-	co.SetContext(coro.ExecutionContext)
+	// 步骤4: 设置 LState 的上下文为执行上下文
+	L.SetContext(coro.ExecutionContext)
 
 	atomic.AddUint64(&e.stats.CoroutinesCreated, 1)
 
@@ -317,9 +307,9 @@ func (e *LuaEngine) releaseCoroutine(coro *LuaCoroutine) {
 		coro.executionCancel()
 	}
 
-	// 步骤2: 取消协程
-	if coro.Cancel != nil {
-		coro.Cancel()
+	// 步骤2: 将 LState 归还池中
+	if coro.Co != nil {
+		e.lstatePool.Put(coro.Co)
 	}
 
 	// 步骤3: 清理状态，防止内存泄漏
@@ -554,4 +544,23 @@ func (e *LuaEngine) CloseScheduler() {
 		e.schedulerLState.Close()
 		e.schedulerLState = nil
 	}
+}
+
+// GetLStateForTest 从池中获取一个 LState 用于测试。
+//
+// 该方法仅用于测试目的，返回一个独立的 LState。
+// 使用完毕后应调用 PutLStateForTest 归还。
+//
+// 返回值：
+//   - *glua.LState: 可用的 LState 实例
+func (e *LuaEngine) GetLStateForTest() *glua.LState {
+	return e.lstatePool.Get()
+}
+
+// PutLStateForTest 归还测试用的 LState。
+//
+// 参数：
+//   - L: 要归还的 LState
+func (e *LuaEngine) PutLStateForTest(L *glua.LState) {
+	e.lstatePool.Put(L)
 }

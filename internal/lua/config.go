@@ -57,6 +57,12 @@ type Config struct {
 
 	// MinimizeStackMemory 启用栈内存自动收缩以减少内存占用
 	MinimizeStackMemory bool
+
+	// LStatePoolInitialSize LState 池初始大小（预热数量，默认 10）
+	LStatePoolInitialSize int
+
+	// LStatePoolMaxSize LState 池最大大小（防止资源耗尽，默认 100）
+	LStatePoolMaxSize int
 }
 
 // DefaultConfig 返回默认配置。
@@ -82,5 +88,7 @@ func DefaultConfig() *Config {
 		CoroutineStackSize:      64, // 优化：较小的栈减少内存分配
 		MinimizeStackMemory:     true,
 		CoroutinePoolWarmup:     4, // 预热4个协程结构
+		LStatePoolInitialSize:   10, // LState 池预热 10 个
+		LStatePoolMaxSize:       100, // LState 池最大 100 个
 	}
 }

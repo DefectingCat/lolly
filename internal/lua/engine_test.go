@@ -28,7 +28,7 @@ func TestNewEngineNilConfig(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	assert.NotNil(t, engine.L)
+	assert.NotNil(t, engine.lstatePool)
 	assert.NotNil(t, engine.codeCache)
 	assert.NotNil(t, engine.sharedDictManager)
 	assert.NotNil(t, engine.timerManager)

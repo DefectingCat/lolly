@@ -134,12 +134,14 @@ type LuaCoroutine struct {
 //   - 阻止写入全局环境（__newindex 返回错误）
 //   - 不修改引擎级全局表，避免并发竞态条件
 func (c *LuaCoroutine) SetupSandbox() error {
+	// 注意：使用 LState Pool 后，每个协程拥有独立的 LState，
+	// 不再共享全局环境，因此无需加锁保护
+
 	// 创建独立的 _ENV 表
 	env := c.Co.NewTable()
 
-	// 获取全局环境 - 使用 Engine 的主 LState 全局表
-	// 协程通过 NewThread 继承了父 LState 的全局环境
-	globals := c.Engine.L.GetGlobal("_G")
+	// 获取全局环境 - 使用当前 LState 的全局表
+	globals := c.Co.GetGlobal("_G")
 
 	// 设置元表，使未找到的变量从全局环境读取
 	mt := c.Co.NewTable()
@@ -173,15 +175,20 @@ func (c *LuaCoroutine) SetupSandbox() error {
 // 仅保留安全的 yield 和 status 函数。
 // 被拦截的函数返回友好错误消息，而非直接崩溃。
 func (c *LuaCoroutine) setupSecureCoroutineLib() {
-	// 创建安全的 coroutine 表（使用 Engine 缓存的函数，避免并发读取）
+	// 创建安全的 coroutine 表
 	safeCoroutine := c.Co.NewTable()
 
-	// 使用缓存的函数（在 Engine.NewEngine 时已获取）
-	if c.Engine.coroYieldFn != nil && c.Engine.coroYieldFn != glua.LNil {
-		safeCoroutine.RawSetString("yield", c.Engine.coroYieldFn)
-	}
-	if c.Engine.coroStatusFn != nil && c.Engine.coroStatusFn != glua.LNil {
-		safeCoroutine.RawSetString("status", c.Engine.coroStatusFn)
+	// 从当前 LState 的 coroutine 库中获取安全的函数
+	coroTable := c.Co.GetGlobal("coroutine")
+	if coroTable != glua.LNil {
+		if tbl, ok := coroTable.(*glua.LTable); ok {
+			if yieldFn := tbl.RawGetString("yield"); yieldFn != glua.LNil {
+				safeCoroutine.RawSetString("yield", yieldFn)
+			}
+			if statusFn := tbl.RawGetString("status"); statusFn != glua.LNil {
+				safeCoroutine.RawSetString("status", statusFn)
+			}
+		}
 	}
 
 	// 拦截函数 - 返回友好错误
@@ -196,10 +203,6 @@ func (c *LuaCoroutine) setupSecureCoroutineLib() {
 
 	// 替换协程的 coroutine 全局变量
 	c.Co.SetGlobal("coroutine", safeCoroutine)
-
-	// 注意：不修改引擎级全局表 origTable，避免并发竞态条件
-	// _G.coroutine 的访问通过沙箱的 __index 元表机制被隔离
-	// 因为协程继承的是引擎全局环境，而我们在协程级别设置了独立的 coroutine 表
 }
 
 // setupNgxAPI 创建并注册 ngx API 到协程环境。
@@ -215,10 +218,6 @@ func (c *LuaCoroutine) setupSecureCoroutineLib() {
 //   - ngx.timer：定时器
 //   - ngx.location：子请求
 func (c *LuaCoroutine) setupNgxAPI() {
-	// 加锁保护对共享 ngx 表的并发写入
-	c.Engine.ngxRegisterMu.Lock()
-	defer c.Engine.ngxRegisterMu.Unlock()
-
 	// 创建 ngx 表
 	ngx := c.Co.NewTable()
 
@@ -365,63 +364,18 @@ func (c *LuaCoroutine) ExecuteFile(path string) error {
 //  4. 如果 error，记录统计并返回错误
 //  5. 如果正常结束，更新执行计数
 func (c *LuaCoroutine) executeProto(proto *glua.FunctionProto) error {
-	fn := c.Engine.L.NewFunctionFromProto(proto)
-	st, execErr, values := c.Engine.L.Resume(c.Co, fn)
+	// 在独立的 LState 上直接执行脚本
+	fn := c.Co.NewFunctionFromProto(proto)
+	c.Co.Push(fn)
+	err := c.Co.PCall(0, 0, nil)
 
-	for st == glua.ResumeYield {
-		results, handleErr := c.handleYield(values)
-		if handleErr != nil {
-			return fmt.Errorf("handle yield: %w", handleErr)
-		}
-		st, execErr, values = c.Engine.L.Resume(c.Co, nil, results...)
-	}
-
-	if st == glua.ResumeError {
+	if err != nil {
 		atomic.AddUint64(&c.Engine.stats.ScriptsErrors, 1)
-		return fmt.Errorf("lua execution error: %w", execErr)
+		return fmt.Errorf("lua execution error: %w", err)
 	}
 
 	atomic.AddUint64(&c.Engine.stats.ScriptsExecuted, 1)
 	return nil
-}
-
-// handleYield 处理协程 yield
-func (c *LuaCoroutine) handleYield(values []glua.LValue) ([]glua.LValue, error) {
-	if len(values) == 0 {
-		return nil, fmt.Errorf("yield without reason")
-	}
-
-	reason := glua.LVAsString(values[0])
-
-	switch reason {
-	case "sleep":
-		return c.handleSleep(values[1:])
-	default:
-		return nil, fmt.Errorf("unknown yield reason: %s", reason)
-	}
-}
-
-// handleSleep 处理 sleep yield
-// 注意：此实现会阻塞当前 goroutine
-func (c *LuaCoroutine) handleSleep(values []glua.LValue) ([]glua.LValue, error) {
-	if len(values) == 0 {
-		return nil, fmt.Errorf("sleep requires duration")
-	}
-
-	duration := float64(glua.LVAsNumber(values[0]))
-	d := time.Duration(duration * float64(time.Second))
-
-	timer := time.NewTimer(d)
-	defer timer.Stop()
-
-	select {
-	case <-timer.C:
-		// sleep 完成，返回空结果
-		return []glua.LValue{}, nil
-	case <-c.ExecutionContext.Done():
-		// 执行超时或取消
-		return nil, fmt.Errorf("sleep interrupted: %w", c.ExecutionContext.Err())
-	}
 }
 
 // Close 关闭协程

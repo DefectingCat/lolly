@@ -16,7 +16,7 @@ func TestNewEngine(t *testing.T) {
 	require.NotNil(t, engine)
 	defer engine.Close()
 
-	assert.NotNil(t, engine.L)
+	assert.NotNil(t, engine.lstatePool)
 	assert.NotNil(t, engine.codeCache)
 	assert.Equal(t, int32(0), engine.ActiveCoroutines())
 }

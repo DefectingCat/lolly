@@ -97,7 +97,8 @@ func TestLocationLuaAPI(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
 	// 注册 ngx.location API
 	ngx := L.NewTable()

@@ -96,7 +96,7 @@ func BenchmarkTimerCallbackThroughput(b *testing.B) {
 	defer engine.Close()
 
 	manager := engine.TimerManager()
-	callback := engine.L.NewFunction(func(L *glua.LState) int {
+	callback := engine.GetLStateForTest().NewFunction(func(L *glua.LState) int {
 		return 0
 	})
 
@@ -118,7 +118,7 @@ func BenchmarkTimerCallbackWithLuaExecution(b *testing.B) {
 	}
 	defer engine.Close()
 
-	L := engine.L
+	L := engine.GetLStateForTest()
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterTimerAPI(L, engine.TimerManager(), ngx)
@@ -153,7 +153,7 @@ func BenchmarkUpvalueDetection(b *testing.B) {
 	}
 	defer engine.Close()
 
-	L := engine.L
+	L := engine.GetLStateForTest()
 	ngx := L.NewTable()
 	L.SetGlobal("ngx", ngx)
 	RegisterTimerAPI(L, engine.TimerManager(), ngx)
@@ -181,7 +181,7 @@ func BenchmarkTimerGracefulShutdown(b *testing.B) {
 		}
 
 		manager := engine.TimerManager()
-		callback := engine.L.NewFunction(func(L *glua.LState) int {
+		callback := engine.GetLStateForTest().NewFunction(func(L *glua.LState) int {
 			return 0
 		})
 
@@ -249,7 +249,7 @@ func BenchmarkLuaTablePool(b *testing.B) {
 	}
 	defer engine.Close()
 
-	L := engine.L
+	L := engine.GetLStateForTest()
 
 	b.Run("NewTable_NoPool", func(b *testing.B) {
 		b.ReportAllocs()

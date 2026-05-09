@@ -491,9 +491,14 @@ func TestLuaAPI_newTCPSocketFunc(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
-	err = engine.L.DoString(`
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
+
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		assert(sock ~= nil)
 		assert(type(sock) == "userdata")
@@ -507,10 +512,15 @@ func TestLuaAPI_tcpSocketConnect(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 测试 connect 返回值结构（不等待实际连接完成，因为没有 yield 处理）
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res1, res2 = sock:connect("127.0.0.1", 9999)
 		-- res1 应该是 "cosocket_connect"，res2 是 op ID
@@ -527,10 +537,15 @@ func TestLuaAPI_tcpSocketConnect_WithError(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 尝试连接到非空闲 socket（已连接过但这里没有，用非法端口）
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		-- 先用一个 nil 测试 connect 的 Lua 参数错误
 		local res, err = pcall(function()
@@ -550,11 +565,16 @@ func TestLuaAPI_tcpSocketSend(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// connect 和 send 都会返回 yield 值（cosocket_xxx, op_id）
 	// 在没有实际 yield 处理的情况下，只测试不报错
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res1, res2 = sock:connect("127.0.0.1", 18809)
 		-- res1 应该是 "cosocket_connect"，res2 应该是 op ID
@@ -569,9 +589,14 @@ func TestLuaAPI_tcpSocketSend_Error(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
-	err = engine.L.DoString(`
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
+
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res, err = sock:send("hello")
 		-- 未连接时应该返回 nil + error
@@ -587,10 +612,15 @@ func TestLuaAPI_tcpSocketReceive(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 测试未连接时的 receive 返回错误
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res, err = sock:receive(1024)
 		-- 未连接时应该返回 nil + error
@@ -606,9 +636,14 @@ func TestLuaAPI_tcpSocketReceive_Error(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
-	err = engine.L.DoString(`
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
+
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res, err = sock:receive(1024)
 		assert(res == nil)
@@ -623,10 +658,15 @@ func TestLuaAPI_tcpSocketReceive_Pattern(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 测试未连接时 receive("*a") 返回错误
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res, err = sock:receive("*a")
 		assert(res == nil)
@@ -644,14 +684,17 @@ func TestLuaAPI_tcpSocketReceive_UnknownPattern(t *testing.T) {
 	cm := NewCosocketManager()
 	defer cm.Close()
 
-	// 创建一个已连接但 conn 为 nil 的 socket 来测试模式接收的错误路径
-	// 我们需要通过 Lua API 间接测试
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 测试 unknown pattern "*x"
 	// 需要先连接才能进入 pattern 匹配，但这里直接测试模式错误路径
 	// 实际上 receive("*x") 在未连接时会先报 "not connected"
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		-- 未连接时用 *x 模式会先报 not connected
 		local res, err = sock:receive("*x")
@@ -667,10 +710,15 @@ func TestLuaAPI_tcpSocketReceiveWithTable(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 未连接时 receive 带 table 参数返回错误
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res, err = sock:receive({timeout = 5000})
 		assert(res == nil)
@@ -685,10 +733,15 @@ func TestLuaAPI_tcpSocketReceiveUntil(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 未连接时 receiveuntil 会先报 not connected
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res, err = sock:receiveuntil("|")
 		assert(res == nil)
@@ -703,10 +756,15 @@ func TestLuaAPI_tcpSocketReceiveUntil_Inclusive(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 未连接时 receiveuntil 会先报 not connected
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res, err = sock:receiveuntil("|", {inclusive = true})
 		assert(res == nil)
@@ -721,9 +779,14 @@ func TestLuaAPI_tcpSocketClose(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
-	err = engine.L.DoString(`
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
+
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local ok = sock:close()
 		assert(ok == true)
@@ -737,9 +800,14 @@ func TestLuaAPI_tcpSocketSetTimeout(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
-	err = engine.L.DoString(`
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
+
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local ok = sock:settimeout(5000)
 		assert(ok == true)
@@ -753,9 +821,14 @@ func TestLuaAPI_tcpSocketSetTimeouts(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
-	err = engine.L.DoString(`
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
+
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local ok = sock:settimeouts(1000, 2000, 3000)
 		assert(ok == true)
@@ -769,9 +842,14 @@ func TestLuaAPI_tcpSocketToString(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
-	err = engine.L.DoString(`
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
+
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local str = tostring(sock)
 		assert(str:find("tcp_socket"))
@@ -785,10 +863,15 @@ func TestLuaAPI_tcpSocketGC(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 创建 socket 并触发 GC
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		sock = nil
 		-- 强制 GC（Lua GC 可能不会立即触发 __gc）
@@ -818,10 +901,15 @@ func TestLuaAPI_tcpSocketConnect_WithTimeout(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 测试 connect 带超时选项（不等待实际连接完成）
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res1, res2 = sock:connect("127.0.0.1", 9999, {timeout = 100})
 		-- 返回值应该是 "cosocket_connect" 和 op ID
@@ -837,10 +925,15 @@ func TestLuaAPI_tcpSocketSend_WithTimeout(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	RegisterTCPSocketAPI(engine.L, engine)
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	ngx := L.NewTable()
+	L.SetGlobal("ngx", ngx)
+	RegisterTCPSocketAPI(L, engine)
 
 	// 未连接时 send 返回 nil + error
-	err = engine.L.DoString(`
+	err = L.DoString(`
 		local sock = ngx.socket.tcp()
 		local res, err = sock:send("hello", {timeout = 5000})
 		-- 未连接时应该返回 nil + error

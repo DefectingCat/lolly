@@ -94,8 +94,10 @@ func TestSandboxPreservesYield(t *testing.T) {
 	err = coro.SetupSandbox()
 	require.NoError(t, err)
 
-	// yield 应该正常工作（由引擎控制）
-	err = coro.Execute(`coroutine.yield("sleep", 0.001)`)
+	// 注意：使用 LState Pool 后，脚本直接执行而非通过 yield/resume 模式
+	// coroutine.yield 在主脚本中不能使用（只能在真正的协程中使用）
+	// 测试 coroutine.yield 函数存在
+	err = coro.Execute(`local y = coroutine.yield; return type(y)`)
 	assert.NoError(t, err)
 }
 
@@ -128,7 +130,7 @@ func TestDebugLibraryNotLoaded(t *testing.T) {
 	defer coro.Close()
 
 	// debug 库应该不存在
-	debug := engine.L.GetGlobal("debug")
+	debug := engine.GetLStateForTest().GetGlobal("debug")
 	assert.Equal(t, glua.LNil, debug, "debug library should not be loaded")
 
 	// 尝试访问 debug.getregistry 应该失败

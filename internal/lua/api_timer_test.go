@@ -19,7 +19,8 @@ func TestTimerManagerAt(t *testing.T) {
 	require.NotNil(t, manager)
 
 	// 创建 Lua 函数作为回调
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
 	// 注册一个简单的回调函数
 	callback := L.NewFunction(func(_ *glua.LState) int {
@@ -45,7 +46,9 @@ func TestTimerManagerCancel(t *testing.T) {
 
 	manager := engine.TimerManager()
 
-	callback := engine.L.NewFunction(func(_ *glua.LState) int {
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+	callback := L.NewFunction(func(_ *glua.LState) int {
 		return 0
 	})
 
@@ -67,12 +70,15 @@ func TestTimerManagerCancel(t *testing.T) {
 func TestTimerManagerWaitAll(t *testing.T) {
 	engine, err := NewEngine(DefaultConfig())
 	require.NoError(t, err)
+	defer engine.Close()
 
 	manager := engine.TimerManager()
 
+	L := engine.GetLStateForTest()
+
 	// 创建多个定时器
 	for range 3 {
-		callback := engine.L.NewFunction(func(_ *glua.LState) int {
+		callback := L.NewFunction(func(_ *glua.LState) int {
 			return 0
 		})
 		manager.At(50*time.Millisecond, callback, nil)
@@ -84,8 +90,6 @@ func TestTimerManagerWaitAll(t *testing.T) {
 
 	// active count 应该回到 0
 	assert.Equal(t, int32(0), manager.ActiveCount())
-
-	engine.Close()
 }
 
 func TestTimerLuaAPI(t *testing.T) {
@@ -93,7 +97,8 @@ func TestTimerLuaAPI(t *testing.T) {
 	require.NoError(t, err)
 	defer engine.Close()
 
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 
 	// 注册 ngx.timer API
 	ngx := L.NewTable()
@@ -128,7 +133,7 @@ func TestTimerRunningCount(t *testing.T) {
 	assert.Equal(t, int32(0), manager.ActiveCount())
 
 	// 创建定时器
-	callback := engine.L.NewFunction(func(_ *glua.LState) int {
+	callback := engine.GetLStateForTest().NewFunction(func(_ *glua.LState) int {
 		return 0
 	})
 

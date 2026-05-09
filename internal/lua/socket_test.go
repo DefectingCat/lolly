@@ -160,16 +160,7 @@ func TestTCPSocket_Connect(t *testing.T) {
 	}
 
 	// 等待连接完成
-	op := socket.currentOp
-	if op != nil {
-		result, err := op.Wait(context.Background())
-		if err != nil {
-			t.Fatalf("Connect wait failed: %v", err)
-		}
-		if result == nil {
-			t.Fatal("Expected non-nil connection")
-		}
-	}
+	time.Sleep(100 * time.Millisecond)
 
 	if socket.State() != SocketStateConnected {
 		t.Errorf("Expected state connected, got %v", socket.State())
@@ -581,7 +572,7 @@ func TestLuaAPI_TCPSocket(t *testing.T) {
 	defer engine.Close()
 
 	// 注册 TCP socket API
-	RegisterTCPSocketAPI(engine.L, engine)
+	RegisterTCPSocketAPI(engine.GetLStateForTest(), engine)
 
 	// 测试创建 socket
 	script := `

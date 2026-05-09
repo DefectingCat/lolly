@@ -65,7 +65,8 @@ func TestNgxLogAPIRegistration(t *testing.T) {
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
 
 	// 在 Lua 状态机中注册 API
-	L := engine.L
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
 	RegisterNgxLogAPI(L, api)
 
 	// 验证 ngx 表已创建
@@ -108,7 +109,7 @@ func TestNgxLogAPILog(t *testing.T) {
 	logger := zerolog.New(&buf)
 
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 测试日志输出
@@ -136,7 +137,7 @@ func TestNgxLogAPISay(t *testing.T) {
 	logger := zerolog.New(&buf)
 
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 测试 say 输出
@@ -163,7 +164,7 @@ func TestNgxLogAPIPrint(t *testing.T) {
 	logger := zerolog.New(&buf)
 
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 测试 print 输出
@@ -191,7 +192,7 @@ func TestNgxLogAPIFlush(t *testing.T) {
 	logger := zerolog.New(&buf)
 
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 测试 flush
@@ -216,7 +217,7 @@ func TestNgxLogAPIExit(t *testing.T) {
 	logger := zerolog.New(&buf)
 
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 测试 exit - 应该抛出错误
@@ -244,7 +245,7 @@ func TestNgxLogAPIRedirect(t *testing.T) {
 	logger := zerolog.New(&buf)
 
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 测试 redirect - 默认状态码 302
@@ -273,7 +274,7 @@ func TestNgxLogAPIRedirectWithStatus(t *testing.T) {
 	logger := zerolog.New(&buf)
 
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 测试 redirect - 301
@@ -299,7 +300,7 @@ func TestNgxLogAPIRedirectInvalidStatus(t *testing.T) {
 	logger := zerolog.New(&buf)
 
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 测试 redirect - 无效状态码 (400)
@@ -344,7 +345,7 @@ func TestNgxLogAPIWithoutLogger(t *testing.T) {
 
 	// 创建无 logger 的 API
 	api := newNgxLogAPI(ctx, luaCtx, nil)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 测试日志 - 不应 panic
@@ -367,7 +368,7 @@ func TestNgxLogAPIIntegration(t *testing.T) {
 	logger := zerolog.New(&buf)
 
 	api := newNgxLogAPI(ctx, luaCtx, &logger)
-	L := engine.L
+	L := engine.GetLStateForTest()
 	RegisterNgxLogAPI(L, api)
 
 	// 综合测试
