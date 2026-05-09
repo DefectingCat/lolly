@@ -149,9 +149,18 @@ type LuaScriptConfig struct {
 	// Path 脚本路径
 	Path string `yaml:"path"`
 
-	// Phase 执行阶段
+	// Phase 执行阶段（与 Route 互斥）
 	// 可选值：rewrite、access、content、log、header_filter、body_filter
 	Phase string `yaml:"phase"`
+
+	// Route 路由匹配路径/模式（与 Phase 互斥）
+	// 当设置此字段时，脚本将按路由匹配执行而非阶段执行
+	Route string `yaml:"route"`
+
+	// RouteType 路由匹配类型
+	// 可选值：exact、prefix、prefix_priority、regex、regex_caseless
+	// 默认值：prefix（当 Route 设置时）
+	RouteType string `yaml:"route_type"`
 
 	// Timeout 执行超时
 	Timeout time.Duration `yaml:"timeout"`
