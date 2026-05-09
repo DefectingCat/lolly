@@ -680,6 +680,9 @@ func (s *Server) startMultiServerMode() error {
 
 			s.registerProxyRoutes(router, serverCfg)
 
+			// Lua 路由
+			s.registerLuaRoutes(router, serverCfg)
+
 			// 静态文件服务
 			s.registerStaticHandlers(router, serverCfg)
 

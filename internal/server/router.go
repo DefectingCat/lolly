@@ -253,6 +253,65 @@ func (s *Server) registerStaticHandlers(router *handler.Router, cfg *config.Serv
 	}
 }
 
+// registerLuaRoutes 使用 Router 注册 Lua 路由。
+//
+// 遍历 Lua 配置中的脚本，为带有 Route 配置的脚本创建 LuaRouteHandler
+// 并注册到 Router。
+//
+// 参数：
+//   - router: 路由器实例
+//   - serverCfg: 服务器配置
+//
+// 注意事项：
+//   - 只有设置了 Route 字段的脚本才会被注册
+//   - 支持 exact、prefix、regex 匹配类型（router 模式下统一使用路径匹配）
+func (s *Server) registerLuaRoutes(router *handler.Router, serverCfg *config.ServerConfig) {
+	if s.luaEngine == nil || serverCfg.Lua == nil || !serverCfg.Lua.Enabled {
+		return
+	}
+
+	for _, script := range serverCfg.Lua.Scripts {
+		if script.Route == "" {
+			continue
+		}
+
+		timeout := script.Timeout
+		if timeout == 0 {
+			timeout = 30 * time.Second
+		}
+		luaHandler := lua.NewLuaRouteHandler(s.luaEngine, script.Path, timeout)
+		handler := s.wrapRoutedHandler(luaHandler.ServeHTTP)
+
+		// Router 模式下，根据 routeType 注册不同路由
+		routePath := script.Route
+		routeType := script.RouteType
+		if routeType == "" {
+			routeType = "prefix"
+		}
+
+		switch routeType {
+		case "exact":
+			// 精确匹配：只注册该路径
+			router.GET(routePath, handler)
+			router.POST(routePath, handler)
+			router.PUT(routePath, handler)
+			router.DELETE(routePath, handler)
+			router.HEAD(routePath, handler)
+		default:
+			// 前缀匹配：注册带通配符的路径
+			if !strings.HasSuffix(routePath, "/") && routePath != "/" {
+				routePath += "/"
+			}
+			wildcardPath := routePath + "{path:*}"
+			router.GET(wildcardPath, handler)
+			router.POST(wildcardPath, handler)
+			router.PUT(wildcardPath, handler)
+			router.DELETE(wildcardPath, handler)
+			router.HEAD(wildcardPath, handler)
+		}
+	}
+}
+
 // registerLuaRoutesWithLocationEngine 使用 LocationEngine 注册 Lua 路由。
 //
 // 遍历 Lua 配置中的脚本，为带有 Route 配置的脚本创建 LuaRouteHandler
