@@ -1225,7 +1225,10 @@ func validateVariables(v *VariablesConfig) error {
 //
 // 验证规则：
 //   - scripts[].path 必填
-//   - scripts[].phase 必须是有效阶段
+//   - scripts[].phase 和 scripts[].route 互斥，只能设置其一
+//   - scripts[].phase 必须是有效阶段（当设置时）
+//   - scripts[].route_type 必须是有效类型（当设置 route 时）
+//   - scripts[].route 为 regex 类型时必须能编译为有效正则
 //   - global_settings.max_concurrent_coroutines 必须 >= 1
 func validateLua(l *LuaMiddlewareConfig) error {
 	// 未配置时跳过
@@ -1239,10 +1242,33 @@ func validateLua(l *LuaMiddlewareConfig) error {
 			return fmt.Errorf("scripts[%d].path 必填", i)
 		}
 
-		// 验证阶段值
-		validPhases := []string{"rewrite", "access", "content", "log", "header_filter", "body_filter"}
-		if !slices.Contains(validPhases, script.Phase) {
-			return fmt.Errorf("scripts[%d].phase 无效: %s（仅支持 rewrite, access, content, log, header_filter, body_filter）", i, script.Phase)
+		// Route 和 Phase 互斥检查
+		if script.Route != "" && script.Phase != "" {
+			return fmt.Errorf("scripts[%d]: route 和 phase 互斥，只能设置其一", i)
+		}
+
+		// 验证阶段值（当设置 phase 时）
+		if script.Phase != "" {
+			validPhases := []string{"rewrite", "access", "content", "log", "header_filter", "body_filter"}
+			if !slices.Contains(validPhases, script.Phase) {
+				return fmt.Errorf("scripts[%d].phase 无效: %s（仅支持 rewrite, access, content, log, header_filter, body_filter）", i, script.Phase)
+			}
+		}
+
+		// 验证路由配置（当设置 route 时）
+		if script.Route != "" {
+			// 验证 route_type 枚举值
+			validRouteTypes := []string{"", "exact", "prefix", "prefix_priority", "regex", "regex_caseless"}
+			if !slices.Contains(validRouteTypes, script.RouteType) {
+				return fmt.Errorf("scripts[%d].route_type 无效: %s（仅支持 exact, prefix, prefix_priority, regex, regex_caseless）", i, script.RouteType)
+			}
+
+			// 当 route_type 为 regex 类型时，验证正则有效性
+			if script.RouteType == "regex" || script.RouteType == "regex_caseless" {
+				if _, err := regexp.Compile(script.Route); err != nil {
+					return fmt.Errorf("scripts[%d].route '%s' 不是有效正则: %w", i, script.Route, err)
+				}
+			}
 		}
 
 		// 超时时间验证
