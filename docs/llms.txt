@@ -460,6 +460,17 @@ compression:
 lua:
   enabled: true
   scripts:
+    # 路由脚本（有 route，无 phase）- 直接处理请求
+    - path: "./lib/lua/status.lua"
+      route: "/api/status"          # 路由路径
+      route_type: "exact"           # exact/prefix/prefix_priority/regex/regex_caseless
+      timeout: 30s                  # 执行超时
+
+    - path: "./lib/lua/echo.lua"
+      route: "/api/echo"
+      route_type: "prefix"          # 前缀匹配，支持子路径
+
+    # 中间件脚本（有 phase，无 route）- 在请求处理阶段执行
     - path: "/etc/lolly/rewrite.lua"
       phase: "rewrite"
       timeout: 10s
@@ -480,7 +491,25 @@ lua:
     coroutine_stack_size: 64
     minimize_stack_memory: true
     coroutine_pool_warmup: 100
+    enable_file_watch: true         # 启用文件监控，支持热更新
 ```
+
+### 脚本类型
+
+| 类型 | 配置 | 说明 |
+|------|------|------|
+| 路由脚本 | `route` + 无 `phase` | 直接处理 HTTP 请求，类似 nginx location |
+| 中间件脚本 | `phase` + 无 `route` | 在请求处理阶段执行，可修改请求/响应 |
+
+### 路由类型 (route_type)
+
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| `exact` | 精确匹配 | `/api/status` 只匹配该路径 |
+| `prefix` | 前缀匹配 | `/api/echo` 匹配 `/api/echo/` 和 `/api/echo/xxx` |
+| `prefix_priority` | 优先前缀匹配 (^~) | 优先于正则匹配 |
+| `regex` | 正则匹配（区分大小写） | `^/api/v[0-9]+/` |
+| `regex_caseless` | 正则匹配（不区分大小写） | `(?i)^/api/` |
 
 ### 执行阶段
 
@@ -568,6 +597,85 @@ ngx.HTTP_INTERNAL_SERVER_ERROR = 500
 ngx.HTTP_BAD_GATEWAY = 502
 ngx.HTTP_SERVICE_UNAVAILABLE = 503
 ngx.HTTP_GATEWAY_TIMEOUT = 504
+```
+
+### 路由脚本示例
+
+**状态检查端点** (`lib/lua/status.lua`)：
+```lua
+-- 返回服务器状态
+ngx.say('{')
+ngx.say('  "status": "ok",')
+ngx.say('  "server": "lolly",')
+ngx.say('  "version": "0.2.2"')
+ngx.say('}')
+ngx.exit(200)
+```
+
+**健康检查端点** (`lib/lua/health.lua`)：
+```lua
+-- 用于负载均衡器健康检查
+ngx.resp.set_status(200)
+ngx.resp.set_header("Content-Type", "application/json")
+ngx.say('{')
+ngx.say('  "status": "healthy",')
+ngx.say('  "server": "lolly"')
+ngx.say('}')
+ngx.exit(200)
+```
+
+**Echo 服务** (`lib/lua/echo.lua`)：
+```lua
+-- 返回请求信息
+local method = ngx.req.get_method()
+local uri = ngx.req.get_uri()
+local args = ngx.req.get_uri_args()
+
+ngx.say('{')
+ngx.say('  "method": "' .. method .. '",')
+ngx.say('  "uri": "' .. uri .. '"')
+
+if args and next(args) then
+    ngx.say('  ,"args": {')
+    local first = true
+    for k, v in pairs(args) do
+        if not first then ngx.say(',') end
+        first = false
+        ngx.say('    "' .. k .. '": "' .. v .. '"')
+    end
+    ngx.say('  }')
+end
+
+ngx.say('}')
+ngx.exit(200)
+```
+
+**获取客户端 IP** (`lib/lua/ip.lua`)：
+```lua
+local remote_addr = ngx.var.remote_addr or "unknown"
+ngx.say('{')
+ngx.say('  "remote_addr": "' .. remote_addr .. '"')
+ngx.say('}')
+ngx.exit(200)
+```
+
+**JSON 响应示例** (`lib/lua/json.lua`)：
+```lua
+ngx.resp.set_header("Content-Type", "application/json")
+ngx.resp.set_header("X-Server", "lolly")
+ngx.say('{')
+ngx.say('  "success": true,')
+ngx.say('  "data": {')
+ngx.say('    "message": "Hello from Lua!"')
+ngx.say('  }')
+ngx.say('}')
+ngx.exit(200)
+```
+
+**HTTP 重定向** (`lib/lua/redirect.lua`)：
+```lua
+local target = ngx.req.get_uri_args()["target"] or "https://example.com"
+return ngx.redirect(target, 302)
 ```
 
 ## URL 重写
