@@ -70,3 +70,4 @@ lua-nginx-module/
 !docs/lua-nginx-module/
 lib/
 main
+.crush
