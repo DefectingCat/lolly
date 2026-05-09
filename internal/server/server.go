@@ -410,6 +410,9 @@ func (s *Server) startSingleMode() error {
 	// 注册代理路由
 	s.registerProxyRoutesWithLocationEngine(serverCfg)
 
+	// Lua 路由
+	s.registerLuaRoutesWithLocationEngine(serverCfg)
+
 	// 静态文件服务
 	s.registerStaticHandlersWithLocationEngine(serverCfg)
 
