@@ -169,10 +169,9 @@ func (m *LuaMiddleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHa
 
 		// 初始化协程
 		if err := luaCtx.InitCoroutine(); err != nil {
-			// 协程创建失败，记录错误并继续
+			// 协程创建失败，返回 500 错误，不继续执行后续处理器
 			ctx.Error(fmt.Sprintf("lua coroutine init failed: %v", err), fasthttp.StatusInternalServerError)
 			luaCtx.Release()
-			next(ctx)
 			return
 		}
 

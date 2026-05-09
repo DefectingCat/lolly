@@ -208,4 +208,10 @@ type LuaGlobalSettings struct {
 
 	// MinimizeStackMemory 启用栈内存自动收缩以减少内存占用
 	MinimizeStackMemory bool `yaml:"minimize_stack_memory"`
+
+	// LStatePoolInitialSize LState 池初始大小（预热数量）
+	LStatePoolInitialSize int `yaml:"lstate_pool_initial_size"`
+
+	// LStatePoolMaxSize LState 池最大大小（与 MaxConcurrentCoroutines 匹配）
+	LStatePoolMaxSize int `yaml:"lstate_pool_max_size"`
 }

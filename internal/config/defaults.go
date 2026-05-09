@@ -69,6 +69,8 @@ func DefaultConfig() *Config {
 					CodeCacheSize:           1000,
 					EnableFileWatch:         true,
 					MaxExecutionTime:        30 * time.Second,
+						LStatePoolInitialSize:   100,
+						LStatePoolMaxSize:       1000,
 				},
 			},
 			Static: []StaticConfig{{
@@ -335,6 +337,8 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	fmt.Fprintf(&buf, "    #     coroutine_stack_size: %d         # 协程栈大小（0=使用默认值）\n", cfg.Servers[0].Lua.GlobalSettings.CoroutineStackSize)
 	fmt.Fprintf(&buf, "    #     coroutine_pool_warmup: %d        # 协程池预热数量（0=不预热）\n", cfg.Servers[0].Lua.GlobalSettings.CoroutinePoolWarmup)
 	fmt.Fprintf(&buf, "    #     minimize_stack_memory: %v    # 最小化栈内存使用\n", cfg.Servers[0].Lua.GlobalSettings.MinimizeStackMemory)
+	fmt.Fprintf(&buf, "    #     lstate_pool_initial_size: %d   # LState池初始大小\n", cfg.Servers[0].Lua.GlobalSettings.LStatePoolInitialSize)
+	fmt.Fprintf(&buf, "    #     lstate_pool_max_size: %d       # LState池最大大小\n", cfg.Servers[0].Lua.GlobalSettings.LStatePoolMaxSize)
 	buf.WriteString("\n")
 
 	// static 配置

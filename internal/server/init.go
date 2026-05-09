@@ -111,6 +111,8 @@ func initLuaEngine(luaCfg *config.LuaMiddlewareConfig) (*lua.LuaEngine, error) {
 		EnableOSLib:             false, // 安全默认值
 		EnableIOLib:             false,
 		EnableLoadLib:           false,
+			LStatePoolInitialSize:   luaCfg.GlobalSettings.LStatePoolInitialSize,
+			LStatePoolMaxSize:       luaCfg.GlobalSettings.LStatePoolMaxSize,
 	}
 
 	// 设置协程栈优化选项
@@ -138,6 +140,12 @@ func initLuaEngine(luaCfg *config.LuaMiddlewareConfig) (*lua.LuaEngine, error) {
 	}
 	if engineCfg.MaxExecutionTime == 0 {
 		engineCfg.MaxExecutionTime = 30 * time.Second
+		}
+		if engineCfg.LStatePoolInitialSize == 0 {
+			engineCfg.LStatePoolInitialSize = 100
+		}
+		if engineCfg.LStatePoolMaxSize == 0 {
+			engineCfg.LStatePoolMaxSize = 1000
 	}
 
 	engine, err := lua.NewEngine(engineCfg)
