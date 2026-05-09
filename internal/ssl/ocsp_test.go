@@ -628,8 +628,8 @@ func TestOCSPManager_SendOCSPRequest_Error(t *testing.T) {
 		t.Error("Expected error for invalid URL")
 	}
 
-	// 测试连接失败
-	_, err = mgr.sendOCSPRequest("http://127.0.0.1:9999/ocsp", []byte("test"))
+	// 测试连接失败 - 使用保留的不可达 IP 地址 (198.18.0.0/15 是 IANA 保留用于基准测试的地址块)
+	_, err = mgr.sendOCSPRequest("http://198.18.0.1:9999/ocsp", []byte("test"))
 	if err == nil {
 		t.Error("Expected error for connection failure")
 	}
