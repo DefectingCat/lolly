@@ -33,6 +33,8 @@ import (
 
 	"github.com/valyala/fasthttp"
 	glua "github.com/yuin/gopher-lua"
+
+	"rua.plus/lolly/gjson"
 )
 
 // LuaEngine 全局 Lua 引擎。
@@ -176,6 +178,7 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 		glua.OpenString(L)
 		glua.OpenMath(L)
 		glua.OpenCoroutine(L)
+		glua.OpenPackage(L) // 需要 package 库支持 require
 
 		// 可选加载危险库
 		if config.EnableOSLib {
@@ -184,6 +187,9 @@ func NewEngine(config *Config) (*LuaEngine, error) {
 		if config.EnableIOLib {
 			glua.OpenIo(L)
 		}
+
+		// 预加载 gjson 模块
+		gjson.Preload(L)
 
 		return L
 	}
