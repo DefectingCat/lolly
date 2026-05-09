@@ -459,22 +459,27 @@ compression:
 ```yaml
 lua:
   enabled: true
-  package_path: "/etc/lolly/lua/?.lua"
-  package_cpath: ""
-  sandbox: true               # 沙箱模式
-
-  # 执行阶段脚本
-  rewrite_by_lua: "/etc/lolly/rewrite.lua"
-  access_by_lua: "/etc/lolly/access.lua"
-  content_by_lua: "/etc/lolly/content.lua"
-  header_filter_by_lua: "/etc/lolly/header_filter.lua"
-  body_filter_by_lua: "/etc/lolly/body_filter.lua"
-  log_by_lua: "/etc/lolly/log.lua"
-
-  # 共享字典
-  shared_dicts:
-    cache: 10000              # 名称: 最大条目数
-    limit: 1000
+  scripts:
+    - path: "/etc/lolly/rewrite.lua"
+      phase: "rewrite"
+      timeout: 10s
+    - path: "/etc/lolly/access.lua"
+      phase: "access"
+    - path: "/etc/lolly/content.lua"
+      phase: "content"
+    - path: "/etc/lolly/header_filter.lua"
+      phase: "header_filter"
+    - path: "/etc/lolly/body_filter.lua"
+      phase: "body_filter"
+    - path: "/etc/lolly/log.lua"
+      phase: "log"
+  global_settings:
+    max_concurrent_coroutines: 1000
+    coroutine_timeout: 30s
+    code_cache_size: 100
+    coroutine_stack_size: 64
+    minimize_stack_memory: true
+    coroutine_pool_warmup: 100
 ```
 
 ### 执行阶段
