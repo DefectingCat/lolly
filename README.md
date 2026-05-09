@@ -7,7 +7,7 @@
 
 基于 [fasthttp](https://github.com/valyala/fasthttp) 构建，提供比标准 net/http 更高的性能。支持 HTTP/3 (QUIC)、WebSocket、虚拟主机、多种负载均衡算法、故障转移、代理缓存、Lua 脚本扩展，以及完整的安全与性能优化特性。
 
-> **代码统计**：174 个源文件 | 158 个测试文件 | ~136,000 行 Go 代码 | 测试覆盖率 >80%
+> **代码统计**：234 个源文件 | 242 个测试文件 | ~189,000 行 Go 代码 | 测试覆盖率 81.3%
 
 ## 特性
 
@@ -54,7 +54,6 @@ proxy:
 ### 安全
 
 - **访问控制** - IP/CIDR 白名单与黑名单，支持 trusted_proxies 配置
-- **GeoIP 过滤** - 基于 MaxMind GeoIP2 数据库的国家/地区访问控制
 - **速率限制** - 令牌桶与滑动窗口算法，支持精确/近似模式
 - **连接限制** - 单 IP 并发连接数限制
 - **认证** - Basic Auth，支持 bcrypt 与 argon2id；外部 auth_request 子请求
@@ -187,238 +186,28 @@ lolly 支持将 nginx 配置文件转换为 YAML 格式：
     +---------+        +-----------+        +---------+
 ```
 
-### 核心模块依赖关系
-
-```
-                            main.go (CLI 入口)
-                                   │ app.Run()
-                                   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                        App (app/)                               │
-│  生命周期: loadConfig → initServer → Start → handleSignal       │
-│  组合: Server + HTTP3Server + HTTP2Server + StreamServer        │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-      ┌───────────────────────┼───────────────────────┐
-      │                       │                       │
-      ▼                       ▼                       ▼
-┌───────────┐           ┌──────────────┐           ┌───────────┐
-│  config   │           │  server      │           │  upgrade  │
-│ (YAML)    │           │ (HTTP)       │           │ (热升级)  │
-│ 18 文件   │           │ GoroutinePool│           │ FD 继承   │
-└─────┬─────┘           └─────┬────────┘           └───────────┘
-      │                       │
-      │                       ▼
-      │           ┌───────────────────────────────────────┐
-      │           │          Middleware Chain             │
-      │           │  AccessLog → Security → Compression   │
-      │           │  → BodyLimit → Rewrite → Lua          │
-      │           └─────┬─────────────────────────────────┘
-      │                 │
-      │                 ▼
-      │           ┌───────────┐
-      │           │  matcher  │
-      │           │ (Location)│
-      │           │ Radix Tree│
-      │           └─────┬─────┘
-      │                 │
-      │     ┌───────────┴───────────┐
-      │     │                       │
-      │     ▼                       ▼
-      │ ┌───────────┐         ┌───────────┐
-      │ │  handler  │         │   proxy   │
-      │ │ (Static)  │         │ (反向代理)│
-      │ │ sendfile  │         │ HostClient│
-      │ └─────┬─────┘         └─────┬─────┘
-      │       │                     │
-      │       ▼                     ▼
-      │ ┌───────────┐         ┌───────────┐
-      │ │   cache   │         │loadbalance│
-      │ │ FileCache │         │ 7 种算法  │
-      │ └───────────┘         └─────┬─────┘
-      │                             │
-      ▼                             ▼
-┌───────────┐               ┌───────────┐
-│  logging  │               │  resolver │
-│ (zerolog) │               │   (DNS)   │
-└───────────┘               └───────────┘
-```
-
-### 设计模式应用
-
-| 模式       | 应用位置                              | 说明                                         |
-| ---------- | ------------------------------------- | -------------------------------------------- |
-| 策略模式   | `loadbalance/`                        | 7 种 LB 算法可插拔切换，实现 `Balancer` 接口 |
-| 责任链模式 | `middleware/`                         | 中间件逆序包装链式调用，洋葱模型             |
-| 工厂模式   | `proxy/proxy.go`                      | `createBalancerByName` 根据名称创建均衡器    |
-| 对象池模式 | `proxy/headersPool`, `cache/`, `lua/` | `sync.Pool` 复用高频对象                     |
-| 观察者模式 | `server/upgrade.go`                   | 信号监听与处理，优雅升级触发                 |
-
-### 性能优化设计
-
-| 优化点         | 实现方式             | 收益                         |
-| -------------- | -------------------- | ---------------------------- |
-| fasthttp       | 替代 net/http        | 零分配请求处理，10x 性能提升 |
-| sendfile       | Linux 内核级传输     | 大文件零拷贝，减少 CPU 开销  |
-| sync.Pool      | headers/buffers 复用 | 减少 GC 压力                 |
-| Goroutine Pool | worker 池复用        | 避免 goroutine 爆炸          |
-| 原子计数器     | `atomic.AddUint64`   | 负载均衡无锁选择             |
-| LRU 缓存       | GeoIP/FileCache      | 减少重复查询/读取            |
-
 ### 目录结构
 
 ```
 internal/
-├── app/                    # 应用入口、信号处理、生命周期
-│   ├── app.go              # 主程序逻辑（Start/Stop/Reload）
-│   ├── app_common.go       # 通用平台代码
-│   ├── app_windows.go      # Windows 平台适配
-│   └── import.go           # nginx 配置导入
-├── config/                 # 配置加载、验证、默认值（13 文件）
-│   ├── config.go           # 根配置结构（支持 single/vhost/multi_server 模式）
-│   ├── loader.go           # 配置文件加载
-│   ├── defaults.go         # 默认配置
-│   ├── validate.go         # 配置验证
-│   ├── server_config.go    # 服务器配置
-│   ├── proxy_config.go     # 代理配置
-│   ├── ssl_config.go       # SSL/TLS 配置
-│   ├── security_config.go  # 安全配置
-│   ├── cache_config.go     # 缓存配置
-│   ├── performance_config.go # 性能配置
-│   ├── monitoring_config.go # 监控配置
-│   └── variable_config.go  # 变量配置
-├── server/                 # HTTP 服务器核心（13 文件）
-│   ├── server.go           # 服务器实现（三种运行模式）
-│   ├── vhost.go            # 虚拟主机管理
-│   ├── pool.go             # Goroutine 池
-│   ├── status.go           # 状态端点
-│   ├── pprof.go            # pprof 端点
-│   ├── pprof_impl.go       # pprof 实现
-│   ├── purge.go            # 缓存清除端点
-│   ├── internal.go         # 内部端点处理
-│   ├── lifecycle.go        # 生命周期管理
-│   ├── middleware_builder.go # 中间件构建器
-│   ├── init.go             # 初始化逻辑
-│   ├── router.go           # 路由器集成
-│   ├── upgrade.go          # 热升级管理（Unix）
-│   ├── upgrade_windows.go  # 热升级管理（Windows）
-│   └── testutil.go         # 测试工具
-├── handler/                # 请求处理器
-│   ├── router.go           # fasthttp/router 封装
-│   ├── static.go           # 静态文件处理（含缓存、ETag、304）
-│   ├── sendfile.go         # 零拷贝传输接口
-│   ├── sendfile_linux.go   # Linux sendfile 实现
-│   ├── sendfile_common.go  # 通用实现
-│   ├── autoindex.go        # 目录列表生成
-│   ├── fileinfo_cache.go   # FileInfo 缓存
-│   └── errorpage.go        # 错误页面管理
-├── proxy/                  # 反向代理
-│   ├── proxy.go            # 代理核心（负载均衡、缓存、故障转移）
-│   ├── websocket.go        # WebSocket 代理
-│   ├── health.go           # 主动健康检查
-│   ├── health_match.go     # 健康检查匹配逻辑
-│   ├── headers.go          # 头部处理工具
-│   ├── header_modifier.go  # 头部修改器
-│   ├── redirect_rewrite.go # Location/Refresh 头改写
-│   ├── proxy_ssl.go        # 上游 SSL/TLS
-│   ├── proxy_dns.go        # DNS 解析集成
-│   ├── target_selector.go  # 目标选择器（Lua balancer 支持）
-│   ├── cache_handler.go    # 代理缓存处理
-│   ├── tempfile.go         # 临时文件管理
-│   ├── tempfile_cleaner.go # 临时文件清理
-│   ├── utils.go            # 工具函数
-│   └── validate.go         # 配置验证
-├── loadbalance/            # 负载均衡算法
-│   ├── balancer.go         # Balancer 接口、RoundRobin、WeightedRR、LeastConn、IPHash
-│   ├── algorithms.go       # 算法注册
-│   ├── consistent_hash.go  # 一致性哈希（虚拟节点）
-│   ├── random.go           # Power of Two Choices
-│   └── slow_start.go       # 慢启动算法
-├── matcher/                # Location 匹配器
-│   ├── matcher.go          # 匹配器接口
-│   ├── exact.go            # 精确匹配
-│   ├── prefix.go           # 前缀匹配
-│   ├── regex.go            # 正则匹配
-│   ├── radix.go            # 基数树匹配
-│   ├── conflict.go         # 冲突检测
-│   ├── location.go         # Location 定义
-│   ├── named.go            # 命名捕获组
-│   └── prefix_priority.go  # 前缀优先级排序
-├── middleware/             # 中间件链
-│   ├── middleware.go       # 中间件接口
-│   ├── compression/        # Gzip/Brotli 压缩
-│   │   ├── compression.go  # 压缩实现
-│   │   └── gzip_static.go  # 预压缩文件
-│   ├── security/           # 安全中间件
-│   │   ├── access.go       # IP/CIDR 访问控制
-│   │   ├── ratelimit.go    # 令牌桶限流
-│   │   ├── sliding_window.go # 滑动窗口限流
-│   │   ├── auth.go         # Basic Auth（bcrypt/argon2id）
-│   │   ├── auth_request.go # 子请求认证
-│   │   ├── geoip.go        # GeoIP 过滤
-│   │   └── headers.go      # 安全头部
-│   ├── rewrite/            # URL 重写
-│   ├── accesslog/          # 访问日志（nginx 兼容格式）
-│   ├── bodylimit/          # 请求体大小限制
-│   ├── limitrate/          # 响应速率限制
-│   └── errorintercept/     # 错误页面拦截
-├── lua/                    # Lua 脚本引擎
-│   ├── engine.go           # gopher-lua 引擎
-│   ├── context.go          # 请求上下文
-│   ├── register.go         # API 注册
-│   ├── socket_manager.go   # Socket 管理
-│   ├── filter_writer.go    # header/body_filter
-│   └── api_*.go            # nginx-lua 兼容 API（20+ 文件）
-├── http2/                  # HTTP/2 服务器
-│   ├── server.go           # HTTP/2 实现
-│   └── adapter.go          # 适配器
-├── http3/                  # HTTP/3 服务器
-│   ├── server.go           # QUIC 服务器
-│   └── adapter.go          # 适配器
-├── stream/                 # TCP/UDP Stream 代理
-│   ├── stream.go           # 四层代理
-│   └── ssl.go              # Stream SSL
-├── ssl/                    # TLS 配置
-│   ├── ssl.go              # TLS 管理器
-│   ├── ocsp.go             # OCSP Stapling
-│   ├── session_tickets.go  # Session Tickets 轮换
-│   └── client_verify.go    # 客户端证书验证
-├── cache/                  # 缓存系统
-│   ├── backend.go          # 缓存后端抽象
-│   ├── file_cache.go       # 文件缓存（LRU）
-│   ├── disk_cache.go       # 磁盘缓存
-│   ├── tiered_cache.go     # L1/L2 分层缓存
-│   └── purge.go            # 缓存清除
-├── resolver/               # DNS 解析器
-│   ├── resolver.go         # DNS 解析
-│   ├── cache.go            # DNS 缓存
-│   └── stats.go            # 解析统计
-├── variable/               # 变量系统
-│   ├── variable.go         # 变量接口
-│   ├── builtin.go          # 内置变量（$remote_addr 等）
-│   ├── pool.go             # 变量池
-│   └── ssl.go              # SSL 变量
-├── converter/              # 配置转换器
-│   └── nginx/              # nginx 配置导入
-│       ├── parser.go       # nginx 语法解析
-│       └── converter.go    # YAML 转换
-├── logging/                # 日志系统
-│   └── logging.go          # zerolog 封装
-├── netutil/                # 网络工具
-│   ├── ip.go               # IP 解析
-│   ├── host.go             # 主机名处理
-│   └── url.go              # URL 处理
-├── mimeutil/               # MIME 类型
-│   └── detect.go           # MIME 检测
-├── sslutil/                # SSL 工具
-│   └── certpool.go         # 证书池
-├── utils/                  # 通用工具
-│   ├── httperror.go        # HTTP 错误处理
-│   └── internal.go         # 内部工具
-├── version/                # 版本信息
-│   └── version.go          # 版本定义
-└── benchmark/              # 基准测试
-    └── tools/              # 测试辅助工具
+├── app/          # 应用入口、信号处理、生命周期
+├── config/       # 配置加载、验证、默认值
+├── server/       # HTTP 服务器核心
+├── handler/      # 请求处理器
+├── proxy/        # 反向代理
+├── loadbalance/  # 负载均衡算法
+├── matcher/      # Location 匹配器
+├── middleware/   # 中间件链
+├── lua/          # Lua 脚本引擎
+├── http2/        # HTTP/2 服务器
+├── http3/        # HTTP/3 服务器
+├── stream/       # TCP/UDP Stream 代理
+├── ssl/          # TLS 配置
+├── cache/        # 缓存系统
+├── resolver/     # DNS 解析器
+├── variable/     # 变量系统
+├── logging/      # 日志系统
+└── ...           # 其他工具模块
 ```
 
 ### 核心设计
@@ -696,103 +485,11 @@ services:
     restart: unless-stopped
 ```
 
-### systemd
-
-创建 `/etc/systemd/system/lolly.service`：
-
-```ini
-[Unit]
-Description=Lolly HTTP Server
-After=network.target
-
-[Service]
-Type=simple
-User=lolly
-Group=lolly
-ExecStart=/usr/local/bin/lolly -c /etc/lolly/lolly.yaml
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
-LimitNOFILE=65535
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-# 安装服务
-sudo systemctl daemon-reload
-sudo systemctl enable lolly
-sudo systemctl start lolly
-
-# 管理服务
-sudo systemctl reload lolly   # 重载配置
-sudo systemctl restart lolly  # 重启服务
-sudo systemctl status lolly   # 查看状态
-```
-
 ## 监控
 
 ### 状态端点
 
-访问 `/status`（需配置 `monitoring.status.allow` 白名单）：
-
-```json
-{
-  "version": "0.2.2",
-  "uptime": "2h30m15s",
-  "connections": 150,
-  "requests": 125000,
-  "bytes_sent": 5368709120,
-  "bytes_received": 1073741824,
-  "pool": {
-    "workers": 256,
-    "IdleWorkers": 200,
-    "MaxWorkers": 10000,
-    "MinWorkers": 100,
-    "QueueLen": 0,
-    "QueueCap": 1000
-  },
-  "upstreams": [
-    {
-      "name": "backend1",
-      "targets": [
-        { "url": "http://10.0.0.1:8080", "healthy": true, "latency_ms": 5 },
-        { "url": "http://10.0.0.2:8080", "healthy": true, "latency_ms": 8 }
-      ],
-      "healthy_count": 2,
-      "unhealthy_count": 0,
-      "latency_p50_ms": 5.2,
-      "latency_p95_ms": 12.5,
-      "latency_p99_ms": 25.0
-    }
-  ],
-  "rate_limits": [
-    {
-      "zone_name": "api_limit",
-      "requests": 50000,
-      "limit": 100,
-      "rejected": 150
-    }
-  ],
-  "ssl": {
-    "handshakes": 2500,
-    "session_reused": 800,
-    "reuse_rate_percent": 32.0
-  },
-  "cache": {
-    "file_cache": {
-      "entries": 5000,
-      "max_entries": 50000,
-      "size": 134217728,
-      "max_size": 268435456
-    },
-    "proxy_cache": {
-      "entries": 2000,
-      "pending": 5
-    }
-  }
-}
-```
+访问 `/status`（需配置 `monitoring.status.allow` 白名单），返回服务器状态、连接池、上游健康、缓存命中等信息。
 
 ### pprof 端点
 
@@ -875,54 +572,6 @@ performance:
 | 中流量（10K-100K RPS） | 5000        | 256MB               | 300                |
 | 高流量（>100K RPS）    | 10000       | 512MB               | 500                |
 
-## 与 NGINX 对比
-
-| 特性           | Lolly           | NGINX        |
-| -------------- | --------------- | ------------ |
-| HTTP/3         | 支持（quic-go） | 1.25+ 支持   |
-| HTTP/2         | 支持（需 TLS）  | 支持         |
-| 配置格式       | YAML            | 自定义 DSL   |
-| 热升级         | 支持            | 支持         |
-| 扩展方式       | Go 代码/Lua     | C 模块/Lua   |
-| 部署方式       | 单二进制        | 需安装       |
-| TCP/UDP Stream | 支持            | 支持         |
-| 代理缓存       | 支持（带锁）    | 支持         |
-| GeoIP          | MaxMind GeoIP2  | GeoIP 模块   |
-| 一致性哈希     | 支持（内置）    | 需第三方模块 |
-
-**Lolly 优势**：
-
-- YAML 配置更易读、易于解析和生成
-- 单二进制部署，无依赖
-- Go 原生扩展，无需 C 编译环境
-- 现代 Go 库生态系统
-
-**NGINX 优势**：
-
-- 经过大规模生产验证
-- 丰富的第三方模块生态
-- 更完整的功能集（邮件代理等）
-
-### 从 NGINX 迁移
-
-常见配置转换示例：
-
-| NGINX                                      | Lolly                                          |
-| ------------------------------------------ | ---------------------------------------------- |
-| `listen 80;`                               | `listen: ":80"`                                |
-| `root /var/www/html;`                      | `root: "/var/www/html"`                        |
-| `proxy_pass http://backend;`               | `url: "http://backend"`                        |
-| `proxy_set_header X-Real-IP $remote_addr;` | `set_request: { X-Real-IP: "$remote_addr" }`   |
-| `limit_req zone=one burst=10;`             | `rate_limit: { request_rate: 100, burst: 10 }` |
-| `ssl_certificate /path/cert.pem;`          | `cert: "/path/cert.pem"`                       |
-
-迁移注意事项：
-
-1. 变量系统语法相同（$remote_addr 等）
-2. try_files 语法兼容
-3. Lua API 与 OpenResty 高度兼容
-4. 健康检查配置略有差异
-
 ## 故障排除
 
 ### 调试模式
@@ -997,10 +646,10 @@ make lint
 
 ### 项目统计
 
-- Go 源文件：174 个
-- 测试文件：158 个
-- 总代码行数：~136,000 行
-- 测试覆盖率：>80%
+- Go 源文件：234 个
+- 测试文件：242 个
+- 总代码行数：~189,000 行
+- 测试覆盖率：81.3%
 - 中文代码注释
 - 所有核心模块均有完整单元测试和性能基准测试
 
