@@ -116,8 +116,6 @@ func (g *GJSON) cfgEncodeKeepBuffer(L *glua.LState) int {
 // Returns current value when called without arguments.
 // When enabled, object keys are sorted alphabetically for deterministic output.
 // When disabled (default), keys are output in arbitrary order for better performance.
-//
-//nolint:unused // 方法通过 instance.cfgEncodeSortKeys 方式注册到 Lua，linter 无法检测到使用
 func (g *GJSON) cfgEncodeSortKeys(L *glua.LState) int {
 	if L.GetTop() == 0 {
 		L.Push(glua.LBool(g.config.encodeSortKeys))
