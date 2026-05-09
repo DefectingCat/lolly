@@ -174,6 +174,11 @@ func (s *Server) buildLuaMiddlewares(luaCfg *config.LuaMiddlewareConfig) ([]midd
 	// 按阶段分组脚本
 	phaseScripts := make(map[string][]config.LuaScriptConfig)
 	for _, script := range luaCfg.Scripts {
+		// 路由脚本由 LocationEngine 处理，跳过
+		if script.Route != "" {
+			continue
+		}
+
 		// 默认启用
 		enabled := script.Enabled
 		if !enabled && script.Timeout == 0 && script.Path != "" {
