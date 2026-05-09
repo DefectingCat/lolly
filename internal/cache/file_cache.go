@@ -19,6 +19,7 @@ package cache
 
 import (
 	"container/list"
+	"hash/fnv"
 	"slices"
 	"strings"
 	"sync"
@@ -786,4 +787,72 @@ func (c *ProxyCache) CacheStats() CacheStats {
 	return CacheStats{
 		Entries: int64(len(c.entries)),
 	}
+}
+
+// HashPathWithMethod 使用 FNV-64a 计算路径和方法的哈希值。
+func HashPathWithMethod(path string, method string) uint64 {
+	if method == "" {
+		method = "GET"
+	}
+	key := method + ":" + path
+	h := fnv.New64a()
+	h.Write([]byte(key))
+	return h.Sum64()
+}
+
+// MatchPattern 检查路径是否匹配通配符模式。
+//
+// 支持以下匹配模式：
+//   - "*"：匹配所有路径
+//   - 以 "*" 结尾：前缀匹配（如 "/api/*" 匹配 "/api/xxx"）
+//   - 以 "/" 结尾：目录前缀匹配
+//   - 中间通配符："/api/*/users" 匹配 "/api/v1/users"
+//   - 其他：精确匹配
+func MatchPattern(pattern, path string) bool {
+	// 特殊情况：* 匹配所有
+	if pattern == "*" {
+		return true
+	}
+
+	// 目录前缀匹配（pattern 以 / 结尾）
+	if strings.HasSuffix(pattern, "/") {
+		return strings.HasPrefix(path, pattern)
+	}
+
+	// 检查是否有通配符
+	if !strings.Contains(pattern, "*") {
+		return path == pattern
+	}
+
+	// 简单的前缀匹配：/api/users/* 匹配 /api/users/123
+	if prefix, ok := strings.CutSuffix(pattern, "*"); ok {
+		return strings.HasPrefix(path, prefix)
+	}
+
+	// 中间通配符：/api/*/users 匹配 /api/v1/users
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 2 {
+		return strings.HasPrefix(path, parts[0]) && strings.HasSuffix(path, parts[1])
+	}
+
+	// 复杂模式不支持，返回 false
+	return false
+}
+
+// PurgeRequest 缓存清理请求结构。
+type PurgeRequest struct {
+	// Path 精确路径
+	Path string `json:"path,omitempty"`
+
+	// Pattern 通配符模式（支持 * 通配符）
+	Pattern string `json:"pattern,omitempty"`
+
+	// Method HTTP 方法，默认 "GET"
+	Method string `json:"method,omitempty"`
+}
+
+// PurgeResponse 缓存清理响应结构。
+type PurgeResponse struct {
+	// Deleted 被删除的缓存条目数
+	Deleted int `json:"deleted"`
 }

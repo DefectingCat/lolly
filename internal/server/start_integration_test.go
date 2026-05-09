@@ -514,6 +514,7 @@ func TestStart_WithDelayedBackend(t *testing.T) {
 	// 启动延迟的 mock 服务器
 	backendAddr, cleanup := tools.DelayedMockBackend(
 		100*time.Millisecond,
+		fasthttp.StatusOK,
 		[]byte(`{"message": "delayed response"}`),
 	)
 	defer cleanup()
@@ -544,9 +545,9 @@ func TestStart_WithDelayedBackend(t *testing.T) {
 func TestStart_WithRandomResponse(t *testing.T) {
 	// 启动随机响应的 mock 服务器
 	backendAddr, cleanup := tools.StartMockFasthttpBackend(tools.MockBackendConfig{
-		Mode:       tools.ModeRandomResponse,
-		StatusCode: fasthttp.StatusOK,
-		Body:       []byte(`{"random": true}`),
+		Mode:         tools.ModeRandomResponse,
+		StatusCode:   fasthttp.StatusOK,
+		ResponseBody: []byte(`{"random": true}`),
 	})
 	defer cleanup()
 

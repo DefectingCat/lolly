@@ -407,7 +407,6 @@ func luaSchedulerLog(L *glua.LState) int {
 	// 在实际实现中，可以通过 engine 的 logger 输出
 	_ = level
 	_ = msg
-	// fmt.Printf("[timer] %s\n", msg)
 
 	return 0
 }

@@ -129,14 +129,7 @@ func ValidateNonNegative[T SignedInteger](value T, fieldName string) error {
 	return nil
 }
 
-// ValidateNonNegativeInt64 验证 int64 值为非负数
-// Deprecated: 使用 ValidateNonNegative[int64] 代替
-func ValidateNonNegativeInt64(value int64, fieldName string) error {
-	return ValidateNonNegative(value, fieldName)
-}
-
 // ValidateNonNegativeDuration 验证 time.Duration 值为非负数
-// Deprecated: 使用 ValidateNonNegative[int64] 代替（time.Duration 是 int64 别名）
 func ValidateNonNegativeDuration(value time.Duration, fieldName string) error {
 	return ValidateNonNegative(int64(value), fieldName)
 }
