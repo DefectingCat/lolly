@@ -42,6 +42,7 @@ import (
 // 当 OCSP 查询失败时，TLS 握手仍可继续进行。
 type OCSPManager struct {
 	responses       map[string]*ocspResponse
+	certs           map[string]certPair
 	client          *http.Client
 	stopChan        chan struct{}
 	refreshInterval time.Duration
@@ -49,6 +50,11 @@ type OCSPManager struct {
 	maxRetries      int
 	mu              sync.RWMutex
 	running         bool
+}
+
+type certPair struct {
+	cert   *x509.Certificate
+	issuer *x509.Certificate
 }
 
 // ocspResponse OCSP 响应缓存条目。
@@ -129,6 +135,7 @@ func NewOCSPManager(cfg *OCSPConfig) *OCSPManager {
 
 	return &OCSPManager{
 		responses: make(map[string]*ocspResponse),
+		certs:     make(map[string]certPair),
 		client: &http.Client{
 			Timeout: timeout,
 		},
@@ -182,24 +189,36 @@ func (m *OCSPManager) refreshLoop() {
 
 // refreshAll 刷新所有缓存的 OCSP 响应。
 func (m *OCSPManager) refreshAll() {
+	var toRefresh []string
 	m.mu.RLock()
-	certs := make([]string, 0, len(m.responses))
-	for serial := range m.responses {
-		certs = append(certs, serial)
+	for serial, resp := range m.responses {
+		if resp == nil || time.Now().After(resp.nextUpdate) || resp.status != statusValid {
+			toRefresh = append(toRefresh, serial)
+		}
 	}
 	m.mu.RUnlock()
 
-	for _, serial := range certs {
+	for _, serial := range toRefresh {
 		m.mu.RLock()
-		resp, ok := m.responses[serial]
+		pair, ok := m.certs[serial]
 		m.mu.RUnlock()
-
-		if ok && resp != nil {
-			// 检查是否需要刷新
-			if time.Now().Before(resp.nextUpdate) && resp.status == statusValid {
-				continue
-			}
+		if !ok {
+			continue
 		}
+
+		response, err := m.fetchOCSP(pair.cert, pair.issuer)
+		m.mu.Lock()
+		if err != nil {
+			if existing, exists := m.responses[serial]; exists {
+				existing.errors++
+				if existing.errors >= m.maxRetries {
+					existing.status = statusFailed
+				}
+			}
+		} else {
+			m.responses[serial] = response
+		}
+		m.mu.Unlock()
 	}
 }
 
@@ -225,6 +244,10 @@ func (m *OCSPManager) RegisterCertificate(cert *x509.Certificate, issuer *x509.C
 	}
 
 	serial := cert.SerialNumber.String()
+
+	m.mu.Lock()
+	m.certs[serial] = certPair{cert: cert, issuer: issuer}
+	m.mu.Unlock()
 
 	// 获取初始 OCSP 响应
 	response, err := m.fetchOCSP(cert, issuer)
