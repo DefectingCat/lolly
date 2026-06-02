@@ -105,7 +105,7 @@ func (m *SlowStartManager) Start() {
 
 // Stop 停止后台更新。
 func (m *SlowStartManager) Stop() {
-	if !m.running.Load() {
+	if !m.running.Swap(false) {
 		return
 	}
 	close(m.stopCh)
