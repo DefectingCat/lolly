@@ -136,7 +136,7 @@ func (s *Server) StopWithTimeout(timeout time.Duration) error {
 		timeout = 5 * time.Second
 	}
 
-	s.running = false
+	s.running.Store(false)
 	s.cleanupResources()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -180,7 +180,7 @@ func (s *Server) StopWithTimeout(timeout time.Duration) error {
 //   - 推荐在生产环境使用此方法关闭服务器
 //   - 超时后会强制关闭，可能导致部分请求中断
 func (s *Server) GracefulStop(timeout time.Duration) error {
-	s.running = false
+	s.running.Store(false)
 	s.cleanupResources()
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

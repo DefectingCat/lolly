@@ -79,7 +79,7 @@ type Server struct {
 	requests            atomic.Int64
 	bytesSent           atomic.Int64
 	bytesReceived       atomic.Int64
-	running             bool
+	running             atomic.Bool
 }
 
 // New 创建 HTTP 服务器实例。
@@ -450,7 +450,7 @@ func (s *Server) startSingleMode() error {
 
 	s.fastServer = s.createFastServer(serverCfg, s.handler)
 
-	s.running = true
+	s.running.Store(true)
 
 	// 创建监听器并保存，用于热升级
 	ln, err := s.createListener(serverCfg)
@@ -580,7 +580,7 @@ func (s *Server) startVHostMode() error {
 
 	s.fastServer = s.createFastServer(serverCfg, s.handler)
 
-	s.running = true
+	s.running.Store(true)
 
 	// 创建监听器并保存，用于热升级
 	ln, err := s.createListener(serverCfg)
@@ -739,7 +739,7 @@ func (s *Server) startMultiServerMode() error {
 		return firstErr
 	}
 
-	s.running = true
+	s.running.Store(true)
 
 	// 启动所有服务器
 	for idx, fastSrv := range s.fastServers {

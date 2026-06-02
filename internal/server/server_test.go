@@ -55,7 +55,7 @@ func TestNew(t *testing.T) {
 		t.Error("Server.config not set correctly")
 	}
 
-	if s.running {
+	if s.running.Load() {
 		t.Error("Server.running should be false initially")
 	}
 
@@ -545,7 +545,7 @@ func TestServer_Running(t *testing.T) {
 	s := New(cfg)
 
 	// 初始状态应为未运行
-	if s.running {
+	if s.running.Load() {
 		t.Error("Initial running state should be false")
 	}
 }
@@ -1140,7 +1140,7 @@ func TestServer_StopWithTimeout_WithFastServer(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建 mock fastServer
 	s.fastServer = &fasthttp.Server{}
@@ -1295,7 +1295,7 @@ func TestServer_GracefulStop_WithFastServers(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建多个 fastServer
 	s.fastServers = []*fasthttp.Server{
@@ -1319,7 +1319,7 @@ func TestServer_StopWithTimeout_WithFastServers(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建多个 fastServer
 	s.fastServers = []*fasthttp.Server{
@@ -1641,9 +1641,9 @@ func TestGracefulStop_RunningState(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
-	if !s.running {
+	if !s.running.Load() {
 		t.Fatal("running should be true before GracefulStop")
 	}
 
@@ -1652,7 +1652,7 @@ func TestGracefulStop_RunningState(t *testing.T) {
 		t.Errorf("GracefulStop failed: %v", err)
 	}
 
-	if s.running {
+	if s.running.Load() {
 		t.Error("running should be false after GracefulStop")
 	}
 }
@@ -1674,7 +1674,7 @@ func TestGracefulStop_WithPool(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 初始化并启动 pool
 	s.pool = initGoroutinePool(&cfg.Performance)
@@ -1697,7 +1697,7 @@ func TestGracefulStop_WithHealthCheckers(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建 mock healthChecker (使用 nil，因为我们只测试循环不会 panic)
 	s.healthCheckers = nil
@@ -1717,7 +1717,7 @@ func TestGracefulStop_WithAccessLog(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建 accessLogMiddleware
 	s.accessLogMiddleware = accesslog.New(&config.LoggingConfig{})
@@ -1737,7 +1737,7 @@ func TestGracefulStop_WithTLSManager(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建临时证书文件
 	tempDir := t.TempDir()
@@ -1773,7 +1773,7 @@ func TestGracefulStop_WithLuaEngine(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建 Lua 引擎
 	luaEngine, err := lua.NewEngine(lua.DefaultConfig())
@@ -1801,7 +1801,7 @@ func TestGracefulStop_Timeout(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建一个真实的 fastServer，但通过模拟长时间关闭来测试超时
 	s.fastServer = &fasthttp.Server{
@@ -1834,7 +1834,7 @@ func TestGracefulStop_AllComponents(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 初始化所有组件
 	s.pool = initGoroutinePool(&cfg.Performance)
@@ -1856,7 +1856,7 @@ func TestGracefulStop_AllComponents(t *testing.T) {
 	}
 
 	// 验证 running 状态
-	if s.running {
+	if s.running.Load() {
 		t.Error("running should be false after GracefulStop")
 	}
 }
@@ -1881,7 +1881,7 @@ func TestGracefulStop_WithAccessControl(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建 AccessControl
 	ac, err := security.NewAccessControl(&cfg.Servers[0].Security.Access)
@@ -1909,7 +1909,7 @@ func TestGracefulStop_ContextCancelled(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建一个监听中的服务器
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1951,7 +1951,7 @@ func TestGracefulStop_MultipleHealthCheckers(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建多个 mock healthChecker
 	// 注意：这里使用 nil slice 测试空循环不会 panic
@@ -1972,7 +1972,7 @@ func TestGracefulStop_NilComponents(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 确保所有组件为 nil
 	s.pool = nil
@@ -1989,7 +1989,7 @@ func TestGracefulStop_NilComponents(t *testing.T) {
 		t.Errorf("GracefulStop failed: %v", err)
 	}
 
-	if s.running {
+	if s.running.Load() {
 		t.Error("running should be false after GracefulStop")
 	}
 }
@@ -2003,7 +2003,7 @@ func TestGracefulStop_FastServersWithNil(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 
 	// 创建包含 nil 的 fastServers
 	s.fastServers = []*fasthttp.Server{nil, {}, nil}
@@ -2023,7 +2023,7 @@ func TestGracefulStop_ZeroTimeout(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 	s.fastServer = &fasthttp.Server{}
 
 	err := s.GracefulStop(0)
@@ -2042,7 +2042,7 @@ func TestGracefulStop_NegativeTimeout(t *testing.T) {
 	}
 
 	s := New(cfg)
-	s.running = true
+	s.running.Store(true)
 	s.fastServer = &fasthttp.Server{}
 
 	err := s.GracefulStop(-1 * time.Second)

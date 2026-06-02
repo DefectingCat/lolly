@@ -65,7 +65,7 @@ func TestStart_Integration(t *testing.T) {
 	}
 
 	// 测试初始状态
-	if s.running {
+	if s.running.Load() {
 		t.Error("Server should not be running initially")
 	}
 
