@@ -318,45 +318,49 @@ func (m *OCSPManager) fetchOCSP(cert, issuer *x509.Certificate) (*ocspResponse, 
 //   - []byte: OCSP 响应数据
 //   - error: 请求失败时返回错误
 func (m *OCSPManager) sendOCSPRequest(url string, req []byte) ([]byte, error) {
-	// 重试逻辑
+	var lastErr error
 	for i := 0; i < m.maxRetries; i++ {
-		httpReq, err := http.NewRequest("POST", url, bytes.NewReader(req))
+		body, err := m.singleOCSPAttempt(url, req)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create HTTP request: %w", err)
-		}
-		httpReq.Header.Set("Content-Type", "application/ocsp-request")
-
-		resp, err := m.client.Do(httpReq)
-		if err != nil {
+			lastErr = err
 			if i < m.maxRetries-1 {
 				time.Sleep(time.Duration(i+1) * time.Second)
 				continue
 			}
-			return nil, fmt.Errorf("HTTP request failed: %w", err)
+			return nil, lastErr
 		}
-		defer func() { _ = resp.Body.Close() }()
-
-		if resp.StatusCode != http.StatusOK {
-			if i < m.maxRetries-1 {
-				time.Sleep(time.Duration(i+1) * time.Second)
-				continue
-			}
-			return nil, fmt.Errorf("OCSP server returned status %d", resp.StatusCode)
-		}
-
-		body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024)) // Limit to 1MB
-		if err != nil {
-			if i < m.maxRetries-1 {
-				time.Sleep(time.Duration(i+1) * time.Second)
-				continue
-			}
-			return nil, fmt.Errorf("failed to read response body: %w", err)
-		}
-
 		return body, nil
 	}
+	return nil, lastErr
+}
 
-	return nil, errors.New("max retries exceeded")
+// singleOCSPAttempt 发送单次 OCSP HTTP 请求。
+//
+// 将单次请求逻辑提取为独立函数，确保 resp.Body 在每次调用结束时
+// 通过 defer 正确关闭，避免在重试循环中累积未关闭的 response body。
+func (m *OCSPManager) singleOCSPAttempt(url string, req []byte) ([]byte, error) {
+	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(req))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/ocsp-request")
+
+	resp, err := m.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("OCSP server returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	return body, nil
 }
 
 // GetOCSPResponse 返回证书的 OCSP 响应。
