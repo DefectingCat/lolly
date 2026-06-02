@@ -406,12 +406,11 @@ func (r *DNSResolver) doRefresh() {
 
 // Stop 停止解析器。
 func (r *DNSResolver) Stop() error {
-	if !r.started.Load() {
+	if !r.started.Swap(false) {
 		return nil
 	}
 
 	close(r.stopCh)
-	r.started.Store(false)
 	return nil
 }
 
