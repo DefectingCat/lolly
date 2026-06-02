@@ -337,7 +337,9 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 	// 上游 SSL 配置（使用原生 TLSConfig）
 	if sslCfg != nil && sslCfg.Enabled && isTLS {
 		tlsCfg, err := CreateTLSConfig(sslCfg, extractHostFromURL(targetURL))
-		if err == nil {
+		if err != nil {
+			logging.Error().Err(err).Str("target", targetURL).Msg("Failed to create upstream TLS config")
+		} else {
 			client.TLSConfig = tlsCfg
 		}
 	}
