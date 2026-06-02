@@ -55,19 +55,13 @@ func (p *Proxy) writeCachedResponse(ctx *fasthttp.RequestCtx, entry *cache.Proxy
 // 该方法在独立 goroutine 中运行，不阻塞主请求流程。
 //
 // 参数：
-//   - ctx: 原始 FastHTTP 请求上下文（仅用于复制请求信息）
+//   - req: 预复制的请求副本（调用方负责 Acquire/Release）
 //   - target: 要刷新的后端目标
 //   - hashKey: 缓存哈希键
 //   - origKey: 缓存原始键
-func (p *Proxy) backgroundRefresh(ctx *fasthttp.RequestCtx, target *loadbalance.Target, hashKey uint64, origKey string) {
-	// 创建新的请求上下文副本
-	req := fasthttp.AcquireRequest()
+func (p *Proxy) backgroundRefresh(req *fasthttp.Request, target *loadbalance.Target, hashKey uint64, origKey string) {
 	resp := fasthttp.AcquireResponse()
-	defer fasthttp.ReleaseRequest(req)
 	defer fasthttp.ReleaseResponse(resp)
-
-	// 复制原始请求
-	ctx.Request.CopyTo(req)
 
 	// 如果启用 Revalidate，添加条件请求头
 	if p.config.Cache.Revalidate {
