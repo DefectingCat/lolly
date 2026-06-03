@@ -31,8 +31,8 @@ func TestDetectContentType(t *testing.T) {
 		{"test.WEBMANIFEST", "application/manifest+json"},
 		{"test.JPG", "image/jpeg"}, // Go 已知，也处理大小写
 
-		// 未知类型
-		{"test.unknown", ""},
+		// 未知类型 - 回退到 defaultMIME
+		{"test.unknown", "application/octet-stream"},
 	}
 
 	for _, tt := range tests {

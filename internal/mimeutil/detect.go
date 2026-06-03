@@ -102,7 +102,7 @@ func SetDefaultType(defaultType string) {
 //   - filePath: 文件路径
 //
 // 返回值:
-//   - string: MIME 类型，未知类型返回空字符串
+//	- string: MIME 类型，未知类型返回 defaultMIME（默认为 application/octet-stream）
 func DetectContentType(filePath string) string {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
@@ -150,6 +150,12 @@ func DetectContentType(filePath string) string {
 	entry := &mimeCacheEntry{ext: ext, mimeType: mimeType}
 	entry.element = mimeLRU.PushFront(entry)
 	mimeCache[ext] = entry
+
+	if mimeType == "" {
+		defaultMutex.RLock()
+		mimeType = defaultMIME
+		defaultMutex.RUnlock()
+	}
 
 	return mimeType
 }
