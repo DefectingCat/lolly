@@ -42,17 +42,6 @@ var bufferPoolInstance = &sync.Pool{
 	},
 }
 
-// SharedBufferPool 返回全局共享的缓冲区池实例。
-//
-// HTTP/2 和 HTTP/3 适配器都使用此 pool 来复用字节缓冲区，
-// 避免大请求体处理时的频繁内存分配。
-//
-// 返回值：
-//   - *sync.Pool: 全局缓冲区池实例
-func SharedBufferPool() *sync.Pool {
-	return bufferPoolInstance
-}
-
 // CommonAdapter 提供 HTTP/2 和 HTTP/3 适配器的共享基础结构。
 //
 // 该结构体提取了两个适配器共用的字段和方法，

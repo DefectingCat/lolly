@@ -249,20 +249,6 @@ func TestFileCacheInactiveEviction(t *testing.T) {
 	}
 }
 
-func TestFileCacheClear(t *testing.T) {
-	fc := NewFileCache(10, 1024, 1*time.Hour)
-
-	_ = fc.Set("/a", []byte("a"), 1, time.Now(), "text/plain")
-	_ = fc.Set("/b", []byte("b"), 1, time.Now(), "text/plain")
-
-	fc.Clear()
-
-	stats := fc.Stats()
-	if stats.Entries != 0 {
-		t.Errorf("Expected 0 entries after clear, got %d", stats.Entries)
-	}
-}
-
 func TestFileCacheStats(t *testing.T) {
 	fc := NewFileCache(100, 1024, 1*time.Hour)
 
@@ -355,33 +341,6 @@ func TestProxyCacheStaleWhileRevalidate(t *testing.T) {
 	}
 }
 
-func TestProxyCacheLock(t *testing.T) {
-	pc := NewProxyCache(nil, true, 0, 0, 0)
-
-	key := "lock-test"
-
-	// 获取锁
-	ch := pc.AcquireLock(hashKey(key))
-	if ch != nil {
-		t.Error("Expected to acquire lock (nil chan)")
-	}
-
-	// 第二次获取应该返回等待 chan
-	ch2 := pc.AcquireLock(hashKey(key))
-	if ch2 == nil {
-		t.Error("Expected waiting chan when lock is held")
-	}
-
-	// 设置缓存并释放锁
-	pc.Set(hashKey(key), key, []byte("data"), nil, 200, 10*time.Minute)
-
-	// 现在应该能获取缓存
-	_, ok, _ := pc.Get(hashKey(key), key)
-	if !ok {
-		t.Error("Expected cache entry after lock release")
-	}
-}
-
 func TestProxyCacheMatchRule(t *testing.T) {
 	rules := []ProxyCacheRule{
 		{Path: "/api/", Methods: []string{"GET"}, Statuses: []int{200}, MaxAge: 10 * time.Minute},
@@ -425,20 +384,6 @@ func TestProxyCacheDelete(t *testing.T) {
 	_, ok, _ := pc.Get(hashKey(key), key)
 	if ok {
 		t.Error("Expected entry to be deleted")
-	}
-}
-
-func TestProxyCacheClear(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0, 0, 0)
-
-	pc.Set(hashKey("a"), "a", []byte("a"), nil, 200, 10*time.Minute)
-	pc.Set(hashKey("b"), "b", []byte("b"), nil, 200, 10*time.Minute)
-
-	pc.Clear()
-
-	stats := pc.Stats()
-	if stats.Entries != 0 {
-		t.Errorf("Expected 0 entries, got %d", stats.Entries)
 	}
 }
 
@@ -674,31 +619,4 @@ func TestProxyCacheDeleteByPatternNoMatch(t *testing.T) {
 	}
 }
 
-// TestProxyCacheStatsToCacheStats 测试 ProxyCacheStats 转换。
-func TestProxyCacheStatsToCacheStats(t *testing.T) {
-	stats := ProxyCacheStats{
-		Entries: 10,
-		Pending: 2,
-	}
 
-	cacheStats := stats.ToCacheStats()
-
-	if cacheStats.Entries != 10 {
-		t.Errorf("Entries = %d, want 10", cacheStats.Entries)
-	}
-}
-
-// TestProxyCacheCacheStatsMethod 测试 CacheStats 方法。
-func TestProxyCacheCacheStatsMethod(t *testing.T) {
-	pc := NewProxyCache(nil, false, 0, 0, 0)
-
-	// 添加缓存条目
-	pc.Set(hashKey("key1"), "key1", []byte("data1"), nil, 200, 10*time.Minute)
-	pc.Set(hashKey("key2"), "key2", []byte("data2"), nil, 200, 10*time.Minute)
-
-	stats := pc.CacheStats()
-
-	if stats.Entries != 2 {
-		t.Errorf("Entries = %d, want 2", stats.Entries)
-	}
-}

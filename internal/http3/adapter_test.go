@@ -45,21 +45,6 @@ func TestWrap(t *testing.T) {
 	}
 }
 
-// TestWrapHandler 测试 WrapHandler 函数
-func TestWrapHandler(t *testing.T) {
-	adapter := NewAdapter()
-
-	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.SetStatusCode(200)
-		ctx.SetBodyString("test")
-	}
-
-	httpHandler := adapter.WrapHandler(handler)
-	if httpHandler == nil {
-		t.Error("Expected non-nil http.Handler")
-	}
-}
-
 // TestConvertRequest_Method 测试请求方法转换
 func TestConvertRequest_Method(t *testing.T) {
 	adapter := NewAdapter()

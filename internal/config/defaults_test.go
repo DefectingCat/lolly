@@ -254,25 +254,4 @@ func TestGenerateConfigYAMLContainsAllSections(t *testing.T) {
 	}
 }
 
-func TestGenerateConfigYAMLLoadable(t *testing.T) {
-	// TestGenerateConfigYAMLLoadable 测试生成的 YAML 可以被加载。
-	cfg := DefaultConfig()
-	yamlData, err := GenerateConfigYAML(cfg)
-	if err != nil {
-		t.Fatalf("GenerateConfigYAML 失败: %v", err)
-	}
 
-	// 尝试加载生成的 YAML
-	loadedCfg, err := LoadFromString(string(yamlData))
-	if err != nil {
-		t.Fatalf("生成的 YAML 无法加载: %v", err)
-	}
-
-	// 验证关键字段匹配
-	if loadedCfg.Servers[0].Listen != cfg.Servers[0].Listen {
-		t.Errorf("Server.Listen 不匹配: 期望 %s, 实际 %s", cfg.Servers[0].Listen, loadedCfg.Servers[0].Listen)
-	}
-	if loadedCfg.Resolver.Enabled != cfg.Resolver.Enabled {
-		t.Errorf("Resolver.Enabled 不匹配")
-	}
-}

@@ -258,20 +258,4 @@ func headersToLuaTable(L *glua.LState, headers map[string]string) *glua.LTable {
 	return table
 }
 
-// RegisterSchedulerUnsafeLocationAPI 为 Scheduler LState 注册不安全的 ngx.location API
-// 这些 API 在 scheduler 模式下会返回错误
-func RegisterSchedulerUnsafeLocationAPI(L *glua.LState, ngx *glua.LTable) {
-	// 创建 ngx.location 表
-	location := L.NewTable()
 
-	// ngx.location.capture 在 scheduler 模式下不可用
-	L.SetField(location, "capture", L.NewFunction(luaSchedulerUnsafeLocation))
-
-	L.SetField(ngx, "location", location)
-}
-
-// luaSchedulerUnsafeLocation 返回 scheduler 模式下不可用的错误
-func luaSchedulerUnsafeLocation(L *glua.LState) int {
-	L.RaiseError("API ngx.location.capture not available in timer callback context")
-	return 0
-}

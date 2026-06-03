@@ -149,15 +149,4 @@ func (a *Adapter) convertResponse(ctx *fasthttp.RequestCtx, w http.ResponseWrite
 	}
 }
 
-// WrapHandler 包装特定的 fasthttp handler。
-//
-// 返回一个可以直接用于 http3.Server 的 http.Handler。
-//
-// 参数：
-//   - handler: fasthttp 请求处理器
-//
-// 返回值：
-//   - http.Handler: 标准库兼容的处理器
-func (a *Adapter) WrapHandler(handler fasthttp.RequestHandler) http.Handler {
-	return a.Wrap(handler)
-}
+

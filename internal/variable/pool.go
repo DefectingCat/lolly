@@ -6,7 +6,6 @@
 package variable
 
 import (
-	"sync"
 	"sync/atomic"
 )
 
@@ -35,36 +34,4 @@ var (
 	active atomic.Int64
 )
 
-// GetStats 获取池统计信息的副本。
-//
-// 返回当前统计信息的快照，包含获取次数、放回次数、新建次数和活跃数量。
-// 该方法是线程安全的，可在多个 goroutine 中同时调用。
-//
-// 返回值：
-//   - PoolStats: 统计信息快照，包含 Gets、Puts、NewCount 和 Active 字段
-func GetStats() PoolStats {
-	return PoolStats{
-		Gets:     gets.Load(),
-		Puts:     puts.Load(),
-		NewCount: newCount.Load(),
-		Active:   active.Load(),
-	}
-}
 
-// GetPool 获取底层的 sync.Pool（用于测试和调试）。
-//
-// 返回值：
-//   - *sync.Pool: 变量池实例，可用于直接操作池中的对象
-func GetPool() *sync.Pool {
-	return &pool
-}
-
-// ResetStats 重置统计信息。
-//
-// 将所有统计计数器清零，线程安全。
-func ResetStats() {
-	gets.Store(0)
-	puts.Store(0)
-	newCount.Store(0)
-	active.Store(0)
-}

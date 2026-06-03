@@ -98,25 +98,6 @@ func GetGlobalVariable(name string) (string, bool) {
 	return v, ok
 }
 
-// GetAllGlobalVariables 获取所有全局变量的副本。
-//
-// 线程安全地返回全局自定义变量存储的完整快照。
-// 返回的是副本，外部修改不会影响全局存储。
-//
-// 返回值：
-//   - map[string]string: 所有全局变量的键值对副本，未初始化时返回 nil
-func GetAllGlobalVariables() map[string]string {
-	globalVariablesLock.RLock()
-	defer globalVariablesLock.RUnlock()
-	if globalVariables == nil {
-		return nil
-	}
-	// 返回副本，避免外部修改影响全局存储
-	result := make(map[string]string, len(globalVariables))
-	maps.Copy(result, globalVariables)
-	return result
-}
-
 // builtinVars 内置变量注册表
 var builtinVars = make(map[string]*BuiltinVariable)
 
@@ -568,11 +549,4 @@ func (vc *Context) Expand(template string) string {
 	}, true)
 }
 
-// ExpandString 展开字符串（静态函数，用于简单场景）
-// 需要提供变量值查找函数
-func ExpandString(template string, lookup func(string) string) string {
-	return expandCore(template, func(name string) (string, bool) {
-		v := lookup(name)
-		return v, v != ""
-	}, true)
-}
+

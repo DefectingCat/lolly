@@ -128,41 +128,5 @@ func BenchmarkStripPort(b *testing.B) {
 	})
 }
 
-// BenchmarkHasPort 测试 HasPort 函数的性能。
-// 覆盖不同场景：IPv4 带端口、IPv6 带端口、无端口、空字符串。
-func BenchmarkHasPort(b *testing.B) {
-	b.Run("IPv4 with port", func(b *testing.B) {
-		host := "example.com:8080"
-		b.ResetTimer()
-		for b.Loop() {
-			HasPort(host)
-		}
-	})
-
-	b.Run("IPv6 with port", func(b *testing.B) {
-		host := "[2001:db8::1]:443"
-		b.ResetTimer()
-		for b.Loop() {
-			HasPort(host)
-		}
-	})
-
-	b.Run("no port", func(b *testing.B) {
-		host := "example.com"
-		b.ResetTimer()
-		for b.Loop() {
-			HasPort(host)
-		}
-	})
-
-	b.Run("empty string", func(b *testing.B) {
-		host := ""
-		b.ResetTimer()
-		for b.Loop() {
-			HasPort(host)
-		}
-	})
-}
-
 // 确保 net 包被使用（避免未使用导入警告）
 var _ = net.IPv4zero

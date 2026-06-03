@@ -92,16 +92,6 @@ func SetDefaultType(defaultType string) {
 	defaultMIME = defaultType
 }
 
-// GetDefaultType 获取默认 MIME 类型（线程安全）。
-//
-// 返回值:
-//   - string: 当前默认 MIME 类型
-func GetDefaultType() string {
-	defaultMutex.RLock()
-	defer defaultMutex.RUnlock()
-	return defaultMIME
-}
-
 // DetectContentType 检测文件的 MIME 类型。
 //
 // 优先使用包本地映射，回退到 Go 标准库 mime.TypeByExtension。

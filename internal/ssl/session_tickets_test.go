@@ -266,80 +266,10 @@ func TestSessionTicketManager_ApplyToTLSConfig(t *testing.T) {
 }
 
 // TestSessionTicketManager_StartStop 测试启动和停止。
-func TestSessionTicketManager_StartStop(t *testing.T) {
-	mgr, err := NewSessionTicketManager(config.SessionTicketsConfig{
-		Enabled:        true,
-		RotateInterval: 100 * time.Millisecond,
-		RetainKeys:     3,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create manager: %v", err)
-	}
 
-	// 验证初始状态
-	status := mgr.GetStatus()
-	if status.Started {
-		t.Error("Manager should not be started initially")
-	}
-
-	// 启动
-	mgr.Start()
-	status = mgr.GetStatus()
-	if !status.Started {
-		t.Error("Manager should be started after Start()")
-	}
-
-	// 等待一次轮换
-	time.Sleep(150 * time.Millisecond)
-
-	keys := mgr.GetKeys()
-	if len(keys) < 1 {
-		t.Error("Expected at least 1 key after auto-rotation")
-	}
-
-	// 停止
-	mgr.Stop()
-	status = mgr.GetStatus()
-	if status.Started {
-		t.Error("Manager should not be started after Stop()")
-	}
-}
 
 // TestSessionTicketManager_GetStatus 测试获取状态。
-func TestSessionTicketManager_GetStatus(t *testing.T) {
-	mgr, err := NewSessionTicketManager(config.SessionTicketsConfig{
-		Enabled:        true,
-		RotateInterval: 30 * time.Minute,
-		RetainKeys:     5,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create manager: %v", err)
-	}
-	defer mgr.Stop()
 
-	status := mgr.GetStatus()
-
-	if status.KeyCount != 1 {
-		t.Errorf("KeyCount = %d, want 1", status.KeyCount)
-	}
-	// 使用自定义值 5，不是默认值
-	if status.RetainKeys != 5 {
-		t.Errorf("RetainKeys = %d, want 5", status.RetainKeys)
-	}
-	// RotateInterval 使用配置值（30m > 0，所以保留）
-	if status.RotateInterval != 30*time.Minute {
-		t.Errorf("RotateInterval = %v, want %v", status.RotateInterval, 30*time.Minute)
-	}
-	if status.Started {
-		t.Error("Started should be false before Start()")
-	}
-
-	mgr.Start()
-	status = mgr.GetStatus()
-	if !status.Started {
-		t.Error("Started should be true after Start()")
-	}
-}
 
 // TestGenerateTicketKey 测试密钥生成函数。
 func TestGenerateTicketKey(t *testing.T) {
@@ -364,60 +294,7 @@ func TestGenerateTicketKey(t *testing.T) {
 }
 
 // TestSessionTicketManager_ConcurrentAccess 测试并发访问。
-func TestSessionTicketManager_ConcurrentAccess(t *testing.T) {
-	mgr, err := NewSessionTicketManager(config.SessionTicketsConfig{
-		Enabled:        true,
-		RotateInterval: 10 * time.Millisecond,
-		RetainKeys:     3,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create manager: %v", err)
-	}
-	defer mgr.Stop()
 
-	mgr.Start()
-
-	// 并发读取和轮换
-	done := make(chan bool, 3)
-
-	// 协程 1: 持续获取密钥
-	go func() {
-		for range 100 {
-			_ = mgr.GetKeys()
-			time.Sleep(time.Millisecond)
-		}
-		done <- true
-	}()
-
-	// 协程 2: 持续获取状态
-	go func() {
-		for range 100 {
-			_ = mgr.GetStatus()
-			time.Sleep(time.Millisecond)
-		}
-		done <- true
-	}()
-
-	// 协程 3: 手动轮换
-	go func() {
-		for range 20 {
-			_ = mgr.RotateKey()
-			time.Sleep(5 * time.Millisecond)
-		}
-		done <- true
-	}()
-
-	// 等待所有协程完成
-	for range 3 {
-		<-done
-	}
-
-	// 验证最终状态
-	keys := mgr.GetKeys()
-	if len(keys) < 1 || len(keys) > 3 {
-		t.Errorf("Final key count %d out of expected range [1, 3]", len(keys))
-	}
-}
 
 // BenchmarkGenerateTicketKey 基准测试密钥生成。
 func BenchmarkGenerateTicketKey(b *testing.B) {

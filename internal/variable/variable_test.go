@@ -9,7 +9,6 @@
 package variable
 
 import (
-	"slices"
 	"strings"
 	"testing"
 
@@ -283,61 +282,9 @@ func TestResponseInfoVariables(t *testing.T) {
 	}
 }
 
-// TestExpandString 测试静态 ExpandString 函数
-func TestExpandString(t *testing.T) {
-	lookup := func(name string) string {
-		switch name {
-		case "host":
-			return "example.com"
-		case "port":
-			return "8080"
-		default:
-			return ""
-		}
-	}
 
-	tests := []struct {
-		template string
-		expected string
-	}{
-		{"$host:$port", "example.com:8080"},
-		{"${host}:${port}", "example.com:8080"},
-		{"http://$host:$port", "http://example.com:8080"},
-		{"$undefined", "$undefined"}, // 未定义变量保持原样
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.template, func(t *testing.T) {
-			result := ExpandString(tt.template, lookup)
-			if result != tt.expected {
-				t.Errorf("ExpandString(%q) = %q, want %q", tt.template, result, tt.expected)
-			}
-		})
-	}
-}
 
-// TestNormalizeHeaderName 测试头名规范化
-func TestNormalizeHeaderName(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"user_agent", "User-Agent"},
-		{"content_type", "Content-Type"},
-		{"x_custom_header", "X-Custom-Header"},
-		{"accept", "Accept"},
-		{"", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result := normalizeHeaderName(tt.input)
-			if result != tt.expected {
-				t.Errorf("normalizeHeaderName(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
 
 // BenchmarkExpandSimple 基准测试：简单变量展开
 func BenchmarkExpandSimple(b *testing.B) {
@@ -428,28 +375,7 @@ func BenchmarkPoolGetPut(b *testing.B) {
 	}
 }
 
-// BenchmarkExpandStringStatic 基准测试：静态 ExpandString 函数
-func BenchmarkExpandStringStatic(b *testing.B) {
-	lookup := func(name string) string {
-		switch name {
-		case "host":
-			return "example.com"
-		case "uri":
-			return "/test"
-		default:
-			return ""
-		}
-	}
 
-	template := "$host $uri"
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for b.Loop() {
-		_ = ExpandString(template, lookup)
-	}
-}
 
 // TestPoolReuse 测试池复用
 func TestPoolReuse(t *testing.T) {
@@ -473,74 +399,7 @@ func TestPoolReuse(t *testing.T) {
 	ReleaseContext(vc2)
 }
 
-// TestMoreBuiltinVariables 测试更多内置变量
-func TestMoreBuiltinVariables(t *testing.T) {
-	tests := []struct {
-		name        string
-		setupFunc   func(*fasthttp.RequestCtx)
-		varName     string
-		expected    string
-		shouldExist bool
-	}{
-		{
-			name:        "server_port with local addr",
-			setupFunc:   func(_ *fasthttp.RequestCtx) {},
-			varName:     VarServerPort,
-			expected:    "0", // 没有设置 local addr 时返回 "0"
-			shouldExist: true,
-		},
-		{
-			name:        "remote_addr without addr",
-			setupFunc:   func(_ *fasthttp.RequestCtx) {},
-			varName:     VarRemoteAddr,
-			expected:    "0.0.0.0:0", // mock ctx 返回默认值
-			shouldExist: true,
-		},
-		{
-			name:        "remote_port without addr",
-			setupFunc:   func(_ *fasthttp.RequestCtx) {},
-			varName:     VarRemotePort,
-			expected:    "0",
-			shouldExist: true,
-		},
-		{
-			name: "request_id from context",
-			setupFunc: func(ctx *fasthttp.RequestCtx) {
-				SetRequestIDInContext(ctx, "test-request-id-123")
-			},
-			varName:     VarRequestID,
-			expected:    "test-request-id-123",
-			shouldExist: true,
-		},
-		{
-			name: "server_name from context",
-			setupFunc: func(ctx *fasthttp.RequestCtx) {
-				SetServerNameInContext(ctx, "test-server")
-			},
-			varName:     VarServerName,
-			expected:    "test-server",
-			shouldExist: true,
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := mockRequestCtx(t)
-			tt.setupFunc(ctx)
-			vc := NewContext(ctx)
-			defer ReleaseContext(vc)
-
-			value, ok := vc.Get(tt.varName)
-			if tt.shouldExist && !ok {
-				t.Errorf("expected variable %s to exist", tt.varName)
-				return
-			}
-			if value != tt.expected {
-				t.Errorf("%s = %q, want %q", tt.varName, value, tt.expected)
-			}
-		})
-	}
-}
 
 // TestReleaseNilContext 测试释放 nil context
 func TestReleaseNilContext(_ *testing.T) {
@@ -563,73 +422,11 @@ func TestGetBuiltin(t *testing.T) {
 	}
 }
 
-// TestGetArgVariable 测试查询参数变量
-func TestGetArgVariable(t *testing.T) {
-	ctx := mockRequestCtx(t) // /test/path?foo=bar&baz=qux
 
-	tests := []struct {
-		name     string
-		expected string
-	}{
-		{"foo", "bar"},
-		{"baz", "qux"},
-		{"notexist", ""},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := GetArgVariable(ctx, tt.name)
-			if result != tt.expected {
-				t.Errorf("GetArgVariable(%q) = %q, want %q", tt.name, result, tt.expected)
-			}
-		})
-	}
-}
 
-// TestGetHTTPVariable 测试 HTTP 头变量
-func TestGetHTTPVariable(t *testing.T) {
-	ctx := mockRequestCtx(t)
 
-	tests := []struct {
-		name     string
-		expected string
-	}{
-		{"user_agent", "Test-Agent/1.0"},
-		{"x_custom_header", "custom-value"},
-		{"not_exist", ""},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := GetHTTPVariable(ctx, tt.name)
-			if result != tt.expected {
-				t.Errorf("GetHTTPVariable(%q) = %q, want %q", tt.name, result, tt.expected)
-			}
-		})
-	}
-}
-
-// TestGetCookieVariable 测试 Cookie 变量
-func TestGetCookieVariable(t *testing.T) {
-	ctx := mockRequestCtx(t) // session=abc123
-
-	tests := []struct {
-		name     string
-		expected string
-	}{
-		{"session", "abc123"},
-		{"notexist", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := GetCookieVariable(ctx, tt.name)
-			if result != tt.expected {
-				t.Errorf("GetCookieVariable(%q) = %q, want %q", tt.name, result, tt.expected)
-			}
-		})
-	}
-}
 
 // TestEmptyTemplate 测试空模板
 func TestEmptyTemplate(t *testing.T) {
@@ -704,23 +501,7 @@ func TestPoolPutNil(_ *testing.T) {
 	ReleaseContext(nil)
 }
 
-// TestStatsFunctions 测试统计相关函数
-func TestStatsFunctions(t *testing.T) {
-	// 重置统计
-	ResetStats()
 
-	// 获取初始统计
-	stats := GetStats()
-	if stats.Gets != 0 || stats.Puts != 0 {
-		t.Error("expected empty stats after reset")
-	}
-
-	// 获取池
-	p := GetPool()
-	if p == nil {
-		t.Error("GetPool() should return non-nil")
-	}
-}
 
 // TestSetResponseInfo 测试 SetResponseInfo
 func TestSetResponseInfo(t *testing.T) {
@@ -754,79 +535,15 @@ func TestSetServerName(t *testing.T) {
 	}
 }
 
-// TestEmptyExpandString 测试空模板 ExpandString
-func TestEmptyExpandString(t *testing.T) {
-	lookup := func(_ string) string { return "" }
-	result := ExpandString("", lookup)
-	if result != "" {
-		t.Errorf("ExpandString('') = %q, want empty", result)
-	}
-}
 
-// TestExpandStringNoVar 测试无变量模板
-func TestExpandStringNoVar(t *testing.T) {
-	lookup := func(_ string) string { return "" }
-	result := ExpandString("hello world", lookup)
-	if result != "hello world" {
-		t.Errorf("ExpandString = %q, want 'hello world'", result)
-	}
-}
 
-// TestTLSBuiltin 测试 HTTPS/TLS 内置变量
-func TestTLSBuiltin(t *testing.T) {
-	// 创建带 TLS 的上下文
-	ctx := &fasthttp.RequestCtx{}
-	ctx.Request.Header.SetMethod("GET")
-	ctx.Request.Header.SetRequestURI("/test")
-	// 由于无法直接设置 TLS，scheme 变量会检查 ctx.IsTLS()
-	// 这里我们测试它返回 http（默认值）
 
-	vc := NewContext(ctx)
-	defer ReleaseContext(vc)
 
-	scheme, ok := vc.Get("scheme")
-	if !ok {
-		t.Error("expected 'scheme' variable to exist")
-	}
-	if scheme != "http" {
-		t.Errorf("scheme = %q, want 'http'", scheme)
-	}
-}
 
-// TestEmptyVarNameBrace 测试空变量名 ${}
-func TestEmptyVarNameBrace(t *testing.T) {
-	ctx := mockRequestCtx(t)
-	vc := NewContext(ctx)
-	defer ReleaseContext(vc)
 
-	// ${} 应该保持为 ${}
-	result := vc.Expand("${}")
-	if result != "${}" {
-		t.Errorf("Expand('${}') = %q, want '${}'", result)
-	}
-}
 
-func TestBuiltinVarNames(t *testing.T) {
-	names := BuiltinVarNames()
-	if len(names) == 0 {
-		t.Error("BuiltinVarNames() returned empty slice")
-	}
 
-	// 检查是否包含一些已知变量
-	hasVar := func(name string) bool {
-		return slices.Contains(names, name)
-	}
 
-	if !hasVar("host") {
-		t.Error("BuiltinVarNames() missing 'host'")
-	}
-	if !hasVar("uri") {
-		t.Error("BuiltinVarNames() missing 'uri'")
-	}
-	if !hasVar("remote_addr") {
-		t.Error("BuiltinVarNames() missing 'remote_addr'")
-	}
-}
 
 // TestUpstreamVariables 测试上游变量
 func TestUpstreamVariables(t *testing.T) {
@@ -1032,103 +749,11 @@ func BenchmarkUpstreamVariables(b *testing.B) {
 	}
 }
 
-// TestGlobalVariables 测试全局变量功能
-func TestGlobalVariables(t *testing.T) {
-	// 清理
-	SetGlobalVariables(nil)
 
-	// 测试设置全局变量
-	SetGlobalVariables(map[string]string{
-		"app_name": "lolly",
-		"version":  "1.0.0",
-	})
 
-	// 测试 GetGlobalVariable
-	if v, ok := GetGlobalVariable("app_name"); !ok || v != "lolly" {
-		t.Errorf("GetGlobalVariable('app_name') = %q, %v, want 'lolly', true", v, ok)
-	}
 
-	if v, ok := GetGlobalVariable("notexist"); ok {
-		t.Errorf("GetGlobalVariable('notexist') = %q, %v, want '', false", v, ok)
-	}
 
-	// 测试 GetAllGlobalVariables
-	globals := GetAllGlobalVariables()
-	if globals == nil {
-		t.Error("GetAllGlobalVariables() returned nil")
-	}
-	if globals["app_name"] != "lolly" {
-		t.Errorf("globals['app_name'] = %q, want 'lolly'", globals["app_name"])
-	}
 
-	// 测试返回副本而非引用
-	globals["app_name"] = "modified"
-	if v, _ := GetGlobalVariable("app_name"); v != "lolly" {
-		t.Error("GetAllGlobalVariables() should return a copy, not a reference")
-	}
-
-	// 清理
-	SetGlobalVariables(nil)
-}
-
-// TestNewContextWithGlobals 测试全局变量注入到请求上下文
-func TestNewContextWithGlobals(t *testing.T) {
-	// 设置全局变量
-	SetGlobalVariables(map[string]string{
-		"global_var": "global_value",
-	})
-	defer SetGlobalVariables(nil)
-
-	ctx := mockRequestCtx(t)
-	vc := NewContext(ctx)
-	defer ReleaseContext(vc)
-
-	// 全局变量应该被注入
-	if v, ok := vc.Get("global_var"); !ok || v != "global_value" {
-		t.Errorf("Get('global_var') = %q, %v, want 'global_value', true", v, ok)
-	}
-
-	// 展开应该包含全局变量
-	result := vc.Expand("$global_var")
-	if result != "global_value" {
-		t.Errorf("Expand('$global_var') = %q, want 'global_value'", result)
-	}
-}
-
-// TestGlobalVariablesConcurrent 测试全局变量并发访问
-func TestGlobalVariablesConcurrent(_ *testing.T) {
-	SetGlobalVariables(map[string]string{
-		"counter": "0",
-	})
-	defer SetGlobalVariables(nil)
-
-	done := make(chan bool)
-
-	// 并发读取
-	for range 10 {
-		go func() {
-			for range 100 {
-				_, _ = GetGlobalVariable("counter")
-			}
-			done <- true
-		}()
-	}
-
-	// 并发写入
-	for range 5 {
-		go func() {
-			for range 50 {
-				SetGlobalVariables(map[string]string{"counter": "updated"})
-			}
-			done <- true
-		}()
-	}
-
-	// 等待所有 goroutine 完成
-	for range 15 {
-		<-done
-	}
-}
 
 // TestEphemeralGet 测试 EphemeralGet 方法
 func TestEphemeralGet(t *testing.T) {

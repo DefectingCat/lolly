@@ -198,14 +198,4 @@ func (api *ngxRespAPI) SetHeader(name, value string) {
 	api.headersCacheOnce = sync.Once{}
 }
 
-// RegisterSchedulerUnsafeRespAPI 为 Scheduler LState 注册不安全的 ngx.resp API
-func RegisterSchedulerUnsafeRespAPI(L *glua.LState, ngx *glua.LTable) {
-	methods := []string{
-		"get_status",
-		"set_status",
-		"get_headers",
-		"set_header",
-		"clear_header",
-	}
-	RegisterUnsafeAPI(L, ngx, "ngx.resp", methods)
-}
+

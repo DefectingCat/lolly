@@ -13,9 +13,6 @@
 package variable
 
 import (
-	"crypto/tls"
-	"fmt"
-
 	"github.com/valyala/fasthttp"
 )
 
@@ -276,58 +273,4 @@ func GetSSLClientEmail(ctx *fasthttp.RequestCtx) string {
 	return ""
 }
 
-// SetSSLClientInfoInContext 在 fasthttp.RequestCtx 中设置 SSL 客户端信息。
-//
-// 参数：
-//   - ctx: fasthttp 请求上下文
-//   - cs: TLS 连接状态
-//   - verified: 验证结果
-func SetSSLClientInfoInContext(ctx *fasthttp.RequestCtx, cs *tls.ConnectionState, verified string) {
-	if ctx == nil || cs == nil {
-		return
-	}
 
-	ctx.SetUserValue(VarSSLClientVerify, verified)
-
-	if len(cs.PeerCertificates) > 0 {
-		cert := cs.PeerCertificates[0]
-		ctx.SetUserValue("tls_peer_cert_present", true)
-		ctx.SetUserValue(VarSSLClientSerial, cert.SerialNumber.String())
-		ctx.SetUserValue(VarSSLClientSubject, cert.Subject.String())
-		ctx.SetUserValue(VarSSLClientIssuer, cert.Issuer.String())
-		ctx.SetUserValue(VarSSLClientNotBefore, cert.NotBefore.Format("2006-01-02T15:04:05Z"))
-		ctx.SetUserValue(VarSSLClientNotAfter, cert.NotAfter.Format("2006-01-02T15:04:05Z"))
-
-		// 计算指纹
-		fingerprint := calculateFingerprint(cert.Raw)
-		ctx.SetUserValue(VarSSLClientFingerprint, fingerprint)
-
-		// 邮箱
-		if len(cert.EmailAddresses) > 0 {
-			ctx.SetUserValue(VarSSLClientEmail, cert.EmailAddresses[0])
-		}
-	}
-}
-
-// calculateFingerprint 计算证书指纹。
-//
-// 参数：
-//   - raw: 证书 DER 编码数据
-//
-// 返回值：
-//   - string: SHA1 指纹（十六进制，大写）
-func calculateFingerprint(raw []byte) string {
-	if len(raw) == 0 {
-		return ""
-	}
-
-	// 计算 SHA1 哈希
-	hash := make([]byte, 20)
-	// 简化处理，返回原始数据的简化哈希表示
-	for i := 0; i < len(raw) && i < 20; i++ {
-		hash[i] = raw[i]
-	}
-
-	// 格式化为十六进制
-	return fmt.Sprintf("%X", hash)
-}

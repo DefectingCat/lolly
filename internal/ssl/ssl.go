@@ -47,7 +47,6 @@ import (
 
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/logging"
-	"rua.plus/lolly/internal/netutil"
 	"rua.plus/lolly/internal/sslutil"
 )
 
@@ -204,47 +203,6 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 	return manager, nil
 }
 
-// NewMultiTLSManager 创建支持多证书的 TLS 管理器（SNI）。
-//
-// 用于多虚拟主机环境，每个主机有自己的证书。
-//
-// 参数：
-//   - configs: 服务器名称到 SSL 配置的映射
-//   - defaultCfg: 默认 SSL 配置，用于回退（可选）
-//
-// 返回值：
-//   - *TLSManager: 支持 SNI 的 TLS 管理器
-//   - error: 任何证书加载失败时返回错误
-func NewMultiTLSManager(configs map[string]*config.SSLConfig, defaultCfg *config.SSLConfig) (*TLSManager, error) {
-	if len(configs) == 0 {
-		return nil, errors.New("no SSL configurations provided")
-	}
-
-	manager := &TLSManager{
-		configs: make(map[string]*tls.Config),
-	}
-
-	// 加载每个证书
-	for name, cfg := range configs {
-		tlsCfg, err := createTLSConfig(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create TLS config for %s: %w", name, err)
-		}
-		manager.configs[name] = tlsCfg
-	}
-
-	// 如果提供了默认配置，则加载
-	if defaultCfg != nil {
-		tlsCfg, err := createTLSConfig(defaultCfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create default TLS config: %w", err)
-		}
-		manager.defaultCfg = tlsCfg
-	}
-
-	return manager, nil
-}
-
 // GetTLSConfig 返回默认的 TLS 配置。
 //
 // 用于单服务器模式。
@@ -255,88 +213,6 @@ func (m *TLSManager) GetTLSConfig() *tls.Config {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.defaultCfg
-}
-
-// GetTLSConfigForHost 返回指定主机的 TLS 配置（SNI）。
-//
-// 如果未找到匹配主机，则回退到默认配置。
-//
-// 参数：
-//   - host: 主机名（可能包含端口）
-//
-// 返回值：
-//   - *tls.Config: 匹配的 TLS 配置
-func (m *TLSManager) GetTLSConfigForHost(host string) *tls.Config {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	// 从主机名中移除端口（如果存在）
-	host = netutil.StripPort(host)
-
-	if cfg, ok := m.configs[host]; ok {
-		return cfg
-	}
-	return m.defaultCfg
-}
-
-// GetCertificate 返回用于 SNI 支持的 GetCertificate 回调。
-//
-// 该回调被 tls.Config 用于根据 SNI 选择证书。
-//
-// 返回值：
-//   - func: 证书选择回调函数
-func (m *TLSManager) GetCertificate() func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	return func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-		m.mu.RLock()
-		defer m.mu.RUnlock()
-
-		// 查找匹配的服务器名称
-		if cfg, ok := m.configs[hello.ServerName]; ok {
-			if len(cfg.Certificates) > 0 {
-				return &cfg.Certificates[0], nil
-			}
-		}
-
-		// 回退到默认配置
-		if m.defaultCfg != nil && len(m.defaultCfg.Certificates) > 0 {
-			return &m.defaultCfg.Certificates[0], nil
-		}
-
-		return nil, errors.New("no certificate available")
-	}
-}
-
-// AddCertificate 为服务器名称添加新证书（SNI）。
-//
-// 用于动态证书更新。
-//
-// 参数：
-//   - name: 服务器名称
-//   - cfg: SSL 配置
-//
-// 返回值：
-//   - error: 配置无效时返回错误
-func (m *TLSManager) AddCertificate(name string, cfg *config.SSLConfig) error {
-	tlsCfg, err := createTLSConfig(cfg)
-	if err != nil {
-		return err
-	}
-
-	m.mu.Lock()
-	m.configs[name] = tlsCfg
-	m.mu.Unlock()
-
-	return nil
-}
-
-// RemoveCertificate 移除服务器名称的证书。
-//
-// 参数：
-//   - name: 服务器名称
-func (m *TLSManager) RemoveCertificate(name string) {
-	m.mu.Lock()
-	delete(m.configs, name)
-	m.mu.Unlock()
 }
 
 // Close 停止 OCSP 管理器和 Session Ticket 管理器并释放资源。
@@ -398,32 +274,6 @@ func (m *TLSManager) getConfigForClientWithOCSP(hello *tls.ClientHelloInfo) (*tl
 	}
 
 	return cfgCopy, nil
-}
-
-// GetOCSPStatus 返回所有已注册证书的 OCSP 状态。
-//
-// 返回值：
-//   - map[string]OCSPStatusInfo: 证书序列号到状态信息的映射
-func (m *TLSManager) GetOCSPStatus() map[string]OCSPStatusInfo {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	result := make(map[string]OCSPStatusInfo)
-	if m.ocspManager == nil {
-		return result
-	}
-
-	for serial, cert := range m.certificates {
-		status, hasResponse := m.ocspManager.GetStatus(serial)
-		result[serial] = OCSPStatusInfo{
-			Serial:      serial,
-			Subject:     cert.Subject.CommonName,
-			Status:      status,
-			HasResponse: hasResponse,
-		}
-	}
-
-	return result
 }
 
 // OCSPStatusInfo OCSP 响应状态信息。
@@ -565,87 +415,4 @@ func matchMarker(data []byte, marker []byte) bool {
 	return true
 }
 
-// createTLSConfig 从 SSL 配置创建 tls.Config。
-//
-// 参数：
-//   - cfg: SSL 配置
-//
-// 返回值：
-//   - *tls.Config: TLS 配置对象
-//   - error: 配置无效时返回错误
-func createTLSConfig(cfg *config.SSLConfig) (*tls.Config, error) {
-	if cfg == nil {
-		return nil, errors.New("ssl config is nil")
-	}
 
-	cert, err := loadCertificate(cfg.Cert, cfg.Key, cfg.CertChain)
-	if err != nil {
-		return nil, err
-	}
-
-	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
-		MaxVersion:   tls.VersionTLS13,
-	}
-
-	if len(cfg.Ciphers) > 0 {
-		ciphers, err := sslutil.ParseCipherSuites(cfg.Ciphers)
-		if err != nil {
-			return nil, err
-		}
-		tlsCfg.CipherSuites = ciphers
-	} else {
-		tlsCfg.CipherSuites = sslutil.DefaultCipherSuites()
-	}
-
-	if len(cfg.Protocols) > 0 {
-		minVer, maxVer, err := sslutil.ParseTLSVersions(cfg.Protocols)
-		if err != nil {
-			return nil, err
-		}
-		tlsCfg.MinVersion = minVer
-		tlsCfg.MaxVersion = maxVer
-	}
-
-	return tlsCfg, nil
-}
-
-// ValidateCertificate 验证证书文件。
-//
-// 检查证书是否有效且未过期。
-//
-// 参数：
-//   - certPath: 证书文件路径
-//
-// 返回值：
-//   - error: 证书无效时返回错误
-func ValidateCertificate(certPath string) error {
-	_, err := os.ReadFile(certPath)
-	if err != nil {
-		return fmt.Errorf("failed to read certificate: %w", err)
-	}
-
-	// Note: More detailed validation would require parsing individual certs
-	// and checking expiration dates, which is done during tls.LoadX509KeyPair
-
-	return nil
-}
-
-// ValidateKey 验证私钥文件。
-//
-// 参数：
-//   - keyPath: 私钥文件路径
-//
-// 返回值：
-//   - error: 私钥无效时返回错误
-func ValidateKey(keyPath string) error {
-	_, err := os.ReadFile(keyPath)
-	if err != nil {
-		return fmt.Errorf("failed to read key: %w", err)
-	}
-
-	// 密钥验证在 tls.LoadX509KeyPair 期间进行
-	// This is a preliminary check that the file exists and is readable
-	return nil
-}

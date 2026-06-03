@@ -151,12 +151,4 @@ func (h *PurgeHandler) purgeByPattern(pattern string, method string) int {
 	return deleted
 }
 
-// PurgeByPathForTest 测试用的导出方法。
-func (h *PurgeHandler) PurgeByPathForTest(path string, method string) int {
-	return h.purgeByPath(path, method)
-}
 
-// PurgeByPatternForTest 测试用的导出方法。
-func (h *PurgeHandler) PurgeByPatternForTest(pattern string, method string) int {
-	return h.purgeByPattern(pattern, method)
-}

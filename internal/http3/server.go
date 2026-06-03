@@ -14,7 +14,6 @@
 package http3
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -210,87 +209,4 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-// GracefulStop 优雅停止服务器。
-//
-// 等待指定时间让现有连接完成。
-//
-// 参数：
-//   - timeout: 等待超时时间
-func (s *Server) GracefulStop(timeout time.Duration) error {
-	s.mu.Lock()
-	s.running = false
-	s.mu.Unlock()
 
-	if s.http3Server != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-
-		done := make(chan struct{})
-		go func() {
-			_ = s.http3Server.Close()
-			close(done)
-		}()
-
-		select {
-		case <-done:
-			logging.Info().Msg("HTTP/3 server graceful stop completed")
-		case <-ctx.Done():
-			logging.Warn().Msg("HTTP/3 server graceful stop timeout")
-		}
-	}
-
-	return nil
-}
-
-// IsRunning 检查服务器是否正在运行。
-func (s *Server) IsRunning() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.running
-}
-
-// GetAltSvcHeader 返回 Alt-Svc 响应头值。
-//
-// 用于告知客户端可以使用 HTTP/3。
-//
-// 返回值：
-//   - string: Alt-Svc 头值，如 `h3=":443"; ma=86400`
-func (s *Server) GetAltSvcHeader() string {
-	if s.config == nil || !s.config.Enabled {
-		return ""
-	}
-
-	listen := s.config.Listen
-	if listen == "" {
-		listen = defaultHTTP3Listen
-	}
-
-	// 移除前导冒号，保留端口
-	port := listen
-	if port[0] == ':' {
-		port = port[1:]
-	}
-
-	return fmt.Sprintf(`h3=":%s"; ma=86400`, port)
-}
-
-// Stats 返回服务器统计信息。
-type Stats struct {
-	Listen     string // 监听地址
-	MaxStreams int    // 最大并发流
-	Running    bool   // 是否运行中
-	Enable0RTT bool   // 是否启用 0-RTT
-}
-
-// GetStats 返回服务器统计信息。
-func (s *Server) GetStats() Stats {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return Stats{
-		Running:    s.running,
-		Listen:     s.config.Listen,
-		Enable0RTT: s.config.Enable0RTT,
-		MaxStreams: s.config.MaxStreams,
-	}
-}

@@ -12,11 +12,9 @@ package http2
 
 import (
 	"bytes"
-	"crypto/tls"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"testing"
 	"time"
 
@@ -76,38 +74,6 @@ func TestIntegrationHTTP2Request(t *testing.T) {
 	}
 }
 
-// TestIntegrationALPN 测试 ALPN 协议协商（需要 TLS 证书）。
-func TestIntegrationALPN(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.SetStatusCode(fasthttp.StatusOK)
-	}
-
-	cfg := &config.HTTP2Config{
-		Enabled: true,
-	}
-
-	server, err := NewServer(cfg, handler, nil)
-	if err != nil {
-		t.Fatalf("Failed to create server: %v", err)
-	}
-
-	// 验证 ALPN 配置
-	tlsConfig := server.ALPNConfig()
-	if tlsConfig == nil {
-		t.Fatal("ALPN config should not be nil")
-	}
-
-	// 验证协议列表
-	foundH2 := slices.Contains(tlsConfig.NextProtos, "h2")
-	if !foundH2 {
-		t.Error("ALPN config should include h2 protocol")
-	}
-}
-
 // TestIntegrationHTTP1Fallback 测试 HTTP/1.1 回退。
 func TestIntegrationHTTP1Fallback(t *testing.T) {
 	if testing.Short() {
@@ -162,52 +128,6 @@ func TestIntegrationConcurrentStreams(t *testing.T) {
 	if server.http2Server.MaxConcurrentStreams != 10 {
 		t.Errorf("Expected MaxConcurrentStreams 10, got %d",
 			server.http2Server.MaxConcurrentStreams)
-	}
-}
-
-// TestIntegrationServerLifecycle 测试服务器生命周期。
-func TestIntegrationServerLifecycle(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.SetStatusCode(fasthttp.StatusOK)
-	}
-
-	cfg := &config.HTTP2Config{
-		Enabled: true,
-	}
-
-	server, err := NewServer(cfg, handler, nil)
-	if err != nil {
-		t.Fatalf("Failed to create server: %v", err)
-	}
-
-	// 初始状态检查
-	if server.IsRunning() {
-		t.Error("Server should not be running initially")
-	}
-
-	// 创建监听器
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Failed to create listener: %v", err)
-	}
-
-	// 启动服务器
-	go func() {
-		if err := server.Serve(ln); err != nil {
-			t.Logf("Server serve error: %v", err)
-		}
-	}()
-
-	// 等待服务器启动
-	time.Sleep(50 * time.Millisecond)
-
-	// 停止服务器
-	if err := server.Stop(); err != nil {
-		t.Errorf("Failed to stop server: %v", err)
 	}
 }
 
@@ -277,78 +197,6 @@ func (b *testBuffer) Write(p []byte) (int, error) {
 
 func (b *testBuffer) String() string {
 	return string(b.data)
-}
-
-// TestIntegrationTLSConfiguration 测试 TLS 配置集成。
-func TestIntegrationTLSConfiguration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.SetStatusCode(fasthttp.StatusOK)
-	}
-
-	cfg := &config.HTTP2Config{
-		Enabled:              true,
-		MaxConcurrentStreams: 100,
-	}
-
-	tlsConfig := &tls.Config{
-		NextProtos: []string{"h2", "http/1.1"},
-	}
-
-	server, err := NewServer(cfg, handler, tlsConfig)
-	if err != nil {
-		t.Fatalf("Failed to create server: %v", err)
-	}
-
-	// 验证 TLS 配置
-	if server.tlsConfig == nil {
-		t.Error("TLS config should be set")
-	}
-
-	// 测试监听器包装
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Failed to create listener: %v", err)
-	}
-	defer func() {
-		if err := ln.Close(); err != nil {
-			t.Logf("Failed to close listener: %v", err)
-		}
-	}()
-
-	wrappedLn := WrapTLSListener(ln, tlsConfig)
-	if wrappedLn == nil {
-		t.Error("Wrapped listener should not be nil")
-	}
-}
-
-// TestIntegrationH2C 测试 H2C（明文 HTTP/2）。
-func TestIntegrationH2C(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
-	handler := func(ctx *fasthttp.RequestCtx) {
-		ctx.SetStatusCode(fasthttp.StatusOK)
-	}
-
-	cfg := &config.HTTP2Config{
-		Enabled:    true,
-		H2CEnabled: true,
-	}
-
-	server, err := NewServer(cfg, handler, nil)
-	if err != nil {
-		t.Fatalf("Failed to create server: %v", err)
-	}
-
-	// 验证 H2C 启用
-	if !server.IsH2CEnabled() {
-		t.Error("H2C should be enabled")
-	}
 }
 
 // BenchmarkAdapterConversion 基准测试适配器转换性能。

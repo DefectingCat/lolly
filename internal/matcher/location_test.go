@@ -338,45 +338,6 @@ func TestLocationEngine_MarkInitialized(t *testing.T) {
 	}
 }
 
-func TestParseRegexPattern(t *testing.T) {
-	tests := []struct {
-		input        string
-		wantPattern  string
-		wantCaseless bool
-		wantIsRegex  bool
-	}{
-		{"", "", false, false},
-		{"/api", "/api", false, false},
-		{"~\\.php$", "\\.php$", false, true},   // ~ is case-sensitive regex
-		{"^~", "", false, false},               // ^~ is NOT regex (prefix priority)
-		{"^~/static", "/static", false, false}, // ^~ is NOT regex
-		{"~*.php$", ".php$", true, true},       // ~* is case-insensitive regex
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			pattern, caseless, isRegex := ParseRegexPattern(tt.input)
-			if pattern != tt.wantPattern {
-				t.Errorf("pattern: expected %q, got %q", tt.wantPattern, pattern)
-			}
-			if caseless != tt.wantCaseless {
-				t.Errorf("caseless: expected %v, got %v", tt.wantCaseless, caseless)
-			}
-			if isRegex != tt.wantIsRegex {
-				t.Errorf("isRegex: expected %v, got %v", tt.wantIsRegex, isRegex)
-			}
-		})
-	}
-}
 
-func TestMustCompileRegex(t *testing.T) {
-	re := MustCompileRegex(`^/api`)
-	if re == nil {
-		t.Error("expected compiled regex")
-	}
 
-	re = MustCompileRegex(`[invalid`)
-	if re != nil {
-		t.Error("expected nil for invalid regex")
-	}
-}

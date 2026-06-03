@@ -26,10 +26,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
-	"syscall"
-	"time"
 )
 
 // UpgradeManager 优雅升级管理器。
@@ -95,28 +92,6 @@ func (u *UpgradeManager) WritePid() error {
 
 	pid := os.Getpid()
 	return os.WriteFile(u.pidFile, fmt.Appendf(nil, "%d", pid), 0o644)
-}
-
-// ReadOldPid 读取旧进程 PID。
-//
-// 从 PID 文件读取当前运行的服务器进程 PID。
-//
-// 返回值：
-//   - int: 旧进程的 PID
-//   - error: 文件不存在或解析失败时返回错误
-func (u *UpgradeManager) ReadOldPid() (int, error) {
-	if u.pidFile == "" {
-		return 0, fmt.Errorf("pid file not configured")
-	}
-
-	data, err := os.ReadFile(u.pidFile)
-	if err != nil {
-		return 0, err
-	}
-
-	var pid int
-	_, err = fmt.Sscanf(string(data), "%d", &pid)
-	return pid, err
 }
 
 // IsChild 检查当前进程是否是升级启动的子进程。
@@ -262,77 +237,4 @@ func listenerFile(listener net.Listener) (*os.File, error) {
 	}
 }
 
-// WaitForShutdown 等待旧进程关闭。
-//
-// 轮询检查旧进程是否已退出，超时后强制发送 SIGKILL。
-//
-// 参数：
-//   - timeout: 最大等待时间
-//
-// 返回值：
-//   - error: 超时时返回错误，旧进程正常退出返回 nil
-func (u *UpgradeManager) WaitForShutdown(timeout time.Duration) error {
-	if u.oldPid == 0 {
-		return nil
-	}
 
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		process, err := os.FindProcess(u.oldPid)
-		if err != nil {
-			return nil
-		}
-
-		err = process.Signal(syscall.Signal(0))
-		if err != nil {
-			return nil
-		}
-
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	process, _ := os.FindProcess(u.oldPid)
-
-	_ = process.Signal(syscall.SIGKILL)
-	return fmt.Errorf("old process did not shutdown gracefully")
-}
-
-// NotifyOldProcess 通知旧进程关闭。
-//
-// 向旧进程发送 SIGQUIT 信号，触发优雅关闭。
-//
-// 返回值：
-//   - error: 发送信号失败时返回错误
-func (u *UpgradeManager) NotifyOldProcess() error {
-	oldPid, err := u.ReadOldPid()
-	if err != nil || oldPid == 0 {
-		return nil
-	}
-
-	process, err := os.FindProcess(oldPid)
-	if err != nil {
-		return nil
-	}
-
-	return process.Signal(syscall.SIGQUIT)
-}
-
-// SetupSignalHandlers 设置升级相关的信号处理器。
-//
-// 注册 SIGUSR2 信号处理器，收到信号时执行优雅升级。
-// 可以通过 kill -USR2 <pid> 触发升级。
-//
-// 参数：
-//   - newBinary: 新服务器二进制文件的路径
-func (u *UpgradeManager) SetupSignalHandlers(newBinary string) {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGUSR2)
-
-	go func() {
-		for sig := range sigCh {
-			if sig == syscall.SIGUSR2 {
-				_ = u.GracefulUpgrade(newBinary)
-			}
-		}
-	}()
-}

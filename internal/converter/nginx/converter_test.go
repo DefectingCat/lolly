@@ -12,7 +12,7 @@ import (
 // helper: parse nginx config string and convert.
 func convertString(t *testing.T, input string) (*ConvertResult, error) {
 	t.Helper()
-	cfg, err := Parse(input)
+	cfg, err := ParseString(input)
 	if err != nil {
 		t.Fatalf("parse error: %v", err)
 	}

@@ -1396,49 +1396,7 @@ func TestStartVHostMode_ModeDetection(t *testing.T) {
 }
 
 // TestStartVHostMode_StartIntegration 测试 startVHostMode 启动集成。
-func TestStartVHostMode_StartIntegration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
 
-	// 使用随机端口避免冲突
-	cfg := &config.Config{
-		Mode: config.ServerModeVHost,
-		Servers: []config.ServerConfig{
-			{
-				Name:        "api.example.com",
-				Listen:      "127.0.0.1:0",
-				ServerNames: []string{"api.example.com"},
-			},
-			{
-				Name:        "www.example.com",
-				Listen:      "127.0.0.1:0",
-				ServerNames: []string{"www.example.com"},
-				Default:     true,
-			},
-		},
-	}
-
-	s := New(cfg)
-	if s == nil {
-		t.Fatal("Expected non-nil server")
-	}
-
-	// 使用 testutil 中的测试服务器启动
-	opts := &TestServerOptions{
-		SkipListener: true, // 跳过实际监听器创建
-	}
-
-	testSrv := NewTestServerWithOptions(cfg, opts)
-	if testSrv == nil {
-		t.Fatal("Expected non-nil test server")
-	}
-
-	// 验证服务器配置正确
-	if !testSrv.config.HasServers() {
-		t.Error("Expected HasServers to return true")
-	}
-}
 
 // TestStartVHostMode_VHostManagerCreation 测试 VHostManager 创建逻辑。
 func TestStartVHostMode_VHostManagerCreation(t *testing.T) {

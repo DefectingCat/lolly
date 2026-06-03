@@ -49,19 +49,6 @@ type HeadersMiddleware struct {
 	mu     sync.RWMutex            // 读写锁，保护并发访问
 }
 
-// NewHeaders 创建新的安全响应头中间件。
-//
-// 根据配置创建中间件实例，如果配置为 nil 则使用安全的默认值。
-//
-// 参数：
-//   - cfg: 安全头配置，可以为 nil 使用默认配置
-//
-// 返回值：
-//   - *HeadersMiddleware: 配置好的中间件实例
-func NewHeaders(cfg *config.SecurityHeaders) *HeadersMiddleware {
-	return NewHeadersWithHSTS(cfg, nil)
-}
-
 // NewHeadersWithHSTS 创建新的安全响应头中间件，支持 HSTS 配置。
 //
 // 根据配置创建中间件实例，如果配置为 nil 则使用安全的默认值。

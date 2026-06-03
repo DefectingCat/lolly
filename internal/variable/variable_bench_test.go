@@ -173,25 +173,7 @@ func BenchmarkVariableSetAndGet(b *testing.B) {
 	}
 }
 
-// BenchmarkExpandStringStaticWithLookup 测试静态展开函数的性能（使用自定义查找函数）。
-func BenchmarkExpandStringStaticWithLookup(b *testing.B) {
-	template := "$remote_addr - $request_method"
-	lookup := func(name string) string {
-		switch name {
-		case "remote_addr":
-			return "192.168.1.100"
-		case "request_method":
-			return "GET"
-		default:
-			return ""
-		}
-	}
 
-	b.ResetTimer()
-	for b.Loop() {
-		ExpandString(template, lookup)
-	}
-}
 
 // BenchmarkVariableExpandLongTemplate 测试长模板展开性能。
 //

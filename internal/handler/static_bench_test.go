@@ -209,7 +209,12 @@ func BenchmarkStaticFileLookupWithAlias(b *testing.B) {
 	dir, cleanup := setupStaticTestDir()
 	defer cleanup()
 
-	handler := NewStaticHandlerWithAlias(dir+"/", "/static/", []string{"index.html"}, false)
+	handler := &StaticHandler{
+		alias:         dir + "/",
+		pathPrefix:    "/static/",
+		pathPrefixLen: len("/static/"),
+		index:         []string{"index.html"},
+	}
 
 	b.ResetTimer()
 	for b.Loop() {

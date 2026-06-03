@@ -362,197 +362,19 @@ func BenchmarkOCSPStapling_Miss(b *testing.B) {
 // BenchmarkOCSPStapling_GetStatus 基准测试 OCSP 状态查询性能。
 //
 // 测量 GetStatus 方法获取证书状态信息的开销。
-func BenchmarkOCSPStapling_GetStatus(b *testing.B) {
-	ocspMgr := NewOCSPManager(DefaultOCSPConfig())
-	ocspMgr.Start()
-	defer ocspMgr.Stop()
 
-	// 注册一些模拟状态
-	for i := range 10 {
-		serial := string(rune('0' + i))
-		ocspMgr.mu.Lock()
-		ocspMgr.responses[serial] = &ocspResponse{
-			response:   make([]byte, 512),
-			thisUpdate: time.Now(),
-			nextUpdate: time.Now().Add(time.Hour),
-			status:     statusValid,
-			fetchedAt:  time.Now(),
-			errors:     0,
-		}
-		ocspMgr.mu.Unlock()
-	}
-
-	b.ResetTimer()
-	var idx int
-	for b.Loop() {
-		serial := string(rune('0' + (idx % 10)))
-		idx++
-		status, hasResponse := ocspMgr.GetStatus(serial)
-		if !hasResponse {
-			b.Error("expected hasResponse=true")
-		}
-		_ = status
-	}
-}
 
 // BenchmarkSessionResumption 基准测试使用 Session Ticket 的会话恢复性能。
 //
 // 使用 ClientSessionCache 实现会话恢复，
 // 测量使用缓存 session 时的握手开销。
-func BenchmarkSessionResumption(b *testing.B) {
-	tmpDir := b.TempDir()
-	certPEM, keyPEM := generateTestCert(&testing.T{})
 
-	certPath := tmpDir + "/cert.pem"
-	keyPath := tmpDir + "/key.pem"
-
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
-		b.Fatalf("write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		b.Fatalf("write key: %v", err)
-	}
-
-	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
-	if err != nil {
-		b.Fatalf("tls.LoadX509KeyPair failed: %v", err)
-	}
-
-	// 创建 Session Ticket 管理器
-	sessionMgr, err := NewSessionTicketManager(config.SessionTicketsConfig{
-		Enabled:        true,
-		RotateInterval: time.Hour,
-		RetainKeys:     3,
-	})
-	if err != nil {
-		b.Fatalf("NewSessionTicketManager failed: %v", err)
-	}
-	defer sessionMgr.Stop()
-
-	// 预热密钥轮换
-	for range 2 {
-		_ = sessionMgr.RotateKey()
-	}
-
-	serverTLS := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
-		MaxVersion:   tls.VersionTLS13,
-	}
-	sessionMgr.ApplyToTLSConfig(serverTLS)
-
-	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverTLS)
-	if err != nil {
-		b.Fatalf("tls.Listen failed: %v", err)
-	}
-	defer listener.Close()
-
-	// 服务端接受连接
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			buf := make([]byte, 1)
-			_, _ = conn.Read(buf)
-			_ = conn.Close()
-		}
-	}()
-
-	// 使用 ClientSessionCache 的客户端配置
-	clientTLS := &tls.Config{
-		InsecureSkipVerify: true,
-		MinVersion:         tls.VersionTLS12,
-		ClientSessionCache: tls.NewLRUClientSessionCache(8),
-	}
-
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			conn, err := tls.Dial("tcp", listener.Addr().String(), clientTLS)
-			if err != nil {
-				b.Error(err)
-				continue
-			}
-			_, _ = conn.Write([]byte{0})
-
-			// 检查是否使用了会话恢复
-			cs := conn.ConnectionState()
-			_ = cs.DidResume
-
-			_ = conn.Close()
-		}
-	})
-}
 
 // BenchmarkSessionResumption_FullHandshake 基准测试完整握手（无会话恢复）。
 //
 // 作为对照组，测量没有 session ticket 的完整 TLS 握手开销，
 // 与 BenchmarkSessionResumption 对比评估会话恢复的性能提升。
-func BenchmarkSessionResumption_FullHandshake(b *testing.B) {
-	tmpDir := b.TempDir()
-	certPEM, keyPEM := generateTestCert(&testing.T{})
 
-	certPath := tmpDir + "/cert.pem"
-	keyPath := tmpDir + "/key.pem"
-
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
-		b.Fatalf("write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		b.Fatalf("write key: %v", err)
-	}
-
-	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
-	if err != nil {
-		b.Fatalf("tls.LoadX509KeyPair failed: %v", err)
-	}
-
-	serverTLS := &tls.Config{
-		Certificates: []tls.Certificate{cert},
-		MinVersion:   tls.VersionTLS12,
-		MaxVersion:   tls.VersionTLS13,
-	}
-
-	listener, err := tls.Listen("tcp", "127.0.0.1:0", serverTLS)
-	if err != nil {
-		b.Fatalf("tls.Listen failed: %v", err)
-	}
-	defer listener.Close()
-
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			buf := make([]byte, 1)
-			_, _ = conn.Read(buf)
-			_ = conn.Close()
-		}
-	}()
-
-	// 禁用客户端 session 缓存
-	clientTLS := &tls.Config{
-		InsecureSkipVerify: true,
-		MinVersion:         tls.VersionTLS12,
-		ClientSessionCache: nil,
-	}
-
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			conn, err := tls.Dial("tcp", listener.Addr().String(), clientTLS)
-			if err != nil {
-				b.Error(err)
-				continue
-			}
-			_, _ = conn.Write([]byte{0})
-			_ = conn.Close()
-		}
-	})
-}
 
 // BenchmarkSessionTicketManager_ApplyToTLSConfig 基准测试应用 Session Ticket 到 TLS 配置的开销。
 func BenchmarkSessionTicketManager_ApplyToTLSConfig(b *testing.B) {
@@ -585,69 +407,7 @@ func BenchmarkSessionTicketManager_ApplyToTLSConfig(b *testing.B) {
 // BenchmarkSNI_GetCertificate 基准测试 SNI 证书查找性能。
 //
 // 测量 GetCertificate 回调在多证书场景下的查找开销。
-func BenchmarkSNI_GetCertificate(b *testing.B) {
-	tmpDir := b.TempDir()
-	certPEM, keyPEM := generateTestCert(&testing.T{})
 
-	certPath := tmpDir + "/cert.pem"
-	keyPath := tmpDir + "/key.pem"
-
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
-		b.Fatalf("write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		b.Fatalf("write key: %v", err)
-	}
-
-	configs := map[string]*config.SSLConfig{
-		"example.com": {
-			Cert: certPath,
-			Key:  keyPath,
-		},
-		"api.example.com": {
-			Cert: certPath,
-			Key:  keyPath,
-		},
-		"cdn.example.com": {
-			Cert: certPath,
-			Key:  keyPath,
-		},
-	}
-
-	manager, err := NewMultiTLSManager(configs, &config.SSLConfig{
-		Cert: certPath,
-		Key:  keyPath,
-	})
-	if err != nil {
-		b.Fatalf("NewMultiTLSManager failed: %v", err)
-	}
-	defer manager.Close()
-
-	getCert := manager.GetCertificate()
-
-	hostnames := []string{
-		"example.com",
-		"api.example.com",
-		"cdn.example.com",
-		"unknown.example.com",
-	}
-
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		idx := 0
-		for pb.Next() {
-			hostname := hostnames[idx%len(hostnames)]
-			idx++
-
-			_, err := getCert(&tls.ClientHelloInfo{
-				ServerName: hostname,
-			})
-			if err != nil {
-				b.Error(err)
-			}
-		}
-	})
-}
 
 // BenchmarkCipherSuiteParsing 基准测试加密套件解析性能。
 func BenchmarkCipherSuiteParsing(b *testing.B) {

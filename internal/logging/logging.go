@@ -137,22 +137,6 @@ func getOutput(path string) io.Writer {
 // 使用全局 log 实例记录 HTTP 请求的基本信息，包括方法、路径、状态码、
 // 响应大小、耗时和客户端地址。
 //
-// 参数：
-//   - ctx: FastHTTP 请求上下文，用于提取请求信息
-//   - status: HTTP 响应状态码
-//   - size: 响应体大小（字节）
-//   - duration: 请求处理耗时
-func LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.Duration) {
-	log.Info().
-		Bytes("method", ctx.Method()).
-		Bytes("path", ctx.Path()).
-		Int("status", status).
-		Int64("size", size).
-		Dur("duration", duration).
-		Str("remote_addr", ctx.RemoteAddr().String()).
-		Msg("request")
-}
-
 // LogAccess 记录访问日志，支持模板格式或 JSON。
 func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.Duration) {
 	// JSON 格式或空格式：输出结构化 JSON

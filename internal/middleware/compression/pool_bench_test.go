@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/valyala/fasthttp"
-	"rua.plus/lolly/internal/benchmark/tools"
+	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/config"
 )
 
@@ -52,7 +52,7 @@ func BenchmarkGzipPool_GetPut(b *testing.B) {
 //
 // 对比基准：每次创建新 Writer。
 func BenchmarkGzipWriter_New(b *testing.B) {
-	data := tools.GenerateTestData(tools.Size1KB)
+	data := testutil.GenerateTestData(testutil.Size1KB)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -69,7 +69,7 @@ func BenchmarkGzipWriter_New(b *testing.B) {
 //
 // 目标：≤2 allocs/op
 func BenchmarkGzipWriter_Pool(b *testing.B) {
-	data := tools.GenerateTestData(tools.Size1KB)
+	data := testutil.GenerateTestData(testutil.Size1KB)
 
 	cfg := &config.CompressionConfig{
 		Type:    "gzip",
@@ -100,7 +100,7 @@ func BenchmarkCompressionMiddleware_Pool(b *testing.B) {
 	mw, _ := New(cfg)
 
 	// 创建测试响应
-	data := tools.GenerateTestData(tools.Size10KB)
+	data := testutil.GenerateTestData(testutil.Size10KB)
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -134,10 +134,10 @@ func BenchmarkGzipCompress_Sizes(b *testing.B) {
 		name string
 		data []byte
 	}{
-		{"100B", tools.GenerateTestData(100)},
-		{"1KB", tools.GenerateTestData(tools.Size1KB)},
-		{"10KB", tools.GenerateTestData(tools.Size10KB)},
-		{"100KB", tools.GenerateTestData(tools.Size100KB)},
+		{"100B", testutil.GenerateTestData(100)},
+		{"1KB", testutil.GenerateTestData(testutil.Size1KB)},
+		{"10KB", testutil.GenerateTestData(testutil.Size10KB)},
+		{"100KB", testutil.GenerateTestData(testutil.Size100KB)},
 	}
 
 	for _, tc := range sizes {

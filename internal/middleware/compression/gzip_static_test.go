@@ -321,65 +321,6 @@ func TestGzipStaticServeFile_VaryHeader(t *testing.T) {
 	}
 }
 
-// TestNewGzipStatic_DefaultExtensions 测试默认扩展名
-func TestNewGzipStatic_DefaultExtensions(t *testing.T) {
-	g := NewGzipStatic(true, "/tmp", nil, nil)
-
-	expected := []string{".html", ".css", ".js", ".json", ".xml", ".svg", ".txt"}
-	got := g.Extensions()
-
-	if len(got) != len(expected) {
-		t.Errorf("扩展名数量 = %d, want %d", len(got), len(expected))
-	}
-
-	for i, ext := range expected {
-		if got[i] != ext {
-			t.Errorf("扩展名[%d] = %q, want %q", i, got[i], ext)
-		}
-	}
-}
-
-// TestNewGzipStatic_CustomExtensions 测试自定义扩展名
-func TestNewGzipStatic_CustomExtensions(t *testing.T) {
-	custom := []string{".custom", ".ext"}
-	g := NewGzipStatic(true, "/tmp", custom, nil)
-
-	got := g.Extensions()
-	if len(got) != 2 || got[0] != ".custom" || got[1] != ".ext" {
-		t.Errorf("自定义扩展名 = %v, want %v", got, custom)
-	}
-}
-
-// TestGzipStatic_Enabled 测试 Enabled 方法
-func TestGzipStatic_Enabled(t *testing.T) {
-	g1 := NewGzipStatic(true, "/tmp", nil, nil)
-	if !g1.Enabled() {
-		t.Error("Enabled() = false, want true")
-	}
-
-	g2 := NewGzipStatic(false, "/tmp", nil, nil)
-	if g2.Enabled() {
-		t.Error("Enabled() = true, want false")
-	}
-}
-
-// TestDefaultExtensions 测试默认扩展名（通过 NewGzipStatic 间接测试）
-func TestDefaultExtensions(t *testing.T) {
-	expected := []string{".html", ".css", ".js", ".json", ".xml", ".svg", ".txt"}
-	g := NewGzipStatic(true, "/tmp", nil, nil)
-	got := g.Extensions()
-
-	if len(got) != len(expected) {
-		t.Errorf("默认扩展名数量 = %d, want %d", len(got), len(expected))
-	}
-
-	for i, ext := range expected {
-		if got[i] != ext {
-			t.Errorf("默认扩展名[%d] = %q, want %q", i, got[i], ext)
-		}
-	}
-}
-
 // TestSupportsEncoding 测试 supportsEncoding 函数
 func TestSupportsEncoding(t *testing.T) {
 	tests := []struct {

@@ -1204,7 +1204,12 @@ func TestStaticHandler_Alias(t *testing.T) {
 			tt.setup(t, aliasDir)
 
 			// 创建处理器（使用 alias）
-			handler := NewStaticHandlerWithAlias(aliasDir, tt.pathPrefix, []string{"index.html"}, false)
+			handler := &StaticHandler{
+				alias:         aliasDir,
+				pathPrefix:    tt.pathPrefix,
+				pathPrefixLen: len(tt.pathPrefix),
+				index:         []string{"index.html"},
+			}
 
 			ctx := newTestContext(t, tt.path)
 			handler.Handle(ctx)
@@ -1256,7 +1261,12 @@ func TestStaticHandler_AliasVsRoot(t *testing.T) {
 		},
 		{
 			name:        "alias 模式：请求路径替换匹配部分",
-			handler:     NewStaticHandlerWithAlias(aliasDir, "/images/", []string{"index.html"}, false),
+			handler:     &StaticHandler{
+				alias:         aliasDir,
+				pathPrefix:    "/images/",
+				pathPrefixLen: len("/images/"),
+				index:         []string{"index.html"},
+			},
 			path:        "/images/logo.png",
 			wantContent: "from alias", // /alias/logo.png（images/被替换）
 		},
@@ -1280,36 +1290,30 @@ func TestStaticHandler_SetAlias(t *testing.T) {
 	t.Run("设置 alias", func(t *testing.T) {
 		handler := NewStaticHandler("/root", "/", nil, false)
 
-		if handler.GetAlias() != "" {
+		if handler.alias != "" {
 			t.Error("初始 alias 应为空")
 		}
 
 		handler.SetAlias("/alias")
 
-		if handler.GetAlias() != "/alias" {
-			t.Errorf("GetAlias() = %q, want %q", handler.GetAlias(), "/alias")
+		if handler.alias != "/alias" {
+			t.Errorf("GetAlias() = %q, want %q", handler.alias, "/alias")
 		}
-		if handler.GetRoot() != "" {
+		if handler.root != "" {
 			t.Error("设置 alias 后 root 应被清空")
 		}
 	})
 
 	t.Run("设置 root 清除 alias", func(t *testing.T) {
-		handler := NewStaticHandlerWithAlias("/alias", "/", nil, false)
-
-		if handler.GetAlias() != "/alias" {
-			t.Error("初始 alias 应为 /alias")
-		}
-
-		handler.SetRoot("/root")
+		handler := NewStaticHandler("/root", "/", nil, false)
 
 		// root 被规范化为带尾部斜杠的形式
 		expectedRoot := "/root/"
-		if handler.GetRoot() != expectedRoot {
-			t.Errorf("GetRoot() = %q, want %q", handler.GetRoot(), expectedRoot)
+		if handler.root != expectedRoot {
+			t.Errorf("root = %q, want %q", handler.root, expectedRoot)
 		}
-		if handler.GetAlias() != "" {
-			t.Error("设置 root 后 alias 应被清空")
+		if handler.alias != "" {
+			t.Error("初始 alias 应为空")
 		}
 	})
 }
@@ -1326,7 +1330,12 @@ func TestStaticHandler_AliasWithTryFiles(t *testing.T) {
 		t.Fatalf("创建文件失败: %v", err)
 	}
 
-	handler := NewStaticHandlerWithAlias(aliasDir, "/static/", []string{"index.html"}, false)
+	handler := &StaticHandler{
+		alias:         aliasDir,
+		pathPrefix:    "/static/",
+		pathPrefixLen: len("/static/"),
+		index:         []string{"index.html"},
+	}
 	handler.SetTryFiles([]string{"$uri", "/index.html"}, false, nil)
 
 	tests := []struct {
@@ -1363,21 +1372,6 @@ func TestStaticHandler_AliasWithTryFiles(t *testing.T) {
 				t.Errorf("内容 = %q, want %q", got, tt.wantContent)
 			}
 		})
-	}
-}
-
-// TestNewStaticHandlerWithAlias 测试 NewStaticHandlerWithAlias 构造函数
-func TestNewStaticHandlerWithAlias(t *testing.T) {
-	handler := NewStaticHandlerWithAlias("/var/www/img/", "/images/", []string{"index.html"}, true)
-
-	if handler == nil {
-		t.Fatal("NewStaticHandlerWithAlias() 返回 nil")
-	}
-	if handler.GetAlias() != "/var/www/img/" {
-		t.Errorf("GetAlias() = %q, want %q", handler.GetAlias(), "/var/www/img/")
-	}
-	if handler.GetRoot() != "" {
-		t.Errorf("GetRoot() = %q, want 空字符串", handler.GetRoot())
 	}
 }
 
@@ -1811,7 +1805,11 @@ func TestStaticHandler_ValidateSymlink_WithAlias(t *testing.T) {
 		t.Fatalf("创建符号链接失败: %v", err)
 	}
 
-	handler := NewStaticHandlerWithAlias(aliasDir, "/static/", nil, false)
+	handler := &StaticHandler{
+		alias:         aliasDir,
+		pathPrefix:    "/static/",
+		pathPrefixLen: len("/static/"),
+	}
 	handler.SetSymlinkCheck(true)
 
 	ctx := newTestContext(t, "/static/link.txt")

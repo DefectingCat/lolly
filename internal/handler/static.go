@@ -116,39 +116,6 @@ func NewStaticHandler(root, pathPrefix string, index []string, useSendfile bool)
 	}
 }
 
-// NewStaticHandlerWithAlias 创建带 alias 的静态文件处理器。
-//
-// alias 与 root 的区别：
-//   - root: 请求路径附加到 root 后
-//     例如：root "/var/www", 请求 "/images/logo.png" -> "/var/www/images/logo.png"
-//   - alias: 请求路径替换匹配部分
-//     例如：alias "/var/www/img/", 请求 "/images/logo.png" -> "/var/www/img/logo.png"
-//
-// 参数：
-//   - alias: 路径别名
-//   - pathPrefix: 路径前缀，用于匹配和替换
-//   - index: 索引文件列表
-//   - useSendfile: 是否启用零拷贝传输
-//
-// 使用示例：
-//
-//	handler := handler.NewStaticHandlerWithAlias("/var/www/img/", "/images/", []string{"index.html"}, true)
-func NewStaticHandlerWithAlias(alias, pathPrefix string, index []string, useSendfile bool) *StaticHandler {
-	// 预计算前缀长度
-	prefixLen := len(pathPrefix)
-	if pathPrefix == "/" {
-		prefixLen = 0
-	}
-
-	return &StaticHandler{
-		alias:         alias,
-		pathPrefix:    pathPrefix,
-		pathPrefixLen: prefixLen,
-		index:         index,
-		useSendfile:   useSendfile,
-	}
-}
-
 // SetAlias 设置路径别名。
 //
 // alias 与 root 互斥，设置 alias 会清空 root。
@@ -160,34 +127,6 @@ func (h *StaticHandler) SetAlias(alias string) {
 	if alias != "" {
 		h.root = ""
 	}
-}
-
-// SetRoot 设置静态文件根目录。
-//
-// root 与 alias 互斥，设置 root 会清空 alias。
-//
-// 参数：
-//   - root: 静态文件根目录
-func (h *StaticHandler) SetRoot(root string) {
-	// 规范化 root 路径
-	cleanRoot := filepath.Clean(root)
-	if !strings.HasSuffix(cleanRoot, string(filepath.Separator)) {
-		cleanRoot += string(filepath.Separator)
-	}
-	h.root = cleanRoot
-	if cleanRoot != "" {
-		h.alias = ""
-	}
-}
-
-// GetAlias 获取路径别名。
-func (h *StaticHandler) GetAlias() string {
-	return h.alias
-}
-
-// GetRoot 获取静态文件根目录。
-func (h *StaticHandler) GetRoot() string {
-	return h.root
 }
 
 // stripPathPrefix 剥离路径前缀（零分配）。
@@ -225,17 +164,6 @@ func (h *StaticHandler) buildFilePath(relPath string) string {
 //   - 缓存会自动检测文件修改并更新
 func (h *StaticHandler) SetFileCache(fc *cache.FileCache) {
 	h.fileCache = fc
-}
-
-// SetFileInfoCache 设置 FileInfo 缓存。
-//
-// 为静态文件处理器启用 FileInfo 缓存功能。
-// 缓存可以减少 os.Stat 调用，提升性能。
-//
-// 参数：
-//   - fic: FileInfo 缓存实例
-func (h *StaticHandler) SetFileInfoCache(fic *FileInfoCache) {
-	h.fileInfoCache = fic
 }
 
 // SetGzipStatic 设置预压缩文件支持。

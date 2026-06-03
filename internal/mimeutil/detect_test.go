@@ -1,7 +1,6 @@
 package mimeutil
 
 import (
-	"sync"
 	"testing"
 )
 
@@ -107,92 +106,4 @@ func TestAddTypes(t *testing.T) {
 			mimeMutex.Unlock()
 		})
 	}
-}
-
-// TestSetDefaultType 测试设置默认 MIME 类型
-func TestSetDefaultType(t *testing.T) {
-	// 保存原始默认值
-	original := GetDefaultType()
-
-	tests := []struct {
-		name string
-		want string
-	}{
-		{"设置为 text/plain", "text/plain"},
-		{"设置为 application/json", "application/json"},
-		{"设置为空字符串", ""},
-		{"恢复默认值", "application/octet-stream"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			SetDefaultType(tt.want)
-			got := GetDefaultType()
-			if got != tt.want {
-				t.Errorf("SetDefaultType(%q): GetDefaultType() = %q, want %q", tt.want, got, tt.want)
-			}
-		})
-	}
-
-	// 恢复原始值
-	SetDefaultType(original)
-}
-
-// TestGetDefaultType 测试获取默认 MIME 类型
-func TestGetDefaultType(t *testing.T) {
-	// 保存原始默认值
-	original := GetDefaultType()
-
-	// 验证默认值
-	if original != "application/octet-stream" {
-		t.Errorf("GetDefaultType() = %q, want %q", original, "application/octet-stream")
-	}
-
-	// 测试设置后获取
-	SetDefaultType("text/plain")
-	if got := GetDefaultType(); got != "text/plain" {
-		t.Errorf("GetDefaultType() = %q, want %q", got, "text/plain")
-	}
-
-	// 恢复原始值
-	SetDefaultType(original)
-}
-
-// TestConcurrentAccess 测试并发访问安全性
-func TestConcurrentAccess(t *testing.T) {
-	var wg sync.WaitGroup
-	numGoroutines := 100
-
-	// 并发调用 DetectContentType
-	wg.Add(numGoroutines)
-	for range numGoroutines {
-		go func() {
-			defer wg.Done()
-			DetectContentType("test.html")
-		}()
-	}
-
-	// 并发调用 AddTypes
-	wg.Add(numGoroutines)
-	for i := range numGoroutines {
-		go func(i int) {
-			defer wg.Done()
-			AddTypes(map[string]string{".test": "application/x-test"})
-		}(i)
-	}
-
-	// 并发调用 SetDefaultType 和 GetDefaultType
-	wg.Add(numGoroutines)
-	for range numGoroutines {
-		go func() {
-			defer wg.Done()
-			SetDefaultType("text/plain")
-			_ = GetDefaultType()
-		}()
-	}
-
-	wg.Wait()
-
-	// 恢复默认值
-	SetDefaultType("application/octet-stream")
 }

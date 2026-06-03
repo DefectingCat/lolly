@@ -15,7 +15,6 @@ package matcher
 import (
 	"errors"
 	"fmt"
-	"regexp"
 
 	"github.com/valyala/fasthttp"
 )
@@ -224,17 +223,6 @@ func (e *LocationEngine) Match(path string) *MatchResult {
 	return e.prefixTree.FindLongestPrefix(path)
 }
 
-// GetNamed 获取命名 location。
-//
-// 参数：
-//   - name: location 名称
-//
-// 返回值：
-//   - *NamedMatcher: 命名匹配器，不存在时返回 nil
-func (e *LocationEngine) GetNamed(name string) *NamedMatcher {
-	return e.namedMatchers[name]
-}
-
 // MarkInitialized 标记初始化完成。
 //
 // 调用后所有 Add 方法均返回错误，确保运行时安全。
@@ -275,53 +263,4 @@ func (e *LocationEngine) checkConflict(path, locationType string) error {
 	return nil
 }
 
-// ParseRegexPattern 解析 nginx 风格的正则模式。
-//
-// 支持以下前缀：
-//   - ~:  大小写敏感正则（case-sensitive regex）
-//   - ~*: 大小写不敏感正则（case-insensitive regex）
-//   - ^~: 前缀优先匹配（非正则）
-//
-// 该函数用于配置验证层，检测用户配置的模式格式是否正确。
-// 运行时匹配器直接使用 LocationType 枚举进行匹配。
-func ParseRegexPattern(pattern string) (cleanPattern string, caseInsensitive bool, isRegex bool) {
-	if len(pattern) == 0 {
-		return pattern, false, false
-	}
 
-	// Handle ~* (case-insensitive regex) - must check first (2-char prefix)
-	if len(pattern) >= 2 && pattern[0] == '~' && pattern[1] == '*' {
-		cleanPattern = pattern[2:]
-		return cleanPattern, true, true // case-insensitive, is regex
-	}
-
-	// Handle ~ (case-sensitive regex)
-	if pattern[0] == '~' {
-		cleanPattern = pattern[1:]
-		return cleanPattern, false, true // case-sensitive, is regex
-	}
-
-	// Handle ^~ (prefix priority, NOT regex)
-	if len(pattern) >= 2 && pattern[0] == '^' && pattern[1] == '~' {
-		cleanPattern = pattern[2:]
-		return cleanPattern, false, false // NOT a regex
-	}
-
-	// Default: exact/prefix match
-	return pattern, false, false
-}
-
-// MustCompileRegex 编译正则表达式，失败返回 nil。
-//
-// 参数：
-//   - pattern: 正则表达式模式
-//
-// 返回值：
-//   - *regexp.Regexp: 编译后的正则表达式，失败时返回 nil
-func MustCompileRegex(pattern string) *regexp.Regexp {
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		return nil
-	}
-	return re
-}

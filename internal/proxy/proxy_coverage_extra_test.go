@@ -646,88 +646,6 @@ func TestCreateHostClient_ProxyBind(t *testing.T) {
 	}
 }
 
-// TestTempFileManager_GetActiveCount 测试 GetActiveCount 方法。
-func TestTempFileManager_GetActiveCount(t *testing.T) {
-	manager, err := NewTempFileManager(t.TempDir(), "1mb", "10mb")
-	if err != nil {
-		t.Fatalf("NewTempFileManager() error: %v", err)
-	}
-
-	if manager.GetActiveCount() != 0 {
-		t.Error("初始活动文件数应为 0")
-	}
-
-	// 创建临时文件
-	tf1, err := manager.CreateTempFile()
-	if err != nil {
-		t.Fatalf("CreateTempFile() error: %v", err)
-	}
-
-	if manager.GetActiveCount() != 1 {
-		t.Errorf("GetActiveCount() = %d, want 1", manager.GetActiveCount())
-	}
-
-	tf2, err := manager.CreateTempFile()
-	if err != nil {
-		t.Fatalf("CreateTempFile() error: %v", err)
-	}
-
-	if manager.GetActiveCount() != 2 {
-		t.Errorf("GetActiveCount() = %d, want 2", manager.GetActiveCount())
-	}
-
-	// 清理
-	_ = tf1.Close()
-	_ = tf2.Close()
-}
-
-// TestDynamicTempFileWriter_GetTotalSize 测试 GetTotalSize 方法。
-func TestDynamicTempFileWriter_GetTotalSize(t *testing.T) {
-	manager, err := NewTempFileManager(t.TempDir(), "1mb", "10mb")
-	if err != nil {
-		t.Fatalf("NewTempFileManager() error: %v", err)
-	}
-
-	writer := NewDynamicTempFileWriter(manager)
-	defer writer.Cleanup()
-
-	if writer.GetTotalSize() != 0 {
-		t.Error("初始总大小应为 0")
-	}
-
-	data := []byte("test data")
-	_ = writer.Write(data)
-
-	if writer.GetTotalSize() != int64(len(data)) {
-		t.Errorf("GetTotalSize() = %d, want %d", writer.GetTotalSize(), len(data))
-	}
-}
-
-// TestTempFileCleaner_GetInterval_GetMaxAge 测试 getter 方法。
-func TestTempFileCleaner_GetInterval_GetMaxAge(t *testing.T) {
-	t.Run("默认值", func(t *testing.T) {
-		cleaner := NewTempFileCleaner(t.TempDir(), 0, 0)
-
-		if cleaner.GetInterval() != DefaultCleanupInterval {
-			t.Errorf("GetInterval() = %v, want %v", cleaner.GetInterval(), DefaultCleanupInterval)
-		}
-		if cleaner.GetMaxAge() != DefaultMaxFileAge {
-			t.Errorf("GetMaxAge() = %v, want %v", cleaner.GetMaxAge(), DefaultMaxFileAge)
-		}
-	})
-
-	t.Run("自定义值", func(t *testing.T) {
-		cleaner := NewTempFileCleaner(t.TempDir(), 10*time.Second, 30*time.Minute)
-
-		if cleaner.GetInterval() != 10*time.Second {
-			t.Errorf("GetInterval() = %v, want 10s", cleaner.GetInterval())
-		}
-		if cleaner.GetMaxAge() != 30*time.Minute {
-			t.Errorf("GetMaxAge() = %v, want 30m", cleaner.GetMaxAge())
-		}
-	})
-}
-
 // TestNewRedirectRewriter_RegexRules 测试正则规则。
 func TestNewRedirectRewriter_RegexRules(t *testing.T) {
 	t.Run("正则模式", func(t *testing.T) {
@@ -998,7 +916,7 @@ func TestBackgroundRefresh_Extra(t *testing.T) {
 		hashKey := uint64(12345)
 
 		// 应该不会 panic
-		p.backgroundRefresh(ctx, targets[0], hashKey, "GET:/api/test")
+		p.backgroundRefresh(&ctx.Request, targets[0], hashKey, "GET:/api/test")
 	})
 
 	t.Run("缓存锁释放", func(t *testing.T) {
@@ -1037,9 +955,8 @@ func TestBackgroundRefresh_Extra(t *testing.T) {
 
 		ctx := testutil.NewRequestCtx("GET", "/api/test")
 		hashKey := uint64(12345)
-		p.cache.AcquireLock(hashKey)
 
-		p.backgroundRefresh(ctx, targets[0], hashKey, "GET:/api/test")
+		p.backgroundRefresh(&ctx.Request, targets[0], hashKey, "GET:/api/test")
 	})
 }
 
@@ -1135,7 +1052,7 @@ func TestBackgroundRefresh_Revalidate(t *testing.T) {
 		hashKey := uint64(12345)
 
 		// 无缓存条目时调用 backgroundRefresh
-		p.backgroundRefresh(ctx, targets[0], hashKey, "GET:/api/test")
+		p.backgroundRefresh(&ctx.Request, targets[0], hashKey, "GET:/api/test")
 	})
 }
 
@@ -1555,31 +1472,6 @@ func TestExtractHostFromURL(t *testing.T) {
 	}
 }
 
-// TestTempFileManager_Threshold 测试 ShouldUseTempFile 的阈值逻辑。
-func TestTempFileManager_Threshold(t *testing.T) {
-	t.Run("响应大于阈值", func(t *testing.T) {
-		manager, err := NewTempFileManager(t.TempDir(), "1kb", "10kb")
-		if err != nil {
-			t.Fatalf("NewTempFileManager() error: %v", err)
-		}
-
-		if !manager.ShouldUseTempFile(2048) {
-			t.Error("ShouldUseTempFile() should return true for 2KB when threshold is 1KB")
-		}
-	})
-
-	t.Run("响应小于阈值", func(t *testing.T) {
-		manager, err := NewTempFileManager(t.TempDir(), "1kb", "10kb")
-		if err != nil {
-			t.Fatalf("NewTempFileManager() error: %v", err)
-		}
-
-		if manager.ShouldUseTempFile(512) {
-			t.Error("ShouldUseTempFile() should return false for 512B when threshold is 1KB")
-		}
-	})
-}
-
 // TestBackgroundRefresh_304 测试后台刷新收到 304 响应。
 func TestBackgroundRefresh_304(t *testing.T) {
 	ln := fasthttputil.NewInmemoryListener()
@@ -1633,5 +1525,5 @@ func TestBackgroundRefresh_304(t *testing.T) {
 	}, 200, 10*time.Second)
 
 	// 调用后台刷新
-	p.backgroundRefresh(ctx, targets[0], hashKey, origKey)
+	p.backgroundRefresh(&ctx.Request, targets[0], hashKey, origKey)
 }

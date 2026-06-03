@@ -279,22 +279,4 @@ func (h *HealthChecker) MarkHealthy(target *loadbalance.Target) {
 	}
 }
 
-// IsRunning 如果健康检查器当前正在运行，则返回 true。
-func (h *HealthChecker) IsRunning() bool {
-	return h.running.Load()
-}
 
-// GetInterval 返回配置的检查间隔。
-func (h *HealthChecker) GetInterval() time.Duration {
-	return h.interval
-}
-
-// GetTimeout 返回配置的检查超时时间。
-func (h *HealthChecker) GetTimeout() time.Duration {
-	return h.timeout
-}
-
-// GetPath 返回配置的健康检查路径。
-func (h *HealthChecker) GetPath() string {
-	return h.path
-}

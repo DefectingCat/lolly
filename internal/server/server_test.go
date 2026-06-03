@@ -1220,21 +1220,7 @@ func TestServer_SetUpgradeManager(t *testing.T) {
 }
 
 // TestServer_GetResolver 测试获取解析器。
-func TestServer_GetResolver(t *testing.T) {
-	cfg := &config.Config{
-		Servers: []config.ServerConfig{{
-			Listen: ":8080",
-		}},
-	}
 
-	s := New(cfg)
-
-	// 初始 resolver 应为 nil
-	resolver := s.GetResolver()
-	if resolver != nil {
-		t.Error("expected nil resolver initially")
-	}
-}
 
 // TestServer_StopWithTimeout_WithListeners 测试带监听器的停止。
 func TestServer_StopWithTimeout_WithListeners(t *testing.T) {

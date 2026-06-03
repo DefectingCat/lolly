@@ -43,32 +43,6 @@ func TestLuaMiddlewareCreation(t *testing.T) {
 	assert.True(t, middleware.IsEnabled())
 }
 
-// TestLuaMiddlewareDefaultConfig 测试默认配置
-func TestLuaMiddlewareDefaultConfig(t *testing.T) {
-	engine, err := NewEngine(DefaultConfig())
-	require.NoError(t, err)
-	defer engine.Close()
-
-	// 创建临时脚本文件
-	tmpDir := t.TempDir()
-	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte("return 1"), 0o644)
-	require.NoError(t, err)
-
-	// 使用默认配置
-	config := DefaultLuaMiddlewareConfig()
-	config.ScriptPath = scriptPath
-
-	middleware, err := NewLuaMiddleware(engine, config)
-	require.NoError(t, err)
-
-	// 验证默认值
-	assert.Equal(t, PhaseContent, middleware.GetPhase())
-	assert.Equal(t, 30*time.Second, middleware.timeout)
-	assert.Equal(t, "lua-content", middleware.Name())
-	assert.True(t, middleware.IsEnabled())
-}
-
 // TestLuaMiddlewareValidation 测试配置验证
 func TestLuaMiddlewareValidation(t *testing.T) {
 	engine, err := NewEngine(DefaultConfig())
@@ -170,42 +144,6 @@ func TestLuaMiddlewareDisabled(t *testing.T) {
 	body := string(ctx.Response.Body())
 	assert.Equal(t, "final only", body)
 	assert.NotContains(t, body, "lua output")
-}
-
-// TestLuaMiddlewareSetters 测试设置方法
-func TestLuaMiddlewareSetters(t *testing.T) {
-	engine, err := NewEngine(DefaultConfig())
-	require.NoError(t, err)
-	defer engine.Close()
-
-	tmpDir := t.TempDir()
-	scriptPath := filepath.Join(tmpDir, "test.lua")
-	err = os.WriteFile(scriptPath, []byte("return 1"), 0o644)
-	require.NoError(t, err)
-
-	config := DefaultLuaMiddlewareConfig()
-	config.ScriptPath = scriptPath
-
-	middleware, err := NewLuaMiddleware(engine, config)
-	require.NoError(t, err)
-
-	// 测试 SetEnabled
-	middleware.SetEnabled(false)
-	assert.False(t, middleware.IsEnabled())
-
-	// 测试 SetPhase
-	middleware.SetPhase(PhaseRewrite)
-	assert.Equal(t, PhaseRewrite, middleware.GetPhase())
-	assert.Equal(t, "lua-rewrite", middleware.Name())
-
-	// 测试 SetTimeout
-	middleware.SetTimeout(5 * time.Second)
-	assert.Equal(t, 5*time.Second, middleware.timeout)
-
-	// 测试 SetScriptPath
-	newPath := filepath.Join(tmpDir, "new.lua")
-	middleware.SetScriptPath(newPath)
-	assert.Equal(t, newPath, middleware.GetScriptPath())
 }
 
 // TestMultiPhaseLuaMiddlewareCreation 测试多阶段中间件创建

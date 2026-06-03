@@ -1,5 +1,4 @@
-// Package tools 提供基准测试和集成测试的辅助工具。
-package tools
+package testutil
 
 import (
 	"net"
@@ -19,16 +18,11 @@ const (
 
 // MockBackendConfig Mock 后端配置
 type MockBackendConfig struct {
-	// Mode 运行模式
-	Mode string
-	// StatusCode 响应状态码
-	StatusCode int
-	// ResponseBody 响应体
+	Mode         string
+	StatusCode   int
 	ResponseBody []byte
-	// ErrorRate 错误率 (0.0 - 1.0)
-	ErrorRate float64
-	// Delay 响应延迟
-	Delay time.Duration
+	ErrorRate    float64
+	Delay        time.Duration
 }
 
 // Mock 后端运行模式
@@ -49,7 +43,6 @@ func GenerateTestData(size int) []byte {
 }
 
 // SimpleMockBackend 创建一个简单的 Mock HTTP 后端。
-// 返回监听地址和清理函数。
 func SimpleMockBackend(statusCode int, responseBody []byte) (string, func()) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -102,7 +95,7 @@ func ErrorMockBackend(errorRate float64, errorBody []byte) (string, func()) {
 	}
 }
 
-// DelayedMockBackend 创建一个带延迟的 Mock HTTP 后端。
+// DelayedMockBackend 创建一个有延迟的 Mock HTTP 后端。
 func DelayedMockBackend(delay time.Duration, statusCode int, responseBody []byte) (string, func()) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -126,8 +119,8 @@ func DelayedMockBackend(delay time.Duration, statusCode int, responseBody []byte
 	}
 }
 
-// StartMockFasthttpBackend 根据配置启动 Mock HTTP 后端。
-func StartMockFasthttpBackend(config MockBackendConfig) (string, func()) {
+// StartMockFasthttpBackend 创建一个可配置的 Mock HTTP 后端。
+func StartMockFasthttpBackend(cfg MockBackendConfig) (string, func()) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
@@ -137,33 +130,31 @@ func StartMockFasthttpBackend(config MockBackendConfig) (string, func()) {
 	handler := func(ctx *fasthttp.RequestCtx) {
 		requestCount++
 
-		switch config.Mode {
-		case ModeDelayedResponse:
-			time.Sleep(config.Delay)
-			ctx.SetStatusCode(config.StatusCode)
-			ctx.SetBody(config.ResponseBody)
+		if cfg.Delay > 0 {
+			time.Sleep(cfg.Delay)
+		}
 
+		switch cfg.Mode {
 		case ModeErrorResponse:
-			if float64(requestCount%100)/100 < config.ErrorRate {
+			if float64(requestCount%100)/100 < cfg.ErrorRate {
 				ctx.SetStatusCode(fasthttp.StatusInternalServerError)
-				ctx.SetBody([]byte(`{"error": "internal error"}`))
+				ctx.SetBody(cfg.ResponseBody)
 				return
 			}
-			ctx.SetStatusCode(config.StatusCode)
-			ctx.SetBody(config.ResponseBody)
-
+		case ModeDelayedResponse:
+			time.Sleep(cfg.Delay)
 		case ModeRandomResponse:
 			if requestCount%2 == 0 {
 				ctx.SetStatusCode(fasthttp.StatusOK)
 			} else {
-				ctx.SetStatusCode(fasthttp.StatusCreated)
+				ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 			}
-			ctx.SetBody(config.ResponseBody)
-
-		default:
-			ctx.SetStatusCode(config.StatusCode)
-			ctx.SetBody(config.ResponseBody)
+			ctx.SetBody(cfg.ResponseBody)
+			return
 		}
+
+		ctx.SetStatusCode(cfg.StatusCode)
+		ctx.SetBody(cfg.ResponseBody)
 	}
 
 	go func() {

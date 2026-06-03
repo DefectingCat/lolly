@@ -256,16 +256,6 @@ func TestGlobalLogFunctions(_ *testing.T) {
 	Error().Str("key", "value").Msg("global error")
 }
 
-func TestLogAccessGlobal(_ *testing.T) {
-	Init("info", "json")
-
-	ctx := &fasthttp.RequestCtx{}
-	ctx.Request.SetRequestURI("/global-test")
-	ctx.Request.Header.SetMethod("GET")
-
-	LogAccess(ctx, 200, 100, 50*time.Millisecond)
-}
-
 func TestFormatAccessLog(t *testing.T) {
 	tmpDir := t.TempDir()
 	logPath := filepath.Join(tmpDir, "access.log")

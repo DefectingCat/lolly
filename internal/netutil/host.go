@@ -5,9 +5,7 @@
 // 作者：xfy
 package netutil
 
-import (
-	"strings"
-)
+
 
 // StripPort 从 Host 头中移除端口号。
 //
@@ -47,23 +45,4 @@ func StripPort(host string) string {
 	return host
 }
 
-// HasPort 检查主机名是否包含端口号。
-//
-// 参数：
-//   - host: 主机名
-//
-// 返回值：
-//   - bool: true 表示包含端口
-func HasPort(host string) bool {
-	if len(host) == 0 {
-		return false
-	}
 
-	// IPv6 格式
-	if host[0] == '[' {
-		return strings.Contains(host, "]:")
-	}
-
-	// IPv4 或域名格式
-	return strings.Contains(host, ":")
-}

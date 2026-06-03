@@ -13,7 +13,6 @@
 package loadbalance
 
 import (
-	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -52,11 +51,6 @@ func NewSlowStartManager(interval time.Duration) *SlowStartManager {
 		interval: interval,
 		stopCh:   make(chan struct{}),
 	}
-}
-
-// SetFindTarget 设置目标查找回调。
-func (m *SlowStartManager) SetFindTarget(fn func(url string) *Target) {
-	m.findTarget = fn
 }
 
 // OnTargetHealthy 目标恢复健康时调用。
@@ -166,19 +160,4 @@ func (m *SlowStartManager) updateEffectiveWeights() {
 	}
 }
 
-// GetState 获取目标的慢启动状态（用于调试/监控）。
-func (m *SlowStartManager) GetState(url string) *SlowStartState {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.targets[url]
-}
 
-// GetAllStates 获取所有慢启动状态（用于调试/监控）。
-func (m *SlowStartManager) GetAllStates() map[string]*SlowStartState {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	result := make(map[string]*SlowStartState, len(m.targets))
-	maps.Copy(result, m.targets)
-	return result
-}

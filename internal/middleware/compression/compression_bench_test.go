@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/valyala/fasthttp"
-	"rua.plus/lolly/internal/benchmark/tools"
+	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/config"
 )
 
@@ -23,7 +23,7 @@ func BenchmarkGzipCompress_1KB(b *testing.B) {
 	}
 	mw, _ := New(cfg)
 
-	data := tools.GenerateTestData(tools.Size1KB)
+	data := testutil.GenerateTestData(testutil.Size1KB)
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -40,7 +40,7 @@ func BenchmarkGzipCompress_10KB(b *testing.B) {
 	}
 	mw, _ := New(cfg)
 
-	data := tools.GenerateTestData(tools.Size10KB)
+	data := testutil.GenerateTestData(testutil.Size10KB)
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -57,7 +57,7 @@ func BenchmarkGzipCompress_100KB(b *testing.B) {
 	}
 	mw, _ := New(cfg)
 
-	data := tools.GenerateTestData(tools.Size100KB)
+	data := testutil.GenerateTestData(testutil.Size100KB)
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -74,7 +74,7 @@ func BenchmarkBrotliCompress_1KB(b *testing.B) {
 	}
 	mw, _ := New(cfg)
 
-	data := tools.GenerateTestData(tools.Size1KB)
+	data := testutil.GenerateTestData(testutil.Size1KB)
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -91,7 +91,7 @@ func BenchmarkBrotliCompress_10KB(b *testing.B) {
 	}
 	mw, _ := New(cfg)
 
-	data := tools.GenerateTestData(tools.Size10KB)
+	data := testutil.GenerateTestData(testutil.Size10KB)
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -110,7 +110,7 @@ func BenchmarkCompressionPool(b *testing.B) {
 	}
 	mw, _ := New(cfg)
 
-	data := tools.GenerateTestData(tools.Size1KB)
+	data := testutil.GenerateTestData(testutil.Size1KB)
 
 	b.ResetTimer()
 	for b.Loop() {
@@ -133,7 +133,7 @@ func BenchmarkCompressionMiddleware(b *testing.B) {
 	mw, _ := New(cfg)
 
 	// 创建 10KB 响应数据
-	responseBody := tools.GenerateTestData(tools.Size10KB)
+	responseBody := testutil.GenerateTestData(testutil.Size10KB)
 
 	// Mock handler 返回固定响应
 	mockHandler := func(ctx *fasthttp.RequestCtx) {
@@ -165,7 +165,7 @@ func BenchmarkCompressionMiddlewareNoCompress(b *testing.B) {
 	}
 	mw, _ := New(cfg)
 
-	responseBody := tools.GenerateTestData(tools.Size10KB)
+	responseBody := testutil.GenerateTestData(testutil.Size10KB)
 
 	mockHandler := func(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusOK)
@@ -215,7 +215,7 @@ func BenchmarkIsCompressible(b *testing.B) {
 
 // BenchmarkCompressionLevelComparison 比较不同压缩级别的性能。
 func BenchmarkCompressionLevelComparison(b *testing.B) {
-	data := tools.GenerateTestData(tools.Size10KB)
+	data := testutil.GenerateTestData(testutil.Size10KB)
 
 	b.Run("Level1", func(b *testing.B) {
 		cfg := &config.CompressionConfig{Type: "gzip", Level: 1}
@@ -255,7 +255,7 @@ func BenchmarkCompressionMiddlewareParallel(b *testing.B) {
 	}
 	mw, _ := New(cfg)
 
-	responseBody := tools.GenerateTestData(tools.Size10KB)
+	responseBody := testutil.GenerateTestData(testutil.Size10KB)
 
 	mockHandler := func(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusOK)

@@ -419,25 +419,7 @@ func BenchmarkHTTP2RequestRoundTrip_WithBody_Parallel(b *testing.B) {
 //
 // 测量 ValidateSettings 函数的开销，用于了解
 // 配置验证阶段的性能成本。
-func BenchmarkHTTP2SettingsValidation(b *testing.B) {
-	validSettings := Settings{
-		HeaderTableSize:      4096,
-		EnablePush:           true,
-		MaxConcurrentStreams: 250,
-		InitialWindowSize:    65535,
-		MaxFrameSize:         16384,
-		MaxHeaderListSize:    1048576,
-	}
 
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for b.Loop() {
-		if err := ValidateSettings(validSettings); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
 
 // BenchmarkHTTP2AdapterWithHPACKHeaders 测试带 HPACK 编码头部的适配器性能
 //

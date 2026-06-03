@@ -38,14 +38,6 @@ type FileInfoCache struct {
 	mu      sync.RWMutex
 }
 
-// NewFileInfoCache 创建 FileInfo 缓存
-func NewFileInfoCache() *FileInfoCache {
-	return &FileInfoCache{
-		entries: make(map[string]*fileInfoEntry, fileInfoCacheMaxEntries),
-		lruList: list.New(),
-	}
-}
-
 // Get 获取缓存的 FileInfo
 func (c *FileInfoCache) Get(filePath string) (os.FileInfo, bool) {
 	c.mu.RLock()
@@ -114,36 +106,6 @@ func (c *FileInfoCache) Set(filePath string, info os.FileInfo) {
 	}
 	entry.element = c.lruList.PushFront(entry)
 	c.entries[filePath] = entry
-}
-
-// Delete 删除缓存条目
-func (c *FileInfoCache) Delete(filePath string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if entry, ok := c.entries[filePath]; ok {
-		c.lruList.Remove(entry.element)
-		delete(c.entries, filePath)
-	}
-}
-
-// Clear 清空缓存
-func (c *FileInfoCache) Clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.entries = make(map[string]*fileInfoEntry, fileInfoCacheMaxEntries)
-	c.lruList = list.New()
-}
-
-// Stats 返回缓存统计
-func (c *FileInfoCache) Stats() FileInfoCacheStats {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return FileInfoCacheStats{
-		Entries: len(c.entries),
-	}
 }
 
 // FileInfoCacheStats FileInfo 缓存统计

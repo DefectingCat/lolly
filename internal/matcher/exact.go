@@ -44,17 +44,6 @@ func NewExactMatcher(path string, handler fasthttp.RequestHandler, priority int,
 	}
 }
 
-// Match 检查路径是否精确匹配。
-//
-// 参数：
-//   - path: 待检查的请求路径
-//
-// 返回值：
-//   - bool: 路径完全相等时返回 true
-func (m *ExactMatcher) Match(path string) bool {
-	return m.path == path
-}
-
 // Result 返回匹配结果。
 //
 // 返回值：

@@ -380,18 +380,4 @@ type SessionTicketStatus struct {
 	Started bool
 }
 
-// GetStatus 返回当前密钥状态。
-//
-// 返回值：
-//   - SessionTicketStatus: 密钥状态信息
-func (m *SessionTicketManager) GetStatus() SessionTicketStatus {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
 
-	return SessionTicketStatus{
-		KeyCount:       len(m.keys),
-		RetainKeys:     m.config.RetainKeys,
-		RotateInterval: m.config.RotateInterval,
-		Started:        m.started,
-	}
-}

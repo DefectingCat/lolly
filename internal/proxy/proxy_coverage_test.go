@@ -551,14 +551,13 @@ func TestBackgroundRefresh(t *testing.T) {
 
 	ctx := testutil.NewRequestCtx("GET", "/api/test")
 
-	// 设置缓存锁
+	// 设置缓存键
 	hashKey := uint64(12345)
-	p.cache.AcquireLock(hashKey)
 
 	// 调用后台刷新（它会执行实际请求来刷新缓存）
 	done := make(chan struct{})
 	go func() {
-		p.backgroundRefresh(ctx, targets[0], hashKey, "/api/test")
+		p.backgroundRefresh(&ctx.Request, targets[0], hashKey, "/api/test")
 		close(done)
 	}()
 
@@ -599,10 +598,9 @@ func TestBackgroundRefresh_NoClient(t *testing.T) {
 
 	ctx := testutil.NewRequestCtx("GET", "/api/test")
 	hashKey := uint64(99999)
-	p.cache.AcquireLock(hashKey)
 
 	// 应该不会 panic，直接返回
-	p.backgroundRefresh(ctx, targets[0], hashKey, "/api/test")
+	p.backgroundRefresh(&ctx.Request, targets[0], hashKey, "/api/test")
 }
 
 // TestServeHTTP_CacheHit 测试缓存命中路径

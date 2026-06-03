@@ -273,51 +273,6 @@ func formatRequestTime(ns int64) string {
 	return strconv.FormatFloat(sec, 'f', 3, 64)
 }
 
-// GetArgVariable 获取查询参数变量（动态变量 $arg_name）
-func GetArgVariable(ctx *fasthttp.RequestCtx, name string) string {
-	return string(ctx.URI().QueryArgs().Peek(name))
-}
-
-// GetHTTPVariable 获取 HTTP 头变量（动态变量 $http_name）
-func GetHTTPVariable(ctx *fasthttp.RequestCtx, name string) string {
-	// 将下划线转换为连字符，并规范化头名
-	headerName := normalizeHeaderName(name)
-	return string(ctx.Request.Header.Peek(headerName))
-}
-
-// GetCookieVariable 获取 Cookie 变量（动态变量 $cookie_name）
-func GetCookieVariable(ctx *fasthttp.RequestCtx, name string) string {
-	return string(ctx.Request.Header.Cookie(name))
-}
-
-// normalizeHeaderName 规范化 HTTP 头名
-func normalizeHeaderName(name string) string {
-	// 简单处理：将 _ 替换为 -，并首字母大写
-	if name == "" {
-		return name
-	}
-
-	var result []byte
-	upper := true
-	for i := 0; i < len(name); i++ {
-		c := name[i]
-		if c == '_' {
-			result = append(result, '-')
-			upper = true
-		} else if upper {
-			if c >= 'a' && c <= 'z' {
-				result = append(result, c-'a'+'A')
-			} else {
-				result = append(result, c)
-			}
-			upper = false
-		} else {
-			result = append(result, c)
-		}
-	}
-	return string(result)
-}
-
 // SetResponseInfoInContext 在 fasthttp.RequestCtx 中设置响应信息
 // 用于在 builtin getter 中获取 status、body_bytes_sent、request_time
 func SetResponseInfoInContext(ctx *fasthttp.RequestCtx, status int, bodySize int64, durationNs int64) {
@@ -326,21 +281,4 @@ func SetResponseInfoInContext(ctx *fasthttp.RequestCtx, status int, bodySize int
 	ctx.SetUserValue(VarRequestTime, durationNs)
 }
 
-// SetServerNameInContext 在 fasthttp.RequestCtx 中设置服务器名称
-func SetServerNameInContext(ctx *fasthttp.RequestCtx, name string) {
-	ctx.SetUserValue(VarServerName, name)
-}
 
-// SetRequestIDInContext 在 fasthttp.RequestCtx 中设置请求 ID
-func SetRequestIDInContext(ctx *fasthttp.RequestCtx, id string) {
-	ctx.SetUserValue(VarRequestID, id)
-}
-
-// BuiltinVarNames 返回所有内置变量名称列表
-func BuiltinVarNames() []string {
-	names := make([]string, 0, len(builtinVars))
-	for name := range builtinVars {
-		names = append(names, name)
-	}
-	return names
-}

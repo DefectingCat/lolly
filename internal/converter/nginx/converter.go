@@ -25,8 +25,9 @@ type Warning struct {
 	Message   string
 }
 
+// String returns a string representation of the warning.
 func (w Warning) String() string {
-	return fmt.Sprintf("warning: %s:%d: %s", w.File, w.Line, w.Message)
+	return fmt.Sprintf("%s:%d: %s: %s", w.File, w.Line, w.Directive, w.Message)
 }
 
 // ConvertResult holds the conversion output.

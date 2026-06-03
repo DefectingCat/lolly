@@ -990,65 +990,6 @@ func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
 	return strings.EqualFold(string(upgrade), "websocket")
 }
 
-// UpdateTargets 更新代理的后端目标列表并重新初始化连接池。
-//
-// 清除旧的 HostClient 连接池，为每个新目标创建新的连接。
-// 适用于动态配置更新场景（如热重载配置）。
-//
-// 参数：
-//   - targets: 新的后端目标列表
-//
-// 返回值：
-//   - error: 目标列表为空时返回错误
-func (p *Proxy) UpdateTargets(targets []*loadbalance.Target) error {
-	if len(targets) == 0 {
-		return errors.New("no targets provided")
-	}
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	// 清除旧客户端
-	p.clients = make(map[string]*fasthttp.HostClient)
-
-	// 初始化新客户端（使用 nil TransportConfig 保持原有行为）
-	for _, target := range targets {
-		if target.URL == "" {
-			continue
-		}
-
-		client := createHostClient(target.URL, p.config.Timeout, nil, p.config.ProxySSL, p.config.ProxyBind, p.config.Buffering)
-		clientKey := target.URL
-		if p.config.ProxyBind != "" {
-			clientKey = target.URL + "|" + p.config.ProxyBind
-		}
-		p.clients[clientKey] = client
-	}
-
-	p.targets = targets
-	return nil
-}
-
-// GetTargets 返回当前的后端目标列表。
-//
-// 返回值：
-//   - []*loadbalance.Target: 后端目标列表
-func (p *Proxy) GetTargets() []*loadbalance.Target {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.targets
-}
-
-// GetConfig 返回代理的配置。
-//
-// 返回值：
-//   - *config.ProxyConfig: 代理配置
-func (p *Proxy) GetConfig() *config.ProxyConfig {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.config
-}
-
 // extractHostFromURL 从 URL 字符串中提取 host:port 部分。
 //
 // 移除 http:// 或 https:// 协议前缀，以及路径部分，

@@ -31,7 +31,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttputil"
-	"rua.plus/lolly/internal/benchmark/tools"
+	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/handler"
@@ -1174,10 +1174,10 @@ func BenchmarkE2EInmemoryServer(b *testing.B) {
 
 // BenchmarkE2EInmemoryServerParallel 基准测试内存服务器并发吞吐量。
 //
-// 使用 tools 包的 MockBackend 工具模拟后端。
+// 使用 testutil 包的 MockBackend 工具模拟后端。
 func BenchmarkE2EInmemoryServerParallel(b *testing.B) {
-	// 使用 tools 包的 mock 后端
-	addr, cleanup := tools.SimpleMockBackend(fasthttp.StatusOK, []byte(`{"mock":"tools"}`))
+	// 使用 testutil 包的 mock 后端
+	addr, cleanup := testutil.SimpleMockBackend(fasthttp.StatusOK, []byte(`{"mock":"testutil"}`))
 	defer cleanup()
 
 	time.Sleep(10 * time.Millisecond) // 等待后端启动
@@ -1446,8 +1446,8 @@ func BenchmarkE2EBasicAuth(b *testing.B) {
 	}
 	warmupProxy(p, "/api/test", 5)
 
-	// 创建 Basic Auth 中间件（使用 bcrypt 哈希）
-	bcryptPassword, _ := security.HashPassword("testpass", security.HashBcrypt)
+		// 创建 Basic Auth 中间件（使用 bcrypt 哈希）
+		bcryptPassword := "$2a$10$BOx2i1WZ6iFADhBylIiAAOe3OgG2tQ1dkhgLhJCNnm9beidTgqMq."
 	auth, err := security.NewBasicAuth(&config.AuthConfig{
 		Type:       "basic",
 		RequireTLS: false,

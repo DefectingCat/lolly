@@ -67,33 +67,6 @@ func (p *Proxy) Start() error {
 	return nil
 }
 
-// Stop 停止代理服务，包括关闭 DNS 刷新循环。
-//
-// 该方法标记代理为已停止状态，关闭 stopCh 通知所有后台协程退出，
-// 并停止 resolver。该方法是幂等的，重复调用不会产生副作用。
-//
-// 返回值：
-//   - error: 停止 resolver 失败时返回非 nil 错误
-func (p *Proxy) Stop() error {
-	if !p.started.Load() {
-		return nil
-	}
-
-	p.started.Store(false)
-
-	// 关闭 stopCh 通知所有后台协程退出
-	close(p.stopCh)
-
-	// 停止 resolver
-	if p.resolver != nil {
-		if err := p.resolver.Stop(); err != nil {
-			return fmt.Errorf("failed to stop resolver: %w", err)
-		}
-	}
-
-	return nil
-}
-
 // startDNSRefreshLoop 启动 DNS 刷新后台循环。
 //
 // 根据 resolver 的 TTL 计算刷新间隔（TTL / 2，最小 1 秒），
@@ -221,20 +194,4 @@ func (p *Proxy) getResolverTTL() time.Duration {
 	return 30 * time.Second
 }
 
-// GetResolverStats 返回 DNS 解析器的统计信息。
-//
-// 获取当前 resolver 的运行统计数据，包括查询次数、
-// 缓存命中率、错误次数等。如果未配置 resolver，返回空的 Stats。
-//
-// 返回值：
-//   - resolver.Stats: DNS 解析器统计数据
-func (p *Proxy) GetResolverStats() resolver.Stats {
-	p.mu.RLock()
-	r := p.resolver
-	p.mu.RUnlock()
 
-	if r == nil {
-		return resolver.Stats{}
-	}
-	return r.Stats()
-}

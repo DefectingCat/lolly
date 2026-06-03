@@ -28,7 +28,6 @@
 package security
 
 import (
-	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
@@ -483,75 +482,6 @@ func validatePasswordHash(hash string, algorithm HashAlgorithm) error {
 	default:
 		return errors.New("unknown algorithm")
 	}
-}
-
-// HashPassword 使用配置的算法生成密码哈希。
-//
-// 这是用于生成配置文件中使用的哈希的工具函数。
-//
-// 参数：
-//   - password: 明文密码
-//   - algorithm: 哈希算法
-//
-// 返回值：
-//   - string: 生成的哈希字符串
-//   - error: 生成失败时返回错误
-func HashPassword(password string, algorithm HashAlgorithm) (string, error) {
-	switch algorithm {
-	case HashBcrypt:
-		return HashPasswordBcrypt(password, bcrypt.DefaultCost)
-	case HashArgon2id:
-		return HashPasswordArgon2id(password, defaultArgon2Params)
-	default:
-		return "", errors.New("unknown algorithm")
-	}
-}
-
-// HashPasswordBcrypt 生成 bcrypt 哈希。
-//
-// 参数：
-//   - password: 明文密码
-//   - cost: 计算成本（推荐 bcrypt.DefaultCost）
-//
-// 返回值：
-//   - string: bcrypt 哈希字符串
-//   - error: 生成失败时返回错误
-func HashPasswordBcrypt(password string, cost int) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), cost)
-	if err != nil {
-		return "", err
-	}
-	return string(hash), nil
-}
-
-// HashPasswordArgon2id 生成 Argon2id 哈希。
-//
-// 使用指定的参数生成安全的密码哈希。
-//
-// 参数：
-//   - password: 明文密码
-//   - params: Argon2id 配置参数
-//
-// 返回值：
-//   - string: Argon2id 哈希字符串
-//   - error: 生成失败时返回错误
-func HashPasswordArgon2id(password string, params argon2Params) (string, error) {
-	// 使用加密安全的随机数生成盐值
-	salt := make([]byte, params.saltLen)
-	if _, err := rand.Read(salt); err != nil {
-		return "", fmt.Errorf("failed to generate salt: %w", err)
-	}
-
-	// 生成哈希
-	hash := argon2.IDKey([]byte(password), salt,
-		params.time, params.memory, params.threads, params.keyLen)
-
-	// 编码为字符串格式
-	encodedSalt := base64.RawStdEncoding.EncodeToString(salt)
-	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
-
-	return fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
-		params.memory, params.time, params.threads, encodedSalt, encodedHash), nil
 }
 
 // parseUint32 将字符串解析为 uint32。

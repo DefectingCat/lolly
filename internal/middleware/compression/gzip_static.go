@@ -186,22 +186,6 @@ func (g *GzipStatic) matchExtension(filePath string) bool {
 	return false
 }
 
-// Enabled 返回是否启用预压缩。
-//
-// 返回值：
-//   - bool: true 表示已启用预压缩支持
-func (g *GzipStatic) Enabled() bool {
-	return g.enabled
-}
-
-// Extensions 返回支持的源文件扩展名列表。
-//
-// 返回值：
-//   - []string: 支持预压缩的源文件扩展名列表
-func (g *GzipStatic) Extensions() []string {
-	return g.extensions
-}
-
 // supportsEncoding 检查客户端是否支持指定编码。
 //
 // 通过检查 Accept-Encoding 请求头中是否包含指定编码名称。

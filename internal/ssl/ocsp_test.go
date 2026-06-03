@@ -129,30 +129,7 @@ func TestOCSPGetOCSPResponse(t *testing.T) {
 	}
 }
 
-func TestOCSPGetStatus(t *testing.T) {
-	mgr := NewOCSPManager(nil)
 
-	// Test non-existent serial
-	status, hasResponse := mgr.GetStatus("nonexistent")
-	if status != statusFailed || hasResponse {
-		t.Error("Expected statusFailed and no response for non-existent serial")
-	}
-
-	// Test with valid response
-	serial := "12345"
-	mgr.mu.Lock()
-	mgr.responses[serial] = &ocspResponse{
-		response:   []byte("test"),
-		status:     statusValid,
-		nextUpdate: time.Now().Add(1 * time.Hour),
-	}
-	mgr.mu.Unlock()
-
-	status, hasResponse = mgr.GetStatus(serial)
-	if status != statusValid || !hasResponse {
-		t.Error("Expected statusValid and hasResponse true")
-	}
-}
 
 func TestOCSPStaleResponse(t *testing.T) {
 	mgr := NewOCSPManager(nil)
@@ -238,44 +215,7 @@ func TestTLSManagerWithOCSPDisabled(t *testing.T) {
 	manager.Close()
 }
 
-func TestTLSManagerGetOCSPStatus(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	// Generate cert without OCSP server
-	certPEM, keyPEM := generateTestCertWithOCSP(t, nil)
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	cfg := &config.SSLConfig{
-		Cert:         certPath,
-		Key:          keyPath,
-		OCSPStapling: true,
-	}
-
-	manager, err := NewTLSManager(cfg)
-	if err != nil {
-		t.Fatalf("NewTLSManager() failed: %v", err)
-	}
-	defer manager.Close()
-
-	// Get status should return empty map (no certs with OCSP server)
-	status := manager.GetOCSPStatus()
-	// Could be empty if cert has no OCSP server URL
-	if len(status) > 0 {
-		// Verify status info structure
-		for serial, info := range status {
-			if info.Serial != serial {
-				t.Errorf("Serial mismatch: expected %s, got %s", serial, info.Serial)
-			}
-		}
-	}
-}
 
 func TestTLSManagerClose(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -433,38 +373,7 @@ func TestOCSPConfigDefaults(t *testing.T) {
 	}
 }
 
-// TestOCSPManager_RefreshResponse 测试强制刷新 OCSP 响应
-func TestOCSPManager_RefreshResponse(_ *testing.T) {
-	cfg := &OCSPConfig{
-		Enabled:         true,
-		RefreshInterval: 1 * time.Hour,
-		Timeout:         100 * time.Millisecond,
-		MaxRetries:      1,
-	}
-	mgr := NewOCSPManager(cfg)
 
-	// 创建带 OCSP 服务器的测试证书
-	serial := big.NewInt(12345)
-	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	template := &x509.Certificate{
-		SerialNumber: serial,
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		OCSPServer:   []string{"http://ocsp.example.com"},
-	}
-	certDER, _ := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
-	cert, _ := x509.ParseCertificate(certDER)
-
-	// 刷新响应（会失败因为 URL 无效）
-	err := mgr.RefreshResponse(cert, cert)
-	// 由于 URL 无效，预期会失败
-	if err == nil {
-		// 如果没有错误，检查状态
-		status, hasResp := mgr.GetStatus(serial.String())
-		_ = status
-		_ = hasResp
-	}
-}
 
 // TestOCSPManager_refreshAll 测试刷新所有响应
 func TestOCSPManager_refreshAll(_ *testing.T) {
@@ -503,33 +412,7 @@ func TestOCSPManager_refreshAll(_ *testing.T) {
 }
 
 // TestOCSPManager_GetStatus_EdgeCases 测试 GetStatus 边界情况
-func TestOCSPManager_GetStatus_EdgeCases(t *testing.T) {
-	cfg := DefaultOCSPConfig()
-	mgr := NewOCSPManager(cfg)
 
-	// 测试不存在的序列号
-	status, hasResp := mgr.GetStatus("nonexistent")
-	if hasResp {
-		t.Error("Expected no response for nonexistent serial")
-	}
-	if status != statusFailed {
-		t.Errorf("Expected statusFailed for nonexistent serial, got %v", status)
-	}
-
-	// 测试空响应
-	serial := "empty-response"
-	mgr.mu.Lock()
-	mgr.responses[serial] = &ocspResponse{
-		status:   statusValid,
-		response: nil, // 空响应
-	}
-	mgr.mu.Unlock()
-
-	_, hasResp = mgr.GetStatus(serial)
-	if hasResp {
-		t.Error("Expected no response for empty response data")
-	}
-}
 
 // TestOCSPManager_RegisterCertificate_NilCert 测试注册空证书
 func TestOCSPManager_RegisterCertificate_NilCert(t *testing.T) {
@@ -610,94 +493,10 @@ func TestOCSPManager_SendOCSPRequest_Error(t *testing.T) {
 }
 
 // TestOCSPManager_RefreshResponse_WithExistingEntry 测试刷新已有条目的响应
-func TestOCSPManager_RefreshResponse_WithExistingEntry(t *testing.T) {
-	cfg := &OCSPConfig{
-		Enabled:         true,
-		RefreshInterval: 1 * time.Hour,
-		Timeout:         100 * time.Millisecond,
-		MaxRetries:      1,
-	}
-	mgr := NewOCSPManager(cfg)
 
-	serial := big.NewInt(12345)
-	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	template := &x509.Certificate{
-		SerialNumber: serial,
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		OCSPServer:   []string{"http://invalid.ocsp.server.example.com"},
-	}
-	certDER, _ := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
-	cert, _ := x509.ParseCertificate(certDER)
-
-	// 预先添加一个条目
-	mgr.mu.Lock()
-	mgr.responses[serial.String()] = &ocspResponse{
-		status:     statusValid,
-		response:   []byte("test-response"),
-		fetchedAt:  time.Now(),
-		nextUpdate: time.Now().Add(1 * time.Hour),
-		errors:     0,
-	}
-	mgr.mu.Unlock()
-
-	// 刷新会失败，但应该增加错误计数
-	_ = mgr.RefreshResponse(cert, cert)
-
-	// 验证错误计数增加
-	mgr.mu.RLock()
-	entry := mgr.responses[serial.String()]
-	mgr.mu.RUnlock()
-
-	if entry.errors != 1 {
-		t.Errorf("Expected errors=1, got %d", entry.errors)
-	}
-}
 
 // TestOCSPManager_RefreshResponse_StatusFailed 测试刷新失败后状态变化
-func TestOCSPManager_RefreshResponse_StatusFailed(t *testing.T) {
-	cfg := &OCSPConfig{
-		Enabled:         true,
-		RefreshInterval: 1 * time.Hour,
-		Timeout:         100 * time.Millisecond,
-		MaxRetries:      1,
-	}
-	mgr := NewOCSPManager(cfg)
 
-	serial := big.NewInt(99999)
-	priv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	template := &x509.Certificate{
-		SerialNumber: serial,
-		NotBefore:    time.Now(),
-		NotAfter:     time.Now().Add(24 * time.Hour),
-		OCSPServer:   []string{"http://invalid.ocsp.server.example.com"},
-	}
-	certDER, _ := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
-	cert, _ := x509.ParseCertificate(certDER)
-
-	// 预先添加一个条目，错误计数接近阈值
-	mgr.mu.Lock()
-	mgr.responses[serial.String()] = &ocspResponse{
-		status:     statusValid,
-		response:   []byte("test-response"),
-		fetchedAt:  time.Now(),
-		nextUpdate: time.Now().Add(1 * time.Hour),
-		errors:     2, // 接近 maxRetries=1, 下次失败会变成 statusFailed
-	}
-	mgr.mu.Unlock()
-
-	// 刷新会失败
-	_ = mgr.RefreshResponse(cert, cert)
-
-	// 验证状态变为 failed（因为 errors >= maxRetries）
-	mgr.mu.RLock()
-	entry := mgr.responses[serial.String()]
-	mgr.mu.RUnlock()
-
-	if entry.status != statusFailed {
-		t.Errorf("Expected statusFailed, got %v", entry.status)
-	}
-}
 
 // TestOCSPManager_FetchOCSP_NoServer 测试无 OCSP 服务器时的 fetchOCSP
 func TestOCSPManager_FetchOCSP_NoServer(t *testing.T) {

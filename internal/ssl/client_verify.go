@@ -45,22 +45,6 @@ const (
 	verifyModeOptionalNoCA = "optional_no_ca"
 )
 
-// String 返回验证模式的字符串表示。
-func (m ClientVerifyMode) String() string {
-	switch m {
-	case VerifyOff:
-		return verifyModeOff
-	case VerifyOn:
-		return verifyModeOn
-	case VerifyOptional:
-		return verifyModeOptional
-	case VerifyOptionalNoCA:
-		return verifyModeOptionalNoCA
-	default:
-		return "unknown"
-	}
-}
-
 // ParseVerifyMode 解析验证模式字符串。
 //
 // 参数：
@@ -231,22 +215,6 @@ func (v *ClientVerifier) checkCRL(cert *x509.Certificate) error {
 	return nil
 }
 
-// IsEnabled 返回验证是否启用。
-//
-// 返回值：
-//   - bool: 启用返回 true
-func (v *ClientVerifier) IsEnabled() bool {
-	return v.mode != VerifyOff
-}
-
-// GetMode 返回验证模式。
-//
-// 返回值：
-//   - ClientVerifyMode: 当前验证模式
-func (v *ClientVerifier) GetMode() ClientVerifyMode {
-	return v.mode
-}
-
 // LoadCRL 从文件加载证书吊销列表。
 //
 // 支持 PEM 和 DER 格式的 CRL 文件。
@@ -277,56 +245,6 @@ func LoadCRL(crlFile string) (*x509.RevocationList, error) {
 	return crl, nil
 }
 
-// ValidateClientCertificate 手动验证客户端证书。
-//
-// 参数：
-//   - cert: 客户端证书
-//
-// 返回值：
-//   - error: 验证失败时返回错误
-func (v *ClientVerifier) ValidateClientCertificate(cert *x509.Certificate) error {
-	if cert == nil {
-		if v.mode == VerifyOn {
-			return errors.New("client certificate is required")
-		}
-		return nil
-	}
-
-	// 检查 CRL
-	if v.crl != nil {
-		if err := v.checkCRL(cert); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// GetClientCertInfo 提取客户端证书信息。
-//
-// 参数：
-//   - cs: TLS 连接状态
-//
-// 返回值：
-//   - *ClientCertInfo: 证书信息
-func GetClientCertInfo(cs *tls.ConnectionState) *ClientCertInfo {
-	if cs == nil || len(cs.PeerCertificates) == 0 {
-		return nil
-	}
-
-	cert := cs.PeerCertificates[0]
-	return &ClientCertInfo{
-		Subject:     cert.Subject.String(),
-		Issuer:      cert.Issuer.String(),
-		Serial:      cert.SerialNumber.String(),
-		NotBefore:   cert.NotBefore,
-		NotAfter:    cert.NotAfter,
-		DNSNames:    cert.DNSNames,
-		Email:       cert.EmailAddresses,
-		Fingerprint: fingerprint(cert),
-	}
-}
-
 // ClientCertInfo 客户端证书信息。
 type ClientCertInfo struct {
 	NotBefore   time.Time
@@ -339,17 +257,4 @@ type ClientCertInfo struct {
 	Email       []string
 }
 
-// fingerprint 计算证书指纹。
-//
-// 参数：
-//   - cert: X509 证书
-//
-// 返回值：
-//   - string: SHA256 指纹（十六进制）
-func fingerprint(cert *x509.Certificate) string {
-	if cert == nil {
-		return ""
-	}
-	// 返回证书的原始 DER 编码指纹
-	return fmt.Sprintf("%x", cert.Raw)
-}
+

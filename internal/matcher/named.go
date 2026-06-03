@@ -34,31 +34,4 @@ func NewNamedMatcher(name string, handler fasthttp.RequestHandler) *NamedMatcher
 	}
 }
 
-// Match 检查路径是否匹配。
-//
-// 命名 location 不使用路径匹配，始终返回 false。
-// 获取命名 location 应使用 LocationEngine.GetNamed()。
-func (m *NamedMatcher) Match(_ string) bool {
-	return false
-}
 
-// Result 返回匹配结果。
-//
-// 返回值：
-//   - *MatchResult: 包含处理器和命名 location 元数据的结果
-func (m *NamedMatcher) Result() *MatchResult {
-	return &MatchResult{
-		Handler:      m.handler,
-		Path:         "@" + m.name,
-		Priority:     0,
-		LocationType: LocationTypeNamed,
-	}
-}
-
-// Name 返回命名 location 的名称。
-//
-// 返回值：
-//   - string: location 名称
-func (m *NamedMatcher) Name() string {
-	return m.name
-}

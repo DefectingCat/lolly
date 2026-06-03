@@ -573,98 +573,13 @@ func TestGetClientIP(t *testing.T) {
 }
 
 // TestUpdateTargets 测试更新目标
-func TestUpdateTargets(t *testing.T) {
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
-	}
 
-	initialTargets := testutil.NewTestTargets("http://old1:8080", "http://old2:8080")
-
-	p, err := NewProxy(cfg, initialTargets, nil, nil)
-	if err != nil {
-		t.Fatalf("NewProxy() error: %v", err)
-	}
-
-	// 更新目标
-	newTargets := testutil.NewTestTargets("http://new1:8080", "http://new2:8080", "http://new3:8080")
-
-	err = p.UpdateTargets(newTargets)
-	if err != nil {
-		t.Errorf("UpdateTargets() error: %v", err)
-	}
-
-	// 验证目标已更新
-	targets := p.GetTargets()
-	if len(targets) != len(newTargets) {
-		t.Errorf("UpdateTargets() targets count = %d, want %d", len(targets), len(newTargets))
-	}
-
-	// 验证空目标列表返回错误
-	err = p.UpdateTargets([]*loadbalance.Target{})
-	if err == nil {
-		t.Error("UpdateTargets([]) should return error")
-	}
-
-	// 验证nil目标列表返回错误
-	err = p.UpdateTargets(nil)
-	if err == nil {
-		t.Error("UpdateTargets(nil) should return error")
-	}
-}
 
 // TestGetTargets 测试获取目标列表
-func TestGetTargets(t *testing.T) {
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
-	}
 
-	targets := testutil.NewTestTargets("http://backend1:8080", "http://backend2:8080")
-
-	p, err := NewProxy(cfg, targets, nil, nil)
-	if err != nil {
-		t.Fatalf("NewProxy() error: %v", err)
-	}
-
-	gotTargets := p.GetTargets()
-	if len(gotTargets) != len(targets) {
-		t.Errorf("GetTargets() returned %d targets, want %d", len(gotTargets), len(targets))
-	}
-
-	for i, target := range gotTargets {
-		if target.URL != targets[i].URL {
-			t.Errorf("GetTargets()[%d].URL = %q, want %q", i, target.URL, targets[i].URL)
-		}
-	}
-}
 
 // TestGetConfig 测试获取配置
-func TestGetConfig(t *testing.T) {
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
-	}
 
-	targets := testutil.NewTestTargets("http://localhost:8080")
-
-	p, err := NewProxy(cfg, targets, nil, nil)
-	if err != nil {
-		t.Fatalf("NewProxy() error: %v", err)
-	}
-
-	gotConfig := p.GetConfig()
-	if gotConfig != cfg {
-		t.Error("GetConfig() returned different config")
-	}
-
-	if gotConfig.Path != cfg.Path {
-		t.Errorf("GetConfig().Path = %q, want %q", gotConfig.Path, cfg.Path)
-	}
-}
 
 // TestIsWebSocketRequest 测试WebSocket请求检测
 func TestIsWebSocketRequest(t *testing.T) {
@@ -924,82 +839,7 @@ func TestGetClient(t *testing.T) {
 }
 
 // TestProxyCache 测试代理缓存功能
-func TestProxyCache(t *testing.T) {
-	// 创建内存监听器作为后端服务器
-	ln := fasthttputil.NewInmemoryListener()
-	defer func() { _ = ln.Close() }()
 
-	requestCount := 0
-	go func() {
-		s := &fasthttp.Server{
-			Handler: func(ctx *fasthttp.RequestCtx) {
-				requestCount++
-				ctx.SetStatusCode(fasthttp.StatusOK)
-				ctx.SetBodyString("Cached response")
-				ctx.Response.Header.Set("X-Request-Count", string(rune(requestCount)))
-			},
-		}
-		_ = s.Serve(ln)
-	}()
-
-	// 等待服务器启动
-	time.Sleep(50 * time.Millisecond)
-
-	addr := ln.Addr().String()
-
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
-		Cache: config.ProxyCacheConfig{
-			Enabled:              true,
-			MaxAge:               1 * time.Second,
-			CacheLock:            true,
-			StaleWhileRevalidate: 500 * time.Millisecond,
-		},
-	}
-
-	targets := testutil.NewTestHealthyTargets("http://" + addr)
-
-	p, err := NewProxy(cfg, targets, nil, nil)
-	if err != nil {
-		t.Fatalf("NewProxy() error: %v", err)
-	}
-
-	// 验证缓存已初始化
-	if p.cache == nil {
-		t.Fatal("Proxy cache should be initialized when enabled")
-	}
-
-	// 测试缓存设置和获取
-	testKey := "/api/test"
-	hashKey := uint64(0x1234567890abcdef) // 测试用哈希值
-	p.cache.Set(hashKey, testKey, []byte("test data"), map[string]string{"Content-Type": "text/plain"}, 200, 1*time.Second)
-
-	entry, found, stale := p.cache.Get(hashKey, testKey)
-	if !found {
-		t.Error("Cache should find existing entry")
-	}
-	if stale {
-		t.Error("Cache entry should not be stale immediately after setting")
-	}
-	if string(entry.Data) != "test data" {
-		t.Errorf("Cache entry data = %q, want %q", string(entry.Data), "test data")
-	}
-
-	// 测试缓存统计
-	stats := p.cache.Stats()
-	if stats.Entries != 1 {
-		t.Errorf("Cache stats.Entries = %d, want %d", stats.Entries, 1)
-	}
-
-	// 测试缓存清除
-	p.cache.Clear()
-	stats = p.cache.Stats()
-	if stats.Entries != 0 {
-		t.Errorf("Cache stats.Entries after Clear = %d, want %d", stats.Entries, 0)
-	}
-}
 
 // TestServeHTTP_WithPassiveHealthCheck 测试带有被动健康检查的请求转发
 func TestServeHTTP_WithPassiveHealthCheck(t *testing.T) {

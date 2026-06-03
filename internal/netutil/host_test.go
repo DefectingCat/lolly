@@ -36,26 +36,4 @@ func TestStripPort(t *testing.T) {
 	}
 }
 
-func TestHasPort(t *testing.T) {
-	tests := []struct {
-		name     string
-		host     string
-		expected bool
-	}{
-		{"IPv4 with port", "example.com:8080", true},
-		{"IPv4 no port", "example.com", false},
-		{"IPv6 with port", "[::1]:443", true},
-		{"IPv6 no port", "[::1]", false},
-		{"empty string", "", false},
-		{"just port", ":8080", true},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := HasPort(tt.host)
-			if result != tt.expected {
-				t.Errorf("HasPort(%q) = %v, want %v", tt.host, result, tt.expected)
-			}
-		})
-	}
-}

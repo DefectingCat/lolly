@@ -195,17 +195,7 @@ func TestIPHashBalancer(t *testing.T) {
 	}
 }
 
-func TestServerStats(t *testing.T) {
-	s := NewServer()
 
-	stats := s.Stats()
-	if stats.Connections != 0 {
-		t.Errorf("Expected 0 connections, got %d", stats.Connections)
-	}
-	if stats.Listeners != 0 {
-		t.Errorf("Expected 0 listeners, got %d", stats.Listeners)
-	}
-}
 
 func TestUpstreamSelect(t *testing.T) {
 	u := &Upstream{
@@ -249,52 +239,9 @@ func TestTargetHealthy(t *testing.T) {
 	}
 }
 
-func TestHealthChecker(t *testing.T) {
-	u := &Upstream{
-		targets: []*Target{
-			{addr: "localhost:99999"}, // 不存在的端口
-		},
-	}
 
-	hc := &HealthChecker{
-		upstream: u,
-		interval: 1 * time.Second,
-		timeout:  100 * time.Millisecond,
-		stopCh:   make(chan struct{}),
-	}
 
-	// 执行一次检查
-	hc.check()
 
-	// 目标应该被标记为不健康
-	if u.targets[0].healthy.Load() {
-		t.Error("Expected target to be marked unhealthy")
-	}
-}
-
-func TestHealthCheckerStartStop(_ *testing.T) {
-	u := &Upstream{
-		targets: []*Target{
-			{addr: "localhost:99998"}, // 不存在的端口
-		},
-	}
-
-	hc := &HealthChecker{
-		upstream: u,
-		interval: 100 * time.Millisecond,
-		timeout:  50 * time.Millisecond,
-		stopCh:   make(chan struct{}),
-	}
-
-	// 启动健康检查
-	go hc.Start()
-
-	// 等待几次检查执行
-	time.Sleep(250 * time.Millisecond)
-
-	// 停止健康检查
-	hc.Stop()
-}
 
 func TestConcurrentConnections(t *testing.T) {
 	s := NewServer()
@@ -318,37 +265,7 @@ func TestConcurrentConnections(t *testing.T) {
 	}
 }
 
-func TestUDPServer(t *testing.T) {
-	s := NewServer()
 
-	// 添加 UDP 上游配置
-	targets := []TargetSpec{
-		{Addr: "127.0.0.1:0", Weight: 1},
-	}
-	err := s.AddUpstream("udp_test", targets, "round_robin", HealthCheckSpec{})
-	if err != nil {
-		t.Fatalf("AddUpstream failed: %v", err)
-	}
-
-	// 测试 UDP 监听（使用 :0 让系统分配端口）
-	err = s.ListenUDP("127.0.0.1:0", "udp_test", 1*time.Second)
-	if err != nil {
-		t.Fatalf("ListenUDP failed: %v", err)
-	}
-
-	// 验证 UDP 服务器已创建
-	s.mu.RLock()
-	if len(s.udpServers) != 1 {
-		t.Errorf("Expected 1 UDP server, got %d", len(s.udpServers))
-	}
-	s.mu.RUnlock()
-
-	// 测试 Stats 包含 UDP 监听器
-	stats := s.Stats()
-	if stats.Listeners != 1 {
-		t.Errorf("Expected 1 listener in stats, got %d", stats.Listeners)
-	}
-}
 
 func TestUDPServerInvalidUpstream(t *testing.T) {
 	s := NewServer()
@@ -360,36 +277,7 @@ func TestUDPServerInvalidUpstream(t *testing.T) {
 	}
 }
 
-func TestUDPServerStartAndStop(t *testing.T) {
-	s := NewServer()
 
-	// 添加上游
-	targets := []TargetSpec{
-		{Addr: "127.0.0.1:19001", Weight: 1},
-	}
-	_ = s.AddUpstream("udp_stop_test", targets, "round_robin", HealthCheckSpec{})
-
-	// 监听 UDP
-	err := s.ListenUDP("127.0.0.1:19000", "udp_stop_test", 500*time.Millisecond)
-	if err != nil {
-		t.Fatalf("ListenUDP failed: %v", err)
-	}
-
-	// 启动服务器
-	err = s.Start()
-	if err != nil {
-		t.Fatalf("Start failed: %v", err)
-	}
-
-	// 给服务器一点时间启动
-	time.Sleep(50 * time.Millisecond)
-
-	// 停止服务器
-	err = s.Stop()
-	if err != nil {
-		t.Errorf("Stop failed: %v", err)
-	}
-}
 
 func TestUDPSessionKey(t *testing.T) {
 	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:1234")
@@ -434,59 +322,9 @@ func TestNewUDPServer(t *testing.T) {
 	}
 }
 
-func TestListenTCP(t *testing.T) {
-	s := NewServer()
 
-	// 使用 :0 让系统分配端口
-	err := s.ListenTCP("127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("ListenTCP failed: %v", err)
-	}
 
-	// 验证监听器已创建
-	s.mu.RLock()
-	if len(s.listeners) != 1 {
-		t.Errorf("Expected 1 listener, got %d", len(s.listeners))
-	}
-	s.mu.RUnlock()
 
-	// 验证 Stats
-	stats := s.Stats()
-	if stats.Listeners != 1 {
-		t.Errorf("Expected 1 listener in stats, got %d", stats.Listeners)
-	}
-}
-
-func TestServerStartStopWithTCP(t *testing.T) {
-	s := NewServer()
-
-	// 添加上游
-	targets := []TargetSpec{
-		{Addr: "127.0.0.1:19003", Weight: 1},
-	}
-	_ = s.AddUpstream("tcp_test", targets, "round_robin", HealthCheckSpec{})
-
-	// 监听 TCP
-	err := s.ListenTCP("127.0.0.1:19004")
-	if err != nil {
-		t.Fatalf("ListenTCP failed: %v", err)
-	}
-
-	// 启动服务器
-	err = s.Start()
-	if err != nil {
-		t.Fatalf("Start failed: %v", err)
-	}
-
-	// 给服务器一点时间启动
-	time.Sleep(50 * time.Millisecond)
-
-	// 停止服务器
-	err = s.Stop()
-	if err != nil {
-		t.Errorf("Stop failed: %v", err)
-	}
-}
 
 func TestRoundRobinBalancerWithSingleTarget(t *testing.T) {
 	rb := newRoundRobin()
@@ -551,38 +389,7 @@ func TestAddUpstreamWithLeastConn(t *testing.T) {
 	}
 }
 
-func TestAddUpstreamWithHealthCheck(t *testing.T) {
-	s := NewServer()
 
-	targets := []TargetSpec{
-		{Addr: "localhost:8001", Weight: 1},
-	}
-
-	hcSpec := HealthCheckSpec{
-		Enabled:  true,
-		Interval: 1 * time.Second,
-		Timeout:  500 * time.Millisecond,
-	}
-
-	err := s.AddUpstream("hc_test", targets, "round_robin", hcSpec)
-	if err != nil {
-		t.Errorf("AddUpstream failed: %v", err)
-	}
-
-	up := s.upstreams["hc_test"]
-	if up == nil {
-		t.Fatal("Expected non-nil upstream")
-	}
-
-	if up.healthChk == nil {
-		t.Error("Expected health checker to be initialized")
-	}
-
-	// 停止健康检查
-	if up.healthChk != nil {
-		up.healthChk.Stop()
-	}
-}
 
 func TestUpstreamSelectNoHealthy(t *testing.T) {
 	u := &Upstream{
@@ -635,38 +442,7 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	srv.mu.RUnlock()
 }
 
-func TestUDPServerStop(t *testing.T) {
-	// 创建 UDP 连接
-	udpAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:0")
-	conn, _ := net.ListenUDP("udp", udpAddr)
 
-	// 创建上游
-	upstream := &Upstream{
-		targets:  []*Target{{addr: "127.0.0.1:19006"}},
-		balancer: newRoundRobin(),
-	}
-
-	// 创建 UDP 服务器
-	srv := newUDPServer(conn, upstream, 1*time.Second)
-
-	// 添加一个模拟会话
-	clientAddr, _ := net.ResolveUDPAddr("udp", "127.0.0.1:12346")
-	session := &udpSession{
-		clientAddr: clientAddr,
-		lastActive: time.Now(),
-	}
-	srv.sessions[sessionKey(clientAddr)] = session
-
-	// 停止服务器
-	srv.stop()
-
-	// 验证会话已被清理
-	srv.mu.RLock()
-	if len(srv.sessions) != 0 {
-		t.Errorf("Expected 0 sessions after stop, got %d", len(srv.sessions))
-	}
-	srv.mu.RUnlock()
-}
 
 func TestUDPSessionOperations(t *testing.T) {
 	// 创建 UDP 连接

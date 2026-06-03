@@ -63,27 +63,6 @@ func NewRegexMatcher(pattern string, handler fasthttp.RequestHandler, priority i
 	}, nil
 }
 
-// MustRegexMatcher 创建正则匹配器，编译失败时 panic。
-//
-// 适用于启动时配置加载场景，配置错误直接终止程序。
-//
-// 参数：
-//   - pattern: 正则表达式模式字符串
-//   - handler: 匹配成功后的请求处理器
-//   - priority: 优先级
-//   - caseInsensitive: 是否大小写不敏感
-//   - internal: 是否为 internal location
-//
-// 返回值：
-//   - *RegexMatcher: 正则匹配器实例
-func MustRegexMatcher(pattern string, handler fasthttp.RequestHandler, priority int, caseInsensitive bool, internal bool) *RegexMatcher {
-	m, err := NewRegexMatcher(pattern, handler, priority, caseInsensitive, internal)
-	if err != nil {
-		panic(err)
-	}
-	return m
-}
-
 // Match 检查路径是否匹配正则表达式。
 //
 // 参数：

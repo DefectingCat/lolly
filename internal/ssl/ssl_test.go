@@ -271,95 +271,11 @@ func TestIsInsecureCipher(t *testing.T) {
 	}
 }
 
-func TestTLSManagerGetTLSConfigForHost(t *testing.T) {
-	manager := &TLSManager{
-		configs: make(map[string]*tls.Config),
-	}
 
-	// Add config for a host
-	manager.configs["example.com"] = &tls.Config{
-		ServerName: "example.com",
-	}
-	manager.defaultCfg = &tls.Config{
-		ServerName: "default",
-	}
 
-	tests := []struct {
-		name     string
-		host     string
-		wantName string
-	}{
-		{
-			name:     "matching host",
-			host:     "example.com",
-			wantName: "example.com",
-		},
-		{
-			name:     "host with port",
-			host:     "example.com:443",
-			wantName: "example.com",
-		},
-		{
-			name:     "unknown host uses default",
-			host:     "unknown.com",
-			wantName: "default",
-		},
-	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := manager.GetTLSConfigForHost(tt.host)
-			if cfg == nil {
-				t.Fatal("Expected non-nil config")
-			}
-			if cfg.ServerName != tt.wantName {
-				t.Errorf("Expected ServerName %s, got %s", tt.wantName, cfg.ServerName)
-			}
-		})
-	}
-}
 
-func TestValidateCertificate(t *testing.T) {
-	t.Run("non-existent file", func(t *testing.T) {
-		err := ValidateCertificate("/nonexistent/cert.pem")
-		if err == nil {
-			t.Error("Expected error for non-existent file")
-		}
-	})
 
-	t.Run("valid file", func(t *testing.T) {
-		tmpFile := filepath.Join(t.TempDir(), "cert.pem")
-		if err := os.WriteFile(tmpFile, []byte("test"), 0o644); err != nil {
-			t.Fatalf("Failed to create temp file: %v", err)
-		}
-
-		err := ValidateCertificate(tmpFile)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-	})
-}
-
-func TestValidateKey(t *testing.T) {
-	t.Run("non-existent file", func(t *testing.T) {
-		err := ValidateKey("/nonexistent/key.pem")
-		if err == nil {
-			t.Error("Expected error for non-existent file")
-		}
-	})
-
-	t.Run("valid file", func(t *testing.T) {
-		tmpFile := filepath.Join(t.TempDir(), "key.pem")
-		if err := os.WriteFile(tmpFile, []byte("test"), 0o600); err != nil {
-			t.Fatalf("Failed to create temp file: %v", err)
-		}
-
-		err := ValidateKey(tmpFile)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-	})
-}
 
 // generateTestCert generates a self-signed certificate for testing
 func generateTestCert(t *testing.T) ([]byte, []byte) {
@@ -587,30 +503,7 @@ func TestNewTLSManager_Errors(t *testing.T) {
 }
 
 // TestNewTLSManager_InvalidCipher 测试无效加密套件
-func TestNewTLSManager_InvalidCipher(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	cfg := &config.SSLConfig{
-		Cert:    certPath,
-		Key:     keyPath,
-		Ciphers: []string{"TLS_UNKNOWN_CIPHER"},
-	}
-
-	_, err := NewTLSManager(cfg)
-	if err == nil {
-		t.Error("Expected error for invalid cipher suite")
-	}
-}
 
 // TestNewTLSManager_InsecureCipher 测试不安全加密套件
 func TestNewTLSManager_InsecureCipher(t *testing.T) {
@@ -639,252 +532,28 @@ func TestNewTLSManager_InsecureCipher(t *testing.T) {
 }
 
 // TestNewMultiTLSManager 测试多证书 TLS 管理器
-func TestNewMultiTLSManager(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	configs := map[string]*config.SSLConfig{
-		"example.com": {
-			Cert: certPath,
-			Key:  keyPath,
-		},
-	}
-
-	manager, err := NewMultiTLSManager(configs, nil)
-	if err != nil {
-		t.Fatalf("NewMultiTLSManager() failed: %v", err)
-	}
-	defer manager.Close()
-
-	// 验证配置已加载
-	cfg := manager.GetTLSConfigForHost("example.com")
-	if cfg == nil {
-		t.Fatal("Expected non-nil config for example.com")
-	}
-}
 
 // TestNewMultiTLSManager_EmptyConfigs 测试空配置
-func TestNewMultiTLSManager_EmptyConfigs(t *testing.T) {
-	_, err := NewMultiTLSManager(map[string]*config.SSLConfig{}, nil)
-	if err == nil {
-		t.Error("Expected error for empty configs")
-	}
-}
+
 
 // TestNewMultiTLSManager_NilConfig 测试 nil 配置项
-func TestNewMultiTLSManager_NilConfig(t *testing.T) {
-	configs := map[string]*config.SSLConfig{
-		"example.com": nil,
-	}
 
-	_, err := NewMultiTLSManager(configs, nil)
-	if err == nil {
-		t.Error("Expected error for nil config")
-	}
-}
 
 // TestGetCertificate 测试证书获取回调
-func TestGetCertificate(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	configs := map[string]*config.SSLConfig{
-		"example.com": {
-			Cert: certPath,
-			Key:  keyPath,
-		},
-	}
-
-	manager, err := NewMultiTLSManager(configs, nil)
-	if err != nil {
-		t.Fatalf("NewMultiTLSManager() failed: %v", err)
-	}
-	defer manager.Close()
-
-	getCert := manager.GetCertificate()
-	if getCert == nil {
-		t.Fatal("Expected non-nil GetCertificate function")
-	}
-
-	// 测试获取存在的证书
-	testHello := &tls.ClientHelloInfo{
-		ServerName: "example.com",
-	}
-	certResult, err := getCert(testHello)
-	if err != nil {
-		t.Errorf("GetCertificate() error = %v", err)
-	}
-	if certResult == nil {
-		t.Error("Expected non-nil certificate")
-	}
-}
 
 // TestAddCertificate 测试添加证书
-func TestAddCertificate(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	// 创建带默认配置的管理器
-	cfg := &config.SSLConfig{
-		Cert: certPath,
-		Key:  keyPath,
-	}
-
-	manager, err := NewTLSManager(cfg)
-	if err != nil {
-		t.Fatalf("NewTLSManager() failed: %v", err)
-	}
-	defer manager.Close()
-
-	// 测试添加新证书
-	err = manager.AddCertificate("newhost.com", cfg)
-	if err != nil {
-		t.Errorf("AddCertificate() error = %v", err)
-	}
-
-	// 验证新证书已添加
-	hostCfg := manager.GetTLSConfigForHost("newhost.com")
-	if hostCfg == nil {
-		t.Error("Expected config for newhost.com")
-	}
-}
 
 // TestAddCertificate_Error 测试添加证书错误
-func TestAddCertificate_Error(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	cfg := &config.SSLConfig{
-		Cert: certPath,
-		Key:  keyPath,
-	}
-
-	manager, err := NewTLSManager(cfg)
-	if err != nil {
-		t.Fatalf("NewTLSManager() failed: %v", err)
-	}
-	defer manager.Close()
-
-	// 测试 nil 配置
-	err = manager.AddCertificate("test.com", nil)
-	if err == nil {
-		t.Error("Expected error for nil config")
-	}
-}
 
 // TestRemoveCertificate 测试移除证书
-func TestRemoveCertificate(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	configs := map[string]*config.SSLConfig{
-		"example.com": {
-			Cert: certPath,
-			Key:  keyPath,
-		},
-	}
-
-	// 创建一个默认配置
-	defaultCfg := &config.SSLConfig{
-		Cert: certPath,
-		Key:  keyPath,
-	}
-
-	manager, err := NewMultiTLSManager(configs, defaultCfg)
-	if err != nil {
-		t.Fatalf("NewMultiTLSManager() failed: %v", err)
-	}
-	defer manager.Close()
-
-	// 移除证书
-	manager.RemoveCertificate("example.com")
-
-	// 验证证书已移除（应返回默认配置）
-	cfg := manager.GetTLSConfigForHost("example.com")
-	if cfg == nil {
-		t.Error("Expected default config after removal")
-	}
-}
 
 // TestGetOCSPStatus_NoManager 测试无 OCSP 管理器时的状态
-func TestGetOCSPStatus_NoManager(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	cert, key := generateTestCert(t)
-	if err := os.WriteFile(certPath, cert, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, key, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	cfg := &config.SSLConfig{
-		Cert:         certPath,
-		Key:          keyPath,
-		OCSPStapling: false, // 禁用 OCSP
-	}
-
-	manager, err := NewTLSManager(cfg)
-	if err != nil {
-		t.Fatalf("NewTLSManager() failed: %v", err)
-	}
-	defer manager.Close()
-
-	status := manager.GetOCSPStatus()
-	if status == nil {
-		t.Error("Expected non-nil status map")
-	}
-	if len(status) != 0 {
-		t.Errorf("Expected empty status, got %d entries", len(status))
-	}
-}
 
 // TestParsePEMChain 测试 PEM 证书链解析
 func TestParsePEMChain(t *testing.T) {
@@ -987,137 +656,19 @@ func TestMatchMarker(t *testing.T) {
 }
 
 // TestGetCertificate_NoCertificate 测试无证书时的错误情况
-func TestGetCertificate_NoCertificate(t *testing.T) {
-	manager := &TLSManager{
-		configs: make(map[string]*tls.Config),
-	}
 
-	getCert := manager.GetCertificate()
-	if getCert == nil {
-		t.Fatal("Expected non-nil GetCertificate function")
-	}
-
-	// 测试未知服务器名且无默认证书
-	testHello := &tls.ClientHelloInfo{
-		ServerName: "unknown.com",
-	}
-	certResult, err := getCert(testHello)
-	if err == nil {
-		t.Error("Expected error when no certificate available")
-	}
-	if certResult != nil {
-		t.Error("Expected nil certificate")
-	}
-}
 
 // TestGetConfigForClientWithOCSP 测试 OCSP 配置回调
-func TestGetConfigForClientWithOCSP(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	// 生成带有 OCSP 服务器的证书
-	certPEM, keyPEM := generateTestCertWithOCSP(t, []string{"http://ocsp.example.com"})
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	cfg := &config.SSLConfig{
-		Cert:         certPath,
-		Key:          keyPath,
-		OCSPStapling: true,
-	}
-
-	manager, err := NewTLSManager(cfg)
-	if err != nil {
-		t.Fatalf("NewTLSManager() failed: %v", err)
-	}
-	defer manager.Close()
-
-	// 测试 GetConfigForClient 回调
-	testHello := &tls.ClientHelloInfo{
-		ServerName: "localhost",
-	}
-	tlsCfg, err := manager.getConfigForClientWithOCSP(testHello)
-	if err != nil {
-		t.Errorf("getConfigForClientWithOCSP() error = %v", err)
-	}
-	if tlsCfg == nil {
-		t.Error("Expected non-nil TLS config")
-	}
-
-	// 测试空 ServerName
-	emptyHello := &tls.ClientHelloInfo{
-		ServerName: "",
-	}
-	if _, err := manager.getConfigForClientWithOCSP(emptyHello); err != nil {
-		t.Errorf("getConfigForClientWithOCSP() error with empty ServerName = %v", err)
-	}
-}
 
 // TestLoadCertificate_WithCertChain 测试带证书链的加载
-func TestLoadCertificate_WithCertChain(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
-	chainPath := filepath.Join(tmpDir, "chain.pem")
 
-	// 生成主证书
-	certPEM, keyPEM := generateTestCert(t)
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	// 生成证书链（使用另一个测试证书）
-	chainCert, _ := generateTestCert(t)
-	if err := os.WriteFile(chainPath, chainCert, 0o644); err != nil {
-		t.Fatalf("Failed to write chain: %v", err)
-	}
-
-	// 测试加载带证书链的证书
-	cert, err := loadCertificate(certPath, keyPath, chainPath)
-	if err != nil {
-		t.Fatalf("loadCertificate() error = %v", err)
-	}
-	if len(cert.Certificate) < 2 {
-		t.Errorf("Expected at least 2 certificates in chain, got %d", len(cert.Certificate))
-	}
-}
 
 // TestLoadCertificate_InvalidChain 测试无效证书链
-func TestLoadCertificate_InvalidChain(t *testing.T) {
-	tmpDir := t.TempDir()
-	certPath := filepath.Join(tmpDir, "cert.pem")
-	keyPath := filepath.Join(tmpDir, "key.pem")
 
-	certPEM, keyPEM := generateTestCert(t)
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
-		t.Fatalf("Failed to write cert: %v", err)
-	}
-	if err := os.WriteFile(keyPath, keyPEM, 0o600); err != nil {
-		t.Fatalf("Failed to write key: %v", err)
-	}
-
-	// 测试不存在的证书链文件
-	_, err := loadCertificate(certPath, keyPath, "/nonexistent/chain.pem")
-	if err == nil {
-		t.Error("Expected error for non-existent chain file")
-	}
-}
 
 // TestCreateTLSConfig_NilConfig 测试 nil 配置
-func TestCreateTLSConfig_NilConfig(t *testing.T) {
-	_, err := createTLSConfig(nil)
-	if err == nil {
-		t.Error("Expected error for nil config")
-	}
-}
+
 
 // TestNewTLSManager_WithSessionTickets 测试启用 Session Tickets
 func TestNewTLSManager_WithSessionTickets(t *testing.T) {

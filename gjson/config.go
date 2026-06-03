@@ -45,18 +45,4 @@ func defaultConfig() *Config {
 	}
 }
 
-// Clone returns a deep copy of the config.
-func (c *Config) Clone() *Config {
-	return &Config{
-		encodeSparseArray: sparseArrayConfig{
-			convert: c.encodeSparseArray.convert,
-			ratio:   c.encodeSparseArray.ratio,
-			safe:    c.encodeSparseArray.safe,
-		},
-		encodeMaxDepth:        c.encodeMaxDepth,
-		decodeMaxDepth:        c.decodeMaxDepth,
-		encodeNumberPrecision: c.encodeNumberPrecision,
-		encodeKeepBuffer:      c.encodeKeepBuffer,
-		encodeSortKeys:        c.encodeSortKeys,
-	}
-}
+

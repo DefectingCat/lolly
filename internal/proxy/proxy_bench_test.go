@@ -9,7 +9,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttputil"
-	"rua.plus/lolly/internal/benchmark/tools"
+	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/variable"
@@ -291,8 +291,8 @@ func BenchmarkProxyHostClientParallel(b *testing.B) {
 
 // BenchmarkProxyWithMockBackend 基准测试使用 mock_backend 工具的代理转发。
 func BenchmarkProxyWithMockBackend(b *testing.B) {
-	// 使用 tools 包启动 mock 后端
-	addr, cleanup := tools.SimpleMockBackend(fasthttp.StatusOK, []byte("Hello from mock backend"))
+	// 使用 testutil 包启动 mock 后端
+	addr, cleanup := testutil.SimpleMockBackend(fasthttp.StatusOK, []byte("Hello from mock backend"))
 	defer cleanup()
 
 	// 等待服务器完全启动

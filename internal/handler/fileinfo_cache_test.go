@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"container/list"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,7 +16,10 @@ func TestFileInfoCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cache := NewFileInfoCache()
+	cache := &FileInfoCache{
+		entries: make(map[string]*fileInfoEntry, fileInfoCacheMaxEntries),
+		lruList: list.New(),
+	}
 
 	t.Run("缓存未命中", func(t *testing.T) {
 		info, ok := cache.Get(tmpFile)
@@ -52,26 +56,6 @@ func TestFileInfoCache(t *testing.T) {
 			t.Errorf("Size() = %d, want %d", cachedInfo.Size(), realInfo.Size())
 		}
 	})
-
-	t.Run("删除缓存", func(t *testing.T) {
-		cache.Delete(tmpFile)
-		_, ok := cache.Get(tmpFile)
-		if ok {
-			t.Error("删除后缓存不应命中")
-		}
-	})
-
-	t.Run("清空缓存", func(t *testing.T) {
-		realInfo, _ := os.Stat(tmpFile)
-		cache.Set(tmpFile, realInfo)
-		cache.Set(filepath.Join(tmpDir, "other"), realInfo)
-
-		cache.Clear()
-		stats := cache.Stats()
-		if stats.Entries != 0 {
-			t.Errorf("清空后 Entries = %d, want 0", stats.Entries)
-		}
-	})
 }
 
 func TestFileInfoCacheTTL(t *testing.T) {
@@ -82,7 +66,10 @@ func TestFileInfoCacheTTL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cache := NewFileInfoCache()
+	cache := &FileInfoCache{
+		entries: make(map[string]*fileInfoEntry, fileInfoCacheMaxEntries),
+		lruList: list.New(),
+	}
 	realInfo, _ := os.Stat(tmpFile)
 
 	// 存入缓存
@@ -109,7 +96,10 @@ func TestFileInfoCacheTTL(t *testing.T) {
 }
 
 func TestFileInfoCacheLRU(t *testing.T) {
-	cache := NewFileInfoCache()
+	cache := &FileInfoCache{
+		entries: make(map[string]*fileInfoEntry, fileInfoCacheMaxEntries),
+		lruList: list.New(),
+	}
 
 	// 创建测试文件信息
 	tmpDir := t.TempDir()
@@ -120,8 +110,10 @@ func TestFileInfoCacheLRU(t *testing.T) {
 		cache.Set(tmpFile, info)
 	}
 
-	stats := cache.Stats()
-	if stats.Entries > fileInfoCacheMaxEntries {
-		t.Errorf("Entries = %d, should not exceed %d", stats.Entries, fileInfoCacheMaxEntries)
+	cache.mu.RLock()
+	entries := len(cache.entries)
+	cache.mu.RUnlock()
+	if entries > fileInfoCacheMaxEntries {
+		t.Errorf("Entries = %d, should not exceed %d", entries, fileInfoCacheMaxEntries)
 	}
 }

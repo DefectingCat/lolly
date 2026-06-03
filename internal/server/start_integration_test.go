@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
-	"rua.plus/lolly/internal/benchmark/tools"
+	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/config"
 )
 
@@ -31,7 +31,7 @@ func TestStart_Integration(t *testing.T) {
 	}
 
 	// 启动 mock 上游服务器
-	backendAddr, cleanup := tools.SimpleMockBackend(
+	backendAddr, cleanup := testutil.SimpleMockBackend(
 		fasthttp.StatusOK,
 		[]byte(`{"message": "Hello from backend"}`),
 	)
@@ -242,13 +242,13 @@ func TestStart_WithLuaEnabled(t *testing.T) {
 // TestStart_WithMultipleProxies 测试多个代理配置
 func TestStart_WithMultipleProxies(t *testing.T) {
 	// 启动多个 mock 上游服务器
-	backend1, cleanup1 := tools.SimpleMockBackend(
+	backend1, cleanup1 := testutil.SimpleMockBackend(
 		fasthttp.StatusOK,
 		[]byte(`{"service": "api1"}`),
 	)
 	defer cleanup1()
 
-	backend2, cleanup2 := tools.SimpleMockBackend(
+	backend2, cleanup2 := testutil.SimpleMockBackend(
 		fasthttp.StatusOK,
 		[]byte(`{"service": "api2"}`),
 	)
@@ -479,7 +479,7 @@ func TestStart_VHostMode(t *testing.T) {
 // TestStart_WithProxyBackendError 测试代理后端错误处理
 func TestStart_WithProxyBackendError(t *testing.T) {
 	// 启动返回错误的 mock 服务器
-	backendAddr, cleanup := tools.ErrorMockBackend(1.0, []byte(`{"error": "backend error"}`))
+	backendAddr, cleanup := testutil.ErrorMockBackend(1.0, []byte(`{"error": "backend error"}`))
 	defer cleanup()
 
 	cfg := &config.Config{
@@ -512,7 +512,7 @@ func TestStart_WithProxyBackendError(t *testing.T) {
 // TestStart_WithDelayedBackend 测试延迟后端
 func TestStart_WithDelayedBackend(t *testing.T) {
 	// 启动延迟的 mock 服务器
-	backendAddr, cleanup := tools.DelayedMockBackend(
+	backendAddr, cleanup := testutil.DelayedMockBackend(
 		100*time.Millisecond,
 		fasthttp.StatusOK,
 		[]byte(`{"message": "delayed response"}`),
@@ -544,8 +544,8 @@ func TestStart_WithDelayedBackend(t *testing.T) {
 // TestStart_WithRandomResponse 测试随机响应后端
 func TestStart_WithRandomResponse(t *testing.T) {
 	// 启动随机响应的 mock 服务器
-	backendAddr, cleanup := tools.StartMockFasthttpBackend(tools.MockBackendConfig{
-		Mode:         tools.ModeRandomResponse,
+	backendAddr, cleanup := testutil.StartMockFasthttpBackend(testutil.MockBackendConfig{
+		Mode:         testutil.ModeRandomResponse,
 		StatusCode:   fasthttp.StatusOK,
 		ResponseBody: []byte(`{"random": true}`),
 	})

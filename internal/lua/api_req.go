@@ -44,30 +44,6 @@ const (
 	APILayerPseudoNonBlocking ngxReqAPILayer = 3
 )
 
-const (
-	// layerStringDirect 直接映射层字符串
-	layerStringDirect = "direct"
-	// layerStringCompatible 兼容层字符串
-	layerStringCompatible = "compatible"
-	// layerStringPseudoNonBlocking 伪非阻塞层字符串
-	layerStringPseudoNonBlocking = "pseudo_non_blocking"
-	// layerStringUnknown 未知层字符串
-	layerStringUnknown = "unknown"
-)
-
-func (l ngxReqAPILayer) String() string {
-	switch l {
-	case APILayerDirect:
-		return layerStringDirect
-	case APILayerCompatible:
-		return layerStringCompatible
-	case APILayerPseudoNonBlocking:
-		return layerStringPseudoNonBlocking
-	default:
-		return layerStringUnknown
-	}
-}
-
 // ngxReqMetrics 收集 API 调用指标
 type ngxReqMetrics struct {
 	// 调用计数
@@ -593,19 +569,4 @@ func (api *ngxReqAPI) ResetMetrics() {
 	api.metrics = ngxReqMetrics{}
 }
 
-// RegisterSchedulerUnsafeReqAPI 为 Scheduler LState 注册不安全的 ngx.req API
-func RegisterSchedulerUnsafeReqAPI(L *glua.LState, ngx *glua.LTable) {
-	methods := []string{
-		"get_method",
-		"get_uri",
-		"set_uri",
-		"get_uri_args",
-		"set_uri_args",
-		"get_headers",
-		"set_header",
-		"clear_header",
-		"get_body_data",
-		"read_body",
-	}
-	RegisterUnsafeAPI(L, ngx, "ngx.req", methods)
-}
+

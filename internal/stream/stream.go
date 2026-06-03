@@ -637,50 +637,6 @@ func (h *HealthChecker) check() {
 	}
 }
 
-// Stop 停止健康检查。
-func (h *HealthChecker) Stop() {
-	close(h.stopCh)
-}
-
-// Stop 停止 Stream 服务器。
-func (s *Server) Stop() error {
-	s.running.Store(false)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// 关闭所有 TCP 监听器
-	for _, listener := range s.listeners {
-		_ = listener.Close()
-	}
-
-	// 停止所有 UDP 服务器
-	for _, udpSrv := range s.udpServers {
-		udpSrv.stop()
-	}
-
-	// 停止健康检查
-	for _, upstream := range s.upstreams {
-		if upstream.healthChk != nil {
-			upstream.healthChk.Stop()
-		}
-	}
-
-	return nil
-}
-
-// Stats 返回服务器统计信息。
-func (s *Server) Stats() Stats {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	return Stats{
-		Connections: atomic.LoadInt64(&s.connCount),
-		Listeners:   len(s.listeners) + len(s.udpServers),
-		Upstreams:   len(s.upstreams),
-	}
-}
-
 // Stats Stream 服务器统计。
 type Stats struct {
 	// Connections 当前活跃连接数量
@@ -1026,24 +982,4 @@ func (s *udpServer) cleanupExpiredSessions() {
 	}
 }
 
-// stop 停止 UDP 服务器。
-//
-// 设置停止标志，关闭所有会话，等待 goroutine 结束，关闭连接。
-func (s *udpServer) stop() {
-	s.running.Store(false)
-	close(s.stopCh)
 
-	// 关闭所有会话
-	s.mu.Lock()
-	for _, session := range s.sessions {
-		session.close()
-	}
-	s.sessions = make(map[string]*udpSession)
-	s.mu.Unlock()
-
-	// 等待所有 goroutine 结束
-	s.wg.Wait()
-
-	// 关闭连接
-	_ = s.conn.Close()
-}

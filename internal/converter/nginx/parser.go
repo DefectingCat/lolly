@@ -44,15 +44,14 @@ type parser struct {
 
 const maxDepth = 10
 
-// Parse parses nginx configuration from a string.
-func Parse(input string) (*NginxConfig, error) {
+// ParseString parses an nginx configuration from a string.
+func ParseString(content string) (*NginxConfig, error) {
 	p := &parser{
-		input:        []byte(input),
+		input:        []byte(content),
 		pos:          0,
 		line:         1,
-		file:         "",
-		includeStack: make(map[string]bool),
-		depth:        0,
+		file:         "<string>",
+		includeStack: map[string]bool{},
 	}
 	directives, err := p.parseDirectives()
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 )
 
 func TestParseSimpleDirective(t *testing.T) {
-	cfg, err := Parse("listen 80;")
+	cfg, err := ParseString("listen 80;")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestParseSimpleDirective(t *testing.T) {
 }
 
 func TestParseBlockDirective(t *testing.T) {
-	cfg, err := Parse("server { listen 80; }")
+	cfg, err := ParseString("server { listen 80; }")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestParseBlockDirective(t *testing.T) {
 }
 
 func TestParseComment(t *testing.T) {
-	cfg, err := Parse("# this is a comment\nlisten 80;")
+	cfg, err := ParseString("# this is a comment\nlisten 80;")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestParseQuotedString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := Parse(tt.input)
+			cfg, err := ParseString(tt.input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -120,7 +120,7 @@ func TestParseQuotedString(t *testing.T) {
 func TestParseMultipleDirectives(t *testing.T) {
 	input := `listen 80;
 server_name example.com;`
-	cfg, err := Parse(input)
+	cfg, err := ParseString(input)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -137,7 +137,7 @@ server_name example.com;`
 
 func TestParseNestedBlocks(t *testing.T) {
 	input := `http { server { location / { root /var/www; } } }`
-	cfg, err := Parse(input)
+	cfg, err := ParseString(input)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestParseNestedBlocks(t *testing.T) {
 }
 
 func TestParseUnclosedBlock(t *testing.T) {
-	_, err := Parse("server { listen 80;")
+	_, err := ParseString("server { listen 80;")
 	if err == nil {
 		t.Fatal("expected error for unclosed block")
 	}
@@ -176,7 +176,7 @@ func TestParseUnclosedBlock(t *testing.T) {
 }
 
 func TestParseMissingSemicolon(t *testing.T) {
-	_, err := Parse("listen 80")
+	_, err := ParseString("listen 80")
 	if err == nil {
 		t.Fatal("expected error for missing semicolon")
 	}
@@ -366,7 +366,7 @@ func TestParseLocationModifiers(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cfg, err := Parse(tt.input)
+			cfg, err := ParseString(tt.input)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -390,7 +390,7 @@ func TestParseLocationModifiers(t *testing.T) {
 }
 
 func TestParseEmptyBlock(t *testing.T) {
-	cfg, err := Parse("server {}")
+	cfg, err := ParseString("server {}")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestParseEmptyBlock(t *testing.T) {
 }
 
 func TestParseMultipleArgs(t *testing.T) {
-	cfg, err := Parse("return 301 https://example.com;")
+	cfg, err := ParseString("return 301 https://example.com;")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

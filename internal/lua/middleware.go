@@ -68,23 +68,6 @@ type LuaMiddlewareConfig struct {
 	EnabledSet bool
 }
 
-// DefaultLuaMiddlewareConfig 返回 Lua 中间件的默认配置。
-//
-// 该函数提供一组合理的默认值，适用于大多数场景：
-//   - Phase: PhaseContent（内容阶段执行）
-//   - Timeout: 30 秒
-//   - Enabled: true（默认启用）
-//
-// 返回值：
-//   - LuaMiddlewareConfig: 包含默认值的配置结构体
-func DefaultLuaMiddlewareConfig() LuaMiddlewareConfig {
-	return LuaMiddlewareConfig{
-		Phase:   PhaseContent,
-		Timeout: 30 * time.Second,
-		Enabled: true,
-	}
-}
-
 // NewLuaMiddleware 创建 Lua 中间件实例。
 //
 // 参数：

@@ -15,7 +15,6 @@ package http2
 import (
 	"net"
 	"net/http"
-	"time"
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/adapter"
@@ -204,82 +203,4 @@ func (a *FastHTTPHandlerAdapter) convertResponse(ctx *fasthttp.RequestCtx, w htt
 	}
 }
 
-// WrapHandler 创建一个适配器包装的 handler。
-//
-// 这是一个便捷函数，用于快速创建适配器实例。
-//
-// 参数：
-//   - handler: fasthttp 请求处理器
-//
-// 返回值：
-//   - http.Handler: 标准库兼容的处理器
-func WrapHandler(handler fasthttp.RequestHandler) http.Handler {
-	return NewFastHTTPHandlerAdapter(handler)
-}
 
-// WrapHandlerFunc 创建一个适配器包装的 handler 函数。
-//
-// 这是一个便捷函数，允许直接使用函数而非创建 handler 实例。
-//
-// 参数：
-//   - fn: fasthttp handler 函数
-//
-// 返回值：
-//   - http.Handler: 标准库兼容的处理器
-func WrapHandlerFunc(fn func(*fasthttp.RequestCtx)) http.Handler {
-	return NewFastHTTPHandlerAdapter(fn)
-}
-
-// AdapterConfig 提供适配器的配置选项。
-type AdapterConfig struct {
-	// BufferSize 是缓冲区大小，默认为 4096 字节
-	BufferSize int
-
-	// MaxBodySize 是最大请求体大小，超过则使用流式处理
-	MaxBodySize int64
-
-	// Timeout 是请求处理超时时间
-	Timeout time.Duration
-}
-
-// DefaultAdapterConfig 返回适配器的默认配置。
-//
-// 返回包含默认缓冲区大小（4096 字节）、最大请求体大小（64KB）
-// 和超时时间（30 秒）的配置实例。
-//
-// 返回值：
-//   - *AdapterConfig: 初始化的适配器默认配置实例
-func DefaultAdapterConfig() *AdapterConfig {
-	return &AdapterConfig{
-		BufferSize:  4096,
-		MaxBodySize: 64 * 1024, // 64KB
-		Timeout:     30 * time.Second,
-	}
-}
-
-// ConfigurableAdapter 是基于配置的可配置适配器。
-type ConfigurableAdapter struct {
-	*FastHTTPHandlerAdapter
-	config *AdapterConfig
-}
-
-// NewConfigurableAdapter 创建可配置的 HTTP/2 适配器。
-//
-// 根据传入的配置参数创建适配器实例，如果配置为 nil 则使用默认配置。
-// 适用于需要自定义缓冲区大小、请求体大小限制或超时时间的场景。
-//
-// 参数：
-//   - handler: fasthttp 请求处理器，用于处理 HTTP/2 请求
-//   - config: 适配器配置，为 nil 时使用默认配置
-//
-// 返回值：
-//   - *ConfigurableAdapter: 初始化的可配置适配器实例
-func NewConfigurableAdapter(handler fasthttp.RequestHandler, config *AdapterConfig) *ConfigurableAdapter {
-	if config == nil {
-		config = DefaultAdapterConfig()
-	}
-	return &ConfigurableAdapter{
-		FastHTTPHandlerAdapter: NewFastHTTPHandlerAdapter(handler),
-		config:                 config,
-	}
-}

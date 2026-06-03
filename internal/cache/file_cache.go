@@ -307,16 +307,6 @@ func (c *FileCache) evictLRU() {
 	c.removeEntry(entry)
 }
 
-// Clear 清空缓存。
-func (c *FileCache) Clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.entries = make(map[string]*FileEntry)
-	c.lruList = list.New()
-	c.currentSize = 0
-}
-
 // Stats 返回缓存统计信息。
 func (c *FileCache) Stats() FileCacheStats {
 	c.mu.RLock()
@@ -525,35 +515,6 @@ func (c *ProxyCache) Set(hashKey uint64, origKey string, data []byte, headers ma
 	}
 }
 
-// AcquireLock 获取缓存生成锁（防止击穿）。
-// 如果返回 nil，表示获得锁，应该去生成缓存。
-// 如果返回 chan，表示有其他请求正在生成，应该等待。
-func (c *ProxyCache) AcquireLock(hashKey uint64) <-chan struct{} {
-	if !c.cacheLock {
-		return nil // 不使用缓存锁
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// 检查是否已有缓存
-	if _, ok := c.entries[hashKey]; ok {
-		return nil
-	}
-
-	// 检查是否有 pending 请求
-	if pending, ok := c.pending[hashKey]; ok {
-		return pending.done // 等待现有请求
-	}
-
-	// 创建新的 pending 请求
-	pending := &pendingRequest{
-		done: make(chan struct{}),
-	}
-	c.pending[hashKey] = pending
-	return nil // 获得锁，应该生成缓存
-}
-
 // AcquireLockWithTimeout 获取缓存生成锁（带超时）。
 // 返回值：
 //   - waitCh != nil && timedOut == false: 需要等待其他请求完成
@@ -701,14 +662,6 @@ func (c *ProxyCache) DeleteByPatternWithMethod(pattern string, method string) in
 	return deleted
 }
 
-// Clear 清空代理缓存。
-func (c *ProxyCache) Clear() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.entries = make(map[uint64]*ProxyCacheEntry)
-	c.pending = make(map[uint64]*pendingRequest)
-}
-
 // RefreshTTL 刷新缓存条目的 TTL（用于 304 响应处理）。
 // 不替换缓存内容，只更新验证时间和验证头。
 // 返回是否成功（条目可能已被驱逐）。
@@ -770,23 +723,6 @@ type ProxyCacheStats struct {
 
 	// Pending 正在等待缓存生成的请求数量
 	Pending int
-}
-
-// ToCacheStats 转换为 CacheStats 格式。
-func (s ProxyCacheStats) ToCacheStats() CacheStats {
-	return CacheStats{
-		Entries: int64(s.Entries),
-	}
-}
-
-// CacheStats 返回缓存统计信息（实现 CacheBackend 接口）。
-func (c *ProxyCache) CacheStats() CacheStats {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	return CacheStats{
-		Entries: int64(len(c.entries)),
-	}
 }
 
 // HashPathWithMethod 使用 FNV-64a 计算路径和方法的哈希值。

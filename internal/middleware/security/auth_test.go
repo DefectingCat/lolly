@@ -11,7 +11,6 @@
 package security
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/valyala/fasthttp"
@@ -266,25 +265,6 @@ func TestBasicAuthUserCount(t *testing.T) {
 	}
 }
 
-func TestHashPasswordBcrypt(t *testing.T) {
-	password := "testpassword"
-
-	hash, err := HashPasswordBcrypt(password, bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatalf("HashPasswordBcrypt() error: %v", err)
-	}
-
-	if hash == "" {
-		t.Error("Expected non-empty hash")
-	}
-
-	// Verify the hash works
-	err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	if err != nil {
-		t.Errorf("Hash verification failed: %v", err)
-	}
-}
-
 func TestValidatePasswordHash(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -491,138 +471,6 @@ func TestBasicAuthHasUser(t *testing.T) {
 
 	if auth.HasUser("nonexistent") {
 		t.Error("Expected nonexistent user to return false")
-	}
-}
-
-func TestHashPasswordArgon2id(t *testing.T) {
-	password := "testpassword"
-	params := argon2Params{
-		time:    2,
-		memory:  32 * 1024,
-		threads: 2,
-		saltLen: 16,
-		keyLen:  32,
-	}
-
-	hash, err := HashPasswordArgon2id(password, params)
-	if err != nil {
-		t.Fatalf("HashPasswordArgon2id() error: %v", err)
-	}
-
-	if hash == "" {
-		t.Error("Expected non-empty hash")
-	}
-
-	if !strings.HasPrefix(hash, "$argon2id$") {
-		t.Errorf("Expected hash to start with $argon2id$, got %s", hash)
-	}
-
-	valid := authenticateArgon2id(password, hash)
-	if !valid {
-		t.Error("Expected argon2id hash to validate")
-	}
-
-	valid = authenticateArgon2id("wrongpassword", hash)
-	if valid {
-		t.Error("Expected wrong password to fail")
-	}
-}
-
-func TestHashPassword(t *testing.T) {
-	password := "testpassword"
-
-	hash, err := HashPassword(password, HashBcrypt)
-	if err != nil {
-		t.Fatalf("HashPassword(bcrypt) error: %v", err)
-	}
-	if !strings.HasPrefix(hash, "$2") {
-		t.Errorf("Expected bcrypt hash, got %s", hash)
-	}
-
-	hash, err = HashPassword(password, HashArgon2id)
-	if err != nil {
-		t.Fatalf("HashPassword(argon2id) error: %v", err)
-	}
-	if !strings.HasPrefix(hash, "$argon2id$") {
-		t.Errorf("Expected argon2id hash, got %s", hash)
-	}
-
-	_, err = HashPassword(password, HashAlgorithm(99))
-	if err == nil {
-		t.Error("Expected error for unknown algorithm")
-	}
-}
-
-func TestParseArgon2idHash(t *testing.T) {
-	password := "testpassword"
-	params := argon2Params{
-		time:    2,
-		memory:  32 * 1024,
-		threads: 2,
-		saltLen: 16,
-		keyLen:  32,
-	}
-
-	hash, _ := HashPasswordArgon2id(password, params)
-
-	parsedParams, salt, expectedHash, err := parseArgon2idHash(hash)
-	if err != nil {
-		t.Fatalf("parseArgon2idHash() error: %v", err)
-	}
-
-	if parsedParams.time != params.time {
-		t.Errorf("Expected time %d, got %d", params.time, parsedParams.time)
-	}
-	if parsedParams.memory != params.memory {
-		t.Errorf("Expected memory %d, got %d", params.memory, parsedParams.memory)
-	}
-	if parsedParams.threads != params.threads {
-		t.Errorf("Expected threads %d, got %d", params.threads, parsedParams.threads)
-	}
-	if len(salt) == 0 {
-		t.Error("Expected non-empty salt")
-	}
-	if len(expectedHash) == 0 {
-		t.Error("Expected non-empty hash")
-	}
-
-	_, _, _, err = parseArgon2idHash("invalid")
-	if err == nil {
-		t.Error("Expected error for invalid hash")
-	}
-
-	_, _, _, err = parseArgon2idHash("$argon2id$v=19$,!@#$%^&*()$base64$")
-	if err == nil {
-		t.Error("Expected error for invalid base64")
-	}
-
-	_, _, _, err = parseArgon2idHash("$argon2id$v=18$m=32,t=2,p=2$salt$hash")
-	if err == nil {
-		t.Error("Expected error for unsupported version")
-	}
-
-	_, _, _, err = parseArgon2idHash("$bcrypt$v=19$m=32,t=2,p=2$salt$hash")
-	if err == nil {
-		t.Error("Expected error for wrong algorithm type")
-	}
-}
-
-func TestAuthenticateArgon2id(t *testing.T) {
-	password := "testpassword"
-	params := defaultArgon2Params
-
-	hash, _ := HashPasswordArgon2id(password, params)
-
-	if !authenticateArgon2id(password, hash) {
-		t.Error("Expected valid password to pass")
-	}
-
-	if authenticateArgon2id("wrong", hash) {
-		t.Error("Expected wrong password to fail")
-	}
-
-	if authenticateArgon2id(password, "invalid") {
-		t.Error("Expected invalid hash to fail")
 	}
 }
 

@@ -78,28 +78,4 @@ func Loader(L *glua.LState) int {
 	return 1
 }
 
-// RegisterGlobal registers the gjson module as a global variable.
-// This allows Lua scripts to use gjson directly without require().
-func RegisterGlobal(L *glua.LState) {
-	mod := L.NewTable()
 
-	instance := &GJSON{
-		config: defaultConfig(),
-		null:   createNull(L),
-	}
-
-	L.SetField(mod, "encode", L.NewFunction(instance.encode))
-	L.SetField(mod, "decode", L.NewFunction(instance.decode))
-	L.SetField(mod, "encode_sparse_array", L.NewFunction(instance.cfgEncodeSparseArray))
-	L.SetField(mod, "encode_max_depth", L.NewFunction(instance.cfgEncodeMaxDepth))
-	L.SetField(mod, "decode_max_depth", L.NewFunction(instance.cfgDecodeMaxDepth))
-	L.SetField(mod, "encode_number_precision", L.NewFunction(instance.cfgEncodeNumberPrecision))
-	L.SetField(mod, "encode_keep_buffer", L.NewFunction(instance.cfgEncodeKeepBuffer))
-	L.SetField(mod, "encode_sort_keys", L.NewFunction(instance.cfgEncodeSortKeys))
-	L.SetField(mod, "new", L.NewFunction(gjsonNew))
-	L.SetField(mod, "null", instance.null)
-	L.SetField(mod, "_NAME", glua.LString(ModuleName))
-	L.SetField(mod, "_VERSION", glua.LString(Version))
-
-	L.SetGlobal(ModuleName, mod)
-}

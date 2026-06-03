@@ -232,58 +232,6 @@ func processIncludes(cfg *Config, baseDir string, depth int, visited map[string]
 	return nil
 }
 
-// LoadFromString 从 YAML 字符串加载配置。
-//
-// 解析 YAML 格式的配置字符串，适用于从环境变量或命令行参数加载配置。
-//
-// 参数：
-//   - yamlStr: YAML 格式的配置字符串
-//
-// 返回值：
-//   - *Config: 解析后的配置对象
-//   - error: 解析或验证失败时的错误信息
-//
-// 注意事项：
-//   - 加载后会自动调用 Validate 进行配置验证
-func LoadFromString(yamlStr string) (*Config, error) {
-	var cfg Config
-	if err := yaml.Unmarshal([]byte(yamlStr), &cfg); err != nil {
-		return nil, fmt.Errorf("解析配置失败: %w", err)
-	}
-
-	if err := Validate(&cfg); err != nil {
-		return nil, fmt.Errorf("配置验证失败: %w", err)
-	}
-
-	return &cfg, nil
-}
-
-// Save 保存配置到文件。
-//
-// 将配置对象序列化为 YAML 格式并写入指定文件。
-//
-// 参数：
-//   - cfg: 配置对象
-//   - path: 目标文件路径
-//
-// 返回值：
-//   - error: 序列化或写入失败时的错误信息
-//
-// 注意事项：
-//   - 文件权限设为 0644
-func Save(cfg *Config, path string) error {
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("序列化配置失败: %w", err)
-	}
-
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("写入配置文件失败: %w", err)
-	}
-
-	return nil
-}
-
 // HasServers 检查是否为多虚拟主机模式。
 //
 // 返回值：

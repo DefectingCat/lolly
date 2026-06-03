@@ -872,7 +872,4 @@ func (s *Server) SetResolver(r resolver.Resolver) {
 	s.resolver = r
 }
 
-// GetResolver 返回 DNS 解析器。
-func (s *Server) GetResolver() resolver.Resolver {
-	return s.resolver
-}
+
