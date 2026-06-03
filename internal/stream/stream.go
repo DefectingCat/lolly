@@ -79,6 +79,9 @@ func newRoundRobin() Balancer {
 	return rr
 }
 
+// Select 选择下一个目标（轮询算法）。
+//
+// 从健康目标列表中按轮询顺序选择。
 func (r *roundRobin) Select(targets []*Target) *Target {
 	// 从池中获取 healthy slice 并复用
 	healthyPtr := r.healthyPool.Get().(*[]*Target) //nolint:errcheck // pool always returns valid *[]*Target
@@ -168,6 +171,9 @@ func newWeightedRoundRobin() Balancer {
 	return w
 }
 
+// Select 选择下一个目标（加权轮询算法）。
+//
+// 从健康目标列表中按权重比例选择。
 func (w *weightedRoundRobin) Select(targets []*Target) *Target {
 	healthyPtr := w.healthyPool.Get().(*[]*Target) //nolint:errcheck // pool always returns valid *[]*Target
 	healthy := *healthyPtr
@@ -241,10 +247,17 @@ func newIPHash() Balancer {
 	return ih
 }
 
+// Select 选择下一个目标（IP 哈希算法）。
+//
+// 委托给 SelectByIP，使用空客户端 IP。
 func (i *ipHash) Select(targets []*Target) *Target {
 	return i.SelectByIP(targets, "")
 }
 
+// SelectByIP 根据客户端 IP 选择目标。
+//
+// 使用 FNV-64a 哈希算法对客户端 IP 进行哈希，从健康目标列表中选择对应的目标。
+// 如果 clientIP 为空，则回退到轮询选择。
 func (i *ipHash) SelectByIP(targets []*Target, clientIP string) *Target {
 	healthyPtr := i.healthyPool.Get().(*[]*Target) //nolint:errcheck // pool always returns valid *[]*Target
 	healthy := *healthyPtr

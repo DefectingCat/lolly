@@ -38,6 +38,7 @@ type wsConfig struct {
 }
 
 // WithHeaders 设置请求头。
+// WithWSHeaders 设置 WebSocket 请求头。
 func WithWSHeaders(headers http.Header) WSOption {
 	return func(c *wsConfig) {
 		c.headers = headers
