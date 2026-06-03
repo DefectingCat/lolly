@@ -19,6 +19,7 @@ import (
 	"slices"
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 // ConsistentHash 一致性哈希负载均衡器。
@@ -31,6 +32,7 @@ type ConsistentHash struct {
 	sortedHashes []uint64
 	virtualNodes int
 	mu           sync.RWMutex
+	rebuilt      atomic.Bool
 }
 
 // NewConsistentHash 创建一致性哈希负载均衡器。
@@ -66,33 +68,22 @@ func (c *ConsistentHash) Select(targets []*Target) *Target {
 // 返回值：
 //   - *Target: 选中的目标，如果没有健康目标则返回 nil
 func (c *ConsistentHash) SelectByKey(targets []*Target, key string) *Target {
+	c.ensureRebuilt(targets)
+
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-
-	// 如果环为空，重建哈希环
-	if len(c.circle) == 0 {
-		c.mu.RUnlock()
-		c.rebuildCircle(targets)
-		c.mu.RLock()
-	}
 
 	if len(c.sortedHashes) == 0 {
 		return nil
 	}
 
-	// 计算键的哈希值
-	hash := c.hashKeyString(key)
-
-	// 二分查找最近的节点
+	hash := fnvHash64a(key)
 	idx := sort.Search(len(c.sortedHashes), func(i int) bool {
 		return c.sortedHashes[i] >= hash
 	})
-
-	// 环形回绕
 	if idx >= len(c.sortedHashes) {
 		idx = 0
 	}
-
 	return c.circle[c.sortedHashes[idx]]
 }
 
@@ -103,6 +94,14 @@ func (c *ConsistentHash) SelectByKey(targets []*Target, key string) *Target {
 // 参数：
 //   - targets: 新的目标列表
 func (c *ConsistentHash) Rebuild(targets []*Target) {
+	c.rebuilt.Store(false)
+	c.rebuildCircle(targets)
+}
+
+func (c *ConsistentHash) ensureRebuilt(targets []*Target) {
+	if c.rebuilt.Load() {
+		return
+	}
 	c.rebuildCircle(targets)
 }
 
@@ -139,6 +138,7 @@ func (c *ConsistentHash) rebuildCircle(targets []*Target) {
 
 	// 排序哈希值
 	slices.Sort(c.sortedHashes)
+	c.rebuilt.Store(true)
 }
 
 // hashKeyString 计算字符串的哈希值（使用 FNV-64a）。
@@ -234,14 +234,9 @@ func (c *ConsistentHash) SelectExcluding(targets []*Target, excluded []*Target) 
 // 若不一致（如多上游组场景），targetSet 校验将拒绝所有候选，返回 nil。
 // 调用方应在 targets 列表变化时调用 Rebuild() 更新主哈希环。
 func (c *ConsistentHash) SelectExcludingByKey(targets []*Target, excluded []*Target, key string) *Target {
-	c.mu.RLock()
+	c.ensureRebuilt(targets)
 
-	// 如果环为空，尝试重建
-	if len(c.circle) == 0 {
-		c.mu.RUnlock()
-		c.rebuildCircle(targets)
-		c.mu.RLock()
-	}
+	c.mu.RLock()
 
 	fc := acquireFilterContext()
 	defer releaseFilterContext(fc)
