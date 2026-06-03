@@ -187,6 +187,9 @@ func (a *App) reloadConfig() {
 	for i, ln := range listeners {
 		duped[i], err = server.DupListener(ln)
 		if err != nil {
+			for j := 0; j < i; j++ {
+				_ = duped[j].Close()
+			}
 			a.logger.Error().Err(err).Msg("Failed to dup listener for reload")
 			return
 		}
@@ -205,6 +208,11 @@ func (a *App) reloadConfig() {
 		}
 	}()
 
+	reloadTimeout := a.cfg.Shutdown.ReloadTimeout
+	if reloadTimeout <= 0 {
+		reloadTimeout = 5 * time.Second
+	}
+
 	select {
 	case err := <-startErr:
 		a.logger.Error().Err(err).Msg("Failed to start new server with reloaded config")
@@ -212,7 +220,7 @@ func (a *App) reloadConfig() {
 			_ = ln.Close()
 		}
 		return
-	case <-time.After(5 * time.Second):
+	case <-time.After(reloadTimeout):
 	}
 
 	oldSrv := a.srv

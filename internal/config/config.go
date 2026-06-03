@@ -140,7 +140,10 @@ func Load(path string) (*Config, error) {
 	}
 
 	if len(cfg.Include) > 0 {
-		absPath, _ := filepath.Abs(path)
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return nil, fmt.Errorf("获取配置文件绝对路径失败: %w", err)
+		}
 		visited := map[string]bool{absPath: true}
 		if err := processIncludes(&cfg, filepath.Dir(path), 0, visited); err != nil {
 			return nil, fmt.Errorf("处理配置引入失败: %w", err)
@@ -176,7 +179,10 @@ func processIncludes(cfg *Config, baseDir string, depth int, visited map[string]
 		}
 
 		for _, match := range matches {
-			absMatch, _ := filepath.Abs(match)
+			absMatch, err := filepath.Abs(match)
+			if err != nil {
+				return fmt.Errorf("获取引入文件绝对路径失败 %q: %w", match, err)
+			}
 			if visited[absMatch] {
 				return fmt.Errorf("检测到循环引入: %s", absMatch)
 			}

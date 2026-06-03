@@ -409,7 +409,11 @@ func (s *Server) tcpAddrMatch(inherited, target string) bool {
 }
 
 func isAnyAddr(host string) bool {
-	return host == "" || host == "0.0.0.0" || host == "::" || host == "[::]"
+	if host == "" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsUnspecified()
 }
 
 // DupListener 复制 listener 的文件描述符，返回独立的 listener。
@@ -422,12 +426,14 @@ func DupListener(ln net.Listener) (net.Listener, error) {
 		if err != nil {
 			return nil, fmt.Errorf("dup tcp listener: %w", err)
 		}
+		defer file.Close()
 		return net.FileListener(file)
 	case *net.UnixListener:
 		file, err := l.File()
 		if err != nil {
 			return nil, fmt.Errorf("dup unix listener: %w", err)
 		}
+		defer file.Close()
 		return net.FileListener(file)
 	default:
 		return nil, fmt.Errorf("unsupported listener type: %T", ln)
