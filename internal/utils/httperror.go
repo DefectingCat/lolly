@@ -76,13 +76,7 @@ func CheckIPAccess(ctx *fasthttp.RequestCtx, allowed []net.IPNet) bool {
 		return false
 	}
 
-	for _, network := range allowed {
-		if network.Contains(clientIP) {
-			return true
-		}
-	}
-
-	return false
+	return IPInAllowList(clientIP, allowed)
 }
 
 // CheckTokenAuth checks token-based authentication.
