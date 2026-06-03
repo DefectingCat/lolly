@@ -1819,11 +1819,9 @@ func TestTargetRecordSuccess(t *testing.T) {
 		target.RecordFailure()
 		target.RecordFailure()
 		target.RecordSuccess()
-		target.failMu.Lock()
-		if target.failCount != 0 {
+		if target.failCount.Load() != 0 {
 			t.Error("fail count should be reset after success")
 		}
-		target.failMu.Unlock()
 		if !target.IsAvailable() {
 			t.Error("target should be available after success resets cooldown")
 		}

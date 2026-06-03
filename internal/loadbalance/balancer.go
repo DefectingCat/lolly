@@ -63,10 +63,8 @@ type Target struct {
 	// ProxyURI 代理传递的 URI 路径
 	ProxyURI string
 
-	// failMu 保护 failCount 和 failedUntil 的协调更新
-	failMu      sync.Mutex
-	failCount   int64
-	failedUntil int64
+	failCount   atomic.Int64
+	failedUntil atomic.Int64
 
 	// 慢启动相关字段
 	// EffectiveWeight 当前有效权重（慢启动期间动态变化）
@@ -298,17 +296,17 @@ func (t *Target) IsAvailable() bool {
 		return false
 	}
 	if t.MaxFails > 0 {
-		t.failMu.Lock()
-		if t.failCount >= t.MaxFails && time.Now().UnixNano() < t.failedUntil {
-			t.failMu.Unlock()
-			return false
+		failCount := t.failCount.Load()
+		if failCount >= t.MaxFails {
+			failedUntil := t.failedUntil.Load()
+			if time.Now().UnixNano() < failedUntil {
+				return false
+			}
+			if failedUntil > 0 {
+				t.failCount.Store(0)
+				t.failedUntil.Store(0)
+			}
 		}
-		// 冷却已过期，重置软状态
-		if t.failCount >= t.MaxFails && t.failedUntil > 0 {
-			t.failCount = 0
-			t.failedUntil = 0
-		}
-		t.failMu.Unlock()
 	}
 	return true
 }
@@ -320,17 +318,14 @@ func (t *Target) RecordFailure() int64 {
 	if t.MaxFails <= 0 {
 		return 0
 	}
-	t.failMu.Lock()
-	t.failCount++
-	count := t.failCount
+	count := t.failCount.Add(1)
 	if count >= t.MaxFails {
 		timeout := t.FailTimeout
 		if timeout <= 0 {
 			timeout = 10 * time.Second
 		}
-		t.failedUntil = time.Now().Add(timeout).UnixNano()
+		t.failedUntil.Store(time.Now().Add(timeout).UnixNano())
 	}
-	t.failMu.Unlock()
 	return count
 }
 
@@ -340,10 +335,8 @@ func (t *Target) RecordSuccess() {
 	if t.MaxFails <= 0 {
 		return
 	}
-	t.failMu.Lock()
-	t.failCount = 0
-	t.failedUntil = 0
-	t.failMu.Unlock()
+	t.failCount.Store(0)
+	t.failedUntil.Store(0)
 }
 
 // IsBackup 返回目标是否为备份服务器。
