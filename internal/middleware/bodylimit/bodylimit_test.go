@@ -48,29 +48,6 @@ func TestParseSize(t *testing.T) {
 	}
 }
 
-// TestFormatSize 测试字节数格式化。
-func TestFormatSize(t *testing.T) {
-	tests := []struct {
-		input    int64
-		expected string
-	}{
-		{512, "512b"},
-		{1024, "1.00kb"},
-		{1024 * 1024, "1.00mb"},
-		{1024 * 1024 * 1024, "1.00gb"},
-		{1536, "1.50kb"},
-	}
-
-	for _, tt := range tests {
-		t.Run(formatSize(tt.input), func(t *testing.T) {
-			got := formatSize(tt.input)
-			if got != tt.expected {
-				t.Errorf("formatSize(%d) = %s, want %s", tt.input, got, tt.expected)
-			}
-		})
-	}
-}
-
 // TestNew 测试创建中间件。
 func TestNew(t *testing.T) {
 	tests := []struct {

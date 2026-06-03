@@ -276,30 +276,4 @@ func ParseSize(sizeStr string) (int64, error) {
 	return int64(value * multiplier), nil
 }
 
-// formatSize 将字节数格式化为人类可读的字符串。
-//
-// 根据大小自动选择合适的单位（b、kb、mb、gb）。
-//
-// 参数：
-//   - size: 字节数
-//
-// 返回值：
-//   - string: 格式化后的字符串，如 "1.00mb"、"10.00kb"
-func formatSize(size int64) string {
-	const (
-		KB = 1024
-		MB = 1024 * KB
-		GB = 1024 * MB
-	)
 
-	switch {
-	case size >= GB:
-		return fmt.Sprintf("%.2fgb", float64(size)/GB)
-	case size >= MB:
-		return fmt.Sprintf("%.2fmb", float64(size)/MB)
-	case size >= KB:
-		return fmt.Sprintf("%.2fkb", float64(size)/KB)
-	default:
-		return fmt.Sprintf("%db", size)
-	}
-}
