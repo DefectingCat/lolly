@@ -1,60 +1,64 @@
-<!-- Generated: 2026-04-02 | Updated: 2026-04-24 -->
-
 # lolly
 
-## Purpose
-高性能 HTTP 服务器，类似 nginx 的纯 Go 实现。使用 YAML 配置，单二进制运行，支持静态文件服务、反向代理、负载均衡、SSL/TLS、安全控制等功能。
+高性能 HTTP 服务器，类似 nginx 的纯 Go 实现。YAML 配置，单二进制，支持反向代理、负载均衡、SSL/TLS、HTTP/2、HTTP/3、Lua 脚本。
 
-## Key Files
+Module: `rua.plus/lolly` | Go 1.26+ | CGO disabled (static builds)
 
-| File | Description |
-|------|-------------|
-| `main.go` | 程序入口，CLI 参数解析和启动逻辑 |
-| `go.mod` | Go 模块定义，依赖 fasthttp、zerolog、yaml.v3 |
-| `go.sum` | 依赖版本锁定 |
-| `Makefile` | 构建脚本，支持多平台编译、测试、覆盖率 |
-| `lolly.yaml` | 默认配置文件示例 |
-| `.gitignore` | Git 忽略规则 |
+## Commands
 
-## Subdirectories
+```
+make build              # static build → bin/lolly
+make test               # unit tests only (./internal/...)
+make test-integration   # L2 integration tests (build tag: integration)
+make test-e2e           # L3 E2E tests (build tag: e2e, requires Docker)
+make test-all           # all three in parallel
+make fmt                # gofumpt (not go fmt)
+make lint               # golangci-lint (falls back to go vet)
+make check              # fmt → lint → test-all
+```
 
-| Directory | Purpose |
-|-----------|---------|
-| `internal/` | 核心业务代码（不可被外部导入） |
-| `bin/` | 编译输出目录 |
-| `docs/` | 项目文档和实现计划 |
-| `examples/` | Lua 脚本示例 |
-| `html/` | 静态 HTML 文件（测试/示例） |
-| `scripts/` | 构建/测试辅助脚本（回归检测） |
+Run a single test or package:
+```
+go test -v -run TestName ./internal/config/...
+go test -v ./internal/server/...
+```
 
-## For AI Agents
+Integration/E2E require build tags:
+```
+go test -v -tags=integration ./internal/integration/...
+go test -v -tags=e2e ./internal/e2e/...
+```
 
-### Working In This Directory
-- 这是 Go 项目，使用 `go mod` 管理依赖
-- 使用 `make build` 构建二进制文件到 `bin/` 目录
-- 使用 `make test` 运行测试，`make test-cover` 生成覆盖率报告
-- 配置文件使用 YAML 格式，结构定义在 `internal/config/config.go`
-- HTTP 库使用 fasthttp（比 net/http 快 6 倍），路由使用 fasthttp/router
-- 日志库使用 zerolog（零分配，JSON 输出）
+## Architecture
 
-### Testing Requirements
-- 运行测试前确保依赖已下载：`go mod download`
-- 测试覆盖率目标 >80%
-- 使用 `make check` 运行完整检查（fmt + lint + test）
-- 使用 `lolly --generate-config` 生成完整配置文件模板
+- `main.go` → `internal/app` — CLI entry; `app.Run()` owns lifecycle
+- `internal/config` — YAML config structs; `config.go` is the root, split into `server_config.go`, `ssl_config.go`, `proxy_config.go`, etc.
+- `internal/server` — HTTP server core: routing, middleware chain, vhosts, upgrade/reload, connection pool
+- `internal/proxy` — reverse proxy + load balancing
+- `internal/middleware/` — individual middleware packages (compression, bodylimit, security, rewrite, accesslog, errorintercept)
+- `internal/handler` — static file handler and other request handlers
+- `internal/lua` — embedded Lua scripting (gopher-lua)
+- `internal/converter/nginx` — nginx config importer
+- `internal/{http2,http3,stream,ssl,sslutil,cache,loadbalance,resolver,logging,variable,matcher}` — supporting packages
+- `internal/e2e` — L3 E2E tests (testcontainers, build tag `e2e`)
+- `internal/integration` — L2 integration tests (build tag `integration`)
 
-### Common Patterns
-- 配置结构体使用 `yaml` 标签，通过 `gopkg.in/yaml.v3` 解析
-- 中间件使用 `fasthttp.RequestHandler` 函数签名
-- 版本信息通过 `-ldflags` 在编译时注入
-- 信号处理：SIGTERM/SIGINT 快速停止，SIGQUIT 优雅停止
+## Key Conventions
 
-## Dependencies
+- HTTP stack: **fasthttp** + **fasthttp/router** (NOT net/http). All handlers use `fasthttp.RequestHandler` signature.
+- Logging: **zerolog** (zero-alloc JSON). No fmt.Printf or log.Printf in production code.
+- Config: YAML with `yaml` struct tags, parsed by `gopkg.in/yaml.v3`.
+- Version: injected at build time via `-ldflags -X` into `internal/version`.
+- Signals: SIGTERM/SIGINT = fast stop, SIGQUIT = graceful stop. Graceful upgrade via `internal/server/upgrade.go`.
+- Formatter: **gofumpt** (stricter than gofmt). `make fmt` runs it.
+- Linter: **golangci-lint** with v2 config (`.golangci.yml`). Uses `default: all` with many disabled — don't add new linter warnings.
+- Build: always `CGO_ENABLED=0`, static linked, `-trimpath`.
+- Tests use **testify** assertions.
 
-### External
-- `github.com/valyala/fasthttp` - 高性能 HTTP 服务器
-- `github.com/fasthttp/router` - 基于 radix tree 的路由器
-- `github.com/rs/zerolog` - 零分配 JSON 日志库
-- `gopkg.in/yaml.v3` - YAML 解析库
+## Gotchas
 
-<!-- MANUAL: -->
+- fasthttp uses `[]byte` strings, NOT `string`. Use `[]byte("literal")` or `fasthttp.AcquireRequest()` patterns. Don't mix net/http types.
+- E2E tests need Docker running (testcontainers-go). If Docker is unavailable, run `make test-e2e-short` for testutil-only tests.
+- Config file path defaults to `lolly.yaml` in CWD. Use `-c path` or `--config path`.
+- `--generate-config` outputs a full config template; `-o file` writes to file.
+- `--import nginx.conf` converts nginx config to lolly YAML.
