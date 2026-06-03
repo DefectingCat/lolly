@@ -431,25 +431,25 @@ func TestConnectionPoolOperations(t *testing.T) {
 	pool.add("client1", conn2)
 
 	// 验证连接数
-	if count := pool.count("client1"); count != 2 {
+	if count := len(pool.conns["client1"]); count != 2 {
 		t.Errorf("Expected 2 connections, got %d", count)
 	}
 
 	// 获取连接
-	conns := pool.get("client1")
+	conns := pool.conns["client1"]
 	if len(conns) != 2 {
 		t.Errorf("Expected 2 connections, got %d", len(conns))
 	}
 
 	// 移除连接
 	pool.remove("client1", conn1)
-	if count := pool.count("client1"); count != 1 {
+	if count := len(pool.conns["client1"]); count != 1 {
 		t.Errorf("Expected 1 connection after removal, got %d", count)
 	}
 
 	// 关闭所有连接
 	pool.closeAll()
-	if count := pool.count("client1"); count != 0 {
+	if count := len(pool.conns["client1"]); count != 0 {
 		t.Errorf("Expected 0 connections after closeAll, got %d", count)
 	}
 }

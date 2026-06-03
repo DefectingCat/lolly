@@ -444,19 +444,19 @@ func TestConnectionPool(t *testing.T) {
 		pool.add("key1", conn1)
 
 		// 测试获取连接
-		conns := pool.get("key1")
+		conns := pool.conns["key1"]
 		if len(conns) != 1 {
 			t.Errorf("Expected 1 connection, got %d", len(conns))
 		}
 
 		// 测试计数
-		if count := pool.count("key1"); count != 1 {
+		if count := len(pool.conns["key1"]); count != 1 {
 			t.Errorf("Expected count 1, got %d", count)
 		}
 
 		// 测试移除连接
 		pool.remove("key1", conn1)
-		if count := pool.count("key1"); count != 0 {
+		if count := len(pool.conns["key1"]); count != 0 {
 			t.Errorf("Expected count 0 after remove, got %d", count)
 		}
 	}
@@ -953,7 +953,7 @@ func TestConnectionPool_CloseAll(t *testing.T) {
 	pool.closeAll()
 
 	// 验证连接池已清空
-	if count := pool.count("key1"); count != 0 {
+	if count := len(pool.conns["key1"]); count != 0 {
 		t.Errorf("Expected count 0 after closeAll, got %d", count)
 	}
 }

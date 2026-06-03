@@ -572,20 +572,6 @@ func (p *connectionPool) remove(key string, conn net.Conn) {
 	}
 }
 
-// get 获取连接。
-func (p *connectionPool) get(key string) []net.Conn {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.conns[key]
-}
-
-// count 获取连接数。
-func (p *connectionPool) count(key string) int {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return len(p.conns[key])
-}
-
 // closeAll 关闭所有连接。
 func (p *connectionPool) closeAll() {
 	p.mu.Lock()
