@@ -709,22 +709,28 @@ func (s *Server) startVHostMode() error {
 //
 // 注意事项：
 //   - 每个服务器有独立的中间件配置
-//   - 热升级场景下回退到虚拟主机模式
 //   - 使用 goroutine 并行启动多个服务器
 func (s *Server) startMultiServerMode() error {
-	// 热升级检测：multi_server 热升级未实现，回退到 vhost 模式
-	if os.Getenv("GRACEFUL_UPGRADE") == "1" {
-		logging.Warn().Msg("multi_server mode not implemented for graceful upgrade, falling back to vhost mode")
-		return s.startVHostMode()
-	}
-
 	s.fastServers = make([]*fasthttp.Server, len(s.config.Servers))
 	s.listeners = make([]net.Listener, len(s.config.Servers))
+
+	for i := range s.config.Servers {
+		serverCfg := &s.config.Servers[i]
+		ln, err := s.createListener(serverCfg)
+		if err != nil {
+			for j := 0; j < i; j++ {
+				if s.listeners[j] != nil {
+					_ = s.listeners[j].Close()
+				}
+			}
+			return fmt.Errorf("failed to listen on %s: %w", serverCfg.Listen, err)
+		}
+		s.listeners[i] = ln
+	}
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(s.config.Servers))
 
-	// 并行创建监听器和 fasthttp.Server
 	for i := range s.config.Servers {
 		wg.Add(1)
 		go func(idx int) {
@@ -732,15 +738,6 @@ func (s *Server) startMultiServerMode() error {
 
 			serverCfg := &s.config.Servers[idx]
 
-			// 创建监听器
-			ln, err := s.createListener(serverCfg)
-			if err != nil {
-				errCh <- fmt.Errorf("failed to listen on %s: %w", serverCfg.Listen, err)
-				return
-			}
-			s.listeners[idx] = ln
-
-			// 创建路由器
 			router := handler.NewRouter()
 
 			// 注册状态监控端点（仅默认服务器）
