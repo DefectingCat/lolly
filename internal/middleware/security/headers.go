@@ -288,47 +288,5 @@ func (sh *HeadersMiddleware) GetConfig() *config.SecurityHeaders {
 	return sh.config
 }
 
-// defaultSecurityHeaders 返回安全的安全头默认配置。
-//
-// 返回值：
-//   - *config.SecurityHeaders: 包含安全默认值的配置对象
-func defaultSecurityHeaders() *config.SecurityHeaders {
-	return &config.SecurityHeaders{
-		XFrameOptions:       "DENY",
-		XContentTypeOptions: "nosniff",
-		ReferrerPolicy:      "strict-origin-when-cross-origin",
-	}
-}
-
-// strictSecurityHeaders 返回严格模式的安全头配置。
-//
-// 适用于高安全要求的应用场景，包含严格的 CSP 和权限策略。
-//
-// 返回值：
-//   - *config.SecurityHeaders: 包含严格安全值的配置对象
-func strictSecurityHeaders() *config.SecurityHeaders {
-	return &config.SecurityHeaders{
-		XFrameOptions:         "DENY",
-		XContentTypeOptions:   "nosniff",
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
-		ReferrerPolicy:        "no-referrer",
-		PermissionsPolicy:     "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
-	}
-}
-
-// developmentSecurityHeaders 返回开发环境使用的宽松安全头配置。
-//
-// 警告：请勿在生产环境使用此配置，安全性较低。
-//
-// 返回值：
-//   - *config.SecurityHeaders: 包含宽松安全值的配置对象
-func developmentSecurityHeaders() *config.SecurityHeaders {
-	return &config.SecurityHeaders{
-		XFrameOptions:       "SAMEORIGIN",
-		XContentTypeOptions: "nosniff",
-		ReferrerPolicy:      "strict-origin-when-cross-origin",
-	}
-}
-
 // 验证接口实现
 var _ middleware.Middleware = (*HeadersMiddleware)(nil)

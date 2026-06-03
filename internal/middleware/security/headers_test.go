@@ -181,39 +181,6 @@ func TestUpdateConfig(t *testing.T) {
 	}
 }
 
-func TestDefaultSecurityHeaders(t *testing.T) {
-	cfg := defaultSecurityHeaders()
-
-	if cfg.XFrameOptions != "DENY" {
-		t.Errorf("Expected default X-Frame-Options 'DENY', got %s", cfg.XFrameOptions)
-	}
-	if cfg.XContentTypeOptions != "nosniff" {
-		t.Errorf("Expected default X-Content-Type-Options 'nosniff', got %s", cfg.XContentTypeOptions)
-	}
-}
-
-func TestStrictSecurityHeaders(t *testing.T) {
-	cfg := strictSecurityHeaders()
-
-	if cfg.XFrameOptions != "DENY" {
-		t.Errorf("Expected X-Frame-Options 'DENY', got %s", cfg.XFrameOptions)
-	}
-	if cfg.ReferrerPolicy != "no-referrer" {
-		t.Errorf("Expected Referrer-Policy 'no-referrer', got %s", cfg.ReferrerPolicy)
-	}
-	if cfg.ContentSecurityPolicy == "" {
-		t.Error("Expected non-empty CSP for strict config")
-	}
-}
-
-func TestDevelopmentSecurityHeaders(t *testing.T) {
-	cfg := developmentSecurityHeaders()
-
-	if cfg.XFrameOptions != "SAMEORIGIN" {
-		t.Errorf("Expected X-Frame-Options 'SAMEORIGIN' for dev, got %s", cfg.XFrameOptions)
-	}
-}
-
 func TestFormatHSTSValue(t *testing.T) {
 	tests := []struct {
 		name              string
