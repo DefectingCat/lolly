@@ -463,26 +463,6 @@ func validatePathConflicts(s *ServerConfig) error {
 	return nil
 }
 
-// validateStatic 验证静态文件配置。
-//
-// 检查静态文件根目录路径的安全性，防止路径遍历攻击。
-//
-// 参数：
-//   - s: 静态文件配置对象
-//
-// 返回值：
-//   - error: 验证失败时返回错误信息，成功返回 nil
-func validateStatic(s *StaticConfig) error {
-	// 静态文件根目录非空时验证路径有效性
-	if s.Root != "" {
-		// 路径安全检查：不允许包含 ".."
-		if err := ValidatePathTraversal(s.Root, "根目录路径"); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // validateProxy 验证代理配置。
 //
 // 检查代理路径、目标地址和负载均衡算法的有效性。

@@ -749,65 +749,6 @@ func TestValidateAccess(t *testing.T) {
 	}
 }
 
-func TestValidateStatic(t *testing.T) {
-	t.Parallel()
-	// TestValidateStatic 测试静态文件配置验证。
-	tests := []struct {
-		name    string
-		errMsg  string
-		config  StaticConfig
-		wantErr bool
-	}{
-		{
-			name:    "空配置有效",
-			config:  StaticConfig{},
-			wantErr: false,
-		},
-		{
-			name: "有效根目录",
-			config: StaticConfig{
-				Root: "/var/www/html",
-			},
-			wantErr: false,
-		},
-		{
-			name: "根目录含..路径遍历",
-			config: StaticConfig{
-				Root: "/var/www/../etc",
-			},
-			wantErr: true,
-			errMsg:  "根目录路径不能包含 '..'",
-		},
-		{
-			name: "根目录含多个..",
-			config: StaticConfig{
-				Root: "/var/../www/../html",
-			},
-			wantErr: true,
-			errMsg:  "根目录路径不能包含 '..'",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateStatic(&tt.config)
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("validateStatic() 期望返回错误，但返回 nil")
-					return
-				}
-				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
-					t.Errorf("validateStatic() 错误消息不匹配，期望包含 %q，实际 %q", tt.errMsg, err.Error())
-				}
-			} else {
-				if err != nil {
-					t.Errorf("validateStatic() 期望返回 nil，但返回错误: %v", err)
-				}
-			}
-		})
-	}
-}
-
 func TestValidateSecurity(t *testing.T) {
 	t.Parallel()
 	// TestValidateSecurity 测试安全配置验证。
