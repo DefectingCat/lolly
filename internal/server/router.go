@@ -218,10 +218,6 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 			if err := s.registerRoute(locType, path, staticHandler.Handle, static.Internal, "static"); err != nil {
 				return err
 			}
-		case matcher.LocationTypeRegex, matcher.LocationTypeRegexCaseless:
-			if err := s.registerRoute(locType, path, staticHandler.Handle, static.Internal, "static"); err != nil {
-				return err
-			}
 		case matcher.LocationTypePrefix:
 			if err := s.registerRoute(locType, path, staticHandler.Handle, static.Internal, "static"); err != nil {
 				return err

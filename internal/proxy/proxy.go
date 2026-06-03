@@ -56,10 +56,8 @@ import (
 )
 
 // proxyDebugLog 在 DEBUG 级别记录代理日志
+// 调用者必须先检查 logging.Debug().Enabled() 以避免不必要的内存分配
 func proxyDebugLog(msg string, kv ...interface{}) {
-	if !logging.Debug().Enabled() {
-		return
-	}
 	event := logging.Debug()
 	for i := 0; i < len(kv)-1; i += 2 {
 		key, ok := kv[i].(string)
@@ -73,6 +71,8 @@ func proxyDebugLog(msg string, kv ...interface{}) {
 			event = event.Int(key, v)
 		case bool:
 			event = event.Bool(key, v)
+		default:
+			event = event.Interface(key, v)
 		}
 	}
 	event.Msg(msg)
@@ -489,11 +489,13 @@ func FinalizeUpstreamVars(vc *variable.Context, upstreamAddr string, upstreamSta
 // 如果没有可用的健康目标，返回 502 Bad Gateway。
 // 如果后端请求失败，根据 next_upstream 配置尝试下一个目标。
 func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
-	proxyDebugLog("[PROXY] 收到请求",
-		"path", b2s(ctx.Path()),
-		"host", b2s(ctx.Host()),
-		"method", b2s(ctx.Method()),
-	)
+	if logging.Debug().Enabled() {
+		proxyDebugLog("[PROXY] 收到请求",
+			"path", b2s(ctx.Path()),
+			"host", b2s(ctx.Host()),
+			"method", b2s(ctx.Method()),
+		)
+	}
 
 	// 上游变量捕获
 	var upstreamAddr string
@@ -552,10 +554,12 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		attemptedTargets = append(attemptedTargets, target)
 
-		proxyDebugLog("[PROXY] 选中目标",
-			"url", target.URL,
-			"healthy", target.Healthy.Load(),
-		)
+		if logging.Debug().Enabled() {
+			proxyDebugLog("[PROXY] 选中目标",
+				"url", target.URL,
+				"healthy", target.Healthy.Load(),
+			)
+		}
 
 		// 获取所选目标的客户端
 		client := p.getClient(target.URL)
@@ -568,10 +572,12 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			continue
 		}
 
-		proxyDebugLog("[PROXY] client 信息",
-			"addr", client.Addr,
-			"isTLS", client.IsTLS,
-		)
+		if logging.Debug().Enabled() {
+			proxyDebugLog("[PROXY] client 信息",
+				"addr", client.Addr,
+				"isTLS", client.IsTLS,
+			)
+		}
 
 		// 增加连接计数（用于最少连接数负载均衡）
 		loadbalance.IncrementConnections(target)
@@ -637,11 +643,13 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		}
 		req.SetRequestURIBytes(targetURI)
 
-		proxyDebugLog("[PROXY] 请求准备完成",
-			"host", b2s(req.Header.Host()),
-			"uri", b2s(req.RequestURI()),
-			"targetURI", b2s(targetURI),
-		)
+		if logging.Debug().Enabled() {
+			proxyDebugLog("[PROXY] 请求准备完成",
+				"host", b2s(req.Header.Host()),
+				"uri", b2s(req.RequestURI()),
+				"targetURI", b2s(targetURI),
+			)
+		}
 
 		// 尝试从缓存获取（如果启用）
 		if p.cache != nil && attempt == 0 {
@@ -723,10 +731,12 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		if err != nil {
 			logging.Error().Msgf("[PROXY] 请求失败: url=%s, err=%v, errType=%T", target.URL, err, err)
 		} else {
-			proxyDebugLog("[PROXY] 请求成功",
-				"url", target.URL,
-				"status", ctx.Response.StatusCode(),
-			)
+			if logging.Debug().Enabled() {
+				proxyDebugLog("[PROXY] 请求成功",
+					"url", target.URL,
+					"status", ctx.Response.StatusCode(),
+				)
+			}
 		}
 
 		if err != nil {
