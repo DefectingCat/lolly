@@ -625,7 +625,7 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 //   - info: 文件信息（用于判断文件大小和修改时间）
 func (h *StaticHandler) serveFile(ctx *fasthttp.RequestCtx, filePath string, info os.FileInfo, skipCacheLookup bool) {
 	// 生成 ETag 并检查条件请求（在预压缩检查之前）
-	etag := generateETag(info.ModTime(), info.Size())
+	etag := utils.GenerateETag(info.ModTime(), info.Size())
 	if isNotModified(ctx, etag, info.ModTime()) {
 		ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
 		ctx.Response.Header.Set("ETag", etag)
@@ -827,12 +827,6 @@ func (h *StaticHandler) validateSymlink(filePath string) error {
 	}
 
 	return nil
-}
-
-// generateETag 基于 ModTime 和 Size 生成 ETag。
-// 使用 strconv.AppendInt 避免 fmt.Sprintf 分配。
-func generateETag(modTime time.Time, size int64) string {
-	return utils.GenerateETag(modTime, size)
 }
 
 // isNotModified 检查条件请求是否匹配（返回 true 表示应返回 304）。

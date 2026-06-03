@@ -42,12 +42,6 @@ type FileEntry struct {
 	ContentType string // 预计算的 MIME 类型，避免每次请求重新检测
 }
 
-// generateETag 基于 ModTime 和 Size 生成 ETag。
-// 使用 strconv.AppendInt 避免 fmt.Sprintf 分配。
-func generateETag(modTime time.Time, size int64) string {
-	return utils.GenerateETag(modTime, size)
-}
-
 // FileCache 文件缓存，支持 LRU 淘汰策略。
 //
 // 该结构体实现了基于内存的文件缓存，支持按条目数和内存大小限制进行淘汰。
@@ -178,7 +172,7 @@ func (c *FileCache) Set(path string, data []byte, size int64, modTime time.Time,
 	defer c.mu.Unlock()
 
 	// 预计算 ETag
-	etag := generateETag(modTime, size)
+	etag := utils.GenerateETag(modTime, size)
 
 	// 检查是否已存在
 	if entry, ok := c.entries[path]; ok {
