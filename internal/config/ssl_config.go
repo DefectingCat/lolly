@@ -1,3 +1,8 @@
+// Package config 提供 YAML 配置文件的解析、验证和默认配置生成功能。
+//
+// 包含 SSL/TLS 配置相关的结构体，用于配置 HTTPS 加密参数。
+//
+// 作者：xfy
 package config
 
 import "time"

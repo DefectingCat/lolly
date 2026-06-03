@@ -1,3 +1,8 @@
+// Package config 提供 YAML 配置文件的解析、验证和默认配置生成功能。
+//
+// 包含监控配置相关的结构体，用于配置服务状态监控和健康检查端点。
+//
+// 作者：xfy
 package config
 
 // MonitoringConfig 监控配置。
