@@ -110,30 +110,6 @@ func TestNewApp(t *testing.T) {
 	}
 }
 
-// TestSetPidFile 测试 SetPidFile setter 方法。
-func TestSetPidFile(t *testing.T) {
-	app := NewApp("/test/config.yaml")
-	pidPath := "/var/run/lolly.pid"
-
-	app.SetPidFile(pidPath)
-
-	if app.pidFile != pidPath {
-		t.Errorf("pidFile = %q, want %q", app.pidFile, pidPath)
-	}
-}
-
-// TestSetLogFile 测试 SetLogFile setter 方法。
-func TestSetLogFile(t *testing.T) {
-	app := NewApp("/test/config.yaml")
-	logPath := "/var/log/lolly.log"
-
-	app.SetLogFile(logPath)
-
-	if app.logFile != logPath {
-		t.Errorf("logFile = %q, want %q", app.logFile, logPath)
-	}
-}
-
 // TestSigName 测试信号名称辅助函数。
 func TestSigName(t *testing.T) {
 	tests := []struct {

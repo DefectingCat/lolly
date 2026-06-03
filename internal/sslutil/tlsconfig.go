@@ -15,31 +15,6 @@ const (
 	tlsV13Upper = "TLSV1.3"
 )
 
-// ParseTLSVersion parses a TLS version string to a tls constant.
-//
-// Parameters:
-//   - version: TLS version string (e.g., "TLSv1.0", "TLSv1.1", "TLSv1.2", "TLSv1.3")
-//
-// Returns:
-//   - uint16: TLS version constant
-//   - error: Invalid version string returns error
-func ParseTLSVersion(version string) (uint16, error) {
-	switch version {
-	case "TLSv1.0", "TLSV1.0":
-		return tls.VersionTLS10, nil
-	case "TLSv1.1", "TLSV1.1":
-		return tls.VersionTLS11, nil
-	case tlsV12Lower, tlsV12Upper:
-		return tls.VersionTLS12, nil
-	case tlsV13Lower, tlsV13Upper:
-		return tls.VersionTLS13, nil
-	case "":
-		return 0, nil // Empty string means use default
-	default:
-		return 0, fmt.Errorf("invalid TLS version: %s", version)
-	}
-}
-
 // ParseTLSVersions parses TLS protocol version strings.
 //
 // Returns minimum and maximum TLS versions.
