@@ -173,8 +173,12 @@ func (e *LocationEngine) AddNamed(name string, handler fasthttp.RequestHandler) 
 		return errors.New("LocationEngine already initialized")
 	}
 
-	if existing, ok := e.namedMatchers[name]; ok {
-		return fmt.Errorf("named location '@%s' already registered", existing.name)
+	if _, ok := e.namedMatchers[name]; ok {
+		return &ConflictError{
+			Path:         "@" + name,
+			ExistingType: "named",
+			NewType:      "named",
+		}
 	}
 
 	matcher := NewNamedMatcher(name, handler)

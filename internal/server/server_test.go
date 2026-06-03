@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/lua"
+	"rua.plus/lolly/internal/matcher"
 	"rua.plus/lolly/internal/middleware/accesslog"
 	"rua.plus/lolly/internal/middleware/security"
 	"rua.plus/lolly/internal/proxy"
@@ -987,6 +989,27 @@ func TestCreateListener_UnixSocketCleanup(t *testing.T) {
 		t.Fatalf("createListener() error: %v", err)
 	}
 	defer ln.Close()
+}
+
+func TestHandleRegistrationError_ConflictWarning(t *testing.T) {
+	s := &Server{}
+	err := s.handleRegistrationError("proxy", "/api",
+		&matcher.ConflictError{Path: "/api", ExistingType: "exact", NewType: "prefix"})
+	if err != nil {
+		t.Errorf("conflict should return nil, got: %v", err)
+	}
+}
+
+func TestHandleRegistrationError_FatalError(t *testing.T) {
+	s := &Server{}
+	err := s.handleRegistrationError("proxy", "/api",
+		fmt.Errorf("invalid regex pattern: missing closing parenthesis"))
+	if err == nil {
+		t.Error("fatal error should return non-nil")
+	}
+	if !strings.Contains(err.Error(), "proxy route /api") {
+		t.Errorf("error should wrap context, got: %v", err)
+	}
 }
 
 func TestDupListener_TCP(t *testing.T) {
