@@ -261,5 +261,3 @@ func (api *ngxVarAPI) GetVariable(name string) (string, bool) {
 	value := api.getVariable(name)
 	return value, value != ""
 }
-
-

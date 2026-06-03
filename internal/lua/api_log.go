@@ -26,7 +26,7 @@ import (
 
 // 日志级别常量（与 OpenResty/ngx_lua 兼容）
 const (
-// LogStderr 标准错误日志级别。
+	// LogStderr 标准错误日志级别。
 	LogStderr = 0
 	// LogEmerg 紧急日志级别。
 	LogEmerg = 1
@@ -48,7 +48,7 @@ const (
 
 // HTTP 状态码常量
 const (
-// HTTPContinue HTTP 100 继续状态码。
+	// HTTPContinue HTTP 100 继续状态码。
 	HTTPContinue = 100
 	// HTTPSwitchingProtocols HTTP 101 切换协议状态码。
 	HTTPSwitchingProtocols = 101
@@ -390,5 +390,3 @@ func (api *ngxLogAPI) luaRedirect(L *glua.LState) int {
 	L.RaiseError("%s", "ngx.redirect: "+uri)
 	return 0
 }
-
-

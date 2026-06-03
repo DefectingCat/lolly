@@ -159,5 +159,3 @@ func (m *SlowStartManager) updateEffectiveWeights() {
 		}
 	}
 }
-
-

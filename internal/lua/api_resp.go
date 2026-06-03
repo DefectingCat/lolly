@@ -197,5 +197,3 @@ func (api *ngxRespAPI) SetHeader(name, value string) {
 	api.headersCache = nil
 	api.headersCacheOnce = sync.Once{}
 }
-
-

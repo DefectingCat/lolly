@@ -1260,8 +1260,8 @@ func TestStaticHandler_AliasVsRoot(t *testing.T) {
 			wantContent: "from root", // /var/www/images/logo.png
 		},
 		{
-			name:        "alias 模式：请求路径替换匹配部分",
-			handler:     &StaticHandler{
+			name: "alias 模式：请求路径替换匹配部分",
+			handler: &StaticHandler{
 				alias:         aliasDir,
 				pathPrefix:    "/images/",
 				pathPrefixLen: len("/images/"),

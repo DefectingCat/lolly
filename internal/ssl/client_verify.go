@@ -29,7 +29,7 @@ import (
 type ClientVerifyMode int
 
 const (
-// VerifyOff 不验证客户端证书。
+	// VerifyOff 不验证客户端证书。
 	VerifyOff ClientVerifyMode = iota
 	// VerifyOn 强制验证客户端证书。
 	VerifyOn
@@ -256,5 +256,3 @@ type ClientCertInfo struct {
 	DNSNames    []string
 	Email       []string
 }
-
-

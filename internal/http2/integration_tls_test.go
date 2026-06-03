@@ -205,7 +205,6 @@ func TestTLSHandshakeFailure(t *testing.T) {
 
 // TestALPNNegotiationH2 测试 ALPN 协商选择 h2。
 
-
 // TestALPNHTTP11Fallback 测试 ALPN 协商回退到 HTTP/1.1。
 func TestALPNHTTP11Fallback(t *testing.T) {
 	cert, _ := generateTestCert(t)
@@ -270,9 +269,7 @@ func TestALPNHTTP11Fallback(t *testing.T) {
 
 // TestTLSListenerWrapper 测试 TLS 监听器包装。
 
-
 // TestTLSListenerExistingProtos 测试已有 NextProtos 的情况。
-
 
 // TestServeHTTP1Fallback 测试 HTTP/1.1 回退。
 func TestServeHTTP1Fallback(t *testing.T) {
@@ -375,6 +372,3 @@ func (m *mockTestConn) SetReadDeadline(_ time.Time) error { return nil }
 func (m *mockTestConn) SetWriteDeadline(_ time.Time) error {
 	return nil
 }
-
-
-

@@ -44,5 +44,3 @@ func defaultConfig() *Config {
 		encodeSortKeys:        defaultEncodeSortKeys,
 	}
 }
-
-

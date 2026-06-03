@@ -5,8 +5,6 @@
 // 作者：xfy
 package netutil
 
-
-
 // StripPort 从 Host 头中移除端口号。
 //
 // 支持 IPv4 和 IPv6 格式：
@@ -44,5 +42,3 @@ func StripPort(host string) string {
 
 	return host
 }
-
-

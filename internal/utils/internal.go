@@ -31,5 +31,3 @@ func GetInternalRedirectPath(ctx *fasthttp.RequestCtx) string {
 	}
 	return ""
 }
-
-

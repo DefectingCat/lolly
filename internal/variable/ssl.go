@@ -18,24 +18,24 @@ import (
 
 // SSL 变量常量
 const (
-// VarSSLClientVerify SSL 客户端证书验证结果变量。
-	VarSSLClientVerify      = "ssl_client_verify"
+	// VarSSLClientVerify SSL 客户端证书验证结果变量。
+	VarSSLClientVerify = "ssl_client_verify"
 	// VarSSLClientSerial SSL 客户端证书序列号变量。
-	VarSSLClientSerial      = "ssl_client_serial"
+	VarSSLClientSerial = "ssl_client_serial"
 	// VarSSLClientSubject SSL 客户端证书主题变量。
-	VarSSLClientSubject     = "ssl_client_subject"
+	VarSSLClientSubject = "ssl_client_subject"
 	// VarSSLClientIssuer SSL 客户端证书颁发者变量。
-	VarSSLClientIssuer      = "ssl_client_issuer"
+	VarSSLClientIssuer = "ssl_client_issuer"
 	// VarSSLClientFingerprint SSL 客户端证书指纹变量。
 	VarSSLClientFingerprint = "ssl_client_fingerprint"
 	// VarSSLClientNotBefore SSL 客户端证书生效时间变量。
-	VarSSLClientNotBefore   = "ssl_client_notbefore"
+	VarSSLClientNotBefore = "ssl_client_notbefore"
 	// VarSSLClientNotAfter SSL 客户端证书过期时间变量。
-	VarSSLClientNotAfter    = "ssl_client_notafter"
+	VarSSLClientNotAfter = "ssl_client_notafter"
 	// VarSSLClientDNS SSL 客户端证书主题 DN 变量。
-	VarSSLClientDNS         = "ssl_client_s_dn"
+	VarSSLClientDNS = "ssl_client_s_dn"
 	// VarSSLClientEmail SSL 客户端证书邮箱变量。
-	VarSSLClientEmail       = "ssl_client_email"
+	VarSSLClientEmail = "ssl_client_email"
 
 	sslProtocolNone = "NONE"
 )
@@ -281,5 +281,3 @@ func GetSSLClientEmail(ctx *fasthttp.RequestCtx) string {
 	}
 	return ""
 }
-
-

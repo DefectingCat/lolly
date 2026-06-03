@@ -148,5 +148,3 @@ func (a *Adapter) convertResponse(ctx *fasthttp.RequestCtx, w http.ResponseWrite
 		_, _ = w.Write(body)
 	}
 }
-
-

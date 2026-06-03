@@ -120,66 +120,45 @@ func TestSetResolver(t *testing.T) {
 
 // TestGetResolverStats_NoResolver 测试没有解析器时返回空统计。
 
-
 // TestGetResolverStats_WithResolver 测试有解析器时返回统计。
-
 
 // TestStartWithResolver 测试启动代理时解析器正确启动。
 
-
 // TestStartResolverFails 测试解析器启动失败时代理返回错误。
-
 
 // TestStartIdempotent 测试 Start 是幂等的。
 
-
 // TestStopIdempotent 测试 Stop 是幂等的。
-
 
 // TestStopWithoutResolver 测试没有解析器时停止代理。
 
-
 // TestRefreshDNS_Success 测试 DNS 刷新成功场景。
-
 
 // TestRefreshDNS_LookupError 测试 DNS 刷新时查找失败场景。
 
-
 // TestRefreshDNS_NoResolver 测试没有解析器时刷新不执行任何操作。
-
 
 // TestRefreshDNS_IPAddressTarget 测试 IP 类型的目标不需要解析。
 
-
 // TestRefreshDNS_RecentlyResolved 测试最近已解析的目标不需要再次解析。
-
 
 // TestRefreshDNS_ExpiredResolve 测试 TTL 过期后需要重新解析。
 // 该测试验证 TTL 过期检查的正确性：
 // - 短时间内（< TTL）不需要重新解析
 // - 长时间后（> TTL）需要重新解析
 
-
 // TestUpdateHostClientAddr_HTTP 测试 HTTP 目标地址更新。
-
 
 // TestUpdateHostClientAddr_HTTPS 测试 HTTPS 目标地址更新。
 
-
 // TestUpdateHostClientAddr_DefaultPort 测试没有端口时使用默认端口。
-
 
 // TestUpdateHostClientAddr_NonExistentTarget 测试不存在的目标不更新。
 
-
 // TestGetResolverTTL 测试 TTL 获取。
-
 
 // TestDNSRefreshLoop_StartStop 测试 DNS 刷新循环的启动和停止。
 
-
 // TestMultipleTargets_Refresh 测试多目标刷新。
 
-
 // TestStopResolverFails 测试停止解析器失败时返回错误。
-

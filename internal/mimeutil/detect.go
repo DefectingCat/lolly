@@ -102,7 +102,7 @@ func SetDefaultType(defaultType string) {
 //   - filePath: 文件路径
 //
 // 返回值:
-//	- string: MIME 类型，未知类型返回 defaultMIME（默认为 application/octet-stream）
+//   - string: MIME 类型，未知类型返回 defaultMIME（默认为 application/octet-stream）
 func DetectContentType(filePath string) string {
 	ext := strings.ToLower(filepath.Ext(filePath))
 

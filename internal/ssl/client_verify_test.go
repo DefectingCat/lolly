@@ -132,8 +132,6 @@ func TestParseVerifyMode(t *testing.T) {
 	}
 }
 
-
-
 // TestLoadCACertPool 测试 CA 证书池加载。
 func TestLoadCACertPool(t *testing.T) {
 	// 创建临时 CA 文件
@@ -170,10 +168,6 @@ func TestLoadCACertPool(t *testing.T) {
 		t.Error("LoadCACertPool() should fail for invalid certificate")
 	}
 }
-
-
-
-
 
 // TestClientVerifier_ConfigureTLS 测试 TLS 配置。
 func TestClientVerifier_ConfigureTLS(t *testing.T) {
@@ -224,12 +218,6 @@ func TestClientVerifier_ConfigureTLS_Disabled(t *testing.T) {
 		t.Error("Disabled verifier should not modify TLS config")
 	}
 }
-
-
-
-
-
-
 
 // generateTestCRL 生成测试 CRL。
 func generateTestCRL(t *testing.T, caCert *x509.Certificate, caKey *rsa.PrivateKey, revokedSerials []*big.Int) []byte {
@@ -303,12 +291,6 @@ func TestLoadCRL(t *testing.T) {
 		t.Error("LoadCRL() should fail for invalid CRL")
 	}
 }
-
-
-
-
-
-
 
 // TestVerifyConnection 测试连接验证。
 func TestVerifyConnection(t *testing.T) {
@@ -432,12 +414,6 @@ func BenchmarkLoadCACertPool(b *testing.B) {
 	}
 }
 
-
-
-
-
-
-
 // TestNewClientVerifier_InvalidMode 测试无效验证模式。
 func TestNewClientVerifier_InvalidMode(t *testing.T) {
 	_, err := NewClientVerifier(config.ClientVerifyConfig{
@@ -448,8 +424,6 @@ func TestNewClientVerifier_InvalidMode(t *testing.T) {
 		t.Error("Expected error for invalid verify mode")
 	}
 }
-
-
 
 // TestNewClientVerifier_InvalidCRL 测试无效 CRL 文件。
 func TestNewClientVerifier_InvalidCRL(t *testing.T) {
@@ -475,7 +449,3 @@ func TestNewClientVerifier_InvalidCRL(t *testing.T) {
 		t.Error("Expected error for invalid CRL file")
 	}
 }
-
-
-
-

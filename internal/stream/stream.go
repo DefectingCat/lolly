@@ -994,5 +994,3 @@ func (s *udpServer) cleanupExpiredSessions() {
 		}
 	}
 }
-
-

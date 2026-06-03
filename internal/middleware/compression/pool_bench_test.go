@@ -18,8 +18,8 @@ import (
 	"testing"
 
 	"github.com/valyala/fasthttp"
-	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/testutil"
 )
 
 // BenchmarkGzipPool_GetPut 测试 gzip.Writer 池直接操作。

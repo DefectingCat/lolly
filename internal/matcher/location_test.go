@@ -337,7 +337,3 @@ func TestLocationEngine_MarkInitialized(t *testing.T) {
 		t.Error("AddNamed should fail after initialized")
 	}
 }
-
-
-
-

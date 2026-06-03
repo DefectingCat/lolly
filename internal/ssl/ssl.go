@@ -414,5 +414,3 @@ func matchMarker(data []byte, marker []byte) bool {
 	}
 	return true
 }
-
-

@@ -271,12 +271,6 @@ func TestIsInsecureCipher(t *testing.T) {
 	}
 }
 
-
-
-
-
-
-
 // generateTestCert generates a self-signed certificate for testing
 func generateTestCert(t *testing.T) ([]byte, []byte) {
 	t.Helper()
@@ -504,7 +498,6 @@ func TestNewTLSManager_Errors(t *testing.T) {
 
 // TestNewTLSManager_InvalidCipher 测试无效加密套件
 
-
 // TestNewTLSManager_InsecureCipher 测试不安全加密套件
 func TestNewTLSManager_InsecureCipher(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -533,27 +526,19 @@ func TestNewTLSManager_InsecureCipher(t *testing.T) {
 
 // TestNewMultiTLSManager 测试多证书 TLS 管理器
 
-
 // TestNewMultiTLSManager_EmptyConfigs 测试空配置
-
 
 // TestNewMultiTLSManager_NilConfig 测试 nil 配置项
 
-
 // TestGetCertificate 测试证书获取回调
-
 
 // TestAddCertificate 测试添加证书
 
-
 // TestAddCertificate_Error 测试添加证书错误
-
 
 // TestRemoveCertificate 测试移除证书
 
-
 // TestGetOCSPStatus_NoManager 测试无 OCSP 管理器时的状态
-
 
 // TestParsePEMChain 测试 PEM 证书链解析
 func TestParsePEMChain(t *testing.T) {
@@ -657,18 +642,13 @@ func TestMatchMarker(t *testing.T) {
 
 // TestGetCertificate_NoCertificate 测试无证书时的错误情况
 
-
 // TestGetConfigForClientWithOCSP 测试 OCSP 配置回调
-
 
 // TestLoadCertificate_WithCertChain 测试带证书链的加载
 
-
 // TestLoadCertificate_InvalidChain 测试无效证书链
 
-
 // TestCreateTLSConfig_NilConfig 测试 nil 配置
-
 
 // TestNewTLSManager_WithSessionTickets 测试启用 Session Tickets
 func TestNewTLSManager_WithSessionTickets(t *testing.T) {

@@ -24,7 +24,7 @@ import "github.com/valyala/fasthttp"
 
 // LocationType 常量定义，表示不同 location 匹配类型。
 const (
-// LocationTypeExact 精确匹配类型（=）。
+	// LocationTypeExact 精确匹配类型（=）。
 	LocationTypeExact = "exact"
 	// LocationTypePrefix 前缀匹配类型。
 	LocationTypePrefix = "prefix"

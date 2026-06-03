@@ -195,8 +195,6 @@ func TestIPHashBalancer(t *testing.T) {
 	}
 }
 
-
-
 func TestUpstreamSelect(t *testing.T) {
 	u := &Upstream{
 		targets: []*Target{
@@ -239,10 +237,6 @@ func TestTargetHealthy(t *testing.T) {
 	}
 }
 
-
-
-
-
 func TestConcurrentConnections(t *testing.T) {
 	s := NewServer()
 
@@ -265,8 +259,6 @@ func TestConcurrentConnections(t *testing.T) {
 	}
 }
 
-
-
 func TestUDPServerInvalidUpstream(t *testing.T) {
 	s := NewServer()
 
@@ -276,8 +268,6 @@ func TestUDPServerInvalidUpstream(t *testing.T) {
 		t.Error("Expected error for non-existent upstream")
 	}
 }
-
-
 
 func TestUDPSessionKey(t *testing.T) {
 	addr1, _ := net.ResolveUDPAddr("udp", "127.0.0.1:1234")
@@ -321,10 +311,6 @@ func TestNewUDPServer(t *testing.T) {
 		t.Errorf("Expected timeout 30s, got %v", srv2.timeout)
 	}
 }
-
-
-
-
 
 func TestRoundRobinBalancerWithSingleTarget(t *testing.T) {
 	rb := newRoundRobin()
@@ -389,8 +375,6 @@ func TestAddUpstreamWithLeastConn(t *testing.T) {
 	}
 }
 
-
-
 func TestUpstreamSelectNoHealthy(t *testing.T) {
 	u := &Upstream{
 		targets: []*Target{
@@ -441,8 +425,6 @@ func TestCleanupExpiredSessions(t *testing.T) {
 	}
 	srv.mu.RUnlock()
 }
-
-
 
 func TestUDPSessionOperations(t *testing.T) {
 	// 创建 UDP 连接

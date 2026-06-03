@@ -329,5 +329,3 @@ func (p *connectionPool) closeAll() {
 	}
 	p.conns = make(map[string][]net.Conn)
 }
-
-

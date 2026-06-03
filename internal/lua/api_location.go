@@ -257,5 +257,3 @@ func headersToLuaTable(L *glua.LState, headers map[string]string) *glua.LTable {
 	}
 	return table
 }
-
-

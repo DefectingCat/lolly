@@ -574,12 +574,9 @@ func TestGetClientIP(t *testing.T) {
 
 // TestUpdateTargets 测试更新目标
 
-
 // TestGetTargets 测试获取目标列表
 
-
 // TestGetConfig 测试获取配置
-
 
 // TestIsWebSocketRequest 测试WebSocket请求检测
 func TestIsWebSocketRequest(t *testing.T) {
@@ -839,7 +836,6 @@ func TestGetClient(t *testing.T) {
 }
 
 // TestProxyCache 测试代理缓存功能
-
 
 // TestServeHTTP_WithPassiveHealthCheck 测试带有被动健康检查的请求转发
 func TestServeHTTP_WithPassiveHealthCheck(t *testing.T) {

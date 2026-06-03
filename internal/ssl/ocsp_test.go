@@ -129,8 +129,6 @@ func TestOCSPGetOCSPResponse(t *testing.T) {
 	}
 }
 
-
-
 func TestOCSPStaleResponse(t *testing.T) {
 	mgr := NewOCSPManager(nil)
 
@@ -214,8 +212,6 @@ func TestTLSManagerWithOCSPDisabled(t *testing.T) {
 
 	manager.Close()
 }
-
-
 
 func TestTLSManagerClose(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -373,8 +369,6 @@ func TestOCSPConfigDefaults(t *testing.T) {
 	}
 }
 
-
-
 // TestOCSPManager_refreshAll 测试刷新所有响应
 func TestOCSPManager_refreshAll(_ *testing.T) {
 	cfg := &OCSPConfig{
@@ -412,7 +406,6 @@ func TestOCSPManager_refreshAll(_ *testing.T) {
 }
 
 // TestOCSPManager_GetStatus_EdgeCases 测试 GetStatus 边界情况
-
 
 // TestOCSPManager_RegisterCertificate_NilCert 测试注册空证书
 func TestOCSPManager_RegisterCertificate_NilCert(t *testing.T) {
@@ -494,9 +487,7 @@ func TestOCSPManager_SendOCSPRequest_Error(t *testing.T) {
 
 // TestOCSPManager_RefreshResponse_WithExistingEntry 测试刷新已有条目的响应
 
-
 // TestOCSPManager_RefreshResponse_StatusFailed 测试刷新失败后状态变化
-
 
 // TestOCSPManager_FetchOCSP_NoServer 测试无 OCSP 服务器时的 fetchOCSP
 func TestOCSPManager_FetchOCSP_NoServer(t *testing.T) {

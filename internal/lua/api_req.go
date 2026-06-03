@@ -593,5 +593,3 @@ func (api *ngxReqAPI) GetPerformanceRatio() float64 {
 func (api *ngxReqAPI) ResetMetrics() {
 	api.metrics = ngxReqMetrics{}
 }
-
-

@@ -282,10 +282,6 @@ func TestResponseInfoVariables(t *testing.T) {
 	}
 }
 
-
-
-
-
 // BenchmarkExpandSimple 基准测试：简单变量展开
 func BenchmarkExpandSimple(b *testing.B) {
 	ctx := &fasthttp.RequestCtx{}
@@ -375,8 +371,6 @@ func BenchmarkPoolGetPut(b *testing.B) {
 	}
 }
 
-
-
 // TestPoolReuse 测试池复用
 func TestPoolReuse(t *testing.T) {
 	ctx := mockRequestCtx(t)
@@ -399,8 +393,6 @@ func TestPoolReuse(t *testing.T) {
 	ReleaseContext(vc2)
 }
 
-
-
 // TestReleaseNilContext 测试释放 nil context
 func TestReleaseNilContext(_ *testing.T) {
 	// 不应该 panic
@@ -421,12 +413,6 @@ func TestGetBuiltin(t *testing.T) {
 		t.Error("GetBuiltin('nonexistent') should return nil")
 	}
 }
-
-
-
-
-
-
 
 // TestEmptyTemplate 测试空模板
 func TestEmptyTemplate(t *testing.T) {
@@ -501,8 +487,6 @@ func TestPoolPutNil(_ *testing.T) {
 	ReleaseContext(nil)
 }
 
-
-
 // TestSetResponseInfo 测试 SetResponseInfo
 func TestSetResponseInfo(t *testing.T) {
 	ctx := mockRequestCtx(t)
@@ -534,16 +518,6 @@ func TestSetServerName(t *testing.T) {
 		t.Errorf("serverName = %q, want 'my-server'", vc.serverName)
 	}
 }
-
-
-
-
-
-
-
-
-
-
 
 // TestUpstreamVariables 测试上游变量
 func TestUpstreamVariables(t *testing.T) {
@@ -748,12 +722,6 @@ func BenchmarkUpstreamVariables(b *testing.B) {
 		_, _ = vc.Get(VarUpstreamResponseTime)
 	}
 }
-
-
-
-
-
-
 
 // TestEphemeralGet 测试 EphemeralGet 方法
 func TestEphemeralGet(t *testing.T) {

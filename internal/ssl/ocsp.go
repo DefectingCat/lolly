@@ -425,5 +425,3 @@ func (m *OCSPManager) GetOCSPResponse(serial string) []byte {
 		return nil
 	}
 }
-
-

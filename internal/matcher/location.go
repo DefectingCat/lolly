@@ -263,5 +263,3 @@ func (e *LocationEngine) checkConflict(path, locationType string) error {
 	e.registeredPaths[path] = locationType
 	return nil
 }
-
-

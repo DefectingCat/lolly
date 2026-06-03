@@ -16,7 +16,7 @@ import (
 
 // 内置变量常量
 const (
-// VarHost 请求主机名变量。
+	// VarHost 请求主机名变量。
 	VarHost = "host"
 	// VarRemoteAddr 客户端地址变量。
 	VarRemoteAddr = "remote_addr"
@@ -301,5 +301,3 @@ func SetResponseInfoInContext(ctx *fasthttp.RequestCtx, status int, bodySize int
 	ctx.SetUserValue(VarBodyBytesSent, bodySize)
 	ctx.SetUserValue(VarRequestTime, durationNs)
 }
-
-

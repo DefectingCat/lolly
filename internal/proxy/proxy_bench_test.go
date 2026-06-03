@@ -9,9 +9,9 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttputil"
-	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
+	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/variable"
 )
 

@@ -20,8 +20,8 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
-	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/testutil"
 )
 
 // TestStart_Integration 测试完整的服务器启动和请求处理流程

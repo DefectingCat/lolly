@@ -77,5 +77,3 @@ func Loader(L *glua.LState) int {
 	L.Push(mod)
 	return 1
 }
-
-

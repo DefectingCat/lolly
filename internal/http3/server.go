@@ -208,5 +208,3 @@ func (s *Server) Stop() error {
 	logging.Info().Msg("HTTP/3 server stopped")
 	return nil
 }
-
-

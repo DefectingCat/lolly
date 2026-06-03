@@ -253,5 +253,3 @@ func TestGenerateConfigYAMLContainsAllSections(t *testing.T) {
 		}
 	}
 }
-
-

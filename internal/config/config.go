@@ -29,7 +29,7 @@ import (
 
 // 默认配置常量。
 const (
-// DefaultPprofPath pprof 端点的默认路径。
+	// DefaultPprofPath pprof 端点的默认路径。
 	DefaultPprofPath = "/debug/pprof"
 )
 
@@ -40,13 +40,13 @@ type ServerMode string
 
 // ServerMode 枚举值。
 const (
-// ServerModeSingle 单服务器模式 - 只运行一个服务器实例。
+	// ServerModeSingle 单服务器模式 - 只运行一个服务器实例。
 	ServerModeSingle ServerMode = "single"
-// ServerModeVHost 虚拟主机模式 - 多个服务器共享相同的监听地址。
+	// ServerModeVHost 虚拟主机模式 - 多个服务器共享相同的监听地址。
 	ServerModeVHost ServerMode = "vhost"
-// ServerModeMultiServer 多服务器模式 - 多个服务器监听不同的地址。
+	// ServerModeMultiServer 多服务器模式 - 多个服务器监听不同的地址。
 	ServerModeMultiServer ServerMode = "multi_server"
-// ServerModeAuto 自动模式 - 根据配置自动推断运行模式。
+	// ServerModeAuto 自动模式 - 根据配置自动推断运行模式。
 	ServerModeAuto ServerMode = "auto"
 )
 
@@ -72,17 +72,17 @@ const (
 //	    // 处理每个服务器配置
 //	}
 type Config struct {
-	Mode        ServerMode            `yaml:"mode"`
-	Variables   VariablesConfig       `yaml:"variables"`
-	Logging     LoggingConfig         `yaml:"logging"`
-	Servers     []ServerConfig        `yaml:"servers"`
-	Stream      []StreamConfig        `yaml:"stream"`
-	Monitoring  MonitoringConfig      `yaml:"monitoring"`
-	HTTP3       HTTP3Config           `yaml:"http3"`
-	Resolver    ResolverConfig        `yaml:"resolver"`
-	Performance PerformanceConfig     `yaml:"performance"`
-	Shutdown    ShutdownConfig        `yaml:"shutdown"`
-	Include     []IncludeConfig       `yaml:"include"` // 配置引入，支持从其他文件引入配置片段
+	Mode        ServerMode        `yaml:"mode"`
+	Variables   VariablesConfig   `yaml:"variables"`
+	Logging     LoggingConfig     `yaml:"logging"`
+	Servers     []ServerConfig    `yaml:"servers"`
+	Stream      []StreamConfig    `yaml:"stream"`
+	Monitoring  MonitoringConfig  `yaml:"monitoring"`
+	HTTP3       HTTP3Config       `yaml:"http3"`
+	Resolver    ResolverConfig    `yaml:"resolver"`
+	Performance PerformanceConfig `yaml:"performance"`
+	Shutdown    ShutdownConfig    `yaml:"shutdown"`
+	Include     []IncludeConfig   `yaml:"include"` // 配置引入，支持从其他文件引入配置片段
 }
 
 // parseSize 解析大小字符串（支持 k, m 单位）。

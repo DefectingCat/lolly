@@ -96,7 +96,7 @@ const streamingThreshold = 64 * 1024 // 64KB
 type Algorithm int
 
 const (
-// AlgorithmGzip 使用 gzip 压缩算法。
+	// AlgorithmGzip 使用 gzip 压缩算法。
 	AlgorithmGzip Algorithm = iota
 	// AlgorithmBrotli 使用 brotli 压缩算法。
 	AlgorithmBrotli

@@ -618,5 +618,3 @@ func TestProxyCacheDeleteByPatternNoMatch(t *testing.T) {
 		t.Error("Original entry should still exist")
 	}
 }
-
-

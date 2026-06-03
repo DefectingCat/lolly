@@ -596,10 +596,6 @@ func TestPurgeHandler_SendError(t *testing.T) {
 	}
 }
 
-
-
-
-
 // TestPurgeHandler_CacheKeyWithMethod 测试带方法的缓存键。
 func TestPurgeHandler_CacheKeyWithMethod(t *testing.T) {
 	tests := []struct {
@@ -664,10 +660,6 @@ func TestPurgeHandler_checkAccess_NilContext(t *testing.T) {
 	})
 }
 
-
-
-
-
 // TestPurgeHandler_ServeHTTP_WithAllowList 测试带白名单的请求处理。
 func TestPurgeHandler_ServeHTTP_WithAllowList(t *testing.T) {
 	cfg := &config.CacheAPIConfig{
@@ -718,18 +710,6 @@ func TestPurgeHandler_checkAccess_WithAllowedIP(t *testing.T) {
 		}
 	})
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 // TestPurgeHandler_PurgeByPath_HashConsistency 测试哈希一致性。
 func TestPurgeHandler_PurgeByPath_HashConsistency(t *testing.T) {
@@ -803,7 +783,3 @@ func TestPurgeHandler_PurgeByPattern_PatternMatching(t *testing.T) {
 		})
 	}
 }
-
-
-
-

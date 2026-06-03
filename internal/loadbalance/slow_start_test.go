@@ -43,5 +43,3 @@ func TestTarget_GetEffectiveWeight(t *testing.T) {
 		})
 	}
 }
-
-

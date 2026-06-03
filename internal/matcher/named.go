@@ -33,5 +33,3 @@ func NewNamedMatcher(name string, handler fasthttp.RequestHandler) *NamedMatcher
 		handler: handler,
 	}
 }
-
-

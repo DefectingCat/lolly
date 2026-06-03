@@ -173,8 +173,6 @@ func BenchmarkVariableSetAndGet(b *testing.B) {
 	}
 }
 
-
-
 // BenchmarkVariableExpandLongTemplate 测试长模板展开性能。
 //
 // 模拟完整访问日志格式，约 200 字符。

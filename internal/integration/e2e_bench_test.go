@@ -31,7 +31,6 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttputil"
-	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/handler"
@@ -43,6 +42,7 @@ import (
 	"rua.plus/lolly/internal/middleware/rewrite"
 	"rua.plus/lolly/internal/middleware/security"
 	"rua.plus/lolly/internal/proxy"
+	"rua.plus/lolly/internal/testutil"
 )
 
 // generateTestCert 生成自签名测试证书（服务器认证）。
@@ -1446,8 +1446,8 @@ func BenchmarkE2EBasicAuth(b *testing.B) {
 	}
 	warmupProxy(p, "/api/test", 5)
 
-		// 创建 Basic Auth 中间件（使用 bcrypt 哈希）
-		bcryptPassword := "$2a$10$BOx2i1WZ6iFADhBylIiAAOe3OgG2tQ1dkhgLhJCNnm9beidTgqMq."
+	// 创建 Basic Auth 中间件（使用 bcrypt 哈希）
+	bcryptPassword := "$2a$10$BOx2i1WZ6iFADhBylIiAAOe3OgG2tQ1dkhgLhJCNnm9beidTgqMq."
 	auth, err := security.NewBasicAuth(&config.AuthConfig{
 		Type:       "basic",
 		RequireTLS: false,

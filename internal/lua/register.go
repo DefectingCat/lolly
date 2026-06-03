@@ -21,5 +21,3 @@ type APIMethod struct {
 	// Func Lua 函数实现
 	Func func(*glua.LState) int
 }
-
-

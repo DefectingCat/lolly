@@ -36,7 +36,7 @@ const MaxRewriteIterations = 10
 type Flag int
 
 const (
-// FlagLast 继续匹配其他规则（nginx 行为：重新从第一条规则开始匹配）。
+	// FlagLast 继续匹配其他规则（nginx 行为：重新从第一条规则开始匹配）。
 	// 匹配到规则后会重新从第一条规则开始遍历，用于多规则链式重写。
 	FlagLast Flag = iota
 	// FlagRedirect 返回 302 临时重定向。

@@ -236,5 +236,3 @@ func listenerFile(listener net.Listener) (*os.File, error) {
 		return nil, fmt.Errorf("unsupported listener type: %T", listener)
 	}
 }
-
-

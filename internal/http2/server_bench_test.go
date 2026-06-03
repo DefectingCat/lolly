@@ -420,7 +420,6 @@ func BenchmarkHTTP2RequestRoundTrip_WithBody_Parallel(b *testing.B) {
 // 测量 ValidateSettings 函数的开销，用于了解
 // 配置验证阶段的性能成本。
 
-
 // BenchmarkHTTP2AdapterWithHPACKHeaders 测试带 HPACK 编码头部的适配器性能
 //
 // 模拟 HTTP/2 场景下经过 HPACK 压缩和解压缩后的头部转换开销。

@@ -193,5 +193,3 @@ func (p *Proxy) getResolverTTL() time.Duration {
 	// 这里返回默认值
 	return 30 * time.Second
 }
-
-

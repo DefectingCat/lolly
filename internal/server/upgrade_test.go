@@ -47,10 +47,6 @@ func TestIsChild(t *testing.T) {
 	}
 }
 
-
-
-
-
 func TestGetInheritedListenersNoFds(t *testing.T) {
 	mgr := NewUpgradeManager(nil)
 
@@ -63,10 +59,6 @@ func TestGetInheritedListenersNoFds(t *testing.T) {
 		t.Errorf("Expected 0 listeners, got %d", len(listeners))
 	}
 }
-
-
-
-
 
 // TestUpgradeSetListeners 测试监听器设置
 func TestUpgradeSetListeners(t *testing.T) {
@@ -109,7 +101,6 @@ func TestWritePid_NoPidFile(t *testing.T) {
 }
 
 // TestReadOldPid_InvalidContent 测试 PID 文件内容无效时的错误处理
-
 
 // TestGetInheritedListeners_InvalidFds 测试 LISTEN_FDS 环境变量格式无效
 func TestGetInheritedListeners_InvalidFds(t *testing.T) {
@@ -154,7 +145,6 @@ func TestGetInheritedListeners_InvalidFds(t *testing.T) {
 }
 
 // TestWaitForShutdown_WithTimeout 测试超时行为
-
 
 // TestListenerFile_TCPListener 测试从 TCP 监听器获取文件
 func TestListenerFile_TCPListener(t *testing.T) {
@@ -211,48 +201,34 @@ func TestGracefulUpgrade_NoListeners(t *testing.T) {
 // TestNotifyOldProcess_WithCurrentPid 测试通知进程
 // 注意：不能向当前进程发送 SIGQUIT，会导致测试崩溃
 
-
 // TestReadOldPid_EmptyFile 测试空 PID 文件
-
 
 // TestNotifyOldProcess_ReadPidError 测试读取 PID 失败的情况
 
-
 // TestNotifyOldProcess_ZeroPid 测试 PID 为 0 的情况
 
-
 // TestNotifyOldProcess_NonExistentProcess 测试通知不存在的进程
-
 
 // TestNotifyOldProcess_FindProcessError 测试 os.FindProcess 的行为
 // 注意：在 Unix 系统上，os.FindProcess 总是成功，即使进程不存在
 
-
 // TestSetupSignalHandlers_SetsUpChannel 测试信号处理器设置
-
 
 // TestSetupSignalHandlers_TriggersUpgrade 测试信号触发升级
 
-
 // TestGracefulUpgrade_UnsupportedListener 测试不支持的监听器类型
-
 
 // TestGracefulUpgrade_NonexistentBinary 测试不存在的二进制文件
 // 注意：此测试使用 mock 监听器避免创建实际网络连接
 
-
 // TestGracefulUpgrade_WithPidFile 测试升级时写入 PID 文件
 // 注意：此测试使用 mock 监听器避免创建实际网络连接
 
-
 // TestWaitForShutdown_ProcessExits 测试进程退出后的等待
-
 
 // TestWaitForShutdown_Timeout 测试等待超时
 
-
 // TestWaitForShutdown_SetsOldPid 测试 oldPid 设置
-
 
 // TestListenerFile_UnixListener 测试 Unix 监听器获取文件
 // 注意：跳过此测试，因为在大量测试运行时可能导致 FD 问题
@@ -263,13 +239,10 @@ func TestListenerFile_UnixListener(t *testing.T) {
 // TestGracefulUpgrade_MultipleListeners 测试多个监听器的升级
 // 注意：使用 mock 监听器避免 FD 问题
 
-
 // TestGracefulUpgrade_RelativePath 测试相对路径的二进制文件
 // 注意：使用 mock 监听器避免 FD 问题
 
-
 // TestWaitForShutdown_FindProcessError 测试 FindProcess 行为
-
 
 // TestGetInheritedListeners_EnvPreserved 测试环境变量处理
 func TestGetInheritedListeners_EnvPreserved(t *testing.T) {
@@ -286,5 +259,3 @@ func TestGetInheritedListeners_EnvPreserved(t *testing.T) {
 		t.Error("LISTEN_FDS env should be preserved")
 	}
 }
-
-

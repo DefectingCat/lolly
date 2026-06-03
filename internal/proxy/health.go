@@ -278,5 +278,3 @@ func (h *HealthChecker) MarkHealthy(target *loadbalance.Target) {
 		h.slowStartManager.OnTargetHealthy(target)
 	}
 }
-
-

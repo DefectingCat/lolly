@@ -363,18 +363,15 @@ func BenchmarkOCSPStapling_Miss(b *testing.B) {
 //
 // 测量 GetStatus 方法获取证书状态信息的开销。
 
-
 // BenchmarkSessionResumption 基准测试使用 Session Ticket 的会话恢复性能。
 //
 // 使用 ClientSessionCache 实现会话恢复，
 // 测量使用缓存 session 时的握手开销。
 
-
 // BenchmarkSessionResumption_FullHandshake 基准测试完整握手（无会话恢复）。
 //
 // 作为对照组，测量没有 session ticket 的完整 TLS 握手开销，
 // 与 BenchmarkSessionResumption 对比评估会话恢复的性能提升。
-
 
 // BenchmarkSessionTicketManager_ApplyToTLSConfig 基准测试应用 Session Ticket 到 TLS 配置的开销。
 func BenchmarkSessionTicketManager_ApplyToTLSConfig(b *testing.B) {
@@ -407,7 +404,6 @@ func BenchmarkSessionTicketManager_ApplyToTLSConfig(b *testing.B) {
 // BenchmarkSNI_GetCertificate 基准测试 SNI 证书查找性能。
 //
 // 测量 GetCertificate 回调在多证书场景下的查找开销。
-
 
 // BenchmarkCipherSuiteParsing 基准测试加密套件解析性能。
 func BenchmarkCipherSuiteParsing(b *testing.B) {

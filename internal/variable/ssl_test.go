@@ -296,20 +296,6 @@ func TestGetSSLClientEmail(t *testing.T) {
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // TestSSLVariablesInContext 测试通过 VariableContext 访问 SSL 变量
 // 注意：ssl_client_verify 在非 TLS 连接下会返回 NONE（因为 GetSSLClientVerify 检查 ctx.IsTLS()）
 func TestSSLVariablesInContext(t *testing.T) {

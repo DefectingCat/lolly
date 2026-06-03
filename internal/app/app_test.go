@@ -371,19 +371,6 @@ func TestPrintVersion(t *testing.T) {
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 // TestVersionVariables 测试版本变量默认值
 func TestVersionVariables(t *testing.T) {
 	if version.Version != "dev" {
@@ -434,25 +421,6 @@ func TestAppFields(t *testing.T) {
 	}
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // TestGenerateConfig_ErrorCase 测试生成配置时的错误情况
 // 注意：config.GenerateConfigYAML 正常情况下不会失败，
 // 但我们测试文件写入失败的情况
@@ -474,14 +442,6 @@ func TestGenerateConfig_ErrorCase(t *testing.T) {
 		}
 	})
 }
-
-
-
-
-
-
-
-
 
 // TestApp_Run_WithValidConfig 测试 App.Run 加载有效配置
 // 注意：此测试验证配置加载路径，但由于服务器启动会阻塞，

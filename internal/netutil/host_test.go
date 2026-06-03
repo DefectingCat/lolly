@@ -35,5 +35,3 @@ func TestStripPort(t *testing.T) {
 		})
 	}
 }
-
-

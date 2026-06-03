@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/valyala/fasthttp"
-	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/testutil"
 )
 
 // BenchmarkGzipCompress_1KB 测试 gzip 压缩 1KB 数据的性能。

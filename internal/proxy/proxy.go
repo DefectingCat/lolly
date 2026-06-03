@@ -673,17 +673,17 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 						}
 						return
 					}
-				// 过期缓存，尝试后台刷新，同时返回旧数据
-				if !p.config.Cache.BackgroundUpdateDisable {
-					entry.Updating.Store(true)
-					reqCopy := fasthttp.AcquireRequest()
-					ctx.Request.CopyTo(reqCopy)
-					go func() {
-						defer entry.Updating.Store(false)
-						defer fasthttp.ReleaseRequest(reqCopy)
-						p.backgroundRefresh(reqCopy, target, hashKey, origKey)
-					}()
-				}
+					// 过期缓存，尝试后台刷新，同时返回旧数据
+					if !p.config.Cache.BackgroundUpdateDisable {
+						entry.Updating.Store(true)
+						reqCopy := fasthttp.AcquireRequest()
+						ctx.Request.CopyTo(reqCopy)
+						go func() {
+							defer entry.Updating.Store(false)
+							defer fasthttp.ReleaseRequest(reqCopy)
+							p.backgroundRefresh(reqCopy, target, hashKey, origKey)
+						}()
+					}
 					upstreamAddr = upstreamCache
 					upstreamStatus = entry.Status
 
@@ -990,5 +990,3 @@ func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
 	upgrade := ctx.Request.Header.Peek("Upgrade")
 	return strings.EqualFold(string(upgrade), "websocket")
 }
-
-

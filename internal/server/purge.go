@@ -150,5 +150,3 @@ func (h *PurgeHandler) purgeByPattern(pattern string, method string) int {
 
 	return deleted
 }
-
-

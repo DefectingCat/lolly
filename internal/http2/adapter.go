@@ -202,5 +202,3 @@ func (a *FastHTTPHandlerAdapter) convertResponse(ctx *fasthttp.RequestCtx, w htt
 		}
 	}
 }
-
-

@@ -43,7 +43,7 @@ import (
 type Action int
 
 const (
-// ActionAllow 允许请求通过。
+	// ActionAllow 允许请求通过。
 	ActionAllow Action = iota
 	// ActionDeny 拒绝请求（返回 403 Forbidden）。
 	ActionDeny

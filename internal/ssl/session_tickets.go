@@ -379,5 +379,3 @@ type SessionTicketStatus struct {
 	// Started 管理器是否已启动
 	Started bool
 }
-
-

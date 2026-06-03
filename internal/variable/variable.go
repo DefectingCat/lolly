@@ -548,5 +548,3 @@ func (vc *Context) Expand(template string) string {
 		return vc.Get(name)
 	}, true)
 }
-
-

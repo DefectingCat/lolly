@@ -25,10 +25,6 @@ import (
 	"rua.plus/lolly/internal/loadbalance"
 )
 
-
-
-
-
 // TestCheckTarget 测试 checkTarget 方法。
 func TestCheckTarget(t *testing.T) {
 	t.Run("健康响应", func(t *testing.T) {

@@ -90,5 +90,3 @@ func ParsePhase(s string) (Phase, error) {
 		return PhaseInit, fmt.Errorf("unknown phase: %s", s)
 	}
 }
-
-
