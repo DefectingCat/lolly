@@ -42,22 +42,15 @@ func TestNewProxy(t *testing.T) {
 		wantErr     bool
 	}{
 		{
-			name: "正常创建",
-			cfg: &config.ProxyConfig{
-				Path:        "/api",
-				LoadBalance: "round_robin",
-				Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
-			},
-			targets: []*loadbalance.Target{
-				{URL: "http://localhost:8081"},
-				{URL: "http://localhost:8082"},
-			},
+			name:    "正常创建",
+			cfg:     testutil.NewTestProxyConfig("/api"),
+			targets: testutil.NewTestTargets("http://localhost:8081", "http://localhost:8082"),
 			wantErr: false,
 		},
 		{
 			name:        "nil配置",
 			cfg:         nil,
-			targets:     []*loadbalance.Target{{URL: "http://localhost:8081"}},
+			targets:     testutil.NewTestTargets("http://localhost:8081"),
 			wantErr:     true,
 			errContains: "proxy config is nil",
 		},
@@ -81,9 +74,7 @@ func TestNewProxy(t *testing.T) {
 				Path:        "/api",
 				LoadBalance: "",
 			},
-			targets: []*loadbalance.Target{
-				{URL: "http://localhost:8081"},
-			},
+			targets: testutil.NewTestTargets("http://localhost:8081"),
 			wantErr: false,
 		},
 		{
@@ -129,9 +120,7 @@ func TestNewProxy(t *testing.T) {
 				Path:        "/api",
 				LoadBalance: "invalid_algorithm",
 			},
-			targets: []*loadbalance.Target{
-				{URL: "http://localhost:8081"},
-			},
+			targets:     testutil.NewTestTargets("http://localhost:8081"),
 			wantErr:     true,
 			errContains: "unsupported load balance algorithm",
 		},
@@ -170,17 +159,10 @@ func TestNewProxy(t *testing.T) {
 
 // TestServeHTTP_NoHealthyTargets 测试没有健康目标时返回502
 func TestServeHTTP_NoHealthyTargets(t *testing.T) {
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
-	}
+	cfg := testutil.NewTestProxyConfig("/api")
 
 	// 所有目标都不健康
-	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8081"},
-		{URL: "http://localhost:8082"},
-	}
+	targets := testutil.NewTestTargets("http://localhost:8081", "http://localhost:8082")
 	targets[0].Healthy.Store(false)
 	targets[1].Healthy.Store(false)
 
@@ -222,15 +204,9 @@ func TestServeHTTP_RequestForwarding(t *testing.T) {
 	// 等待服务器启动
 	time.Sleep(10 * time.Millisecond)
 
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
-	}
+	cfg := testutil.NewTestProxyConfig("/api")
 
-	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8080"},
-	}
+	targets := testutil.NewTestTargets("http://localhost:8080")
 
 	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
@@ -523,9 +499,7 @@ func TestModifyResponseHeaders(t *testing.T) {
 				},
 			}
 
-			targets := []*loadbalance.Target{
-				{URL: "http://localhost:8080"},
-			}
+			targets := testutil.NewTestTargets("http://localhost:8080")
 
 			p, err := NewProxy(cfg, targets, nil, nil)
 			if err != nil {
@@ -606,10 +580,7 @@ func TestUpdateTargets(t *testing.T) {
 		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
 	}
 
-	initialTargets := []*loadbalance.Target{
-		{URL: "http://old1:8080"},
-		{URL: "http://old2:8080"},
-	}
+	initialTargets := testutil.NewTestTargets("http://old1:8080", "http://old2:8080")
 
 	p, err := NewProxy(cfg, initialTargets, nil, nil)
 	if err != nil {
@@ -617,11 +588,7 @@ func TestUpdateTargets(t *testing.T) {
 	}
 
 	// 更新目标
-	newTargets := []*loadbalance.Target{
-		{URL: "http://new1:8080"},
-		{URL: "http://new2:8080"},
-		{URL: "http://new3:8080"},
-	}
+	newTargets := testutil.NewTestTargets("http://new1:8080", "http://new2:8080", "http://new3:8080")
 
 	err = p.UpdateTargets(newTargets)
 	if err != nil {
@@ -655,10 +622,7 @@ func TestGetTargets(t *testing.T) {
 		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
 	}
 
-	targets := []*loadbalance.Target{
-		{URL: "http://backend1:8080"},
-		{URL: "http://backend2:8080"},
-	}
+	targets := testutil.NewTestTargets("http://backend1:8080", "http://backend2:8080")
 
 	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
@@ -685,9 +649,7 @@ func TestGetConfig(t *testing.T) {
 		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
 	}
 
-	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8080"},
-	}
+	targets := testutil.NewTestTargets("http://localhost:8080")
 
 	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
@@ -877,9 +839,7 @@ func TestHandleWebSocket(t *testing.T) {
 		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
 	}
 
-	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8080"},
-	}
+	targets := testutil.NewTestTargets("http://localhost:8080")
 
 	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
@@ -889,7 +849,7 @@ func TestHandleWebSocket(t *testing.T) {
 	// 由于 handleWebSocket 使用 Hijack，在测试环境中无法正常工作
 	// （需要一个真实的 HTTP 连接），因此我们仅验证函数存在且可调用
 	// 实际功能通过集成测试验证
-	target := &loadbalance.Target{URL: "http://localhost:8080"}
+	target := testutil.NewTestTarget("http://localhost:8080")
 	client := p.getClient(target.URL)
 
 	// 验证客户端和目标已正确配置
@@ -905,15 +865,9 @@ func TestHandleWebSocket(t *testing.T) {
 // 注意：SetHealthChecker 是公开方法，但 healthChecker 是私有字段
 // 此测试验证方法可以正常调用
 func TestSetHealthChecker(t *testing.T) {
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
-	}
+	cfg := testutil.NewTestProxyConfig("/api")
 
-	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8081"},
-	}
+	targets := testutil.NewTestTargets("http://localhost:8081")
 
 	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
@@ -942,16 +896,9 @@ func TestSetHealthChecker(t *testing.T) {
 
 // TestGetClient 测试客户端获取
 func TestGetClient(t *testing.T) {
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second, Read: 30 * time.Second, Write: 30 * time.Second},
-	}
+	cfg := testutil.NewTestProxyConfig("/api")
 
-	targets := []*loadbalance.Target{
-		{URL: "http://localhost:8081"},
-		{URL: "http://localhost:8082"},
-	}
+	targets := testutil.NewTestTargets("http://localhost:8081", "http://localhost:8082")
 
 	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
@@ -1012,10 +959,7 @@ func TestProxyCache(t *testing.T) {
 		},
 	}
 
-	targets := []*loadbalance.Target{
-		{URL: "http://" + addr},
-	}
-	targets[0].Healthy.Store(true)
+	targets := testutil.NewTestHealthyTargets("http://" + addr)
 
 	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
@@ -1065,10 +1009,7 @@ func TestServeHTTP_WithPassiveHealthCheck(t *testing.T) {
 		Timeout:     config.ProxyTimeout{Connect: 100 * time.Millisecond, Read: 100 * time.Millisecond, Write: 100 * time.Millisecond},
 	}
 
-	targets := []*loadbalance.Target{
-		{URL: "http://127.0.0.1:59999"}, // 不存在的后端
-	}
-	targets[0].Healthy.Store(true)
+	targets := testutil.NewTestHealthyTargets("http://127.0.0.1:59999") // 不存在的后端
 
 	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {
@@ -1145,15 +1086,7 @@ func TestUpstreamVariablesCapture(t *testing.T) {
 	}
 	targets[0].Healthy.Store(true)
 
-	cfg := &config.ProxyConfig{
-		Path:        "/",
-		LoadBalance: "round_robin",
-		Timeout: config.ProxyTimeout{
-			Connect: 5 * time.Second,
-			Read:    30 * time.Second,
-			Write:   30 * time.Second,
-		},
-	}
+	cfg := testutil.NewTestProxyConfig("/")
 
 	p, err := NewProxy(cfg, targets, nil, nil)
 	if err != nil {

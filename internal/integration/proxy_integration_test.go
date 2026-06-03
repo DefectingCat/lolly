@@ -17,6 +17,7 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/proxy"
+	"rua.plus/lolly/internal/testutil"
 )
 
 // TestProxyCreation 测试代理创建
