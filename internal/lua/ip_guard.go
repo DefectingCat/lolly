@@ -1,3 +1,8 @@
+// Package lua 提供 Lua 脚本扩展功能，支持 IP 黑白名单、请求处理等。
+//
+// 包含 IP 守卫相关的逻辑，用于处理 IP 黑白名单功能。
+//
+// 作者：xfy
 package lua
 
 import "net"
