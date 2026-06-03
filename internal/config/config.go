@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -138,11 +139,80 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
+	if len(cfg.Include) > 0 {
+		if err := processIncludes(&cfg, filepath.Dir(path), 0); err != nil {
+			return nil, fmt.Errorf("处理配置引入失败: %w", err)
+		}
+	}
+
 	if err := Validate(&cfg); err != nil {
 		return nil, fmt.Errorf("配置验证失败: %w", err)
 	}
 
 	return &cfg, nil
+}
+
+const maxIncludeDepth = 10
+
+func processIncludes(cfg *Config, baseDir string, depth int) error {
+	if depth >= maxIncludeDepth {
+		return fmt.Errorf("配置引入嵌套深度超过 %d 层，可能存在循环引入", maxIncludeDepth)
+	}
+
+	for _, inc := range cfg.Include {
+		pattern := inc.Path
+		if !filepath.IsAbs(pattern) {
+			pattern = filepath.Join(baseDir, pattern)
+		}
+
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return fmt.Errorf("展开引入路径 %q 失败: %w", inc.Path, err)
+		}
+		if len(matches) == 0 {
+			return fmt.Errorf("引入路径 %q 未匹配到任何文件", inc.Path)
+		}
+
+		for _, match := range matches {
+			info, err := os.Stat(match)
+			if err != nil {
+				return fmt.Errorf("读取引入文件 %q 失败: %w", match, err)
+			}
+			if info.IsDir() {
+				continue
+			}
+
+			data, err := os.ReadFile(match)
+			if err != nil {
+				return fmt.Errorf("读取引入文件 %q 失败: %w", match, err)
+			}
+
+			var included Config
+			if err := yaml.Unmarshal(data, &included); err != nil {
+				return fmt.Errorf("解析引入文件 %q 失败: %w", match, err)
+			}
+
+			if len(included.Include) > 0 {
+				if err := processIncludes(&included, filepath.Dir(match), depth+1); err != nil {
+					return err
+				}
+			}
+
+			cfg.Servers = append(cfg.Servers, included.Servers...)
+			cfg.Stream = append(cfg.Stream, included.Stream...)
+			for k, v := range included.Variables.Set {
+				if _, exists := cfg.Variables.Set[k]; !exists {
+					if cfg.Variables.Set == nil {
+						cfg.Variables.Set = make(map[string]string)
+					}
+					cfg.Variables.Set[k] = v
+				}
+			}
+		}
+	}
+
+	cfg.Include = nil
+	return nil
 }
 
 // LoadFromString 从 YAML 字符串加载配置。
