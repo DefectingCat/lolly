@@ -68,7 +68,7 @@ benchmark-*.txt
 bench-*.txt
 lua-nginx-module/
 !docs/lua-nginx-module/
-lib/
+others/
 main
 .crush
 
