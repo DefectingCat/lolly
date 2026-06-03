@@ -22,4 +22,14 @@ func IsInternalRedirect(ctx *fasthttp.RequestCtx) bool {
 	return ctx.UserValue(InternalRedirectKey) != nil
 }
 
+// GetInternalRedirectPath 获取内部重定向目标路径
+func GetInternalRedirectPath(ctx *fasthttp.RequestCtx) string {
+	if v := ctx.UserValue(InternalRedirectKey); v != nil {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
 
