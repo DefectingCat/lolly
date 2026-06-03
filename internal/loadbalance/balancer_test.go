@@ -575,15 +575,16 @@ func TestFilterHealthy(t *testing.T) {
 			createHealthyTarget("http://backend4:8080", false),
 		}
 
-		got := filterHealthy(targets)
+		fc := acquireFilterContext()
+		got := filterInto(fc, targets)
+		defer releaseFilterContext(fc)
 		if len(got) != 2 {
-			t.Errorf("len(filterHealthy) = %d, want 2", len(got))
+			t.Errorf("len(filterInto) = %d, want 2", len(got))
 		}
 
-		// 验证返回的都是健康目标
 		for _, target := range got {
 			if !target.Healthy.Load() {
-				t.Errorf("filterHealthy 返回了不健康目标: %q", target.URL)
+				t.Errorf("filterInto returned unhealthy target: %q", target.URL)
 			}
 		}
 	})
@@ -594,9 +595,11 @@ func TestFilterHealthy(t *testing.T) {
 			createHealthyTarget("http://backend2:8080", true),
 		}
 
-		got := filterHealthy(targets)
+		fc := acquireFilterContext()
+		got := filterInto(fc, targets)
+		defer releaseFilterContext(fc)
 		if len(got) != 2 {
-			t.Errorf("len(filterHealthy) = %d, want 2", len(got))
+			t.Errorf("len(filterInto) = %d, want 2", len(got))
 		}
 	})
 
@@ -606,23 +609,29 @@ func TestFilterHealthy(t *testing.T) {
 			createHealthyTarget("http://backend2:8080", false),
 		}
 
-		got := filterHealthy(targets)
+		fc := acquireFilterContext()
+		got := filterInto(fc, targets)
+		defer releaseFilterContext(fc)
 		if len(got) != 0 {
-			t.Errorf("len(filterHealthy) = %d, want 0", len(got))
+			t.Errorf("len(filterInto) = %d, want 0", len(got))
 		}
 	})
 
 	t.Run("空切片", func(_ *testing.T) {
-		got := filterHealthy([]*Target{})
+		fc := acquireFilterContext()
+		got := filterInto(fc, []*Target{})
+		defer releaseFilterContext(fc)
 		if len(got) != 0 {
-			t.Errorf("len(filterHealthy) = %d, want 0", len(got))
+			t.Errorf("len(filterInto) = %d, want 0", len(got))
 		}
 	})
 
 	t.Run("nil切片", func(_ *testing.T) {
-		got := filterHealthy(nil)
+		fc := acquireFilterContext()
+		got := filterInto(fc, nil)
+		defer releaseFilterContext(fc)
 		if len(got) != 0 {
-			t.Errorf("len(filterHealthy) = %d, want 0", len(got))
+			t.Errorf("len(filterInto) = %d, want 0", len(got))
 		}
 	})
 }
@@ -1255,7 +1264,9 @@ func TestFilterHealthyAndExclude(t *testing.T) {
 		}
 		excluded := []*Target{targets[0]}
 
-		got := filterHealthyAndExclude(targets, excluded)
+		fc := acquireFilterContext()
+		got := filterIntoExcluding(fc, targets, excluded)
+		defer releaseFilterContext(fc)
 		if len(got) != 1 {
 			t.Fatalf("len = %d, want 1", len(got))
 		}
@@ -1270,14 +1281,18 @@ func TestFilterHealthyAndExclude(t *testing.T) {
 			createHealthyTarget("http://backend2:8080", true),
 		}
 
-		got := filterHealthyAndExclude(targets, nil)
+		fc := acquireFilterContext()
+		got := filterIntoExcluding(fc, targets, nil)
+		defer releaseFilterContext(fc)
 		if len(got) != 2 {
 			t.Fatalf("len = %d, want 2", len(got))
 		}
 	})
 
 	t.Run("空目标列表", func(_ *testing.T) {
-		got := filterHealthyAndExclude(nil, []*Target{})
+		fc := acquireFilterContext()
+		got := filterIntoExcluding(fc, nil, []*Target{})
+		defer releaseFilterContext(fc)
 		if len(got) != 0 {
 			t.Errorf("len = %d, want 0", len(got))
 		}
@@ -1289,7 +1304,9 @@ func TestFilterHealthyAndExclude(t *testing.T) {
 		}
 		excluded := []*Target{nil}
 
-		got := filterHealthyAndExclude(targets, excluded)
+		fc := acquireFilterContext()
+		got := filterIntoExcluding(fc, targets, excluded)
+		defer releaseFilterContext(fc)
 		if len(got) != 1 {
 			t.Fatalf("len = %d, want 1", len(got))
 		}
@@ -1835,7 +1852,9 @@ func TestFilterHealthyBackup(t *testing.T) {
 		backup := NewTargetFromConfig("http://backup:8080", 1, 0, 0, 0, true, false, "")
 		targets := []*Target{primary, backup}
 
-		result := filterHealthy(targets)
+		fc := acquireFilterContext()
+		result := filterInto(fc, targets)
+		defer releaseFilterContext(fc)
 		if len(result) != 1 || result[0].URL != "http://primary:8080" {
 			t.Error("should prefer non-backup target")
 		}
@@ -1847,7 +1866,9 @@ func TestFilterHealthyBackup(t *testing.T) {
 		backup := NewTargetFromConfig("http://backup:8080", 1, 0, 0, 0, true, false, "")
 		targets := []*Target{primary, backup}
 
-		result := filterHealthy(targets)
+		fc := acquireFilterContext()
+		result := filterInto(fc, targets)
+		defer releaseFilterContext(fc)
 		if len(result) != 1 || result[0].URL != "http://backup:8080" {
 			t.Error("should fall back to backup target")
 		}

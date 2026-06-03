@@ -17,13 +17,50 @@
 package loadbalance
 
 import (
-	"hash/fnv"
 	"net"
 	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+type filterContext struct {
+	available  []*Target
+	backups    []*Target
+	excludeSet map[string]bool
+}
+
+var filterContextPool = sync.Pool{
+	New: func() any {
+		return &filterContext{
+			available:  make([]*Target, 0, 64),
+			backups:    make([]*Target, 0, 64),
+			excludeSet: make(map[string]bool, 8),
+		}
+	},
+}
+
+func acquireFilterContext() *filterContext {
+	return filterContextPool.Get().(*filterContext)
+}
+
+func releaseFilterContext(fc *filterContext) {
+	fc.available = fc.available[:0]
+	fc.backups = fc.backups[:0]
+	for k := range fc.excludeSet {
+		delete(fc.excludeSet, k)
+	}
+	filterContextPool.Put(fc)
+}
+
+func fnvHash64a(key string) uint64 {
+	var h uint64 = 14695981039346656037
+	for i := 0; i < len(key); i++ {
+		h ^= uint64(key[i])
+		h *= 1099511628211
+	}
+	return h
+}
 
 // Target 表示 HTTP 代理（L7 层）的负载均衡后端服务器目标。
 //
@@ -120,12 +157,12 @@ func NewRoundRobin() *RoundRobin {
 // Select 选择轮询顺序中的下一个目标。
 // 只考虑健康目标。如果没有健康目标则返回 nil。
 func (r *RoundRobin) Select(targets []*Target) *Target {
-	healthy := filterHealthy(targets)
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+	healthy := filterInto(fc, targets)
 	if len(healthy) == 0 {
 		return nil
 	}
-
-	// 原子地递增并获取计数器值
 	idx := r.counter.Add(1) - 1
 	return healthy[idx%uint64(len(healthy))]
 }
@@ -154,16 +191,17 @@ func NewWeightedRoundRobin() *WeightedRoundRobin {
 // Select 基于权重分布选择目标。
 // 只考虑健康目标。如果没有健康目标则返回 nil。
 func (w *WeightedRoundRobin) Select(targets []*Target) *Target {
-	healthy := filterHealthy(targets)
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+	healthy := filterInto(fc, targets)
 	if len(healthy) == 0 {
 		return nil
 	}
 
-	// 计算总权重
 	totalWeight := 0
 	for _, t := range healthy {
 		if t.Weight <= 0 {
-			totalWeight++ // 最小权重为 1
+			totalWeight++
 		} else {
 			totalWeight += t.Weight
 		}
@@ -173,11 +211,9 @@ func (w *WeightedRoundRobin) Select(targets []*Target) *Target {
 		return nil
 	}
 
-	// 使用原子计数器确定权重分布中的位置
 	idx := w.counter.Add(1) - 1
 	pos := int(idx % uint64(totalWeight))
 
-	// 找到计算位置处的目标
 	currentWeight := 0
 	for _, t := range healthy {
 		weight := t.Weight
@@ -190,7 +226,6 @@ func (w *WeightedRoundRobin) Select(targets []*Target) *Target {
 		}
 	}
 
-	// 回退到最后一个目标（不应到达这里）
 	return healthy[len(healthy)-1]
 }
 
@@ -256,16 +291,13 @@ func (i *IPHash) Select(targets []*Target) *Target {
 // SelectByIP 基于提供的 IP 地址的哈希值选择目标。
 // 只考虑健康目标。如果没有健康目标则返回 nil。
 func (i *IPHash) SelectByIP(targets []*Target, clientIP string) *Target {
-	healthy := filterHealthy(targets)
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+	healthy := filterInto(fc, targets)
 	if len(healthy) == 0 {
 		return nil
 	}
-
-	// 对客户端 IP 进行哈希
-	h := fnv.New64a()
-	h.Write([]byte(clientIP))
-	hash := h.Sum64()
-
+	hash := fnvHash64a(clientIP)
 	idx := hash % uint64(len(healthy))
 	return healthy[idx]
 }
@@ -344,32 +376,21 @@ func (t *Target) IsBackup() bool {
 	return t.Backup
 }
 
-// filterHealthy 从目标列表中筛选出所有可用的目标，返回新切片。
-//
-// 选择逻辑：
-//  1. 优先选择非备份且可用的目标（IsAvailable() == true && !IsBackup()）
-//  2. 如果没有非备份目标可用，则选择可用的备份目标
-//
-// 返回的切片容量与输入相同，避免多次内存分配。
-func filterHealthy(targets []*Target) []*Target {
-	available := make([]*Target, 0, len(targets))
-	backups := make([]*Target, 0, len(targets))
-
+func filterInto(fc *filterContext, targets []*Target) []*Target {
 	for _, t := range targets {
 		if !t.IsAvailable() {
 			continue
 		}
 		if t.IsBackup() {
-			backups = append(backups, t)
+			fc.backups = append(fc.backups, t)
 		} else {
-			available = append(available, t)
+			fc.available = append(fc.available, t)
 		}
 	}
-
-	if len(available) > 0 {
-		return available
+	if len(fc.available) > 0 {
+		return fc.available
 	}
-	return backups
+	return fc.backups
 }
 
 // IncrementConnections 原子地增加目标的连接计数。
@@ -384,45 +405,37 @@ func DecrementConnections(t *Target) {
 	atomic.AddInt64(&t.Connections, -1)
 }
 
-// filterHealthyAndExclude 从目标列表中筛选出可用且不在排除列表中的目标，返回新切片。
-//
-// 选择逻辑与 filterHealthy 相同：
-//  1. 优先选择非备份且可用的目标
-//  2. 如果没有非备份目标可用，则选择可用的备份目标
-//
-// 排除判断基于目标的 URL 进行匹配。
-func filterHealthyAndExclude(targets []*Target, excluded []*Target) []*Target {
-	excludeSet := buildExcludeSet(excluded)
-
-	available := make([]*Target, 0, len(targets))
-	backups := make([]*Target, 0, len(targets))
-
+func filterIntoExcluding(fc *filterContext, targets []*Target, excluded []*Target) []*Target {
+	for _, t := range excluded {
+		if t != nil {
+			fc.excludeSet[t.URL] = true
+		}
+	}
 	for _, t := range targets {
-		if !t.IsAvailable() || excludeSet[t.URL] {
+		if !t.IsAvailable() || fc.excludeSet[t.URL] {
 			continue
 		}
 		if t.IsBackup() {
-			backups = append(backups, t)
+			fc.backups = append(fc.backups, t)
 		} else {
-			available = append(available, t)
+			fc.available = append(fc.available, t)
 		}
 	}
-
-	if len(available) > 0 {
-		return available
+	if len(fc.available) > 0 {
+		return fc.available
 	}
-	return backups
+	return fc.backups
 }
 
 // SelectExcluding 根据轮询策略选择一个目标，排除指定的目标列表。
 // 只考虑健康且不在排除列表中的目标。
 func (r *RoundRobin) SelectExcluding(targets []*Target, excluded []*Target) *Target {
-	available := filterHealthyAndExclude(targets, excluded)
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+	available := filterIntoExcluding(fc, targets, excluded)
 	if len(available) == 0 {
 		return nil
 	}
-
-	// 原子地递增并获取计数器值
 	idx := r.counter.Add(1) - 1
 	return available[idx%uint64(len(available))]
 }
@@ -430,16 +443,17 @@ func (r *RoundRobin) SelectExcluding(targets []*Target, excluded []*Target) *Tar
 // SelectExcluding 根据权重分布选择目标，排除指定的目标列表。
 // 只考虑健康且不在排除列表中的目标。
 func (w *WeightedRoundRobin) SelectExcluding(targets []*Target, excluded []*Target) *Target {
-	available := filterHealthyAndExclude(targets, excluded)
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+	available := filterIntoExcluding(fc, targets, excluded)
 	if len(available) == 0 {
 		return nil
 	}
 
-	// 计算总权重
 	totalWeight := 0
 	for _, t := range available {
 		if t.Weight <= 0 {
-			totalWeight++ // 最小权重为 1
+			totalWeight++
 		} else {
 			totalWeight += t.Weight
 		}
@@ -449,11 +463,9 @@ func (w *WeightedRoundRobin) SelectExcluding(targets []*Target, excluded []*Targ
 		return nil
 	}
 
-	// 使用原子计数器确定权重分布中的位置
 	idx := w.counter.Add(1) - 1
 	pos := int(idx % uint64(totalWeight))
 
-	// 找到计算位置处的目标
 	currentWeight := 0
 	for _, t := range available {
 		weight := t.Weight
@@ -466,14 +478,19 @@ func (w *WeightedRoundRobin) SelectExcluding(targets []*Target, excluded []*Targ
 		}
 	}
 
-	// 回退到最后一个目标（不应到达这里）
 	return available[len(available)-1]
 }
 
 // SelectExcluding 选择连接数最少的目标，排除指定的目标列表。
 // 优先选择非备份目标，仅当无可用非备份目标时选择备份目标。
 func (l *LeastConnections) SelectExcluding(targets []*Target, excluded []*Target) *Target {
-	excludeSet := buildExcludeSet(excluded)
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+	for _, t := range excluded {
+		if t != nil {
+			fc.excludeSet[t.URL] = true
+		}
+	}
 
 	var selected *Target
 	var selectedBackup *Target
@@ -481,12 +498,10 @@ func (l *LeastConnections) SelectExcluding(targets []*Target, excluded []*Target
 	var minBackupConns int64 = -1
 
 	for _, t := range targets {
-		if !t.IsAvailable() || excludeSet[t.URL] {
+		if !t.IsAvailable() || fc.excludeSet[t.URL] {
 			continue
 		}
-
 		conns := atomic.LoadInt64(&t.Connections)
-
 		if t.IsBackup() {
 			if selectedBackup == nil || conns < minBackupConns {
 				selectedBackup = t
@@ -515,16 +530,13 @@ func (i *IPHash) SelectExcluding(targets []*Target, excluded []*Target) *Target 
 // SelectExcludingByIP 基于提供的 IP 地址的哈希值选择目标，排除指定的目标列表。
 // 只考虑健康且不在排除列表中的目标。
 func (i *IPHash) SelectExcludingByIP(targets []*Target, excluded []*Target, clientIP string) *Target {
-	available := filterHealthyAndExclude(targets, excluded)
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+	available := filterIntoExcluding(fc, targets, excluded)
 	if len(available) == 0 {
 		return nil
 	}
-
-	// 对客户端 IP 进行哈希
-	h := fnv.New64a()
-	h.Write([]byte(clientIP))
-	hash := h.Sum64()
-
+	hash := fnvHash64a(clientIP)
 	idx := hash % uint64(len(available))
 	return available[idx]
 }
@@ -622,24 +634,4 @@ func (t *Target) LastResolved() time.Time {
 	return time.Unix(0, nano)
 }
 
-// buildExcludeSet 从排除列表构建 URL 集合。
-//
-// 用于负载均衡算法中快速检查目标是否应被排除。
-//
-// 参数：
-//   - excluded: 需要排除的目标列表
-//
-// 返回值：
-//   - map[string]bool: 目标 URL 到 true 的映射
-func buildExcludeSet(excluded []*Target) map[string]bool {
-	if len(excluded) == 0 {
-		return nil
-	}
-	excludeSet := make(map[string]bool, len(excluded))
-	for _, t := range excluded {
-		if t != nil {
-			excludeSet[t.URL] = true
-		}
-	}
-	return excludeSet
-}
+

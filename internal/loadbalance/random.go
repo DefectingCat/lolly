@@ -29,7 +29,9 @@ func NewRandom() *Random {
 // 随机选择两个候选，返回连接数较少的那个。
 // 只考虑可用目标。如果没有可用目标则返回 nil。
 func (r *Random) Select(targets []*Target) *Target {
-	available := filterHealthy(targets)
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+	available := filterInto(fc, targets)
 	if len(available) == 0 {
 		return nil
 	}
@@ -38,7 +40,6 @@ func (r *Random) Select(targets []*Target) *Target {
 		return available[0]
 	}
 
-	// Power of Two Choices
 	i := rand.IntN(len(available))
 	j := rand.IntN(len(available) - 1)
 	if j >= i {
@@ -54,7 +55,9 @@ func (r *Random) Select(targets []*Target) *Target {
 
 // SelectExcluding 使用 Power of Two Choices 算法选择目标，排除指定的目标列表。
 func (r *Random) SelectExcluding(targets []*Target, excluded []*Target) *Target {
-	available := filterHealthyAndExclude(targets, excluded)
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+	available := filterIntoExcluding(fc, targets, excluded)
 	if len(available) == 0 {
 		return nil
 	}

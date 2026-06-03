@@ -16,7 +16,6 @@ package loadbalance
 
 import (
 	"fmt"
-	"hash/fnv"
 	"slices"
 	"sort"
 	"sync"
@@ -144,9 +143,7 @@ func (c *ConsistentHash) rebuildCircle(targets []*Target) {
 
 // hashKeyString 计算字符串的哈希值（使用 FNV-64a）。
 func (c *ConsistentHash) hashKeyString(key string) uint64 {
-	h := fnv.New64a()
-	h.Write([]byte(key))
-	return h.Sum64()
+	return fnvHash64a(key)
 }
 
 // PrecomputeHashes 预计算目标的虚拟节点哈希值。
@@ -246,42 +243,43 @@ func (c *ConsistentHash) SelectExcludingByKey(targets []*Target, excluded []*Tar
 		c.mu.RLock()
 	}
 
-	// 构建 targets 集合（用于校验返回的目标是否有效）
-	targetSet := make(map[string]bool, len(targets))
+	fc := acquireFilterContext()
+	defer releaseFilterContext(fc)
+
+	targetSet := fc.excludeSet
 	for _, t := range targets {
 		if t.Healthy.Load() {
 			targetSet[t.URL] = true
 		}
 	}
-
-	// 构建排除集合
-	excludeSet := buildExcludeSet(excluded)
+	for _, t := range excluded {
+		if t != nil {
+			targetSet[t.URL] = false
+		}
+	}
 
 	if len(c.sortedHashes) == 0 {
 		c.mu.RUnlock()
 		return nil
 	}
 
-	// 计算键的哈希值
 	hash := c.hashKeyString(key)
 
-	// 二分查找起始位置
 	idx := sort.Search(len(c.sortedHashes), func(i int) bool {
 		return c.sortedHashes[i] >= hash
 	})
 
-	// 从起始位置开始查找，跳过 excluded 和不在 targetSet 中的目标
 	for i := 0; i < len(c.sortedHashes); i++ {
 		targetIdx := (idx + i) % len(c.sortedHashes)
 		target := c.circle[c.sortedHashes[targetIdx]]
-		if targetSet[target.URL] && !excludeSet[target.URL] {
+		if targetSet[target.URL] {
 			c.mu.RUnlock()
 			return target
 		}
 	}
 
 	c.mu.RUnlock()
-	return nil // 所有目标都被排除或不在 targets 列表中
+	return nil
 }
 
 // 验证接口实现
