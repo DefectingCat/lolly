@@ -71,3 +71,6 @@ lua-nginx-module/
 lib/
 main
 .crush
+
+# Planning and specification documents (agent-generated)
+docs/superpowers/
