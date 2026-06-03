@@ -23,14 +23,22 @@ type HTTPError struct {
 
 // Predefined common HTTP errors.
 var (
-// ErrNotFound 资源未找到错误。           = HTTPError{Message: "Not Found", StatusCode: fasthttp.StatusNotFound}
-// ErrForbidden 禁止访问错误。          = HTTPError{Message: "Forbidden", StatusCode: fasthttp.StatusForbidden}
-// ErrUnauthorized 未授权错误。       = HTTPError{Message: "Unauthorized", StatusCode: fasthttp.StatusUnauthorized}
-// ErrBadGateway 错误网关错误。         = HTTPError{Message: "Bad Gateway", StatusCode: fasthttp.StatusBadGateway}
-// ErrGatewayTimeout 网关超时错误。     = HTTPError{Message: "Gateway Timeout", StatusCode: fasthttp.StatusGatewayTimeout}
-// ErrInternalError 内部服务器错误。      = HTTPError{Message: "Internal Server Error", StatusCode: fasthttp.StatusInternalServerError}
-// ErrTooManyRequests 请求过多错误。    = HTTPError{Message: "Too Many Requests", StatusCode: fasthttp.StatusTooManyRequests}
-// ErrServiceUnavailable 服务不可用错误。 = HTTPError{Message: "Service Unavailable", StatusCode: fasthttp.StatusServiceUnavailable}
+// ErrNotFound 资源未找到错误。
+	ErrNotFound           = HTTPError{Message: "Not Found", StatusCode: fasthttp.StatusNotFound}
+	// ErrForbidden 禁止访问错误。
+	ErrForbidden          = HTTPError{Message: "Forbidden", StatusCode: fasthttp.StatusForbidden}
+	// ErrUnauthorized 未授权错误。
+	ErrUnauthorized       = HTTPError{Message: "Unauthorized", StatusCode: fasthttp.StatusUnauthorized}
+	// ErrBadGateway 错误网关错误。
+	ErrBadGateway         = HTTPError{Message: "Bad Gateway", StatusCode: fasthttp.StatusBadGateway}
+	// ErrGatewayTimeout 网关超时错误。
+	ErrGatewayTimeout     = HTTPError{Message: "Gateway Timeout", StatusCode: fasthttp.StatusGatewayTimeout}
+	// ErrInternalError 内部服务器错误。
+	ErrInternalError      = HTTPError{Message: "Internal Server Error", StatusCode: fasthttp.StatusInternalServerError}
+	// ErrTooManyRequests 请求过多错误。
+	ErrTooManyRequests    = HTTPError{Message: "Too Many Requests", StatusCode: fasthttp.StatusTooManyRequests}
+	// ErrServiceUnavailable 服务不可用错误。
+	ErrServiceUnavailable = HTTPError{Message: "Service Unavailable", StatusCode: fasthttp.StatusServiceUnavailable}
 )
 
 // SendError sends an HTTP error response to the client.

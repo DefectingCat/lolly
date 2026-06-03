@@ -98,7 +98,7 @@ type Algorithm int
 const (
 // AlgorithmGzip 使用 gzip 压缩算法。
 	AlgorithmGzip Algorithm = iota
-// AlgorithmBrotli 使用 brotli 压缩算法。
+	// AlgorithmBrotli 使用 brotli 压缩算法。
 	AlgorithmBrotli
 
 	compressionGZIP = "gzip"

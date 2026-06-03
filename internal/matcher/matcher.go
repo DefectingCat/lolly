@@ -26,15 +26,15 @@ import "github.com/valyala/fasthttp"
 const (
 // LocationTypeExact 精确匹配类型（=）。
 	LocationTypeExact = "exact"
-// LocationTypePrefix 前缀匹配类型。
+	// LocationTypePrefix 前缀匹配类型。
 	LocationTypePrefix = "prefix"
-// LocationTypePrefixPriority 前缀优先匹配类型（^~）。
+	// LocationTypePrefixPriority 前缀优先匹配类型（^~）。
 	LocationTypePrefixPriority = "prefix_priority"
-// LocationTypeRegex 正则匹配类型（~）。
+	// LocationTypeRegex 正则匹配类型（~）。
 	LocationTypeRegex = "regex"
-// LocationTypeRegexCaseless 大小写不敏感正则匹配类型（~*）。
+	// LocationTypeRegexCaseless 大小写不敏感正则匹配类型（~*）。
 	LocationTypeRegexCaseless = "regex_caseless"
-// LocationTypeNamed 命名匹配类型（@name）。
+	// LocationTypeNamed 命名匹配类型（@name）。
 	LocationTypeNamed = "named"
 )
 

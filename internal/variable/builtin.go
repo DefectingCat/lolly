@@ -16,28 +16,49 @@ import (
 
 // 内置变量常量
 const (
-// VarHost 请求主机名变量。          = "host"
-// VarRemoteAddr 客户端地址变量。    = "remote_addr"
-// VarRemotePort 客户端端口变量。    = "remote_port"
-// VarRequestURI 请求 URI 变量。    = "request_uri"
-// VarURI URI 变量。           = "uri"
-// VarArgs 查询参数变量。          = "args"
-// VarRequestMethod 请求方法变量。 = "request_method"
-// VarScheme 协议方案变量。        = "scheme"
-// VarServerName 服务器名称变量。    = "server_name"
-// VarServerPort 服务器端口变量。    = "server_port"
-// VarStatus HTTP 状态码变量。        = "status"
-// VarBodyBytesSent 发送字节数变量。 = "body_bytes_sent"
-// VarRequestTime 请求处理时间变量。   = "request_time"
-// VarTimeLocal 本地时间变量。     = "time_local"
-// VarTimeISO8601 ISO8601 时间变量。   = "time_iso8601"
-// VarRequestID 请求 ID 变量。     = "request_id"
+// VarHost 请求主机名变量。
+	VarHost = "host"
+	// VarRemoteAddr 客户端地址变量。
+	VarRemoteAddr = "remote_addr"
+	// VarRemotePort 客户端端口变量。
+	VarRemotePort = "remote_port"
+	// VarRequestURI 请求 URI 变量。
+	VarRequestURI = "request_uri"
+	// VarURI URI 变量。
+	VarURI = "uri"
+	// VarArgs 查询参数变量。
+	VarArgs = "args"
+	// VarRequestMethod 请求方法变量。
+	VarRequestMethod = "request_method"
+	// VarScheme 协议方案变量。
+	VarScheme = "scheme"
+	// VarServerName 服务器名称变量。
+	VarServerName = "server_name"
+	// VarServerPort 服务器端口变量。
+	VarServerPort = "server_port"
+	// VarStatus HTTP 状态码变量。
+	VarStatus = "status"
+	// VarBodyBytesSent 发送字节数变量。
+	VarBodyBytesSent = "body_bytes_sent"
+	// VarRequestTime 请求处理时间变量。
+	VarRequestTime = "request_time"
+	// VarTimeLocal 本地时间变量。
+	VarTimeLocal = "time_local"
+	// VarTimeISO8601 ISO8601 时间变量。
+	VarTimeISO8601 = "time_iso8601"
+	// VarRequestID 请求 ID 变量。
+	VarRequestID = "request_id"
 	// 上游变量
-// VarUpstreamAddr 上游地址变量。         = "upstream_addr"
-// VarUpstreamStatus 上游状态码变量。       = "upstream_status"
-// VarUpstreamResponseTime 上游响应时间变量。 = "upstream_response_time"
-// VarUpstreamConnectTime 上游连接时间变量。  = "upstream_connect_time"
-// VarUpstreamHeaderTime 上游响应头时间变量。   = "upstream_header_time"
+	// VarUpstreamAddr 上游地址变量。
+	VarUpstreamAddr = "upstream_addr"
+	// VarUpstreamStatus 上游状态码变量。
+	VarUpstreamStatus = "upstream_status"
+	// VarUpstreamResponseTime 上游响应时间变量。
+	VarUpstreamResponseTime = "upstream_response_time"
+	// VarUpstreamConnectTime 上游连接时间变量。
+	VarUpstreamConnectTime = "upstream_connect_time"
+	// VarUpstreamHeaderTime 上游响应头时间变量。
+	VarUpstreamHeaderTime = "upstream_header_time"
 )
 
 // init 注册所有内置变量

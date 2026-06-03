@@ -23,9 +23,6 @@
 //   - Number precision control
 //   - Independent configuration instances via gjson.new()
 //
-// Author: xfy
-// Package gjson 提供 Go 模块信息。
-//
 // 作者：xfy
 package gjson
 
@@ -34,11 +31,11 @@ import (
 )
 
 const (
-	// ModuleName is the Lua module name for require()
-// ModuleName 模块名称。 = "gjson"
+	// ModuleName 模块名称。
+	ModuleName = "gjson"
 
-	// Version is the module version
-// Version 模块版本号。 = "1.0.0"
+	// Version 模块版本号。
+	Version = "1.0.0"
 )
 
 // Preload registers the gjson module as a preload in the given LState.
