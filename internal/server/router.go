@@ -1,3 +1,8 @@
+// Package server 提供 HTTP 服务器的核心实现，支持单服务器、虚拟主机和多服务器三种运行模式。
+//
+// 包含路由器相关的核心逻辑，用于管理 HTTP 请求的路由分发。
+//
+// 作者：xfy
 package server
 
 import (
