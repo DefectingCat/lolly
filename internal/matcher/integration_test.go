@@ -1,6 +1,7 @@
 package matcher
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/valyala/fasthttp"
@@ -106,5 +107,9 @@ func TestLocationEngine_PathConflict(t *testing.T) {
 	err := engine.AddExact("/api", handler, false)
 	if err == nil {
 		t.Error("should fail on path conflict")
+	}
+	var ce *ConflictError
+	if !errors.As(err, &ce) {
+		t.Errorf("expected *ConflictError, got %T: %v", err, err)
 	}
 }

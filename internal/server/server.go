@@ -21,6 +21,7 @@ package server
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -94,6 +95,15 @@ type Server struct {
 //   - *Server: 创建的服务器实例
 func New(cfg *config.Config) *Server {
 	return &Server{config: cfg}
+}
+
+func (s *Server) handleRegistrationError(source, path string, err error) error {
+	var ce *matcher.ConflictError
+	if errors.As(err, &ce) {
+		logging.Warn().Msgf("Route registration skipped (%s %s): %s", source, path, err)
+		return nil
+	}
+	return fmt.Errorf("%s route %s: %w", source, path, err)
 }
 
 // getServerName 根据配置返回服务器名称。
@@ -382,39 +392,56 @@ func (s *Server) startSingleMode() error {
 		if err != nil {
 			logging.Error().Msg("Failed to create status handler: " + err.Error())
 		} else {
-			_ = s.locationEngine.AddExact(statusHandler.Path(), statusHandler.ServeHTTP, false)
+			if err := s.locationEngine.AddExact(statusHandler.Path(), statusHandler.ServeHTTP, false); err != nil {
+				if err := s.handleRegistrationError("status", statusHandler.Path(), err); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
-	// 注册 pprof 性能分析端点（如果配置）
 	if s.config.Monitoring.Pprof.Enabled {
 		pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
 		if err != nil {
 			logging.Error().Msg("Failed to create pprof handler: " + err.Error())
 		} else {
-			_ = s.locationEngine.AddExact(pprofHandler.Path(), pprofHandler.ServeHTTP, false)
-			_ = s.locationEngine.AddPrefixPriority(pprofHandler.Path()+"/", pprofHandler.ServeHTTP, false)
+			if err := s.locationEngine.AddExact(pprofHandler.Path(), pprofHandler.ServeHTTP, false); err != nil {
+				if err := s.handleRegistrationError("pprof", pprofHandler.Path(), err); err != nil {
+					return err
+				}
+			}
+			if err := s.locationEngine.AddPrefixPriority(pprofHandler.Path()+"/", pprofHandler.ServeHTTP, false); err != nil {
+				if err := s.handleRegistrationError("pprof", pprofHandler.Path()+"/", err); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
-	// 注册缓存清理 API（如果配置）
 	if serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
 		purgeHandler, err := NewPurgeHandler(s, serverCfg.CacheAPI)
 		if err != nil {
 			logging.Error().Msg("Failed to create cache purge handler: " + err.Error())
 		} else {
-			_ = s.locationEngine.AddExact(purgeHandler.Path(), purgeHandler.ServeHTTP, false)
+			if err := s.locationEngine.AddExact(purgeHandler.Path(), purgeHandler.ServeHTTP, false); err != nil {
+				if err := s.handleRegistrationError("cache-purge", purgeHandler.Path(), err); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
-	// 注册代理路由
-	s.registerProxyRoutesWithLocationEngine(serverCfg)
+	if err := s.registerProxyRoutesWithLocationEngine(serverCfg); err != nil {
+		return err
+	}
 
-	// Lua 路由
-	s.registerLuaRoutesWithLocationEngine(serverCfg)
+	if err := s.registerLuaRoutesWithLocationEngine(serverCfg); err != nil {
+		return err
+	}
 
-	// 静态文件服务
-	s.registerStaticHandlersWithLocationEngine(serverCfg)
+	if err := s.registerStaticHandlersWithLocationEngine(serverCfg); err != nil {
+		return err
+	}
 
 	// 标记 LocationEngine 初始化完成
 	s.locationEngine.MarkInitialized()

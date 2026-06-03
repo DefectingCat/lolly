@@ -240,6 +240,21 @@ func (e *LocationEngine) MarkInitialized() {
 	e.prefixTree.MarkInitialized()
 }
 
+// ConflictError 路径冲突错误。
+//
+// 当同一路径被重复注册为不同类型的 location 时返回此错误。
+// 调用方可通过 errors.As 检测此类型，区分冲突与致命错误。
+type ConflictError struct {
+	Path         string
+	ExistingType string
+	NewType      string
+}
+
+func (e *ConflictError) Error() string {
+	return fmt.Sprintf("path conflict: '%s' already registered as '%s', trying to register as '%s'",
+		e.Path, e.ExistingType, e.NewType)
+}
+
 // checkConflict 检查路径冲突。
 //
 // 参数：
@@ -247,11 +262,10 @@ func (e *LocationEngine) MarkInitialized() {
 //   - locationType: location 类型
 //
 // 返回值：
-//   - error: 路径已存在时返回冲突错误
+//   - error: 路径已存在时返回 *ConflictError
 func (e *LocationEngine) checkConflict(path, locationType string) error {
 	if existing, ok := e.registeredPaths[path]; ok {
-		return fmt.Errorf("path conflict: '%s' already registered as '%s', trying to register as '%s'",
-			path, existing, locationType)
+		return &ConflictError{Path: path, ExistingType: existing, NewType: locationType}
 	}
 	e.registeredPaths[path] = locationType
 	return nil
