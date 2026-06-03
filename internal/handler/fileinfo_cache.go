@@ -47,32 +47,20 @@ func (c *FileInfoCache) Get(filePath string) (os.FileInfo, bool) {
 		return nil, false
 	}
 
-	// 检查 TTL（只读检查）
 	if time.Since(entry.cachedAt) > fileInfoCacheTTL {
 		c.mu.RUnlock()
-		// 升级为写锁删除过期条目
 		c.mu.Lock()
-		// double-check：可能已被其他请求删除或更新
-		if entry, ok := c.entries[filePath]; ok && time.Since(entry.cachedAt) > fileInfoCacheTTL {
-			c.lruList.Remove(entry.element)
+		if e, ok := c.entries[filePath]; ok && time.Since(e.cachedAt) > fileInfoCacheTTL {
+			c.lruList.Remove(e.element)
 			delete(c.entries, filePath)
 		}
 		c.mu.Unlock()
 		return nil, false
 	}
 
+	info := entry.info
 	c.mu.RUnlock()
-
-	// LRU 移动需要写锁
-	c.mu.Lock()
-	// double-check：条目可能已被删除
-	if entry, ok := c.entries[filePath]; ok {
-		c.lruList.MoveToFront(entry.element)
-		c.mu.Unlock()
-		return entry.info, true
-	}
-	c.mu.Unlock()
-	return nil, false
+	return info, true
 }
 
 // Set 缓存 FileInfo
