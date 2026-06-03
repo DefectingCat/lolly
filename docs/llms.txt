@@ -58,8 +58,7 @@ http3: {}                     # HTTP/3 配置
 resolver: {}                  # DNS 解析配置
 performance: {}               # 性能配置
 shutdown: {}                  # 关闭配置
-include: []                   # 配置引入
-cache_path: {}                # 缓存路径配置
+ include: []                   # 配置引入
 ```
 
 ### 运行模式

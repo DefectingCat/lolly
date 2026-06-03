@@ -2,54 +2,6 @@ package config
 
 import "time"
 
-// ProxyCachePathConfig 缓存路径配置（磁盘持久化）。
-//
-// 配置磁盘缓存路径和相关参数，支持 L1/L2 分层缓存架构。
-// 配置后，代理缓存将持久化到磁盘，服务重启后可恢复。
-//
-// 注意事项：
-//   - Path 为必填项，指定缓存根目录
-//   - Levels 支持最多 3 级目录（如 "1:2:2"）
-//   - MaxSize 为 0 表示不限制大小
-//   - L1MaxEntries/L1MaxSize 为 0 时使用默认值
-//
-// 使用示例：
-//
-//	cache_path:
-//	  path: "/var/cache/lolly"
-//	  levels: "1:2"
-//	  max_size: "1GB"
-//	  inactive: "60m"
-//	  l1_max_entries: 10000
-type ProxyCachePathConfig struct {
-	// Path 缓存根目录
-	Path string `yaml:"path"`
-
-	// Levels 目录层级，如 "1:2" 表示两级目录
-	Levels string `yaml:"levels"`
-
-	// MaxSize 最大缓存大小（字节）
-	MaxSize int64 `yaml:"max_size"`
-
-	// Inactive 未访问淘汰时间
-	Inactive time.Duration `yaml:"inactive"`
-
-	// Purger 是否启用后台清理
-	Purger bool `yaml:"purger"`
-
-	// PurgerInterval 清理间隔
-	PurgerInterval time.Duration `yaml:"purger_interval"`
-
-	// L1MaxEntries L1 最大条目数
-	L1MaxEntries int64 `yaml:"l1_max_entries"`
-
-	// L1MaxSize L1 最大内存大小
-	L1MaxSize int64 `yaml:"l1_max_size"`
-
-	// PromoteThreshold 提升到 L1 的访问阈值
-	PromoteThreshold int `yaml:"promote_threshold"`
-}
-
 // ProxyCacheConfig 代理缓存配置。
 //
 // 缓存后端响应，减少重复请求，提高响应速度。

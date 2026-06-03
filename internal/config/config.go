@@ -81,8 +81,7 @@ type Config struct {
 	Resolver    ResolverConfig        `yaml:"resolver"`
 	Performance PerformanceConfig     `yaml:"performance"`
 	Shutdown    ShutdownConfig        `yaml:"shutdown"`
-	Include     []IncludeConfig       `yaml:"include"`    // 配置引入，支持从其他文件引入配置片段
-	CachePath   *ProxyCachePathConfig `yaml:"cache_path"` // 缓存路径配置（磁盘持久化）
+	Include     []IncludeConfig       `yaml:"include"` // 配置引入，支持从其他文件引入配置片段
 }
 
 // parseSize 解析大小字符串（支持 k, m 单位）。
