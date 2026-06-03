@@ -14,7 +14,6 @@
 | `go.sum` | 依赖版本锁定 |
 | `Makefile` | 构建脚本，支持多平台编译、测试、覆盖率 |
 | `lolly.yaml` | 默认配置文件示例 |
-| `config.example.yaml` | 完整配置文件示例（所有字段枚举） |
 | `.gitignore` | Git 忽略规则 |
 
 ## Subdirectories
@@ -27,7 +26,6 @@
 | `examples/` | Lua 脚本示例 |
 | `html/` | 静态 HTML 文件（测试/示例） |
 | `scripts/` | 构建/测试辅助脚本（回归检测） |
-| `.github/` | CI/CD 工作流定义 |
 
 ## For AI Agents
 
@@ -43,6 +41,7 @@
 - 运行测试前确保依赖已下载：`go mod download`
 - 测试覆盖率目标 >80%
 - 使用 `make check` 运行完整检查（fmt + lint + test）
+- 使用 `lolly --generate-config` 生成完整配置文件模板
 
 ### Common Patterns
 - 配置结构体使用 `yaml` 标签，通过 `gopkg.in/yaml.v3` 解析

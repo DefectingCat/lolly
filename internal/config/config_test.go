@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -490,4 +491,274 @@ func TestProxyBufferingConfig_ParseBuffers(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoad_Include(t *testing.T) {
+	t.Run("append servers from include", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		mainCfg := `
+servers:
+  - listen: ":8080"
+    name: main
+include:
+  - path: "conf.d/*.yaml"
+`
+		incCfg := `
+servers:
+  - listen: ":9090"
+    name: included
+`
+		confDir := filepath.Join(tmpDir, "conf.d")
+		if err := os.MkdirAll(confDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(mainCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(confDir, "extra.yaml"), []byte(incCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg, err := Load(filepath.Join(tmpDir, "config.yaml"))
+		if err != nil {
+			t.Fatalf("Load() failed: %v", err)
+		}
+
+		if len(cfg.Servers) != 2 {
+			t.Fatalf("expected 2 servers, got %d", len(cfg.Servers))
+		}
+		if cfg.Servers[0].Name != "main" {
+			t.Errorf("Servers[0].Name = %q, want %q", cfg.Servers[0].Name, "main")
+		}
+		if cfg.Servers[1].Name != "included" {
+			t.Errorf("Servers[1].Name = %q, want %q", cfg.Servers[1].Name, "included")
+		}
+	})
+
+	t.Run("merge variables with main priority", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		mainCfg := `
+servers:
+  - listen: ":8080"
+variables:
+  set:
+    app: lolly
+    env: production
+include:
+  - path: "extra.yaml"
+`
+		incCfg := `
+servers:
+  - listen: ":9090"
+variables:
+  set:
+    app: other
+    debug: "true"
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(mainCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "extra.yaml"), []byte(incCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg, err := Load(filepath.Join(tmpDir, "config.yaml"))
+		if err != nil {
+			t.Fatalf("Load() failed: %v", err)
+		}
+
+		if cfg.Variables.Set["app"] != "lolly" {
+			t.Errorf("app = %q, want %q (main should win)", cfg.Variables.Set["app"], "lolly")
+		}
+		if cfg.Variables.Set["debug"] != "true" {
+			t.Errorf("debug = %q, want %q (included should fill missing)", cfg.Variables.Set["debug"], "true")
+		}
+		if cfg.Variables.Set["env"] != "production" {
+			t.Errorf("env = %q, want %q", cfg.Variables.Set["env"], "production")
+		}
+	})
+
+	t.Run("no matches returns error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		mainCfg := `
+servers:
+  - listen: ":8080"
+include:
+  - path: "nonexistent/*.yaml"
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(mainCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := Load(filepath.Join(tmpDir, "config.yaml"))
+		if err == nil {
+			t.Error("expected error for non-matching glob pattern")
+		}
+	})
+
+	t.Run("circular include detected immediately", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg1 := `
+servers:
+  - listen: ":8080"
+include:
+  - path: "b.yaml"
+`
+		cfg2 := `
+servers:
+  - listen: ":9090"
+include:
+  - path: "a.yaml"
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "a.yaml"), []byte(cfg1), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "b.yaml"), []byte(cfg2), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := Load(filepath.Join(tmpDir, "a.yaml"))
+		if err == nil {
+			t.Error("expected error for circular include")
+		}
+		if !strings.Contains(err.Error(), "循环引入") {
+			t.Errorf("error should mention circular include, got: %v", err)
+		}
+	})
+
+	t.Run("self include detected", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := `
+servers:
+  - listen: ":8080"
+include:
+  - path: "a.yaml"
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "a.yaml"), []byte(cfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := Load(filepath.Join(tmpDir, "a.yaml"))
+		if err == nil {
+			t.Error("expected error for self include")
+		}
+	})
+
+	t.Run("diamond include works", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		mainCfg := `
+servers:
+  - listen: ":8080"
+include:
+  - path: "b.yaml"
+  - path: "c.yaml"
+`
+		bCfg := `
+servers:
+  - listen: ":9090"
+include:
+  - path: "shared.yaml"
+`
+		cCfg := `
+servers:
+  - listen: ":9091"
+include:
+  - path: "shared.yaml"
+`
+		sharedCfg := `
+variables:
+  set:
+    shared: value
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(mainCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "b.yaml"), []byte(bCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "c.yaml"), []byte(cCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "shared.yaml"), []byte(sharedCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg, err := Load(filepath.Join(tmpDir, "config.yaml"))
+		if err != nil {
+			t.Fatalf("diamond include should work: %v", err)
+		}
+
+		if len(cfg.Servers) != 3 {
+			t.Errorf("expected 3 servers, got %d", len(cfg.Servers))
+		}
+		if cfg.Variables.Set["shared"] != "value" {
+			t.Error("shared variable should be merged")
+		}
+	})
+
+	t.Run("empty include list is no-op", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		mainCfg := `
+servers:
+  - listen: ":8080"
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(mainCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg, err := Load(filepath.Join(tmpDir, "config.yaml"))
+		if err != nil {
+			t.Fatalf("Load() failed: %v", err)
+		}
+		if len(cfg.Servers) != 1 {
+			t.Errorf("expected 1 server, got %d", len(cfg.Servers))
+		}
+	})
+
+	t.Run("append stream from include", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		mainCfg := `
+servers:
+  - listen: ":8080"
+stream:
+  - listen: ":5432"
+    protocol: tcp
+    upstream:
+      targets:
+        - addr: "127.0.0.1:9000"
+include:
+  - path: "stream.yaml"
+`
+		incCfg := `
+stream:
+  - listen: ":5433"
+    protocol: udp
+    upstream:
+      targets:
+        - addr: "127.0.0.1:9001"
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(mainCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "stream.yaml"), []byte(incCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg, err := Load(filepath.Join(tmpDir, "config.yaml"))
+		if err != nil {
+			t.Fatalf("Load() failed: %v", err)
+		}
+
+		if len(cfg.Stream) != 2 {
+			t.Fatalf("expected 2 streams, got %d", len(cfg.Stream))
+		}
+	})
 }

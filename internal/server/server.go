@@ -21,6 +21,7 @@ package server
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -94,6 +95,15 @@ type Server struct {
 //   - *Server: 创建的服务器实例
 func New(cfg *config.Config) *Server {
 	return &Server{config: cfg}
+}
+
+func (s *Server) handleRegistrationError(source, path string, err error) error {
+	var ce *matcher.ConflictError
+	if errors.As(err, &ce) {
+		logging.Warn().Msgf("Route registration skipped (%s %s): %s", source, path, err)
+		return nil
+	}
+	return fmt.Errorf("%s route %s: %w", source, path, err)
 }
 
 // getServerName 根据配置返回服务器名称。
@@ -308,32 +318,31 @@ func (s *Server) Start() error {
 func (s *Server) createListener(cfg *config.ServerConfig) (net.Listener, error) {
 	listenAddr := cfg.Listen
 
+	if s.upgradeManager != nil && s.upgradeManager.IsChild() {
+		inherited, _ := s.upgradeManager.GetInheritedListeners()
+		if ln := s.matchInheritedListener(inherited, listenAddr); ln != nil {
+			return ln, nil
+		}
+	}
+
+	if len(s.listeners) > 0 {
+		if ln := s.matchInheritedListener(s.listeners, listenAddr); ln != nil {
+			return ln, nil
+		}
+	}
+
 	if strings.HasPrefix(listenAddr, "unix:") {
-		// Unix Socket 模式
 		socketPath := listenAddr[5:]
 
-		// 1. 检查继承的监听器（热升级场景）
-		if s.upgradeManager != nil && s.upgradeManager.IsChild() {
-			inherited, _ := s.upgradeManager.GetInheritedListeners()
-			for _, ln := range inherited {
-				if ln.Addr().Network() == "unix" && ln.Addr().String() == socketPath {
-					return ln, nil
-				}
-			}
-		}
-
-		// 2. 清理旧 socket 文件
 		if _, err := os.Stat(socketPath); err == nil {
 			_ = os.Remove(socketPath)
 		}
 
-		// 3. 创建 Unix socket listener
 		listener, err := net.Listen("unix", socketPath)
 		if err != nil {
 			return nil, fmt.Errorf("create unix socket failed: %w", err)
 		}
 
-		// 4. 设置 socket 文件权限
 		mode := 0o666
 		if cfg.UnixSocket.Mode > 0 {
 			mode = cfg.UnixSocket.Mode
@@ -342,17 +351,93 @@ func (s *Server) createListener(cfg *config.ServerConfig) (net.Listener, error) 
 			logging.Warn().Err(err).Msg("Failed to set socket file permissions")
 		}
 
-		// 5. 设置文件所有权（需要 root 权限）
 		if cfg.UnixSocket.User != "" || cfg.UnixSocket.Group != "" {
-			// 简化处理：仅记录警告，实际实现需要 syscall.Chown
 			logging.Warn().Msg("Unix socket user/group config requires root privileges, skipped")
 		}
 
 		return listener, nil
 	}
 
-	// TCP 模式
 	return net.Listen("tcp", listenAddr)
+}
+
+func (s *Server) matchInheritedListener(inherited []net.Listener, listenAddr string) net.Listener {
+	if len(inherited) == 0 {
+		return nil
+	}
+
+	if strings.HasPrefix(listenAddr, "unix:") {
+		socketPath := listenAddr[5:]
+		for _, ln := range inherited {
+			if ln == nil {
+				continue
+			}
+			if ln.Addr().Network() == "unix" && ln.Addr().String() == socketPath {
+				return ln
+			}
+		}
+		return nil
+	}
+
+	for _, ln := range inherited {
+		if ln == nil {
+			continue
+		}
+		if ln.Addr().Network() != "tcp" {
+			continue
+		}
+		if s.tcpAddrMatch(ln.Addr().String(), listenAddr) {
+			return ln
+		}
+	}
+	return nil
+}
+
+func (s *Server) tcpAddrMatch(inherited, target string) bool {
+	if inherited == target {
+		return true
+	}
+	host1, port1, err1 := net.SplitHostPort(inherited)
+	host2, port2, err2 := net.SplitHostPort(target)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	if port1 != port2 {
+		return false
+	}
+	return host1 == host2 || isAnyAddr(host1) || isAnyAddr(host2)
+}
+
+func isAnyAddr(host string) bool {
+	if host == "" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsUnspecified()
+}
+
+// DupListener 复制 listener 的文件描述符，返回独立的 listener。
+//
+// 用于热重载场景：新旧 server 各自持有独立 FD，互不影响关闭操作。
+func DupListener(ln net.Listener) (net.Listener, error) {
+	switch l := ln.(type) {
+	case *net.TCPListener:
+		file, err := l.File()
+		if err != nil {
+			return nil, fmt.Errorf("dup tcp listener: %w", err)
+		}
+		defer file.Close()
+		return net.FileListener(file)
+	case *net.UnixListener:
+		file, err := l.File()
+		if err != nil {
+			return nil, fmt.Errorf("dup unix listener: %w", err)
+		}
+		defer file.Close()
+		return net.FileListener(file)
+	default:
+		return nil, fmt.Errorf("unsupported listener type: %T", ln)
+	}
 }
 
 // startSingleMode 单服务器模式启动。
@@ -382,39 +467,56 @@ func (s *Server) startSingleMode() error {
 		if err != nil {
 			logging.Error().Msg("Failed to create status handler: " + err.Error())
 		} else {
-			_ = s.locationEngine.AddExact(statusHandler.Path(), statusHandler.ServeHTTP, false)
+			if err := s.locationEngine.AddExact(statusHandler.Path(), statusHandler.ServeHTTP, false); err != nil {
+				if err := s.handleRegistrationError("status", statusHandler.Path(), err); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
-	// 注册 pprof 性能分析端点（如果配置）
 	if s.config.Monitoring.Pprof.Enabled {
 		pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
 		if err != nil {
 			logging.Error().Msg("Failed to create pprof handler: " + err.Error())
 		} else {
-			_ = s.locationEngine.AddExact(pprofHandler.Path(), pprofHandler.ServeHTTP, false)
-			_ = s.locationEngine.AddPrefixPriority(pprofHandler.Path()+"/", pprofHandler.ServeHTTP, false)
+			if err := s.locationEngine.AddExact(pprofHandler.Path(), pprofHandler.ServeHTTP, false); err != nil {
+				if err := s.handleRegistrationError("pprof", pprofHandler.Path(), err); err != nil {
+					return err
+				}
+			}
+			if err := s.locationEngine.AddPrefixPriority(pprofHandler.Path()+"/", pprofHandler.ServeHTTP, false); err != nil {
+				if err := s.handleRegistrationError("pprof", pprofHandler.Path()+"/", err); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
-	// 注册缓存清理 API（如果配置）
 	if serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
 		purgeHandler, err := NewPurgeHandler(s, serverCfg.CacheAPI)
 		if err != nil {
 			logging.Error().Msg("Failed to create cache purge handler: " + err.Error())
 		} else {
-			_ = s.locationEngine.AddExact(purgeHandler.Path(), purgeHandler.ServeHTTP, false)
+			if err := s.locationEngine.AddExact(purgeHandler.Path(), purgeHandler.ServeHTTP, false); err != nil {
+				if err := s.handleRegistrationError("cache-purge", purgeHandler.Path(), err); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
-	// 注册代理路由
-	s.registerProxyRoutesWithLocationEngine(serverCfg)
+	if err := s.registerProxyRoutesWithLocationEngine(serverCfg); err != nil {
+		return err
+	}
 
-	// Lua 路由
-	s.registerLuaRoutesWithLocationEngine(serverCfg)
+	if err := s.registerLuaRoutesWithLocationEngine(serverCfg); err != nil {
+		return err
+	}
 
-	// 静态文件服务
-	s.registerStaticHandlersWithLocationEngine(serverCfg)
+	if err := s.registerStaticHandlersWithLocationEngine(serverCfg); err != nil {
+		return err
+	}
 
 	// 标记 LocationEngine 初始化完成
 	s.locationEngine.MarkInitialized()
@@ -613,22 +715,28 @@ func (s *Server) startVHostMode() error {
 //
 // 注意事项：
 //   - 每个服务器有独立的中间件配置
-//   - 热升级场景下回退到虚拟主机模式
 //   - 使用 goroutine 并行启动多个服务器
 func (s *Server) startMultiServerMode() error {
-	// 热升级检测：multi_server 热升级未实现，回退到 vhost 模式
-	if os.Getenv("GRACEFUL_UPGRADE") == "1" {
-		logging.Warn().Msg("multi_server mode not implemented for graceful upgrade, falling back to vhost mode")
-		return s.startVHostMode()
-	}
-
 	s.fastServers = make([]*fasthttp.Server, len(s.config.Servers))
 	s.listeners = make([]net.Listener, len(s.config.Servers))
+
+	for i := range s.config.Servers {
+		serverCfg := &s.config.Servers[i]
+		ln, err := s.createListener(serverCfg)
+		if err != nil {
+			for j := 0; j < i; j++ {
+				if s.listeners[j] != nil {
+					_ = s.listeners[j].Close()
+				}
+			}
+			return fmt.Errorf("failed to listen on %s: %w", serverCfg.Listen, err)
+		}
+		s.listeners[i] = ln
+	}
 
 	var wg sync.WaitGroup
 	errCh := make(chan error, len(s.config.Servers))
 
-	// 并行创建监听器和 fasthttp.Server
 	for i := range s.config.Servers {
 		wg.Add(1)
 		go func(idx int) {
@@ -636,15 +744,6 @@ func (s *Server) startMultiServerMode() error {
 
 			serverCfg := &s.config.Servers[idx]
 
-			// 创建监听器
-			ln, err := s.createListener(serverCfg)
-			if err != nil {
-				errCh <- fmt.Errorf("failed to listen on %s: %w", serverCfg.Listen, err)
-				return
-			}
-			s.listeners[idx] = ln
-
-			// 创建路由器
 			router := handler.NewRouter()
 
 			// 注册状态监控端点（仅默认服务器）

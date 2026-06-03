@@ -181,6 +181,11 @@ type ShutdownConfig struct {
 	// 接收到 SIGINT 或 SIGTERM 信号后，等待服务器关闭的最大时间
 	// 默认: 5s（当值为 0 时使用默认值）
 	FastTimeout time.Duration `yaml:"fast_timeout"`
+
+	// ReloadTimeout 热重载启动等待超时（SIGHUP）
+	// 等待新服务器启动完成的最大时间，超时后视为启动成功
+	// 默认: 5s（当值为 0 时使用默认值）
+	ReloadTimeout time.Duration `yaml:"reload_timeout"`
 }
 
 // ResolverConfig DNS 解析器配置。

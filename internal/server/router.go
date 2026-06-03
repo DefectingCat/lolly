@@ -67,7 +67,7 @@ func (s *Server) createProxyForConfig(proxyCfg *config.ProxyConfig) *proxy.Proxy
 //
 // 根据配置为 LocationEngine 注册代理路径，创建代理处理器和健康检查器。
 // 支持通过 LocationType 配置不同的匹配方式。
-func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerConfig) {
+func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerConfig) error {
 	for i := range serverCfg.Proxy {
 		proxyCfg := &serverCfg.Proxy[i]
 
@@ -76,7 +76,6 @@ func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerC
 			continue
 		}
 
-		// 根据 LocationType 注册路由
 		locType := proxyCfg.LocationType
 		if locType == "" {
 			locType = matcher.LocationTypePrefix
@@ -84,22 +83,47 @@ func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerC
 
 		switch locType {
 		case matcher.LocationTypeExact:
-			_ = s.locationEngine.AddExact(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
+			if err := s.locationEngine.AddExact(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal); err != nil {
+				if err := s.handleRegistrationError("proxy", proxyCfg.Path, err); err != nil {
+					return err
+				}
+			}
 		case matcher.LocationTypePrefixPriority:
-			_ = s.locationEngine.AddPrefixPriority(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
+			if err := s.locationEngine.AddPrefixPriority(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal); err != nil {
+				if err := s.handleRegistrationError("proxy", proxyCfg.Path, err); err != nil {
+					return err
+				}
+			}
 		case matcher.LocationTypeRegex, matcher.LocationTypeRegexCaseless:
 			caseInsensitive := locType == matcher.LocationTypeRegexCaseless
-			_ = s.locationEngine.AddRegex(proxyCfg.Path, p.ServeHTTP, caseInsensitive, proxyCfg.Internal)
+			if err := s.locationEngine.AddRegex(proxyCfg.Path, p.ServeHTTP, caseInsensitive, proxyCfg.Internal); err != nil {
+				if err := s.handleRegistrationError("proxy", proxyCfg.Path, err); err != nil {
+					return err
+				}
+			}
 		case matcher.LocationTypeNamed:
 			if proxyCfg.LocationName != "" {
-				_ = s.locationEngine.AddNamed(proxyCfg.LocationName, p.ServeHTTP)
+				if err := s.locationEngine.AddNamed(proxyCfg.LocationName, p.ServeHTTP); err != nil {
+					if err := s.handleRegistrationError("proxy", "@"+proxyCfg.LocationName, err); err != nil {
+						return err
+					}
+				}
 			}
 		case matcher.LocationTypePrefix:
-			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
+			if err := s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal); err != nil {
+				if err := s.handleRegistrationError("proxy", proxyCfg.Path, err); err != nil {
+					return err
+				}
+			}
 		default:
-			_ = s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal)
+			if err := s.locationEngine.AddPrefix(proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal); err != nil {
+				if err := s.handleRegistrationError("proxy", proxyCfg.Path, err); err != nil {
+					return err
+				}
+			}
 		}
 	}
+	return nil
 }
 
 // configureStaticHandler 配置静态文件处理器。
@@ -156,7 +180,7 @@ func (s *Server) configureStaticHandler(static *config.StaticConfig, cfg *config
 }
 
 // registerStaticHandlersWithLocationEngine 使用 LocationEngine 注册静态文件处理器。
-func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConfig) {
+func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConfig) error {
 	for _, static := range cfg.Static {
 		staticHandler := s.configureStaticHandler(&static, cfg)
 		path := static.Path
@@ -164,7 +188,6 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 			path = "/"
 		}
 
-		// 根据 LocationType 注册路由
 		locType := static.LocationType
 		if locType == "" {
 			locType = matcher.LocationTypePrefix
@@ -172,15 +195,32 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 
 		switch locType {
 		case matcher.LocationTypeExact:
-			_ = s.locationEngine.AddExact(path, staticHandler.Handle, static.Internal)
+			if err := s.locationEngine.AddExact(path, staticHandler.Handle, static.Internal); err != nil {
+				if err := s.handleRegistrationError("static", path, err); err != nil {
+					return err
+				}
+			}
 		case matcher.LocationTypePrefixPriority:
-			_ = s.locationEngine.AddPrefixPriority(path, staticHandler.Handle, static.Internal)
+			if err := s.locationEngine.AddPrefixPriority(path, staticHandler.Handle, static.Internal); err != nil {
+				if err := s.handleRegistrationError("static", path, err); err != nil {
+					return err
+				}
+			}
 		case matcher.LocationTypePrefix:
-			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle, static.Internal)
+			if err := s.locationEngine.AddPrefix(path, staticHandler.Handle, static.Internal); err != nil {
+				if err := s.handleRegistrationError("static", path, err); err != nil {
+					return err
+				}
+			}
 		default:
-			_ = s.locationEngine.AddPrefix(path, staticHandler.Handle, static.Internal)
+			if err := s.locationEngine.AddPrefix(path, staticHandler.Handle, static.Internal); err != nil {
+				if err := s.handleRegistrationError("static", path, err); err != nil {
+					return err
+				}
+			}
 		}
 	}
+	return nil
 }
 
 // registerProxyRoutes 注册代理路由。
@@ -324,9 +364,9 @@ func (s *Server) registerLuaRoutes(router *handler.Router, serverCfg *config.Ser
 //   - 只有设置了 Route 字段的脚本才会被注册
 //   - 路由脚本不经过完整中间件链，只应用 accesslog 和 errorintercept
 //   - 支持 exact、prefix、prefix_priority、regex、regex_caseless 匹配类型
-func (s *Server) registerLuaRoutesWithLocationEngine(serverCfg *config.ServerConfig) {
+func (s *Server) registerLuaRoutesWithLocationEngine(serverCfg *config.ServerConfig) error {
 	if s.luaEngine == nil || serverCfg.Lua == nil || !serverCfg.Lua.Enabled {
-		return
+		return nil
 	}
 
 	for _, script := range serverCfg.Lua.Scripts {
@@ -348,17 +388,38 @@ func (s *Server) registerLuaRoutesWithLocationEngine(serverCfg *config.ServerCon
 
 		switch routeType {
 		case matcher.LocationTypeExact:
-			_ = s.locationEngine.AddExact(script.Route, handler, false)
+			if err := s.locationEngine.AddExact(script.Route, handler, false); err != nil {
+				if err := s.handleRegistrationError("lua", script.Route, err); err != nil {
+					return err
+				}
+			}
 		case matcher.LocationTypePrefixPriority:
-			_ = s.locationEngine.AddPrefixPriority(script.Route, handler, false)
+			if err := s.locationEngine.AddPrefixPriority(script.Route, handler, false); err != nil {
+				if err := s.handleRegistrationError("lua", script.Route, err); err != nil {
+					return err
+				}
+			}
 		case matcher.LocationTypeRegex:
-			_ = s.locationEngine.AddRegex(script.Route, handler, false, false)
+			if err := s.locationEngine.AddRegex(script.Route, handler, false, false); err != nil {
+				if err := s.handleRegistrationError("lua", script.Route, err); err != nil {
+					return err
+				}
+			}
 		case matcher.LocationTypeRegexCaseless:
-			_ = s.locationEngine.AddRegex(script.Route, handler, true, false)
+			if err := s.locationEngine.AddRegex(script.Route, handler, true, false); err != nil {
+				if err := s.handleRegistrationError("lua", script.Route, err); err != nil {
+					return err
+				}
+			}
 		default:
-			_ = s.locationEngine.AddPrefix(script.Route, handler, false)
+			if err := s.locationEngine.AddPrefix(script.Route, handler, false); err != nil {
+				if err := s.handleRegistrationError("lua", script.Route, err); err != nil {
+					return err
+				}
+			}
 		}
 	}
+	return nil
 }
 
 // wrapRoutedHandler 为路由处理器包装基础中间件链。

@@ -222,6 +222,7 @@ func DefaultConfig() *Config {
 		Shutdown: ShutdownConfig{
 			GracefulTimeout: 30 * time.Second,
 			FastTimeout:     5 * time.Second,
+			ReloadTimeout:   5 * time.Second,
 		},
 	}
 }
@@ -612,6 +613,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("shutdown:\n")
 	fmt.Fprintf(&buf, "  graceful_timeout: %ds    # 优雅停止超时（SIGQUIT），等待活跃请求完成（0=使用默认30s）\n", int(cfg.Shutdown.GracefulTimeout.Seconds()))
 	fmt.Fprintf(&buf, "  fast_timeout: %ds         # 快速停止超时（SIGINT/SIGTERM，0=使用默认5s）\n", int(cfg.Shutdown.FastTimeout.Seconds()))
+	fmt.Fprintf(&buf, "  reload_timeout: %ds        # 热重载启动等待超时（SIGHUP，0=使用默认5s）\n", int(cfg.Shutdown.ReloadTimeout.Seconds()))
 	buf.WriteString("\n")
 
 	// stream 配置
@@ -734,6 +736,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("#   - path: \"conf.d/*.yaml\"       # 相对路径 + glob 模式\n")
 	buf.WriteString("#   - path: \"sites/example.yaml\"  # 单个文件引入\n")
 	buf.WriteString("# 支持循环检测和深度限制（最大 10 层）\n")
+	buf.WriteString("# 注意：只有 servers、stream、variables 会被合并，其他字段忽略\n")
 
 	return buf.Bytes(), nil
 }

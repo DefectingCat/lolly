@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -81,8 +82,7 @@ type Config struct {
 	Resolver    ResolverConfig        `yaml:"resolver"`
 	Performance PerformanceConfig     `yaml:"performance"`
 	Shutdown    ShutdownConfig        `yaml:"shutdown"`
-	Include     []IncludeConfig       `yaml:"include"`    // 配置引入，支持从其他文件引入配置片段
-	CachePath   *ProxyCachePathConfig `yaml:"cache_path"` // 缓存路径配置（磁盘持久化）
+	Include     []IncludeConfig       `yaml:"include"` // 配置引入，支持从其他文件引入配置片段
 }
 
 // parseSize 解析大小字符串（支持 k, m 单位）。
@@ -139,11 +139,97 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
+	if len(cfg.Include) > 0 {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return nil, fmt.Errorf("获取配置文件绝对路径失败: %w", err)
+		}
+		visited := map[string]bool{absPath: true}
+		if err := processIncludes(&cfg, filepath.Dir(path), 0, visited); err != nil {
+			return nil, fmt.Errorf("处理配置引入失败: %w", err)
+		}
+	}
+
 	if err := Validate(&cfg); err != nil {
 		return nil, fmt.Errorf("配置验证失败: %w", err)
 	}
 
 	return &cfg, nil
+}
+
+const maxIncludeDepth = 10
+
+func processIncludes(cfg *Config, baseDir string, depth int, visited map[string]bool) error {
+	if depth >= maxIncludeDepth {
+		return fmt.Errorf("配置引入嵌套深度超过 %d 层", maxIncludeDepth)
+	}
+
+	for _, inc := range cfg.Include {
+		pattern := inc.Path
+		if !filepath.IsAbs(pattern) {
+			pattern = filepath.Join(baseDir, pattern)
+		}
+
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return fmt.Errorf("展开引入路径 %q 失败: %w", inc.Path, err)
+		}
+		if len(matches) == 0 {
+			return fmt.Errorf("引入路径 %q 未匹配到任何文件", inc.Path)
+		}
+
+		for _, match := range matches {
+			absMatch, err := filepath.Abs(match)
+			if err != nil {
+				return fmt.Errorf("获取引入文件绝对路径失败 %q: %w", match, err)
+			}
+			if visited[absMatch] {
+				return fmt.Errorf("检测到循环引入: %s", absMatch)
+			}
+			visited[absMatch] = true
+
+			info, err := os.Stat(match)
+			if err != nil {
+				return fmt.Errorf("读取引入文件 %q 失败: %w", match, err)
+			}
+			if info.IsDir() {
+				delete(visited, absMatch)
+				continue
+			}
+
+			data, err := os.ReadFile(match)
+			if err != nil {
+				return fmt.Errorf("读取引入文件 %q 失败: %w", match, err)
+			}
+
+			var included Config
+			if err := yaml.Unmarshal(data, &included); err != nil {
+				return fmt.Errorf("解析引入文件 %q 失败: %w", match, err)
+			}
+
+			if len(included.Include) > 0 {
+				if err := processIncludes(&included, filepath.Dir(match), depth+1, visited); err != nil {
+					return err
+				}
+			}
+
+			cfg.Servers = append(cfg.Servers, included.Servers...)
+			cfg.Stream = append(cfg.Stream, included.Stream...)
+			for k, v := range included.Variables.Set {
+				if _, exists := cfg.Variables.Set[k]; !exists {
+					if cfg.Variables.Set == nil {
+						cfg.Variables.Set = make(map[string]string)
+					}
+					cfg.Variables.Set[k] = v
+				}
+			}
+
+			delete(visited, absMatch)
+		}
+	}
+
+	cfg.Include = nil
+	return nil
 }
 
 // LoadFromString 从 YAML 字符串加载配置。

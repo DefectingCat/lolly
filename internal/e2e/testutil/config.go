@@ -462,15 +462,6 @@ func (b *ConfigBuilder) WithRewrite(pattern, replacement string, opts ...Rewrite
 	return b
 }
 
-// WithCachePath 配置缓存路径。
-func (b *ConfigBuilder) WithCachePath(path string, maxSize int64) *ConfigBuilder {
-	b.cfg.CachePath = &config.ProxyCachePathConfig{
-		Path:    path,
-		MaxSize: maxSize,
-	}
-	return b
-}
-
 // WithResolver 配置 DNS 解析器。
 func (b *ConfigBuilder) WithResolver(addresses []string, valid, timeout time.Duration) *ConfigBuilder {
 	b.cfg.Resolver = config.ResolverConfig{
