@@ -359,7 +359,8 @@ func createHostClient(targetURL string, timeout config.ProxyTimeout, transportCf
 
 	// 上游 SSL 配置（使用原生 TLSConfig）
 	if sslCfg != nil && sslCfg.Enabled && isTLS {
-		tlsCfg, err := CreateTLSConfig(sslCfg, extractHostFromURL(targetURL))
+		host, _ := netutil.ParseTargetURL(targetURL, false)
+		tlsCfg, err := CreateTLSConfig(sslCfg, host)
 		if err != nil {
 			logging.Error().Err(err).Str("target", targetURL).Msg("Failed to create upstream TLS config")
 		} else {
@@ -990,29 +991,4 @@ func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
 	return strings.EqualFold(string(upgrade), "websocket")
 }
 
-// extractHostFromURL 从 URL 字符串中提取 host:port 部分。
-//
-// 移除 http:// 或 https:// 协议前缀，以及路径部分，
-// 仅保留主机名和端口（如 "example.com:8080"）。
-//
-// 参数：
-//   - urlStr: 完整 URL 字符串
-//
-// 返回值：
-//   - string: host:port 格式的主机地址
-func extractHostFromURL(urlStr string) string {
-	// 移除协议前缀
-	host := urlStr
-	if strings.HasPrefix(host, "http://") {
-		host = host[7:]
-	} else if strings.HasPrefix(host, "https://") {
-		host = host[8:]
-	}
 
-	// 移除路径部分
-	if idx := strings.Index(host, "/"); idx != -1 {
-		host = host[:idx]
-	}
-
-	return host
-}

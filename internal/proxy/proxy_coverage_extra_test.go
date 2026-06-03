@@ -1423,55 +1423,6 @@ func TestSelectTarget_LuaEnabled(t *testing.T) {
 	})
 }
 
-// TestExtractHostFromURL 测试 extractHostFromURL 函数。
-func TestExtractHostFromURL(t *testing.T) {
-	tests := []struct {
-		name string
-		url  string
-		want string
-	}{
-		{
-			name: "HTTP URL with port",
-			url:  "http://example.com:8080",
-			want: "example.com:8080",
-		},
-		{
-			name: "HTTPS URL with port",
-			url:  "https://example.com:8443",
-			want: "example.com:8443",
-		},
-		{
-			name: "HTTP URL without port",
-			url:  "http://example.com",
-			want: "example.com",
-		},
-		{
-			name: "HTTPS URL without port",
-			url:  "https://example.com",
-			want: "example.com",
-		},
-		{
-			name: "URL with path",
-			url:  "http://example.com:8080/api/users",
-			want: "example.com:8080",
-		},
-		{
-			name: "No protocol prefix",
-			url:  "example.com:8080",
-			want: "example.com:8080",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := extractHostFromURL(tt.url)
-			if got != tt.want {
-				t.Errorf("extractHostFromURL() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
 // TestBackgroundRefresh_304 测试后台刷新收到 304 响应。
 func TestBackgroundRefresh_304(t *testing.T) {
 	ln := fasthttputil.NewInmemoryListener()

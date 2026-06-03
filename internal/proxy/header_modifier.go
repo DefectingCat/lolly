@@ -11,6 +11,7 @@ import (
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/logging"
+	"rua.plus/lolly/internal/netutil"
 	"rua.plus/lolly/internal/variable"
 )
 
@@ -30,7 +31,7 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 
 	// 设置 Host header 为目标主机
 	// 从 target.URL 提取 host:port（HostClient 连接需要此格式）
-	targetHost := extractHostFromURL(target.URL)
+	targetHost, _ := netutil.ParseTargetURL(target.URL, false)
 	if targetHost != "" {
 		headers.Set("Host", targetHost)
 	}
