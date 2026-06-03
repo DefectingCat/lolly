@@ -115,33 +115,13 @@ func (s *Server) registerProxyRoutesWithLocationEngine(serverCfg *config.ServerC
 			locType = matcher.LocationTypePrefix
 		}
 
-		switch locType {
-		case matcher.LocationTypeExact:
-			if err := s.registerRoute(locType, proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal, "proxy"); err != nil {
-				return err
-			}
-		case matcher.LocationTypePrefixPriority:
-			if err := s.registerRoute(locType, proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal, "proxy"); err != nil {
-				return err
-			}
-		case matcher.LocationTypeRegex, matcher.LocationTypeRegexCaseless:
-			if err := s.registerRoute(locType, proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal, "proxy"); err != nil {
-				return err
-			}
-		case matcher.LocationTypeNamed:
-			if proxyCfg.LocationName != "" {
-				if err := s.registerRoute(locType, "@"+proxyCfg.LocationName, p.ServeHTTP, false, "proxy"); err != nil {
-					return err
-				}
-			}
-		case matcher.LocationTypePrefix:
-			if err := s.registerRoute(locType, proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal, "proxy"); err != nil {
-				return err
-			}
-		default:
-			if err := s.registerRoute(locType, proxyCfg.Path, p.ServeHTTP, proxyCfg.Internal, "proxy"); err != nil {
-				return err
-			}
+		path := proxyCfg.Path
+		if locType == matcher.LocationTypeNamed && proxyCfg.LocationName != "" {
+			path = "@" + proxyCfg.LocationName
+		}
+
+		if err := s.registerRoute(locType, path, p.ServeHTTP, proxyCfg.Internal, "proxy"); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -214,23 +194,8 @@ func (s *Server) registerStaticHandlersWithLocationEngine(cfg *config.ServerConf
 			locType = matcher.LocationTypePrefix
 		}
 
-		switch locType {
-		case matcher.LocationTypeExact:
-			if err := s.registerRoute(locType, path, staticHandler.Handle, static.Internal, "static"); err != nil {
-				return err
-			}
-		case matcher.LocationTypePrefixPriority:
-			if err := s.registerRoute(locType, path, staticHandler.Handle, static.Internal, "static"); err != nil {
-				return err
-			}
-		case matcher.LocationTypePrefix:
-			if err := s.registerRoute(locType, path, staticHandler.Handle, static.Internal, "static"); err != nil {
-				return err
-			}
-		default:
-			if err := s.registerRoute(locType, path, staticHandler.Handle, static.Internal, "static"); err != nil {
-				return err
-			}
+		if err := s.registerRoute(locType, path, staticHandler.Handle, static.Internal, "static"); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -399,27 +364,8 @@ func (s *Server) registerLuaRoutesWithLocationEngine(serverCfg *config.ServerCon
 			routeType = matcher.LocationTypePrefix
 		}
 
-		switch routeType {
-		case matcher.LocationTypeExact:
-			if err := s.registerRoute(routeType, script.Route, handler, false, "lua"); err != nil {
-				return err
-			}
-		case matcher.LocationTypePrefixPriority:
-			if err := s.registerRoute(routeType, script.Route, handler, false, "lua"); err != nil {
-				return err
-			}
-		case matcher.LocationTypeRegex, matcher.LocationTypeRegexCaseless:
-			if err := s.registerRoute(routeType, script.Route, handler, false, "lua"); err != nil {
-				return err
-			}
-		case matcher.LocationTypePrefix:
-			if err := s.registerRoute(routeType, script.Route, handler, false, "lua"); err != nil {
-				return err
-			}
-		default:
-			if err := s.registerRoute(routeType, script.Route, handler, false, "lua"); err != nil {
-				return err
-			}
+		if err := s.registerRoute(routeType, script.Route, handler, false, "lua"); err != nil {
+			return err
 		}
 	}
 	return nil
