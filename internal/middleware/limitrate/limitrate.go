@@ -12,8 +12,10 @@ import (
 
 const (
 	// LargeFileStrategySkip 跳过大文件限速
+// LargeFileStrategySkip 大文件策略：跳过（不限制）。
 	LargeFileStrategySkip = "skip"
 	// LargeFileStrategyCoarse 粗粒度限速
+// LargeFileStrategyCoarse 大文件策略：粗略限制。
 	LargeFileStrategyCoarse = "coarse"
 )
 

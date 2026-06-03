@@ -36,16 +36,16 @@ const MaxRewriteIterations = 10
 type Flag int
 
 const (
-	// FlagLast 继续匹配其他规则（nginx 行为：重新从第一条规则开始匹配）。
+// FlagLast 继续匹配其他规则（nginx 行为：重新从第一条规则开始匹配）。
 	// 匹配到规则后会重新从第一条规则开始遍历，用于多规则链式重写。
 	FlagLast Flag = iota
-	// FlagRedirect 返回 302 临时重定向。
+// FlagRedirect 返回 302 临时重定向。
 	// 客户端收到 302 响应后重新请求新 URL，不会继续匹配后续规则。
 	FlagRedirect
-	// FlagPermanent 返回 301 永久重定向。
+// FlagPermanent 返回 301 永久重定向。
 	// 客户端收到 301 响应后永久重定向到新 URL，不会继续匹配后续规则。
 	FlagPermanent
-	// FlagBreak 停止匹配规则。
+// FlagBreak 停止匹配规则。
 	// 修改请求路径后终止重写流程，直接进入下一个处理器。
 	FlagBreak
 )
