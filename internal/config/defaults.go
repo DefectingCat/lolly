@@ -734,6 +734,7 @@ func GenerateConfigYAML(cfg *Config) ([]byte, error) {
 	buf.WriteString("#   - path: \"conf.d/*.yaml\"       # 相对路径 + glob 模式\n")
 	buf.WriteString("#   - path: \"sites/example.yaml\"  # 单个文件引入\n")
 	buf.WriteString("# 支持循环检测和深度限制（最大 10 层）\n")
+	buf.WriteString("# 注意：只有 servers、stream、variables 会被合并，其他字段忽略\n")
 
 	return buf.Bytes(), nil
 }

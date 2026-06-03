@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -598,7 +599,7 @@ include:
 		}
 	})
 
-	t.Run("circular include detected", func(t *testing.T) {
+	t.Run("circular include detected immediately", func(t *testing.T) {
 		tmpDir := t.TempDir()
 
 		cfg1 := `
@@ -623,6 +624,81 @@ include:
 		_, err := Load(filepath.Join(tmpDir, "a.yaml"))
 		if err == nil {
 			t.Error("expected error for circular include")
+		}
+		if !strings.Contains(err.Error(), "循环引入") {
+			t.Errorf("error should mention circular include, got: %v", err)
+		}
+	})
+
+	t.Run("self include detected", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := `
+servers:
+  - listen: ":8080"
+include:
+  - path: "a.yaml"
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "a.yaml"), []byte(cfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		_, err := Load(filepath.Join(tmpDir, "a.yaml"))
+		if err == nil {
+			t.Error("expected error for self include")
+		}
+	})
+
+	t.Run("diamond include works", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		mainCfg := `
+servers:
+  - listen: ":8080"
+include:
+  - path: "b.yaml"
+  - path: "c.yaml"
+`
+		bCfg := `
+servers:
+  - listen: ":9090"
+include:
+  - path: "shared.yaml"
+`
+		cCfg := `
+servers:
+  - listen: ":9091"
+include:
+  - path: "shared.yaml"
+`
+		sharedCfg := `
+variables:
+  set:
+    shared: value
+`
+		if err := os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte(mainCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "b.yaml"), []byte(bCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "c.yaml"), []byte(cCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "shared.yaml"), []byte(sharedCfg), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg, err := Load(filepath.Join(tmpDir, "config.yaml"))
+		if err != nil {
+			t.Fatalf("diamond include should work: %v", err)
+		}
+
+		if len(cfg.Servers) != 3 {
+			t.Errorf("expected 3 servers, got %d", len(cfg.Servers))
+		}
+		if cfg.Variables.Set["shared"] != "value" {
+			t.Error("shared variable should be merged")
 		}
 	})
 

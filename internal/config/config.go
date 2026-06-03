@@ -140,7 +140,9 @@ func Load(path string) (*Config, error) {
 	}
 
 	if len(cfg.Include) > 0 {
-		if err := processIncludes(&cfg, filepath.Dir(path), 0); err != nil {
+		absPath, _ := filepath.Abs(path)
+		visited := map[string]bool{absPath: true}
+		if err := processIncludes(&cfg, filepath.Dir(path), 0, visited); err != nil {
 			return nil, fmt.Errorf("处理配置引入失败: %w", err)
 		}
 	}
@@ -154,9 +156,9 @@ func Load(path string) (*Config, error) {
 
 const maxIncludeDepth = 10
 
-func processIncludes(cfg *Config, baseDir string, depth int) error {
+func processIncludes(cfg *Config, baseDir string, depth int, visited map[string]bool) error {
 	if depth >= maxIncludeDepth {
-		return fmt.Errorf("配置引入嵌套深度超过 %d 层，可能存在循环引入", maxIncludeDepth)
+		return fmt.Errorf("配置引入嵌套深度超过 %d 层", maxIncludeDepth)
 	}
 
 	for _, inc := range cfg.Include {
@@ -174,11 +176,18 @@ func processIncludes(cfg *Config, baseDir string, depth int) error {
 		}
 
 		for _, match := range matches {
+			absMatch, _ := filepath.Abs(match)
+			if visited[absMatch] {
+				return fmt.Errorf("检测到循环引入: %s", absMatch)
+			}
+			visited[absMatch] = true
+
 			info, err := os.Stat(match)
 			if err != nil {
 				return fmt.Errorf("读取引入文件 %q 失败: %w", match, err)
 			}
 			if info.IsDir() {
+				delete(visited, absMatch)
 				continue
 			}
 
@@ -193,7 +202,7 @@ func processIncludes(cfg *Config, baseDir string, depth int) error {
 			}
 
 			if len(included.Include) > 0 {
-				if err := processIncludes(&included, filepath.Dir(match), depth+1); err != nil {
+				if err := processIncludes(&included, filepath.Dir(match), depth+1, visited); err != nil {
 					return err
 				}
 			}
@@ -208,6 +217,8 @@ func processIncludes(cfg *Config, baseDir string, depth int) error {
 					cfg.Variables.Set[k] = v
 				}
 			}
+
+			delete(visited, absMatch)
 		}
 	}
 
