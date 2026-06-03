@@ -199,18 +199,16 @@ func (e *LocationEngine) AddNamed(name string, handler fasthttp.RequestHandler) 
 // 返回值：
 //   - *MatchResult: 匹配结果，无匹配时返回 nil
 func (e *LocationEngine) Match(path string) *MatchResult {
-	// 1. 精确匹配 (=) - O(1)
 	if m, ok := e.exactMatchers[path]; ok {
 		return m.Result()
 	}
 
-	// 2. 前缀优先匹配 (^~) - O(log n)
 	prefixPriorityResult := e.prefixPriorityTree.FindLongestPrefix(path)
 	if prefixPriorityResult != nil && prefixPriorityResult.Handler != nil {
 		return prefixPriorityResult
 	}
+	ReleaseMatchResult(prefixPriorityResult)
 
-	// 3. 正则匹配 (~, ~*) - 按顺序
 	for _, m := range e.regexMatchers {
 		if m.Match(path) {
 			result := m.Result()
@@ -219,7 +217,6 @@ func (e *LocationEngine) Match(path string) *MatchResult {
 		}
 	}
 
-	// 4. 前缀匹配（无修饰符）- O(log n)
 	return e.prefixTree.FindLongestPrefix(path)
 }
 

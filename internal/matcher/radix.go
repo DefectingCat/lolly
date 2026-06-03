@@ -11,9 +11,16 @@ package matcher
 import (
 	"errors"
 	"strings"
+	"sync"
 
 	"github.com/valyala/fasthttp"
 )
+
+var matchResultPool = sync.Pool{
+	New: func() any {
+		return &MatchResult{}
+	},
+}
 
 // RadixNode Radix Tree 节点。
 //
@@ -218,70 +225,58 @@ func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, 
 // 返回值：
 //   - *MatchResult: 最长前缀匹配结果，无匹配时返回 nil
 func (t *RadixTree) FindLongestPrefix(path string) *MatchResult {
-	return t.searchLongest(t.root, path, nil)
+	bestNode := t.searchLongest(t.root, path, nil)
+	if bestNode == nil {
+		return nil
+	}
+	result := matchResultPool.Get().(*MatchResult)
+	result.Handler = bestNode.handler
+	result.Path = bestNode.prefix
+	result.Priority = bestNode.priority
+	result.LocationType = bestNode.locationType
+	result.Internal = bestNode.internal
+	return result
 }
 
-// searchLongest 递归搜索最长前缀匹配。
-//
-// 匹配规则：
-//  1. 优先级数值越小越优先
-//  2. 相同优先级时，前缀越长越优先
-//
-// 参数：
-//   - node: 当前搜索节点
-//   - path: 剩余待匹配路径
-//   - bestMatch: 当前最佳匹配
-//
-// 返回值：
-//   - *MatchResult: 最佳匹配结果
-func (t *RadixTree) searchLongest(node *RadixNode, path string, bestMatch *MatchResult) *MatchResult {
+func (t *RadixTree) searchLongest(node *RadixNode, path string, bestNode *RadixNode) *RadixNode {
 	if node == nil || path == "" {
-		return bestMatch
+		return bestNode
 	}
 
-	// 检查是否匹配节点前缀
 	if !strings.HasPrefix(path, node.prefix) {
-		return bestMatch
+		return bestNode
 	}
 
 	remaining := path[len(node.prefix):]
 
-	// 如果节点有 handler，更新最佳匹配
 	if node.handler != nil {
-		newMatch := &MatchResult{
-			Handler:      node.handler,
-			Path:         node.prefix,
-			Priority:     node.priority,
-			LocationType: node.locationType,
-			Internal:     node.internal,
-		}
-
-		// nil-safe 优先级比较 + 长度比较
-		if bestMatch == nil {
-			bestMatch = newMatch
-		} else if node.priority < bestMatch.Priority {
-			bestMatch = newMatch
-		} else if node.priority == bestMatch.Priority && len(node.prefix) > len(bestMatch.Path) {
-			bestMatch = newMatch
+		if bestNode == nil || node.priority < bestNode.priority {
+			bestNode = node
+		} else if node.priority == bestNode.priority && len(node.prefix) > len(bestNode.prefix) {
+			bestNode = node
 		}
 	}
 
-	// 继续搜索子节点
 	for _, child := range node.children {
-		childMatch := t.searchLongest(child, remaining, bestMatch)
-		if childMatch != nil {
-			// nil-safe 比较
-			if bestMatch == nil {
-				bestMatch = childMatch
-			} else if childMatch.Priority < bestMatch.Priority {
-				bestMatch = childMatch
-			} else if childMatch.Priority == bestMatch.Priority && len(childMatch.Path) > len(bestMatch.Path) {
-				bestMatch = childMatch
+		result := t.searchLongest(child, remaining, bestNode)
+		if result != nil && result != bestNode {
+			if bestNode == nil || result.priority < bestNode.priority {
+				bestNode = result
+			} else if result.priority == bestNode.priority && len(result.prefix) > len(bestNode.prefix) {
+				bestNode = result
 			}
 		}
 	}
 
-	return bestMatch
+	return bestNode
+}
+
+func ReleaseMatchResult(r *MatchResult) {
+	if r == nil {
+		return
+	}
+	*r = MatchResult{}
+	matchResultPool.Put(r)
 }
 
 // MarkInitialized 标记初始化完成。
