@@ -1,3 +1,8 @@
+// Package limitrate 提供基于令牌桶算法的请求速率限制功能。
+//
+// 包含速率限制响应写入器相关的逻辑，用于处理被限制的请求响应。
+//
+// 作者：xfy
 package limitrate
 
 import (

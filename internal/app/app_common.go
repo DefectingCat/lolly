@@ -1,3 +1,8 @@
+// Package app 提供 Lolly 应用程序的生命周期管理和命令行入口。
+//
+// 包含应用通用逻辑相关的工具函数。
+//
+// 作者：xfy
 package app
 
 import (

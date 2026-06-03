@@ -1,3 +1,8 @@
+// Package utils 提供通用的工具函数和辅助类型。
+//
+// 包含字节操作相关的工具函数，用于处理字节切片和缓冲区。
+//
+// 作者：xfy
 package utils
 
 import "unsafe"

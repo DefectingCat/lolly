@@ -1,3 +1,8 @@
+// Package app 提供 Lolly 应用程序的生命周期管理和命令行入口。
+//
+// 包含配置导入相关的逻辑，用于导入 nginx 配置等外部配置。
+//
+// 作者：xfy
 package app
 
 import (

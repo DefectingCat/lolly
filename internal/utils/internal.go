@@ -1,3 +1,8 @@
+// Package utils 提供通用的工具函数和辅助类型。
+//
+// 包含内部工具函数，用于处理内部逻辑。
+//
+// 作者：xfy
 package utils
 
 import "github.com/valyala/fasthttp"

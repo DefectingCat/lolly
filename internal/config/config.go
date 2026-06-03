@@ -29,7 +29,7 @@ import (
 
 // 默认配置常量。
 const (
-	// DefaultPprofPath pprof 端点的默认路径。
+// DefaultPprofPath pprof 端点的默认路径。
 	DefaultPprofPath = "/debug/pprof"
 )
 
@@ -40,13 +40,13 @@ type ServerMode string
 
 // ServerMode 枚举值。
 const (
-	// ServerModeSingle 单服务器模式 - 只运行一个服务器实例。
+// ServerModeSingle 单服务器模式 - 只运行一个服务器实例。
 	ServerModeSingle ServerMode = "single"
-	// ServerModeVHost 虚拟主机模式 - 多个服务器共享相同的监听地址。
+// ServerModeVHost 虚拟主机模式 - 多个服务器共享相同的监听地址。
 	ServerModeVHost ServerMode = "vhost"
-	// ServerModeMultiServer 多服务器模式 - 多个服务器监听不同的地址。
+// ServerModeMultiServer 多服务器模式 - 多个服务器监听不同的地址。
 	ServerModeMultiServer ServerMode = "multi_server"
-	// ServerModeAuto 自动模式 - 根据配置自动推断运行模式。
+// ServerModeAuto 自动模式 - 根据配置自动推断运行模式。
 	ServerModeAuto ServerMode = "auto"
 )
 

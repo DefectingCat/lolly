@@ -47,6 +47,7 @@ const (
 	PhaseBodyFilter
 )
 
+// String 返回处理阶段的字符串表示。
 func (p Phase) String() string {
 	switch p {
 	case PhaseInit:

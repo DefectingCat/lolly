@@ -25,6 +25,7 @@ type Warning struct {
 	Message   string
 }
 
+// String 返回警告的字符串表示。
 func (w Warning) String() string {
 	return fmt.Sprintf("warning: %s:%d: %s", w.File, w.Line, w.Message)
 }

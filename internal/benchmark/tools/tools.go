@@ -1,4 +1,8 @@
 // Package tools 提供基准测试和集成测试的辅助工具。
+//
+// 包含 Mock 后端创建、测试数据生成等工具函数。
+//
+// 作者：xfy
 package tools
 
 import (
@@ -10,14 +14,19 @@ import (
 
 // 预定义的测试数据大小常量
 const (
-	Size100B  = 100
-	Size1KB   = 1024
-	Size10KB  = 10 * 1024
+	// Size100B 100 字节测试数据。
+	Size100B = 100
+	// Size1KB 1KB 测试数据。
+	Size1KB = 1024
+	// Size10KB 10KB 测试数据。
+	Size10KB = 10 * 1024
+	// Size100KB 100KB 测试数据。
 	Size100KB = 100 * 1024
-	Size1MB   = 1024 * 1024
+	// Size1MB 1MB 测试数据。
+	Size1MB = 1024 * 1024
 )
 
-// MockBackendConfig Mock 后端配置
+// MockBackendConfig Mock 后端配置。
 type MockBackendConfig struct {
 	// Mode 运行模式
 	Mode string
@@ -33,9 +42,13 @@ type MockBackendConfig struct {
 
 // Mock 后端运行模式
 const (
-	ModeNormalResponse  = "normal"
-	ModeRandomResponse  = "random"
-	ModeErrorResponse   = "error"
+	// ModeNormalResponse 正常响应模式。
+	ModeNormalResponse = "normal"
+	// ModeRandomResponse 随机响应模式。
+	ModeRandomResponse = "random"
+	// ModeErrorResponse 错误响应模式。
+	ModeErrorResponse = "error"
+	// ModeDelayedResponse 延迟响应模式。
 	ModeDelayedResponse = "delayed"
 )
 

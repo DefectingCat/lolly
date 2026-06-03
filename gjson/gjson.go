@@ -23,7 +23,7 @@
 //   - Number precision control
 //   - Independent configuration instances via gjson.new()
 //
-// Author: xfy
+// 作者：xfy
 package gjson
 
 import (
@@ -31,10 +31,10 @@ import (
 )
 
 const (
-	// ModuleName is the Lua module name for require()
+	// ModuleName 模块名称。
 	ModuleName = "gjson"
 
-	// Version is the module version
+	// Version 模块版本号。
 	Version = "1.0.0"
 )
 

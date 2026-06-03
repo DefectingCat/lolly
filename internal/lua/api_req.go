@@ -55,6 +55,7 @@ const (
 	layerStringUnknown = "unknown"
 )
 
+// String 返回 API 层级的字符串表示。
 func (l ngxReqAPILayer) String() string {
 	switch l {
 	case APILayerDirect:

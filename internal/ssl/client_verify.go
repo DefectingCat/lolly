@@ -29,13 +29,13 @@ import (
 type ClientVerifyMode int
 
 const (
-	// VerifyOff 不验证客户端证书
+// VerifyOff 不验证客户端证书。
 	VerifyOff ClientVerifyMode = iota
-	// VerifyOn 强制验证客户端证书
+	// VerifyOn 强制验证客户端证书。
 	VerifyOn
-	// VerifyOptional 可选验证（客户端可选择不提供证书）
+	// VerifyOptional 可选验证（客户端可选择不提供证书）。
 	VerifyOptional
-	// VerifyOptionalNoCA 可选验证但不验证 CA
+	// VerifyOptionalNoCA 可选验证但不验证 CA。
 	VerifyOptionalNoCA
 
 	// verifyModeOff 验证模式字符串常量
