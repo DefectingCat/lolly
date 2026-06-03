@@ -25,7 +25,6 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -479,36 +478,4 @@ func (m *OCSPManager) GetStatus(serial string) (status OCSPStatus, hasResponse b
 	return resp.status, len(resp.response) > 0
 }
 
-// extractCertificates 解析 PEM 数据并返回证书列表。
-//
-// 参数：
-//   - pemData: PEM 编码的证书数据
-//
-// 返回值：
-//   - []*x509.Certificate: 解析后的证书列表
-//   - error: 解析失败时返回错误
-func extractCertificates(pemData []byte) ([]*x509.Certificate, error) {
-	var certs []*x509.Certificate
-	rest := pemData
 
-	for {
-		block, remaining := pem.Decode(rest)
-		if block == nil {
-			break
-		}
-		if block.Type == "CERTIFICATE" {
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse certificate: %w", err)
-			}
-			certs = append(certs, cert)
-		}
-		rest = remaining
-	}
-
-	if len(certs) == 0 {
-		return nil, errors.New("no certificates found in PEM data")
-	}
-
-	return certs, nil
-}

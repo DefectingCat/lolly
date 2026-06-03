@@ -308,32 +308,6 @@ func TestTLSManagerClose(t *testing.T) {
 	manager.Close()
 }
 
-func TestExtractCertificates(t *testing.T) {
-	// Create valid PEM data
-	certPEM, _ := generateTestCertWithOCSP(t, nil)
-
-	certs, err := extractCertificates(certPEM)
-	if err != nil {
-		t.Fatalf("extractCertificates() failed: %v", err)
-	}
-
-	if len(certs) == 0 {
-		t.Error("Expected at least one certificate")
-	}
-}
-
-func TestExtractCertificatesInvalidPEM(t *testing.T) {
-	invalidPEM := []byte("not valid pem data")
-
-	certs, err := extractCertificates(invalidPEM)
-	if err == nil {
-		t.Error("Expected error for invalid PEM data")
-	}
-	if certs != nil {
-		t.Error("Expected nil certs for invalid PEM data")
-	}
-}
-
 func TestOCSPManagerRegisterCertificate(t *testing.T) {
 	mgr := NewOCSPManager(nil)
 	defer mgr.Stop()
