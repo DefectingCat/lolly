@@ -308,7 +308,7 @@ func (api *ngxReqAPI) luaSetURIArgs(L *glua.LState) int {
 	// 获取参数类型
 	argType := L.Get(1)
 
-	//nolint:exhaustive // 只处理特定类型
+	//nolint:exhaustive,nolintlint
 	switch argType.Type() {
 	case glua.LTString:
 		// 如果是字符串，直接解析并设置
@@ -330,7 +330,7 @@ func (api *ngxReqAPI) luaSetURIArgs(L *glua.LState) int {
 
 		table.ForEach(func(key, value glua.LValue) {
 			keyStr := glua.LVAsString(key)
-			//nolint:exhaustive // 只处理特定类型
+			//nolint:exhaustive,nolintlint
 			switch value.Type() {
 			case glua.LTString:
 				// 类型断言检查

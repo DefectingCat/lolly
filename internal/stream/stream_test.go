@@ -13,7 +13,6 @@ package stream
 import (
 	"net"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -96,10 +95,13 @@ func TestRoundRobinBalancer(t *testing.T) {
 
 func TestLeastConnBalancer(t *testing.T) {
 	targets := []*Target{
-		{addr: "localhost:8001", conns: 5},
-		{addr: "localhost:8002", conns: 2},
-		{addr: "localhost:8003", conns: 8},
+		{addr: "localhost:8001"},
+		{addr: "localhost:8002"},
+		{addr: "localhost:8003"},
 	}
+	targets[0].conns.Store(5)
+	targets[1].conns.Store(2)
+	targets[2].conns.Store(8)
 	for _, t := range targets {
 		t.healthy.Store(true)
 	}
@@ -249,12 +251,12 @@ func TestConcurrentConnections(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 100 {
 		wg.Go(func() {
-			atomic.AddInt64(&s.connCount, 1)
+			s.connCount.Add(1)
 		})
 	}
 	wg.Wait()
 
-	if s.connCount != 100 {
+	if s.connCount.Load() != 100 {
 		t.Errorf("Expected 100 connections, got %d", s.connCount)
 	}
 }
@@ -335,10 +337,13 @@ func TestRoundRobinBalancerWithSingleTarget(t *testing.T) {
 func TestLeastConnBalancerWithTie(t *testing.T) {
 	lc := newLeastConn()
 	targets := []*Target{
-		{addr: "backend1:8080", conns: 5},
-		{addr: "backend2:8080", conns: 5},
-		{addr: "backend3:8080", conns: 5},
+		{addr: "backend1:8080"},
+		{addr: "backend2:8080"},
+		{addr: "backend3:8080"},
 	}
+	targets[0].conns.Store(5)
+	targets[1].conns.Store(5)
+	targets[2].conns.Store(5)
 	for _, t := range targets {
 		t.healthy.Store(true)
 	}

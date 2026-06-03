@@ -260,8 +260,8 @@ func BenchmarkStreamBalancerSelect(b *testing.B) {
 				targets[i] = &Target{
 					addr:   fmt.Sprintf("backend%d:8080", i),
 					weight: i + 1,
-					conns:  int64(i * 10), // 模拟不同连接数
 				}
+				targets[i].conns.Store(int64(i * 10))
 				targets[i].healthy.Store(true)
 			}
 
@@ -353,8 +353,8 @@ func BenchmarkStreamLeastConnWithVaryingConns(b *testing.B) {
 				targets[i] = &Target{
 					addr:   fmt.Sprintf("backend%d:8080", i),
 					weight: 1,
-					conns:  conns,
 				}
+				targets[i].conns.Store(conns)
 				targets[i].healthy.Store(true)
 			}
 

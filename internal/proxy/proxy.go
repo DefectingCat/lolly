@@ -57,7 +57,7 @@ import (
 
 // proxyDebugLog 在 DEBUG 级别记录代理日志
 // 调用者必须先检查 logging.Debug().Enabled() 以避免不必要的内存分配
-func proxyDebugLog(msg string, kv ...interface{}) {
+func proxyDebugLog(msg string, kv ...any) {
 	event := logging.Debug()
 	for i := 0; i < len(kv)-1; i += 2 {
 		key, ok := kv[i].(string)

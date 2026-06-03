@@ -180,7 +180,7 @@ func RegisterLocationAPI(L *glua.LState, manager *LocationManager, ngx *glua.LTa
 			optionsTable := L.CheckTable(2)
 			optionsTable.ForEach(func(key, value glua.LValue) {
 				keyStr := glua.LVAsString(key)
-				//nolint:exhaustive // 只处理特定类型
+				//nolint:exhaustive,nolintlint
 				switch value.Type() {
 				case glua.LTString:
 					opts[keyStr] = glua.LVAsString(value)

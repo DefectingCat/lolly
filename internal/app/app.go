@@ -192,7 +192,7 @@ func (a *App) reloadConfig() {
 	for i, ln := range listeners {
 		duped[i], err = server.DupListener(ln)
 		if err != nil {
-			for j := 0; j < i; j++ {
+			for j := range i {
 				_ = duped[j].Close()
 			}
 			a.logger.Error().Err(err).Msg("Failed to dup listener for reload")
@@ -289,6 +289,8 @@ func (a *App) requiresFullRestart(newCfg *config.Config) bool {
 				return true
 			}
 		}
+	case config.ServerModeAuto:
+		return true
 	}
 	return false
 }

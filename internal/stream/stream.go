@@ -136,7 +136,7 @@ func (l *leastConn) Select(targets []*Target) *Target {
 		if !t.healthy.Load() {
 			continue
 		}
-		conns := atomic.LoadInt64(&t.conns)
+		conns := t.conns.Load()
 		if selected == nil || conns < minConns {
 			selected = t
 			minConns = conns
@@ -293,7 +293,7 @@ type Server struct {
 	// upstreams 上游配置映射
 	upstreams map[string]*Upstream
 	// connCount 当前连接数
-	connCount int64
+	connCount atomic.Int64
 	// mu 读写锁，保护并发访问
 	mu sync.RWMutex
 	// running 运行状态标志
@@ -329,7 +329,7 @@ type Target struct {
 	// healthy 健康状态
 	healthy atomic.Bool
 	// conns 当前连接数
-	conns int64
+	conns atomic.Int64
 }
 
 // HealthChecker Stream 健康检查器。
@@ -528,7 +528,7 @@ func (s *Server) acceptLoop(addr string, listener net.Listener) {
 			continue
 		}
 
-		atomic.AddInt64(&s.connCount, 1)
+		s.connCount.Add(1)
 		go s.handleConnection(conn, addr)
 	}
 }
@@ -547,7 +547,7 @@ func (s *Server) acceptLoop(addr string, listener net.Listener) {
 func (s *Server) handleConnection(clientConn net.Conn, _ string) {
 	defer func() {
 		_ = clientConn.Close()
-		atomic.AddInt64(&s.connCount, -1)
+		s.connCount.Add(-1)
 	}()
 
 	s.mu.RLock()
@@ -569,8 +569,8 @@ func (s *Server) handleConnection(clientConn net.Conn, _ string) {
 		return // 无可用目标
 	}
 
-	atomic.AddInt64(&target.conns, 1)
-	defer func() { atomic.AddInt64(&target.conns, -1) }()
+	target.conns.Add(1)
+	defer func() { target.conns.Add(-1) }()
 
 	// 连接目标
 	targetConn, err := net.DialTimeout("tcp", target.addr, 10*time.Second)
@@ -808,7 +808,7 @@ func (s *udpServer) getOrCreateSession(clientAddr *net.UDPAddr) (*udpSession, er
 		return nil, err
 	}
 
-	atomic.AddInt64(&target.conns, 1)
+	target.conns.Add(1)
 
 	// 创建新会话
 	session = &udpSession{
@@ -855,7 +855,7 @@ func (sess *udpSession) close() {
 			_ = sess.targetConn.Close()
 		}
 		if sess.target != nil {
-			atomic.AddInt64(&sess.target.conns, -1)
+			sess.target.conns.Add(-1)
 		}
 	})
 }

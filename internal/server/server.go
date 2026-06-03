@@ -46,6 +46,8 @@ import (
 	"rua.plus/lolly/internal/version"
 )
 
+const networkTCP = "tcp"
+
 // Server HTTP 服务器，封装 fasthttp.Server 并提供中间件链和生命周期管理。
 //
 // 该结构体是服务器的核心实体，负责：
@@ -358,7 +360,7 @@ func (s *Server) createListener(cfg *config.ServerConfig) (net.Listener, error) 
 		return listener, nil
 	}
 
-	return net.Listen("tcp", listenAddr)
+	return net.Listen(networkTCP, listenAddr)
 }
 
 func (s *Server) matchInheritedListener(inherited []net.Listener, listenAddr string) net.Listener {
@@ -383,7 +385,7 @@ func (s *Server) matchInheritedListener(inherited []net.Listener, listenAddr str
 		if ln == nil {
 			continue
 		}
-		if ln.Addr().Network() != "tcp" {
+		if ln.Addr().Network() != networkTCP {
 			continue
 		}
 		if s.tcpAddrMatch(ln.Addr().String(), listenAddr) {
@@ -426,14 +428,14 @@ func DupListener(ln net.Listener) (net.Listener, error) {
 		if err != nil {
 			return nil, fmt.Errorf("dup tcp listener: %w", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		return net.FileListener(file)
 	case *net.UnixListener:
 		file, err := l.File()
 		if err != nil {
 			return nil, fmt.Errorf("dup unix listener: %w", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		return net.FileListener(file)
 	default:
 		return nil, fmt.Errorf("unsupported listener type: %T", ln)
@@ -467,8 +469,8 @@ func (s *Server) startSingleMode() error {
 		if err != nil {
 			logging.Error().Msg("Failed to create status handler: " + err.Error())
 		} else {
-			if err := s.locationEngine.AddExact(statusHandler.Path(), statusHandler.ServeHTTP, false); err != nil {
-				if err := s.handleRegistrationError("status", statusHandler.Path(), err); err != nil {
+			if regErr := s.locationEngine.AddExact(statusHandler.Path(), statusHandler.ServeHTTP, false); regErr != nil {
+				if err := s.handleRegistrationError("status", statusHandler.Path(), regErr); err != nil {
 					return err
 				}
 			}
@@ -480,13 +482,13 @@ func (s *Server) startSingleMode() error {
 		if err != nil {
 			logging.Error().Msg("Failed to create pprof handler: " + err.Error())
 		} else {
-			if err := s.locationEngine.AddExact(pprofHandler.Path(), pprofHandler.ServeHTTP, false); err != nil {
-				if err := s.handleRegistrationError("pprof", pprofHandler.Path(), err); err != nil {
+			if regErr := s.locationEngine.AddExact(pprofHandler.Path(), pprofHandler.ServeHTTP, false); regErr != nil {
+				if err := s.handleRegistrationError("pprof", pprofHandler.Path(), regErr); err != nil {
 					return err
 				}
 			}
-			if err := s.locationEngine.AddPrefixPriority(pprofHandler.Path()+"/", pprofHandler.ServeHTTP, false); err != nil {
-				if err := s.handleRegistrationError("pprof", pprofHandler.Path()+"/", err); err != nil {
+			if regErr := s.locationEngine.AddPrefixPriority(pprofHandler.Path()+"/", pprofHandler.ServeHTTP, false); regErr != nil {
+				if err := s.handleRegistrationError("pprof", pprofHandler.Path()+"/", regErr); err != nil {
 					return err
 				}
 			}
@@ -498,8 +500,8 @@ func (s *Server) startSingleMode() error {
 		if err != nil {
 			logging.Error().Msg("Failed to create cache purge handler: " + err.Error())
 		} else {
-			if err := s.locationEngine.AddExact(purgeHandler.Path(), purgeHandler.ServeHTTP, false); err != nil {
-				if err := s.handleRegistrationError("cache-purge", purgeHandler.Path(), err); err != nil {
+			if regErr := s.locationEngine.AddExact(purgeHandler.Path(), purgeHandler.ServeHTTP, false); regErr != nil {
+				if err := s.handleRegistrationError("cache-purge", purgeHandler.Path(), regErr); err != nil {
 					return err
 				}
 			}
@@ -650,7 +652,7 @@ func (s *Server) startMultiServerMode() error {
 		serverCfg := &s.config.Servers[i]
 		ln, err := s.createListener(serverCfg)
 		if err != nil {
-			for j := 0; j < i; j++ {
+			for j := range i {
 				if s.listeners[j] != nil {
 					_ = s.listeners[j].Close()
 				}
