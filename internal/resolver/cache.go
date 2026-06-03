@@ -6,6 +6,7 @@
 package resolver
 
 import (
+	"container/list"
 	"time"
 )
 
@@ -59,23 +60,21 @@ func (r *DNSResolver) GetCacheEntry(host string) (*DNSCacheEntry, bool) {
 // DeleteCacheEntry 删除指定主机的缓存条目。
 func (r *DNSResolver) DeleteCacheEntry(host string) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	delete(r.cache, host)
-	// 从 LRU 链表中移除
-	for i, h := range r.lruOrder {
-		if h == host {
-			r.lruOrder = append(r.lruOrder[:i], r.lruOrder[i+1:]...)
-			break
-		}
+	if elem, ok := r.lruIndex[host]; ok {
+		r.lruList.Remove(elem)
+		delete(r.lruIndex, host)
 	}
 	delete(r.refreshHosts, host)
-	r.mu.Unlock()
 }
 
 // ClearCache 清空所有缓存。
 func (r *DNSResolver) ClearCache() {
 	r.mu.Lock()
 	r.cache = make(map[string]*DNSCacheEntry)
-	r.lruOrder = make([]string, 0, r.config.CacheSize)
+	r.lruList = list.New()
+	r.lruIndex = make(map[string]*list.Element)
 	r.refreshHosts = make(map[string]struct{})
 	r.mu.Unlock()
 }

@@ -421,22 +421,28 @@ func TestMockDNSMoveToFrontLocked(t *testing.T) {
 
 	resolver := New(cfg).(*DNSResolver)
 
-	// 设置缓存
 	resolver.cache = map[string]*DNSCacheEntry{
 		"a": {},
 		"b": {},
 		"c": {},
 	}
-	resolver.lruOrder = []string{"a", "b", "c"}
+	elemA := resolver.lruList.PushFront("a")
+	elemB := resolver.lruList.PushFront("b")
+	elemC := resolver.lruList.PushFront("c")
+	resolver.lruIndex["a"] = elemA
+	resolver.lruIndex["b"] = elemB
+	resolver.lruIndex["c"] = elemC
 
-	// 移动 "a" 到前端
-	resolver.moveToFrontLocked("a")
+	resolver.lruList.MoveToFront(resolver.lruIndex["a"])
 
-	// 验证顺序
+	order := []string{}
+	for e := resolver.lruList.Back(); e != nil; e = e.Prev() {
+		order = append(order, e.Value.(string))
+	}
 	expected := []string{"b", "c", "a"}
 	for i, v := range expected {
-		if resolver.lruOrder[i] != v {
-			t.Errorf("LRU order[%d] = %s, want %s", i, resolver.lruOrder[i], v)
+		if order[i] != v {
+			t.Errorf("LRU order[%d] = %s, want %s", i, order[i], v)
 		}
 	}
 }

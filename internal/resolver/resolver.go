@@ -16,6 +16,7 @@
 package resolver
 
 import (
+	"container/list"
 	"context"
 	"fmt"
 	"net"
@@ -61,41 +62,31 @@ func (r *DNSResolver) storeCache(host string, entry *DNSCacheEntry) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// 已存在则更新并移到头部
-	if _, ok := r.cache[host]; ok {
+	if elem, ok := r.lruIndex[host]; ok {
 		r.cache[host] = entry
-		r.moveToFrontLocked(host)
+		r.lruList.MoveToFront(elem)
 		return
 	}
 
-	// 检查是否需要淘汰
 	if r.config.CacheSize > 0 && len(r.cache) >= r.config.CacheSize {
 		r.evictLRULocked()
 	}
 
 	r.cache[host] = entry
-	r.lruOrder = append(r.lruOrder, host)
+	elem := r.lruList.PushFront(host)
+	r.lruIndex[host] = elem
 }
 
 // evictLRULocked 淘汰最久未使用的条目（需持有锁）。
 func (r *DNSResolver) evictLRULocked() {
-	if len(r.lruOrder) == 0 {
+	oldest := r.lruList.Back()
+	if oldest == nil {
 		return
 	}
-	oldest := r.lruOrder[0]
-	delete(r.cache, oldest)
-	r.lruOrder = r.lruOrder[1:]
-}
-
-// moveToFrontLocked 将条目移到 LRU 链表尾部（最新）（需持有锁）。
-func (r *DNSResolver) moveToFrontLocked(host string) {
-	for i, h := range r.lruOrder {
-		if h == host {
-			r.lruOrder = append(r.lruOrder[:i], r.lruOrder[i+1:]...)
-			r.lruOrder = append(r.lruOrder, host)
-			return
-		}
-	}
+	host := oldest.Value.(string)
+	delete(r.cache, host)
+	delete(r.lruIndex, host)
+	r.lruList.Remove(oldest)
 }
 
 // DNSResolver 实现 Resolver 接口的 DNS 解析器。
@@ -103,8 +94,9 @@ type DNSResolver struct {
 	config       *config.ResolverConfig
 	stopCh       chan struct{}
 	refreshHosts map[string]struct{}
-	cache        map[string]*DNSCacheEntry // DNS 缓存
-	lruOrder     []string                  // LRU 访问顺序（最旧在前）
+	cache        map[string]*DNSCacheEntry
+	lruList      *list.List
+	lruIndex     map[string]*list.Element
 	hits         atomic.Int64
 	misses       atomic.Int64
 	errors       atomic.Int64
@@ -166,7 +158,8 @@ func New(cfg *config.ResolverConfig) Resolver {
 		stopCh:       make(chan struct{}),
 		refreshHosts: make(map[string]struct{}),
 		cache:        make(map[string]*DNSCacheEntry),
-		lruOrder:     make([]string, 0, cfg.CacheSize),
+		lruList:      list.New(),
+		lruIndex:     make(map[string]*list.Element),
 	}
 }
 
