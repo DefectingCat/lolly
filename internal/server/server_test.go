@@ -25,13 +25,13 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
-	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/lua"
 	"rua.plus/lolly/internal/matcher"
 	"rua.plus/lolly/internal/middleware/accesslog"
 	"rua.plus/lolly/internal/middleware/security"
 	"rua.plus/lolly/internal/proxy"
 	"rua.plus/lolly/internal/ssl"
+	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/version"
 )
 
@@ -1525,7 +1525,7 @@ func TestServer_GetProxyCacheStats_SingleProxyWithCache(t *testing.T) {
 			MaxAge:  10 * time.Second,
 		},
 	}
-	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	targets := testutil.NewTestTargets("http://localhost:8080")
 	p, err := proxy.NewProxy(proxyCfg, targets, nil, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
@@ -1555,13 +1555,8 @@ func TestServer_GetProxyCacheStats_SingleProxyNoCache(t *testing.T) {
 	s := New(cfg)
 
 	// 创建不带缓存的代理
-	proxyCfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
-		// Cache 未启用
-	}
-	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	proxyCfg := testutil.NewTestProxyConfig("/api")
+	targets := testutil.NewTestTargets("http://localhost:8080")
 	p, err := proxy.NewProxy(proxyCfg, targets, nil, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
@@ -1591,7 +1586,7 @@ func TestServer_GetProxyCacheStats_MultipleProxies(t *testing.T) {
 	s := New(cfg)
 
 	// 创建多个代理：部分带缓存，部分不带
-	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	targets := testutil.NewTestTargets("http://localhost:8080")
 
 	// 代理1：带缓存
 	proxyCfg1 := &config.ProxyConfig{
@@ -1609,11 +1604,7 @@ func TestServer_GetProxyCacheStats_MultipleProxies(t *testing.T) {
 	}
 
 	// 代理2：不带缓存
-	proxyCfg2 := &config.ProxyConfig{
-		Path:        "/static",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
-	}
+	proxyCfg2 := testutil.NewTestProxyConfig("/static")
 	p2, err := proxy.NewProxy(proxyCfg2, targets, nil, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
@@ -1657,7 +1648,7 @@ func TestServer_GetProxyCacheStats_AllProxiesWithCache(t *testing.T) {
 
 	s := New(cfg)
 
-	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	targets := testutil.NewTestTargets("http://localhost:8080")
 
 	// 创建多个带缓存的代理
 	proxies := make([]*proxy.Proxy, 3)
@@ -1701,16 +1692,12 @@ func TestServer_GetProxyCacheStats_AllProxiesNoCache(t *testing.T) {
 
 	s := New(cfg)
 
-	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	targets := testutil.NewTestTargets("http://localhost:8080")
 
 	// 创建多个不带缓存的代理
 	proxies := make([]*proxy.Proxy, 3)
 	for i := range 3 {
-		proxyCfg := &config.ProxyConfig{
-			Path:        fmt.Sprintf("/api%d", i),
-			LoadBalance: "round_robin",
-			Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
-		}
+		proxyCfg := testutil.NewTestProxyConfig(fmt.Sprintf("/api%d", i))
 		p, err := proxy.NewProxy(proxyCfg, targets, nil, nil)
 		if err != nil {
 			t.Fatalf("NewProxy() error: %v", err)

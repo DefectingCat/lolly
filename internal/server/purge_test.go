@@ -22,8 +22,8 @@ import (
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
-	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/proxy"
+	"rua.plus/lolly/internal/testutil"
 	"rua.plus/lolly/internal/utils"
 )
 
@@ -798,7 +798,7 @@ func TestPurgeHandler_PurgeByPath_WithRealCache(t *testing.T) {
 			MaxAge:  10 * time.Second,
 		},
 	}
-	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	targets := testutil.NewTestTargets("http://localhost:8080")
 	p, err := proxy.NewProxy(cfg, targets, nil, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
@@ -888,7 +888,7 @@ func TestPurgeHandler_PurgeByPattern_WithRealCache(t *testing.T) {
 			MaxAge:  10 * time.Second,
 		},
 	}
-	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	targets := testutil.NewTestTargets("http://localhost:8080")
 	p, err := proxy.NewProxy(cfg, targets, nil, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
@@ -959,13 +959,8 @@ func TestPurgeHandler_PurgeByPattern_WithRealCache(t *testing.T) {
 // TestPurgeHandler_PurgeByPath_WithProxyNoCache 测试代理没有缓存时的情况。
 func TestPurgeHandler_PurgeByPath_WithProxyNoCache(t *testing.T) {
 	// 创建禁用缓存的代理
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
-		// Cache 未启用
-	}
-	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	cfg := testutil.NewTestProxyConfig("/api")
+	targets := testutil.NewTestTargets("http://localhost:8080")
 	p, err := proxy.NewProxy(cfg, targets, nil, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
@@ -997,12 +992,8 @@ func TestPurgeHandler_PurgeByPath_WithProxyNoCache(t *testing.T) {
 // TestPurgeHandler_PurgeByPattern_WithProxyNoCache 测试代理没有缓存时的情况。
 func TestPurgeHandler_PurgeByPattern_WithProxyNoCache(t *testing.T) {
 	// 创建禁用缓存的代理
-	cfg := &config.ProxyConfig{
-		Path:        "/api",
-		LoadBalance: "round_robin",
-		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
-	}
-	targets := []*loadbalance.Target{{URL: "http://localhost:8080"}}
+	cfg := testutil.NewTestProxyConfig("/api")
+	targets := testutil.NewTestTargets("http://localhost:8080")
 	p, err := proxy.NewProxy(cfg, targets, nil, nil)
 	if err != nil {
 		t.Fatalf("NewProxy() error: %v", err)
