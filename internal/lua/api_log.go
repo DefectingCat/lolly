@@ -26,52 +26,52 @@ import (
 
 // 日志级别常量（与 OpenResty/ngx_lua 兼容）
 const (
-	LogStderr = 0
-	LogEmerg  = 1
-	LogAlert  = 2
-	LogCrit   = 3
-	LogErr    = 4
-	LogWarn   = 5
-	LogNotice = 6
-	LogInfo   = 7
-	LogDebug  = 8
+// LogStderr 标准错误日志级别。 = 0
+// LogEmerg 紧急日志级别。  = 1
+// LogAlert 警报日志级别。  = 2
+// LogCrit 严重日志级别。   = 3
+// LogErr 错误日志级别。    = 4
+// LogWarn 警告日志级别。   = 5
+// LogNotice 通知日志级别。 = 6
+// LogInfo 信息日志级别。   = 7
+// LogDebug 调试日志级别。  = 8
 )
 
 // HTTP 状态码常量
 const (
-	HTTPContinue                = 100
-	HTTPSwitchingProtocols      = 101
-	HTTPOK                      = 200
-	HTTPCreated                 = 201
-	HTTPAccepted                = 202
-	HTTPNoContent               = 204
-	HTTPPartialContent          = 206
-	HTTPMovedPermanently        = 301
-	HTTPFound                   = 302
-	HTTPSeeOther                = 303
-	HTTPNotModified             = 304
-	HTTPTemporaryRedirect       = 307
-	HTTPPermanentRedirect       = 308
-	HTTPBadRequest              = 400
-	HTTPUnauthorized            = 401
-	HTTPForbidden               = 403
-	HTTPNotFound                = 404
-	HTTPMethodNotAllowed        = 405
-	HTTPRequestTimeout          = 408
-	HTTPConflict                = 409
-	HTTPGone                    = 410
-	HTTPLengthRequired          = 411
-	HTTPPayloadTooLarge         = 413
-	HTTPURITooLong              = 414
-	HTTPUnsupportedMedia        = 415
-	HTTPRangeNotSatisfiable     = 416
-	HTTPTooManyRequests         = 429
-	HTTPInternalServerError     = 500
-	HTTPNotImplemented          = 501
-	HTTPBadGateway              = 502
-	HTTPServiceUnavailable      = 503
-	HTTPGatewayTimeout          = 504
-	HTTPHTTPVersionNotSupported = 505
+// HTTPContinue HTTP 100 继续状态码。                = 100
+// HTTPSwitchingProtocols HTTP 101 切换协议状态码。      = 101
+// HTTPOK HTTP 200 成功状态码。                      = 200
+// HTTPCreated HTTP 201 已创建状态码。                 = 201
+// HTTPAccepted HTTP 202 已接受状态码。                = 202
+// HTTPNoContent HTTP 204 无内容状态码。               = 204
+// HTTPPartialContent HTTP 206 部分内容状态码。          = 206
+// HTTPMovedPermanently HTTP 301 永久重定向状态码。        = 301
+// HTTPFound HTTP 302 找到状态码。                   = 302
+// HTTPSeeOther HTTP 303 查看其他状态码。                = 303
+// HTTPNotModified HTTP 304 未修改状态码。             = 304
+// HTTPTemporaryRedirect HTTP 307 临时重定向状态码。       = 307
+// HTTPPermanentRedirect HTTP 308 永久重定向状态码。       = 308
+// HTTPBadRequest HTTP 400 错误请求状态码。              = 400
+// HTTPUnauthorized HTTP 401 未授权状态码。            = 401
+// HTTPForbidden HTTP 403 禁止访问状态码。               = 403
+// HTTPNotFound HTTP 404 未找到状态码。                = 404
+// HTTPMethodNotAllowed HTTP 405 方法不允许状态码。        = 405
+// HTTPRequestTimeout HTTP 408 请求超时状态码。          = 408
+// HTTPConflict HTTP 409 冲突状态码。                = 409
+// HTTPGone HTTP 410 已移除状态码。                    = 410
+// HTTPLengthRequired HTTP 411 需要长度状态码。          = 411
+// HTTPPayloadTooLarge HTTP 413 请求实体过大状态码。         = 413
+// HTTPURITooLong HTTP 414 URI 过长状态码。              = 414
+// HTTPUnsupportedMedia HTTP 415 不支持的媒体类型状态码。        = 415
+// HTTPRangeNotSatisfiable HTTP 416 范围不可满足状态码。     = 416
+// HTTPTooManyRequests HTTP 429 请求过多状态码。         = 429
+// HTTPInternalServerError HTTP 500 内部服务器错误状态码。     = 500
+// HTTPNotImplemented HTTP 501 未实现状态码。          = 501
+// HTTPBadGateway HTTP 502 错误网关状态码。              = 502
+// HTTPServiceUnavailable HTTP 503 服务不可用状态码。      = 503
+// HTTPGatewayTimeout HTTP 504 网关超时状态码。          = 504
+// HTTPHTTPVersionNotSupported HTTP 505 HTTP 版本不支持状态码。 = 505
 )
 
 // ngxLogAPI 封装 ngx.log 和输出控制相关的 API。
