@@ -1,3 +1,8 @@
+// Package utils 提供通用的工具函数和辅助类型。
+//
+// 包含 ETag 生成相关的工具函数，用于处理缓存验证。
+//
+// 作者：xfy
 package utils
 
 import (
