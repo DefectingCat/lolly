@@ -989,6 +989,136 @@ func TestCreateListener_UnixSocketCleanup(t *testing.T) {
 	defer ln.Close()
 }
 
+func TestDupListener_TCP(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	duped, err := DupListener(ln)
+	if err != nil {
+		t.Fatalf("DupListener() error: %v", err)
+	}
+	defer duped.Close()
+
+	if duped.Addr().Network() != "tcp" {
+		t.Errorf("expected tcp, got %s", duped.Addr().Network())
+	}
+	if duped.Addr().String() != ln.Addr().String() {
+		t.Errorf("expected same address %s, got %s", ln.Addr().String(), duped.Addr().String())
+	}
+}
+
+func TestDupListener_Unix(t *testing.T) {
+	dir := t.TempDir()
+	socketPath := dir + "/dup.sock"
+	ln, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	duped, err := DupListener(ln)
+	if err != nil {
+		t.Fatalf("DupListener() error: %v", err)
+	}
+	defer duped.Close()
+}
+
+func TestDupListener_Unsupported(t *testing.T) {
+	_, err := DupListener(struct{ net.Listener }{})
+	if err == nil {
+		t.Error("expected error for unsupported type")
+	}
+}
+
+func TestTcpAddrMatch(t *testing.T) {
+	s := &Server{}
+
+	tests := []struct {
+		inherited string
+		target    string
+		want      bool
+	}{
+		{"127.0.0.1:8080", "127.0.0.1:8080", true},
+		{"0.0.0.0:8080", ":8080", true},
+		{"[::]:8080", ":8080", true},
+		{"0.0.0.0:8080", "0.0.0.0:8080", true},
+		{"0.0.0.0:8080", "127.0.0.1:8080", true},
+		{"127.0.0.1:8080", "0.0.0.0:8080", true},
+		{"127.0.0.1:8080", ":9090", false},
+		{"127.0.0.1:8080", "192.168.1.1:8080", false},
+	}
+
+	for _, tt := range tests {
+		got := s.tcpAddrMatch(tt.inherited, tt.target)
+		if got != tt.want {
+			t.Errorf("tcpAddrMatch(%q, %q) = %v, want %v", tt.inherited, tt.target, got, tt.want)
+		}
+	}
+}
+
+func TestMatchInheritedListener_TCP(t *testing.T) {
+	s := &Server{}
+
+	ln1, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln1.Close()
+
+	ln2, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln2.Close()
+
+	inherited := []net.Listener{ln1, ln2}
+
+	result := s.matchInheritedListener(inherited, "0.0.0.0:99999")
+	if result != nil {
+		t.Error("expected nil for non-matching address")
+	}
+
+	addr1 := ln1.Addr().String()
+	result = s.matchInheritedListener(inherited, addr1)
+	if result != ln1 {
+		t.Errorf("expected ln1 for address %s", addr1)
+	}
+}
+
+func TestMatchInheritedListener_Empty(t *testing.T) {
+	s := &Server{}
+	result := s.matchInheritedListener(nil, ":8080")
+	if result != nil {
+		t.Error("expected nil for empty inherited list")
+	}
+}
+
+func TestMatchInheritedListener_PresetListeners(t *testing.T) {
+	cfg := &config.Config{
+		Servers: []config.ServerConfig{{Listen: "127.0.0.1:0"}},
+	}
+	s := New(cfg)
+
+	ln, err := s.createListener(&cfg.Servers[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	s.SetListeners([]net.Listener{ln})
+
+	addr := ln.Addr().String()
+	cfg.Servers[0].Listen = addr
+
+	matched, err := s.createListener(&cfg.Servers[0])
+	if err != nil {
+		t.Fatalf("createListener with preset should reuse: %v", err)
+	}
+	if matched == nil {
+		t.Fatal("expected non-nil listener from preset match")
+	}
+	if matched.Addr().String() != addr {
+		t.Errorf("expected same address %s, got %s", addr, matched.Addr().String())
+	}
+}
+
 // TestServer_StatsMethods 测试服务器统计方法。
 func TestServer_StatsMethods(t *testing.T) {
 	cfg := &config.Config{

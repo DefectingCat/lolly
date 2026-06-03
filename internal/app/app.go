@@ -4,6 +4,7 @@ package app
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -164,9 +165,119 @@ func (a *App) reloadConfig() {
 		return
 	}
 
+	if a.srv == nil {
+		a.cfg = newCfg
+		a.logger = logging.NewAppLogger(&newCfg.Logging)
+		a.logger.LogStartup("Config reloaded (no running server)", nil)
+		return
+	}
+
+	if a.requiresFullRestart(newCfg) {
+		logging.Warn().Msg("Config requires full restart (listen address or mode changed). Use SIGUSR2 for graceful upgrade.")
+		return
+	}
+
+	listeners := a.srv.GetListeners()
+	if len(listeners) == 0 {
+		a.logger.Error().Msg("Cannot reload: server has no saved listeners")
+		return
+	}
+
+	duped := make([]net.Listener, len(listeners))
+	for i, ln := range listeners {
+		duped[i], err = server.DupListener(ln)
+		if err != nil {
+			a.logger.Error().Err(err).Msg("Failed to dup listener for reload")
+			return
+		}
+	}
+
+	newSrv := server.New(newCfg)
+	if a.resv != nil {
+		newSrv.SetResolver(a.resv)
+	}
+	newSrv.SetListeners(duped)
+
+	startErr := make(chan error, 1)
+	go func() {
+		if err := newSrv.Start(); err != nil {
+			startErr <- err
+		}
+	}()
+
+	select {
+	case err := <-startErr:
+		a.logger.Error().Err(err).Msg("Failed to start new server with reloaded config")
+		for _, ln := range duped {
+			_ = ln.Close()
+		}
+		return
+	case <-time.After(5 * time.Second):
+	}
+
+	oldSrv := a.srv
+	oldHTTP2 := a.http2Srv
+	oldHTTP3 := a.http3Srv
+
+	a.srv = newSrv
 	a.cfg = newCfg
 	a.logger = logging.NewAppLogger(&newCfg.Logging)
+	a.http2Srv = nil
+	a.http3Srv = nil
+
+	a.initVariables()
+	a.initHTTP2()
+	a.initHTTP3()
+
+	if a.upgradeMgr != nil {
+		a.upgradeMgr.SetListeners(newSrv.GetListeners())
+	}
+
+	go func() {
+		if oldHTTP2 != nil {
+			_ = oldHTTP2.Stop()
+		}
+		if oldHTTP3 != nil {
+			_ = oldHTTP3.Stop()
+		}
+		_ = oldSrv.GracefulStop(30 * time.Second)
+	}()
+
 	a.logger.LogStartup("Config reloaded successfully", nil)
+}
+
+func (a *App) requiresFullRestart(newCfg *config.Config) bool {
+	if a.cfg.GetMode() != newCfg.GetMode() {
+		return true
+	}
+	oldMode := a.cfg.GetMode()
+	switch oldMode {
+	case config.ServerModeSingle:
+		if len(a.cfg.Servers) > 0 && len(newCfg.Servers) > 0 {
+			if a.cfg.Servers[0].Listen != newCfg.Servers[0].Listen {
+				return true
+			}
+		}
+	case config.ServerModeVHost:
+		if len(a.cfg.Servers) != len(newCfg.Servers) {
+			return true
+		}
+		if len(a.cfg.Servers) > 0 && len(newCfg.Servers) > 0 {
+			if a.cfg.Servers[0].Listen != newCfg.Servers[0].Listen {
+				return true
+			}
+		}
+	case config.ServerModeMultiServer:
+		if len(a.cfg.Servers) != len(newCfg.Servers) {
+			return true
+		}
+		for i := range a.cfg.Servers {
+			if a.cfg.Servers[i].Listen != newCfg.Servers[i].Listen {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (a *App) gracefulUpgrade() {

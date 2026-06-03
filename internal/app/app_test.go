@@ -461,7 +461,6 @@ func TestHandleSignal_SIGINT(t *testing.T) {
 
 // TestHandleSignal_SIGHUP 测试 SIGHUP 信号处理（重载配置）
 func TestHandleSignal_SIGHUP(t *testing.T) {
-	// 创建临时配置文件
 	tmpDir := t.TempDir()
 	cfgPath := filepath.Join(tmpDir, "config.yaml")
 	cfgContent := `
@@ -1448,14 +1447,12 @@ logging:
 	}
 	app.logger = setupTestLogger()
 
-	// 发送 SIGHUP 信号
 	result := app.handleSignal(syscall.SIGHUP)
 
 	if result != true {
 		t.Error("Expected handleSignal(SIGHUP) to return true")
 	}
 
-	// 验证配置已更新
 	if app.cfg.Servers[0].Listen != ":7070" {
 		t.Errorf("Expected listen ':7070', got '%s'", app.cfg.Servers[0].Listen)
 	}
