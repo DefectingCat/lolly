@@ -41,7 +41,8 @@ var filterContextPool = sync.Pool{
 }
 
 func acquireFilterContext() *filterContext {
-	return filterContextPool.Get().(*filterContext)
+	fc, _ := filterContextPool.Get().(*filterContext)
+	return fc
 }
 
 func releaseFilterContext(fc *filterContext) {
@@ -633,5 +634,3 @@ func (t *Target) LastResolved() time.Time {
 	}
 	return time.Unix(0, nano)
 }
-
-

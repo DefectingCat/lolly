@@ -229,7 +229,7 @@ func (t *RadixTree) FindLongestPrefix(path string) *MatchResult {
 	if bestNode == nil {
 		return nil
 	}
-	result := matchResultPool.Get().(*MatchResult)
+	result, _ := matchResultPool.Get().(*MatchResult)
 	result.Handler = bestNode.handler
 	result.Path = bestNode.prefix
 	result.Priority = bestNode.priority
@@ -271,6 +271,7 @@ func (t *RadixTree) searchLongest(node *RadixNode, path string, bestNode *RadixN
 	return bestNode
 }
 
+// ReleaseMatchResult 将 MatchResult 归还到对象池。
 func ReleaseMatchResult(r *MatchResult) {
 	if r == nil {
 		return

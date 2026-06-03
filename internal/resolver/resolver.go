@@ -83,7 +83,7 @@ func (r *DNSResolver) evictLRULocked() {
 	if oldest == nil {
 		return
 	}
-	host := oldest.Value.(string)
+	host, _ := oldest.Value.(string)
 	delete(r.cache, host)
 	delete(r.lruIndex, host)
 	r.lruList.Remove(oldest)
