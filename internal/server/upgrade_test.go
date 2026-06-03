@@ -287,12 +287,4 @@ func TestGetInheritedListeners_EnvPreserved(t *testing.T) {
 	}
 }
 
-// containsString 检查字符串是否包含子串
-func containsString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
+

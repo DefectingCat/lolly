@@ -88,12 +88,6 @@ func (m *mockResolver) Stats() resolver.Stats {
 	}
 }
 
-func (m *mockResolver) getLookupWithCacheCalls() int {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.lookupWithCacheCalls
-}
-
 // TestSetResolver 测试设置 DNS 解析器。
 func TestSetResolver(t *testing.T) {
 	cfg := &config.ProxyConfig{

@@ -444,11 +444,7 @@ func TestAppFields(t *testing.T) {
 
 
 
-// customSig 实现自定义信号类型用于测试
-type customSig struct{}
 
-func (customSig) String() string { return "custom" }
-func (customSig) Signal()        {}
 
 
 

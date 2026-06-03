@@ -302,7 +302,6 @@ func BenchmarkPoolMemoryReuse(b *testing.B) {
 	// 模拟池化结构体
 	type pooledTask struct {
 		data []byte
-		id   int
 	}
 
 	taskPool := &sync.Pool{
