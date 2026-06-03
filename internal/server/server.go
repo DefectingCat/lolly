@@ -521,12 +521,6 @@ func (s *Server) startSingleMode() error {
 	// 标记 LocationEngine 初始化完成
 	s.locationEngine.MarkInitialized()
 
-	// 构建中间件链
-	chain, err := s.buildMiddlewareChain(serverCfg)
-	if err != nil {
-		return err
-	}
-
 	// 创建主请求处理器，使用 LocationEngine 匹配路由
 	locationEngine := s.locationEngine
 	baseHandler := func(ctx *fasthttp.RequestCtx) {
@@ -541,38 +535,17 @@ func (s *Server) startSingleMode() error {
 		ctx.SetBodyString("Not Found")
 	}
 
-	// 应用中间件
-	handler := chain.Apply(baseHandler)
-	if s.pool != nil {
-		handler = s.pool.WrapHandler(handler)
+	handler, err := s.wrapHandler(baseHandler, serverCfg)
+	if err != nil {
+		return err
 	}
-	// 包装统计追踪
-	handler = s.trackStats(handler)
 	s.handler = handler
 
 	s.fastServer = s.createFastServer(serverCfg, s.handler)
 
 	s.running.Store(true)
 
-	// 创建监听器并保存，用于热升级
-	ln, err := s.createListener(serverCfg)
-	if err != nil {
-		return fmt.Errorf("failed to listen: %w", err)
-	}
-	s.listeners = []net.Listener{ln}
-
-	// 检查是否配置了 SSL/TLS
-	if serverCfg.SSL.Cert != "" && serverCfg.SSL.Key != "" {
-		var err error
-		s.tlsManager, err = ssl.NewTLSManager(&serverCfg.SSL)
-		if err != nil {
-			return fmt.Errorf("failed to create TLS manager: %w", err)
-		}
-		s.fastServer.TLSConfig = s.tlsManager.GetTLSConfig()
-		return s.fastServer.ServeTLS(ln, "", "")
-	}
-
-	return s.fastServer.Serve(ln)
+	return s.startServer(serverCfg, s.fastServer)
 }
 
 // startVHostMode 虚拟主机模式启动。
@@ -621,40 +594,11 @@ func (s *Server) startVHostMode() error {
 	}
 
 	// 默认主机
-	if s.config.GetDefaultServerFromList() != nil {
+	defaultSrv := s.config.GetDefaultServerFromList()
+	if defaultSrv != nil {
 		router := handler.NewRouter()
 
-		// 注册状态监控端点（如果启用）
-		if s.config.Monitoring.Status.Enabled {
-			statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
-			if err != nil {
-				logging.Error().Msg("Failed to create status handler: " + err.Error())
-			} else {
-				router.GET(statusHandler.Path(), statusHandler.ServeHTTP)
-			}
-		}
-
-		// 注册 pprof 性能分析端点（如果配置）
-		if s.config.Monitoring.Pprof.Enabled {
-			pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
-			if err != nil {
-				logging.Error().Msg("Failed to create pprof handler: " + err.Error())
-			} else {
-				router.GET(pprofHandler.Path(), pprofHandler.ServeHTTP)
-				router.GET(pprofHandler.Path()+"/{profile:*}", pprofHandler.ServeHTTP)
-			}
-		}
-
-		// 注册缓存清理 API（如果配置）
-		defaultSrv := s.config.GetDefaultServerFromList()
-		if defaultSrv != nil && defaultSrv.CacheAPI != nil && defaultSrv.CacheAPI.Enabled {
-			purgeHandler, err := NewPurgeHandler(s, defaultSrv.CacheAPI)
-			if err != nil {
-				logging.Error().Msg("Failed to create cache purge handler: " + err.Error())
-			} else {
-				router.POST(purgeHandler.Path(), purgeHandler.ServeHTTP)
-			}
-		}
+		s.registerMonitoringEndpoints(router, defaultSrv, true)
 
 		s.registerProxyRoutes(router, defaultSrv)
 
@@ -684,25 +628,7 @@ func (s *Server) startVHostMode() error {
 
 	s.running.Store(true)
 
-	// 创建监听器并保存，用于热升级
-	ln, err := s.createListener(serverCfg)
-	if err != nil {
-		return fmt.Errorf("failed to listen: %w", err)
-	}
-	s.listeners = []net.Listener{ln}
-
-	// 检查是否配置了 SSL/TLS
-	if serverCfg.SSL.Cert != "" && serverCfg.SSL.Key != "" {
-		var err error
-		s.tlsManager, err = ssl.NewTLSManager(&serverCfg.SSL)
-		if err != nil {
-			return fmt.Errorf("failed to create TLS manager: %w", err)
-		}
-		s.fastServer.TLSConfig = s.tlsManager.GetTLSConfig()
-		return s.fastServer.ServeTLS(ln, "", "")
-	}
-
-	return s.fastServer.Serve(ln)
+	return s.startServer(serverCfg, s.fastServer)
 }
 
 // startMultiServerMode 多服务器模式启动。
@@ -746,36 +672,7 @@ func (s *Server) startMultiServerMode() error {
 
 			router := handler.NewRouter()
 
-			// 注册状态监控端点（仅默认服务器）
-			if serverCfg.Default && s.config.Monitoring.Status.Enabled {
-				statusHandler, statusErr := NewStatusHandler(s, &s.config.Monitoring.Status)
-				if statusErr != nil {
-					logging.Error().Msg("Failed to create status handler: " + statusErr.Error())
-				} else {
-					router.GET(statusHandler.Path(), statusHandler.ServeHTTP)
-				}
-			}
-
-			// 注册 pprof 性能分析端点（仅默认服务器）
-			if serverCfg.Default && s.config.Monitoring.Pprof.Enabled {
-				pprofHandler, pprofErr := NewPprofHandler(&s.config.Monitoring.Pprof)
-				if pprofErr != nil {
-					logging.Error().Msg("Failed to create pprof handler: " + pprofErr.Error())
-				} else {
-					router.GET(pprofHandler.Path(), pprofHandler.ServeHTTP)
-					router.GET(pprofHandler.Path()+"/{profile:*}", pprofHandler.ServeHTTP)
-				}
-			}
-
-			// 注册缓存清理 API（仅默认服务器）
-			if serverCfg.Default && serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
-				purgeHandler, purgeErr := NewPurgeHandler(s, serverCfg.CacheAPI)
-				if purgeErr != nil {
-					errCh <- fmt.Errorf("failed to create cache purge handler (server[%d]): %w", idx, purgeErr)
-					return
-				}
-				router.POST(purgeHandler.Path(), purgeHandler.ServeHTTP)
-			}
+			s.registerMonitoringEndpoints(router, serverCfg, serverCfg.Default)
 
 			s.registerProxyRoutes(router, serverCfg)
 
@@ -785,19 +682,12 @@ func (s *Server) startMultiServerMode() error {
 			// 静态文件服务
 			s.registerStaticHandlers(router, serverCfg)
 
-			// 构建独立的中间件链
-			chain, err := s.buildMiddlewareChain(serverCfg)
+			// 应用中间件链、连接池包装和统计追踪
+			h, err := s.wrapHandler(router.Handler(), serverCfg)
 			if err != nil {
 				errCh <- fmt.Errorf("failed to build middleware chain (server[%d]): %w", idx, err)
 				return
 			}
-
-			// 应用中间件
-			h := chain.Apply(router.Handler())
-			if s.pool != nil {
-				h = s.pool.WrapHandler(h)
-			}
-			h = s.trackStats(h)
 
 			// 创建 fasthttp.Server
 			fastSrv := s.createFastServer(serverCfg, h)
@@ -867,9 +757,73 @@ func (s *Server) startMultiServerMode() error {
 	return nil
 }
 
+// registerMonitoringEndpoints 注册状态监控、性能分析和缓存清理端点。
+func (s *Server) registerMonitoringEndpoints(router *handler.Router, serverCfg *config.ServerConfig, isDefault bool) {
+	if isDefault && s.config.Monitoring.Status.Enabled {
+		statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
+		if err != nil {
+			logging.Error().Msg("Failed to create status handler: " + err.Error())
+		} else {
+			router.GET(statusHandler.Path(), statusHandler.ServeHTTP)
+		}
+	}
+
+	if isDefault && s.config.Monitoring.Pprof.Enabled {
+		pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
+		if err != nil {
+			logging.Error().Msg("Failed to create pprof handler: " + err.Error())
+		} else {
+			router.GET(pprofHandler.Path(), pprofHandler.ServeHTTP)
+			router.GET(pprofHandler.Path()+"/{profile:*}", pprofHandler.ServeHTTP)
+		}
+	}
+
+	if isDefault && serverCfg.CacheAPI != nil && serverCfg.CacheAPI.Enabled {
+		purgeHandler, err := NewPurgeHandler(s, serverCfg.CacheAPI)
+		if err != nil {
+			logging.Error().Msg("Failed to create cache purge handler: " + err.Error())
+		} else {
+			router.POST(purgeHandler.Path(), purgeHandler.ServeHTTP)
+		}
+	}
+}
+
+// wrapHandler 应用中间件链、连接池包装和统计追踪。
+func (s *Server) wrapHandler(base fasthttp.RequestHandler, serverCfg *config.ServerConfig) (fasthttp.RequestHandler, error) {
+	chain, err := s.buildMiddlewareChain(serverCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	handler := chain.Apply(base)
+	if s.pool != nil {
+		handler = s.pool.WrapHandler(handler)
+	}
+	handler = s.trackStats(handler)
+	return handler, nil
+}
+
+// startServer 创建监听器并启动 fasthttp.Server，支持可选 TLS。
+func (s *Server) startServer(serverCfg *config.ServerConfig, fastSrv *fasthttp.Server) error {
+	ln, err := s.createListener(serverCfg)
+	if err != nil {
+		return fmt.Errorf("failed to listen: %w", err)
+	}
+	s.listeners = append(s.listeners, ln)
+
+	if serverCfg.SSL.Cert != "" && serverCfg.SSL.Key != "" {
+		tlsManager, err := ssl.NewTLSManager(&serverCfg.SSL)
+		if err != nil {
+			return fmt.Errorf("failed to create TLS manager: %w", err)
+		}
+		fastSrv.TLSConfig = tlsManager.GetTLSConfig()
+		return fastSrv.ServeTLS(ln, "", "")
+	}
+
+	return fastSrv.Serve(ln)
+}
+
 // SetResolver 设置 DNS 解析器。
 func (s *Server) SetResolver(r resolver.Resolver) {
 	s.resolver = r
 }
-
-
