@@ -47,9 +47,9 @@ import (
 type HashAlgorithm int
 
 const (
-	// HashBcrypt bcrypt 算法（默认，推荐）
+// HashBcrypt bcrypt 哈希算法（默认，推荐）。
 	HashBcrypt HashAlgorithm = iota
-	// HashArgon2id Argon2id 算法（更安全，计算密集）
+	// HashArgon2id Argon2id 哈希算法（更安全，计算密集）。
 	HashArgon2id
 )
 

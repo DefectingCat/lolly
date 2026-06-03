@@ -443,26 +443,34 @@ func (r *DNSResolver) Stats() Stats {
 // noopResolver 是禁用状态下的空实现。
 type noopResolver struct{}
 
+// LookupHost 解析主机名（空实现）。
+// 在禁用状态下返回错误。
 func (n *noopResolver) LookupHost(_ context.Context, _ string) ([]string, error) {
 	return nil, fmt.Errorf("resolver is disabled")
 }
 
+// LookupHostWithCache 带缓存解析主机名（空实现）。
+// 直接委托给 LookupHost。
 func (n *noopResolver) LookupHostWithCache(ctx context.Context, host string) ([]string, error) {
 	return n.LookupHost(ctx, host)
 }
 
+// Refresh 刷新解析器缓存（空实现）。
 func (n *noopResolver) Refresh(_ string) error {
 	return nil
 }
 
+// Start 启动解析器（空实现）。
 func (n *noopResolver) Start() error {
 	return nil
 }
 
+// Stop 停止解析器（空实现）。
 func (n *noopResolver) Stop() error {
 	return nil
 }
 
+// Stats 返回解析器统计信息（空实现）。
 func (n *noopResolver) Stats() Stats {
 	return Stats{}
 }

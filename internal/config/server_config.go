@@ -1,3 +1,8 @@
+// Package config 提供 YAML 配置文件的解析、验证和默认配置生成功能。
+//
+// 包含服务器配置相关的结构体，用于配置监听地址、静态文件、代理、SSL 等设置。
+//
+// 作者：xfy
 package config
 
 import "time"

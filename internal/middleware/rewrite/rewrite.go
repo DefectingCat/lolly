@@ -29,14 +29,14 @@ import (
 	"rua.plus/lolly/internal/variable"
 )
 
-// MaxRewriteIterations URL重写最大迭代次数，防止无限循环
+// MaxRewriteIterations URL重写最大迭代次数，防止无限循环。
 const MaxRewriteIterations = 10
 
 // Flag 重写标志类型。
 type Flag int
 
 const (
-	// FlagLast 继续匹配其他规则（nginx 行为：重新从第一条规则开始匹配）。
+// FlagLast 继续匹配其他规则（nginx 行为：重新从第一条规则开始匹配）。
 	// 匹配到规则后会重新从第一条规则开始遍历，用于多规则链式重写。
 	FlagLast Flag = iota
 	// FlagRedirect 返回 302 临时重定向。

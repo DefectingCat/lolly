@@ -242,6 +242,7 @@ type ConflictError struct {
 	NewType      string
 }
 
+// Error 返回路径冲突错误的字符串表示。
 func (e *ConflictError) Error() string {
 	return fmt.Sprintf("path conflict: '%s' already registered as '%s', trying to register as '%s'",
 		e.Path, e.ExistingType, e.NewType)

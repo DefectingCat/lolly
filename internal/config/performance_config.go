@@ -1,3 +1,8 @@
+// Package config 提供 YAML 配置文件的解析、验证和默认配置生成功能。
+//
+// 包含性能配置相关的结构体，用于控制服务器性能优化参数。
+//
+// 作者：xfy
 package config
 
 import (

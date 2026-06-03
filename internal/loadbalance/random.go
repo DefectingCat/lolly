@@ -1,3 +1,8 @@
+// Package loadbalance 提供多种负载均衡算法实现，支持随机、轮询、加权、一致性哈希等策略。
+//
+// 包含随机负载均衡算法相关的逻辑。
+//
+// 作者：xfy
 package loadbalance
 
 import (

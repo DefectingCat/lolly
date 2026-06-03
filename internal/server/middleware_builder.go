@@ -1,3 +1,8 @@
+// Package server 提供 HTTP 服务器的核心实现，支持单服务器、虚拟主机和多服务器三种运行模式。
+//
+// 包含中间件构建器相关的逻辑，用于构建和管理 HTTP 中间件链。
+//
+// 作者：xfy
 package server
 
 import (

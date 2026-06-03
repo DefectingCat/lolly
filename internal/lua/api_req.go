@@ -44,6 +44,31 @@ const (
 	APILayerPseudoNonBlocking ngxReqAPILayer = 3
 )
 
+const (
+	// layerStringDirect 直接映射层字符串
+	layerStringDirect = "direct"
+	// layerStringCompatible 兼容层字符串
+	layerStringCompatible = "compatible"
+	// layerStringPseudoNonBlocking 伪非阻塞层字符串
+	layerStringPseudoNonBlocking = "pseudo_non_blocking"
+	// layerStringUnknown 未知层字符串
+	layerStringUnknown = "unknown"
+)
+
+// String returns a string representation of the API layer.
+func (l ngxReqAPILayer) String() string {
+	switch l {
+	case APILayerDirect:
+		return layerStringDirect
+	case APILayerCompatible:
+		return layerStringCompatible
+	case APILayerPseudoNonBlocking:
+		return layerStringPseudoNonBlocking
+	default:
+		return layerStringUnknown
+	}
+}
+
 // ngxReqMetrics 收集 API 调用指标
 type ngxReqMetrics struct {
 	// 调用计数

@@ -28,6 +28,7 @@ type ParseError struct {
 	Message string
 }
 
+// Error 返回解析错误的字符串表示。
 func (e *ParseError) Error() string {
 	return fmt.Sprintf("%s:%d: %s", e.File, e.Line, e.Message)
 }

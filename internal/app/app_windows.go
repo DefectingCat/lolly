@@ -2,6 +2,11 @@
 
 // Windows lacks POSIX signals (SIGUSR1, SIGUSR2, SIGHUP, SIGQUIT);
 // this file provides stub implementations for those Unix-specific signals.
+// Package app 提供 Lolly 应用程序的生命周期管理和命令行入口。
+//
+// 包含 Windows 平台特定的应用逻辑。
+//
+// 作者：xfy
 package app
 
 import (
