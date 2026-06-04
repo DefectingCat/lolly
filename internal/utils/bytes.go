@@ -30,6 +30,7 @@ func S2b(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
+// BytesContainsFold reports whether b contains subslice, case-insensitively.
 func BytesContainsFold(b, sub []byte) bool {
 	if len(sub) == 0 {
 		return true
