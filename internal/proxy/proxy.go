@@ -977,16 +977,16 @@ func (p *Proxy) selectTarget(ctx *fasthttp.RequestCtx) *loadbalance.Target {
 // 返回值：
 //   - bool: true 表示是 WebSocket 升级请求
 func isWebSocketRequest(ctx *fasthttp.RequestCtx) bool {
-	// 检查 Connection 请求头
 	connection := ctx.Request.Header.Peek("Connection")
-	if !strings.EqualFold(string(connection), "upgrade") {
-		// 也检查 "Upgrade" 子串（例如 "keep-alive, Upgrade"）
-		if !strings.Contains(strings.ToLower(string(connection)), "upgrade") {
-			return false
-		}
+	if len(connection) == 0 {
+		return false
+	}
+	upgradeBytes := []byte("upgrade")
+	if !bytes.EqualFold(connection, upgradeBytes) &&
+		!utils.BytesContainsFold(connection, upgradeBytes) {
+		return false
 	}
 
-	// 检查 Upgrade 请求头
 	upgrade := ctx.Request.Header.Peek("Upgrade")
-	return strings.EqualFold(string(upgrade), "websocket")
+	return bytes.EqualFold(upgrade, []byte("websocket"))
 }
