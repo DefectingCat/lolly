@@ -198,8 +198,8 @@ func (e *LocationEngine) AddNamed(name string, handler fasthttp.RequestHandler) 
 //
 // 返回值：
 //   - *MatchResult: 匹配结果，无匹配时返回 nil
-func (e *LocationEngine) Match(path string) *MatchResult {
-	if m, ok := e.exactMatchers[path]; ok {
+func (e *LocationEngine) Match(path []byte) *MatchResult {
+	if m, ok := e.exactMatchers[string(path)]; ok {
 		return m.Result()
 	}
 
@@ -209,10 +209,11 @@ func (e *LocationEngine) Match(path string) *MatchResult {
 	}
 	ReleaseMatchResult(prefixPriorityResult)
 
+	pathStr := string(path)
 	for _, m := range e.regexMatchers {
-		if m.Match(path) {
+		if m.Match(pathStr) {
 			result := m.Result()
-			result.Captures = m.GetCaptures(path)
+			result.Captures = m.GetCaptures(pathStr)
 			return result
 		}
 	}

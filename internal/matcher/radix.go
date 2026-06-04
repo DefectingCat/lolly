@@ -9,6 +9,7 @@
 package matcher
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"sync"
@@ -224,7 +225,7 @@ func (t *RadixTree) insertNode(parent *RadixNode, node *RadixNode, path string, 
 //
 // 返回值：
 //   - *MatchResult: 最长前缀匹配结果，无匹配时返回 nil
-func (t *RadixTree) FindLongestPrefix(path string) *MatchResult {
+func (t *RadixTree) FindLongestPrefix(path []byte) *MatchResult {
 	bestNode := t.searchLongest(t.root, path, nil)
 	if bestNode == nil {
 		return nil
@@ -238,12 +239,12 @@ func (t *RadixTree) FindLongestPrefix(path string) *MatchResult {
 	return result
 }
 
-func (t *RadixTree) searchLongest(node *RadixNode, path string, bestNode *RadixNode) *RadixNode {
-	if node == nil || path == "" {
+func (t *RadixTree) searchLongest(node *RadixNode, path []byte, bestNode *RadixNode) *RadixNode {
+	if node == nil || len(path) == 0 {
 		return bestNode
 	}
 
-	if !strings.HasPrefix(path, node.prefix) {
+	if !bytes.HasPrefix(path, []byte(node.prefix)) {
 		return bestNode
 	}
 
