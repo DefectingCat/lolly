@@ -112,6 +112,10 @@ type Middleware struct {
 	brotliPool *compressorPool
 	// types 可压缩的 MIME 类型列表
 	types []string
+	// typesBytes 预计算的小写 MIME 类型字节切片
+	typesBytes [][]byte
+	// typesWildcardPrefix 预计算的通配符前缀字节切片
+	typesWildcardPrefix [][]byte
 
 	// level 压缩级别（1-9）
 	level int
@@ -169,6 +173,15 @@ func New(cfg *config.CompressionConfig) (*Middleware, error) {
 		level:     cfg.Level,
 		minSize:   cfg.MinSize,
 		algorithm: algo,
+	}
+
+	for _, t := range m.types {
+		lower := strings.ToLower(t)
+		if base, found := strings.CutSuffix(lower, "/*"); found {
+			m.typesWildcardPrefix = append(m.typesWildcardPrefix, []byte(base))
+		} else {
+			m.typesBytes = append(m.typesBytes, []byte(lower))
+		}
 	}
 
 	// 初始化缓冲池
@@ -296,22 +309,20 @@ func (m *Middleware) Process(next fasthttp.RequestHandler) fasthttp.RequestHandl
 // 返回值：
 //   - bool: 是否可压缩
 func (m *Middleware) isCompressible(contentType []byte) bool {
-	// 移除 charset 等参数
 	ct := contentType
 	if idx := bytes.IndexByte(ct, ';'); idx >= 0 {
 		ct = ct[:idx]
 	}
 	ct = bytes.TrimSpace(ct)
 
-	for _, t := range m.types {
-		if bytes.Equal(bytes.ToLower([]byte(t)), ct) {
+	for _, t := range m.typesBytes {
+		if bytes.Equal(t, ct) {
 			return true
 		}
-		// 支持通配符匹配
-		if base, found := strings.CutSuffix(t, "/*"); found {
-			if bytes.HasPrefix(ct, []byte(base)) {
-				return true
-			}
+	}
+	for _, prefix := range m.typesWildcardPrefix {
+		if bytes.HasPrefix(ct, prefix) {
+			return true
 		}
 	}
 	return false
