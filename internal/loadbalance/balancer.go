@@ -22,6 +22,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"rua.plus/lolly/internal/hash"
 )
 
 type filterContext struct {
@@ -55,12 +57,7 @@ func releaseFilterContext(fc *filterContext) {
 }
 
 func fnvHash64a(key string) uint64 {
-	var h uint64 = 14695981039346656037
-	for i := 0; i < len(key); i++ {
-		h ^= uint64(key[i])
-		h *= 1099511628211
-	}
-	return h
+	return hash.FNV64a(key)
 }
 
 // Target 表示 HTTP 代理（L7 层）的负载均衡后端服务器目标。
