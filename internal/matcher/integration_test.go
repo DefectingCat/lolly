@@ -20,13 +20,13 @@ func TestLocationEngine_NginxPriority(t *testing.T) {
 	engine.MarkInitialized()
 
 	// 测试精确匹配优先
-	result := engine.Match("/api")
+	result := engine.Match([]byte("/api"))
 	if result.LocationType != "exact" {
 		t.Errorf("expected exact, got %s", result.LocationType)
 	}
 
 	// 测试 ^~ 阻止正则
-	result = engine.Match("/api/test.php")
+	result = engine.Match([]byte("/api/test.php"))
 	if result.LocationType != "prefix_priority" {
 		t.Errorf("^~ should block regex, got %s", result.LocationType)
 	}
@@ -42,7 +42,7 @@ func TestLocationEngine_RegexMatch(t *testing.T) {
 	engine.MarkInitialized()
 
 	// 正则匹配（^~ 不匹配 /index.php）
-	result := engine.Match("/index.php")
+	result := engine.Match([]byte("/index.php"))
 	if result.LocationType != "regex" {
 		t.Errorf("expected regex for /index.php, got %s", result.LocationType)
 	}
@@ -55,7 +55,7 @@ func TestLocationEngine_PrefixFallback(t *testing.T) {
 	engine.AddPrefix("/", handler, false)
 	engine.MarkInitialized()
 
-	result := engine.Match("/any/path")
+	result := engine.Match([]byte("/any/path"))
 	if result == nil || result.LocationType != "prefix" {
 		t.Errorf("expected prefix match, got %v", result)
 	}
@@ -65,7 +65,7 @@ func TestLocationEngine_NoMatch(t *testing.T) {
 	engine := NewLocationEngine()
 	engine.MarkInitialized()
 
-	result := engine.Match("/nonexistent")
+	result := engine.Match([]byte("/nonexistent"))
 	if result != nil {
 		t.Errorf("expected nil for no match, got %+v", result)
 	}
@@ -78,7 +78,7 @@ func TestLocationEngine_RegexCaptures(t *testing.T) {
 	engine.AddRegex(`^/user/(?P<id>[0-9]+)$`, handler, false, false)
 	engine.MarkInitialized()
 
-	result := engine.Match("/user/42")
+	result := engine.Match([]byte("/user/42"))
 	if result.LocationType != "regex" {
 		t.Errorf("expected regex, got %s", result.LocationType)
 	}

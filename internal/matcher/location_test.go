@@ -37,7 +37,7 @@ func TestLocationEngine_AddExact(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	result := engine.Match("/api")
+	result := engine.Match([]byte("/api"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -80,7 +80,7 @@ func TestLocationEngine_AddPrefixPriority(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	result := engine.Match("/static/css/style.css")
+	result := engine.Match([]byte("/static/css/style.css"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -112,7 +112,7 @@ func TestLocationEngine_AddPrefix(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	result := engine.Match("/api/users")
+	result := engine.Match([]byte("/api/users"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -141,7 +141,7 @@ func TestLocationEngine_AddRegex(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	result := engine.Match("/index.php")
+	result := engine.Match([]byte("/index.php"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -159,7 +159,7 @@ func TestLocationEngine_AddRegex_CaseInsensitive(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	result := engine.Match("/index.PHP")
+	result := engine.Match([]byte("/index.PHP"))
 	if result == nil {
 		t.Fatal("expected match for case insensitive")
 	}
@@ -187,7 +187,7 @@ func TestLocationEngine_AddRegex_Captures(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	result := engine.Match("/user/123")
+	result := engine.Match([]byte("/user/123"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -213,7 +213,7 @@ func TestLocationEngine_Match_PriorityOrder(t *testing.T) {
 	engine.AddPrefix("/api/path", hPrefix, false)
 
 	// Exact should win (priority 1)
-	result := engine.Match("/api/path")
+	result := engine.Match([]byte("/api/path"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -232,7 +232,7 @@ func TestLocationEngine_Match_PrefixPriorityBeatsRegex(t *testing.T) {
 	engine.AddRegex(`\.css$`, hRegex, false, false)
 
 	// ^~ prefix priority should beat regex
-	result := engine.Match("/static/style.css")
+	result := engine.Match([]byte("/static/style.css"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -250,7 +250,7 @@ func TestLocationEngine_Match_RegexBeatsPrefix(t *testing.T) {
 	engine.AddPrefix("/", hPrefix, false)
 
 	// Regex should win over plain prefix
-	result := engine.Match("/index.php")
+	result := engine.Match([]byte("/index.php"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -265,7 +265,7 @@ func TestLocationEngine_Match_FallbackToPrefix(t *testing.T) {
 
 	engine.AddPrefix("/api", hPrefix, false)
 
-	result := engine.Match("/api/users")
+	result := engine.Match([]byte("/api/users"))
 	if result == nil {
 		t.Fatal("expected prefix match")
 	}
@@ -280,7 +280,7 @@ func TestLocationEngine_Match_NoMatch(t *testing.T) {
 
 	engine.AddPrefix("/api", hPrefix, false)
 
-	result := engine.Match("/other")
+	result := engine.Match([]byte("/other"))
 	if result != nil {
 		t.Errorf("expected no match, got %+v", result)
 	}
@@ -292,7 +292,7 @@ func TestLocationEngine_Match_EmptyString(t *testing.T) {
 
 	engine.AddPrefix("/api", hPrefix, false)
 
-	result := engine.Match("")
+	result := engine.Match([]byte(""))
 	if result != nil {
 		t.Errorf("expected no match for empty string, got %+v", result)
 	}
@@ -304,7 +304,7 @@ func TestLocationEngine_Match_UnicodePath(t *testing.T) {
 
 	engine.AddPrefixPriority("/文档", handler, false)
 
-	result := engine.Match("/文档/报告")
+	result := engine.Match([]byte("/文档/报告"))
 	if result == nil {
 		t.Fatal("expected unicode prefix match")
 	}

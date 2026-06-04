@@ -47,7 +47,7 @@ func TestPrefixPriorityNotRegex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := engine.Match("/images/logo.png")
+	result := engine.Match([]byte("/images/logo.png"))
 	if result == nil {
 		t.Error("^~ should match prefix")
 	}

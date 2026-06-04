@@ -16,7 +16,7 @@ func TestRadixTree_Insert_EmptyNode(t *testing.T) {
 		t.Fatalf("insert failed: %v", err)
 	}
 
-	result := tree.FindLongestPrefix("/api")
+	result := tree.FindLongestPrefix([]byte("/api"))
 	if result == nil {
 		t.Error("should find inserted path")
 	}
@@ -34,7 +34,7 @@ func TestRadixTree_Insert_CommonPrefix(t *testing.T) {
 	tree.Insert("/api", handler1, 1, "prefix", false)
 	tree.Insert("/api/users", handler2, 2, "prefix", false)
 
-	result := tree.FindLongestPrefix("/api/users")
+	result := tree.FindLongestPrefix([]byte("/api/users"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -57,7 +57,7 @@ func TestRadixTree_Insert_NodeSplit(t *testing.T) {
 	tree.Insert("/abx", handler2, 2, "prefix", false)
 
 	// 应该正确分割 /ab 公共前缀
-	result := tree.FindLongestPrefix("/abc")
+	result := tree.FindLongestPrefix([]byte("/abc"))
 	if result == nil {
 		t.Error("should find /abc after split")
 	}
@@ -73,7 +73,7 @@ func TestRadixTree_FindLongestPrefix(t *testing.T) {
 
 	// "/" has priority 1 (wins), "/api" has 2, "/api/v1" has 3
 	// Lower number = higher priority
-	result := tree.FindLongestPrefix("/api/v1/users")
+	result := tree.FindLongestPrefix([]byte("/api/v1/users"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -112,7 +112,7 @@ func TestRadixTree_FindLongestPrefix_NoMatch(t *testing.T) {
 
 	tree.Insert("/api", handler, 1, "prefix", false)
 
-	result := tree.FindLongestPrefix("/other")
+	result := tree.FindLongestPrefix([]byte("/other"))
 	if result != nil {
 		t.Errorf("expected nil for no match, got %+v", result)
 	}
@@ -127,7 +127,7 @@ func TestRadixTree_PriorityComparison(t *testing.T) {
 	tree.Insert("/api/users", h2, 2, "prefix", false)
 
 	// Lower priority number wins
-	result := tree.FindLongestPrefix("/api/users")
+	result := tree.FindLongestPrefix([]byte("/api/users"))
 	if result == nil {
 		t.Fatal("expected match")
 	}
@@ -151,7 +151,7 @@ func TestRadixTree_Insert_ExactMatch(t *testing.T) {
 	}
 
 	// 验证原 handler 未被覆盖
-	result := tree.FindLongestPrefix("/api")
+	result := tree.FindLongestPrefix([]byte("/api"))
 	if result == nil || result.Priority != 1 {
 		t.Errorf("original handler should not be overwritten, got priority %d", result.Priority)
 	}

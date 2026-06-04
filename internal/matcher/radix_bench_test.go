@@ -18,7 +18,7 @@ func BenchmarkRadixTreeFindLongestPrefix(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {
-		result := tree.FindLongestPrefix("/api/v1/users")
+		result := tree.FindLongestPrefix([]byte("/api/v1/users"))
 		ReleaseMatchResult(result)
 	}
 }
@@ -36,7 +36,7 @@ func BenchmarkRadixTreeFindLongestPrefixParallel(b *testing.B) {
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			result := tree.FindLongestPrefix("/api/v1/users")
+			result := tree.FindLongestPrefix([]byte("/api/v1/users"))
 			ReleaseMatchResult(result)
 		}
 	})
