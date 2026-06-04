@@ -526,8 +526,7 @@ func (s *Server) startSingleMode() error {
 	// 创建主请求处理器，使用 LocationEngine 匹配路由
 	locationEngine := s.locationEngine
 	baseHandler := func(ctx *fasthttp.RequestCtx) {
-		path := string(ctx.Path())
-		result := locationEngine.Match(path)
+		result := locationEngine.Match(ctx.Path())
 		if result != nil && result.Handler != nil {
 			result.Handler(ctx)
 			return
