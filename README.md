@@ -7,7 +7,7 @@
 
 基于 [fasthttp](https://github.com/valyala/fasthttp) 构建，提供比标准 net/http 更高的性能。支持 HTTP/3 (QUIC)、WebSocket、虚拟主机、多种负载均衡算法、故障转移、代理缓存、Lua 脚本扩展，以及完整的安全与性能优化特性。
 
-> **代码统计**：156 个源文件 | 170 个测试文件 | ~113,000 行 Go 代码
+> **代码统计**：154 个源文件 | 171 个测试文件 | ~121,000 行 Go 代码
 
 ## 特性
 
@@ -15,6 +15,7 @@
 
 - **静态文件服务** - 零拷贝传输（sendfile）、文件缓存、预压缩支持、try_files 配置、ETag 和 304 Not Modified
 - **反向代理** - 请求头/响应头修改、超时控制、故障转移（next_upstream）、Location/Refresh 头改写
+- **HTTP/2** - 完整的 HTTP/2 服务器支持，包含适配器与流控
 - **HTTP/3 (QUIC)** - 基于 quic-go，支持 0-RTT 连接
 - **WebSocket** - 完整的 WebSocket 代理支持
 - **虚拟主机** - 单进程支持多域名独立配置，server_name 支持通配符和正则匹配
@@ -26,6 +27,12 @@
 - **GeoIP 过滤** - 基于 MaxMind GeoIP2 的国家/地区访问控制
 - **自定义错误页面** - 支持为特定状态码配置自定义错误页面
 - **nginx 配置导入** - 支持将 nginx 配置文件转换为 lolly YAML 配置
+- **变量系统** - nginx 风格变量（`$request_uri`、`$remote_addr`、`$host` 等），支持自定义变量
+- **Gzip/Brotli 压缩** - 动态与预压缩（gzip_static/br_static）支持
+- **URL 重写** - 正则替换、break/last/redirect/permanent 标记
+- **目录索引** - 自动生成目录列表（HTML/JSON/XML）
+- **访问日志** - 结构化访问日志，支持自定义格式
+- **DNS 解析缓存** - 带 TTL 与统计的缓存 DNS 解析器
 
 ### 负载均衡
 
@@ -45,16 +52,16 @@
 - **连接限制** - 单 IP 并发连接数限制
 - **认证** - Basic Auth，支持 bcrypt 与 argon2id；外部 auth_request 子请求
 - **安全头部** - HSTS、X-Frame-Options、CSP、Referrer-Policy
-- **SSL/TLS** - OCSP Stapling、TLS 1.2/1.3、加密套件配置、Session Tickets 密钥轮换
+- **SSL/TLS** - OCSP Stapling、TLS 1.2/1.3、加密套件配置、Session Tickets 密钥轮换、客户端证书验证（mTLS）
 - **请求体限制** - 可配置全局和路径级别的请求体大小限制
 
 ### 性能优化
 
 - **Goroutine 池** - 限制并发 worker 数量，避免 goroutine 爆炸
 - **文件缓存** - LRU 淘汰策略，内存上限控制
-- **连接池** - 空闲连接复用，减少连接建立开销
-- **零拷贝** - 大文件（≥8KB）传输使用 sendfile 系统调用
-- **代理缓存** - 支持缓存后端响应，cache_lock 防止缓存击穿
+- **连接池** - 基于 fasthttp HostClient 的空闲连接复用，减少连接建立开销
+- **零拷贝** - 大文件（≥8KB）在 Linux 上使用 sendfile 系统调用，其他平台自动回退到高效拷贝
+- **代理缓存** - 支持缓存后端响应，cache_lock 防止缓存击穿与并发回源
 - **PGO 优化** - 支持 Profile-Guided Optimization 构建
 
 ### 运维
@@ -115,15 +122,23 @@ internal/
 ├── loadbalance/  # 负载均衡算法
 ├── matcher/      # Location 匹配器
 ├── middleware/   # 中间件链
+│   ├── compression/  # Gzip/Brotli 压缩
+│   ├── security/     # 访问控制、认证、限流、安全头部
+│   ├── rewrite/      # URL 重写
+│   ├── accesslog/    # 访问日志
+│   ├── bodylimit/    # 请求体限制
+│   └── errorintercept/ # 错误拦截
 ├── lua/          # Lua 脚本引擎
 ├── http2/        # HTTP/2 服务器
 ├── http3/        # HTTP/3 服务器
+├── adapter/      # HTTP/2、HTTP/3 适配器
 ├── stream/       # TCP/UDP Stream 代理
 ├── ssl/          # TLS 配置
 ├── cache/        # 缓存系统
 ├── resolver/     # DNS 解析器
 ├── variable/     # 变量系统
 ├── logging/      # 日志系统
+├── converter/    # nginx 配置转换器
 └── ...           # 其他工具模块
 ```
 
