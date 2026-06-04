@@ -20,9 +20,10 @@
 package security
 
 import (
-	"hash/fnv"
 	"sync"
 	"time"
+
+	"rua.plus/lolly/internal/hash"
 )
 
 // limiterBucket 分段锁桶，每个桶持有部分键的计数器。
@@ -59,9 +60,7 @@ type SlidingWindowLimiter struct {
 // 返回值：
 //   - *limiterBucket: 对应的桶
 func (s *SlidingWindowLimiter) getBucket(key string) *limiterBucket {
-	h := fnv.New64a()
-	h.Write([]byte(key))
-	return s.buckets[h.Sum64()%16]
+	return s.buckets[hash.FNV64a(key)%16]
 }
 
 // windowCounter 滑动窗口计数器。
