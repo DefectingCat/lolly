@@ -40,6 +40,7 @@ package ssl
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
@@ -356,61 +357,9 @@ func parsePEMChain(data []byte) [][]byte {
 //   - []byte: DER 编码的块
 //   - []byte: 剩余数据
 func extractPEMBlock(data []byte) ([]byte, []byte) {
-	startMarker := []byte("-----BEGIN CERTIFICATE-----")
-	endMarker := []byte("-----END CERTIFICATE-----")
-
-	start := findMarker(data, startMarker)
-	if start == -1 {
+	block, rest := pem.Decode(data)
+	if block == nil || block.Type != "CERTIFICATE" {
 		return nil, nil
 	}
-
-	end := findMarker(data[start:], endMarker)
-	if end == -1 {
-		return nil, nil
-	}
-
-	// 提取并解码 PEM 块
-	blockData := data[start : start+end+len(endMarker)]
-	rest := data[start+end+len(endMarker):]
-
-	// 注意：此处为简化实现，直接返回原始 PEM 块数据
-	// 生产环境建议使用 encoding/pem 进行完整解码
-	return blockData, rest
-}
-
-// findMarker 在数据中查找标记位置。
-//
-// 参数：
-//   - data: 待搜索的数据
-//   - marker: 要查找的标记
-//
-// 返回值：
-//   - int: 标记位置，未找到返回 -1
-func findMarker(data []byte, marker []byte) int {
-	for i := 0; i <= len(data)-len(marker); i++ {
-		if matchMarker(data[i:], marker) {
-			return i
-		}
-	}
-	return -1
-}
-
-// matchMarker 检查数据是否以指定标记开头。
-//
-// 参数：
-//   - data: 待检查的数据
-//   - marker: 要匹配的标记
-//
-// 返回值：
-//   - bool: 匹配返回 true
-func matchMarker(data []byte, marker []byte) bool {
-	if len(data) < len(marker) {
-		return false
-	}
-	for i := range marker {
-		if data[i] != marker[i] {
-			return false
-		}
-	}
-	return true
+	return block.Bytes, rest
 }
