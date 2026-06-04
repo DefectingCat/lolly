@@ -529,9 +529,10 @@ func (s *Server) startSingleMode() error {
 		result := locationEngine.Match(ctx.Path())
 		if result != nil && result.Handler != nil {
 			result.Handler(ctx)
+			matcher.ReleaseMatchResult(result)
 			return
 		}
-		// 无匹配，返回 404
+		matcher.ReleaseMatchResult(result)
 		ctx.SetStatusCode(404)
 		ctx.SetBodyString("Not Found")
 	}
