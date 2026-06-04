@@ -32,13 +32,13 @@ package security
 import (
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/hash"
 	"rua.plus/lolly/internal/middleware"
 	"rua.plus/lolly/internal/netutil"
 	"rua.plus/lolly/internal/utils"
@@ -256,9 +256,7 @@ func (rl *RateLimiter) Process(next fasthttp.RequestHandler) fasthttp.RequestHan
 // 返回值：
 //   - *shardedBucket: 对应的分段锁桶
 func (rl *RateLimiter) getShard(key string) *shardedBucket {
-	h := fnv.New64a()
-	h.Write([]byte(key))
-	return &rl.shards[h.Sum64()%16]
+	return &rl.shards[hash.FNV64a(key)%16]
 }
 
 // Allow 检查给定键的请求是否应被允许。
