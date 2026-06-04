@@ -5,7 +5,10 @@
 // 作者：xfy
 package utils
 
-import "unsafe"
+import (
+	"bytes"
+	"unsafe"
+)
 
 // B2s converts byte slice to string without allocation.
 // WARNING: The returned string shares memory with the original slice.
@@ -25,4 +28,20 @@ func S2b(s string) []byte {
 		return nil
 	}
 	return unsafe.Slice(unsafe.StringData(s), len(s))
+}
+
+func BytesContainsFold(b, sub []byte) bool {
+	if len(sub) == 0 {
+		return true
+	}
+	if len(sub) > len(b) {
+		return false
+	}
+	end := len(b) - len(sub) + 1
+	for i := 0; i < end; i++ {
+		if bytes.EqualFold(b[i:i+len(sub)], sub) {
+			return true
+		}
+	}
+	return false
 }
