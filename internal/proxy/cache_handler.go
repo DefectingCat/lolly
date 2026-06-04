@@ -6,7 +6,6 @@
 package proxy
 
 import (
-	"hash/fnv"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -17,25 +16,41 @@ import (
 // buildCacheKeyHash 使用 FNV-64a 计算缓存键的 uint64 哈希值。
 // 使用零分配方式构建哈希，避免 []byte(origKey) 转换。
 func (p *Proxy) buildCacheKeyHash(ctx *fasthttp.RequestCtx) (uint64, string) {
-	h := fnv.New64a()
-	h.Write(ctx.Request.Header.Method())
-	h.Write([]byte(":"))
-	h.Write(ctx.Request.URI().RequestURI())
-	hash := h.Sum64()
+	method := ctx.Request.Header.Method()
+	uri := ctx.Request.URI().RequestURI()
 
-	// 仅在需要 origKey 时构建字符串
-	origKey := b2s(ctx.Request.Header.Method()) + ":" + b2s(ctx.Request.URI().RequestURI())
-	return hash, origKey
+	var h uint64 = 14695981039346656037
+	for i := 0; i < len(method); i++ {
+		h ^= uint64(method[i])
+		h *= 1099511628211
+	}
+	h ^= uint64(':')
+	h *= 1099511628211
+	for i := 0; i < len(uri); i++ {
+		h ^= uint64(uri[i])
+		h *= 1099511628211
+	}
+
+	origKey := b2s(method) + ":" + b2s(uri)
+	return h, origKey
 }
 
-// buildCacheKeyHashValue 直接计算缓存键的哈希值，零字符串分配。
-// 用于只需要哈希值而不需要原始键的场景。
 func (p *Proxy) buildCacheKeyHashValue(ctx *fasthttp.RequestCtx) uint64 {
-	h := fnv.New64a()
-	h.Write(ctx.Request.Header.Method())
-	h.Write([]byte(":"))
-	h.Write(ctx.Request.URI().RequestURI())
-	return h.Sum64()
+	method := ctx.Request.Header.Method()
+	uri := ctx.Request.URI().RequestURI()
+
+	var h uint64 = 14695981039346656037
+	for i := 0; i < len(method); i++ {
+		h ^= uint64(method[i])
+		h *= 1099511628211
+	}
+	h ^= uint64(':')
+	h *= 1099511628211
+	for i := 0; i < len(uri); i++ {
+		h ^= uint64(uri[i])
+		h *= 1099511628211
+	}
+	return h
 }
 
 // writeCachedResponse 将缓存的响应写入 FastHTTP 响应上下文。
