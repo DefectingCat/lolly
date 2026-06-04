@@ -564,7 +564,6 @@ func TestParsePEMChain(t *testing.T) {
 
 // TestExtractPEMBlock 测试 PEM 块提取
 func TestExtractPEMBlock(t *testing.T) {
-	// 测试有效的证书块
 	certPEM, _ := generateTestCert(t)
 	block, rest := extractPEMBlock(certPEM)
 	if block == nil {
@@ -573,70 +572,27 @@ func TestExtractPEMBlock(t *testing.T) {
 	if len(block) == 0 {
 		t.Error("Expected non-empty block")
 	}
+
+	if _, err := x509.ParseCertificate(block); err != nil {
+		t.Errorf("Expected DER-encoded bytes parseable as certificate, got error: %v", err)
+	}
 	_ = rest
 
-	// 测试空数据
 	block, _ = extractPEMBlock([]byte{})
 	if block != nil {
 		t.Error("Expected nil block from empty data")
 	}
 
-	// 测试无结束标记的数据
 	invalidData := []byte("-----BEGIN CERTIFICATE-----\nsome data without end")
 	block, _ = extractPEMBlock(invalidData)
 	if block != nil {
 		t.Error("Expected nil block from incomplete PEM")
 	}
 
-	// 测试无开始标记的数据
 	noStartData := []byte("some data\n-----END CERTIFICATE-----")
 	block, _ = extractPEMBlock(noStartData)
 	if block != nil {
 		t.Error("Expected nil block from data without start marker")
-	}
-}
-
-// TestFindMarker 测试标记查找
-func TestFindMarker(t *testing.T) {
-	data := []byte("prefix-----BEGIN CERTIFICATE-----suffix")
-	marker := []byte("-----BEGIN CERTIFICATE-----")
-
-	idx := findMarker(data, marker)
-	if idx != 6 {
-		t.Errorf("Expected index 6, got %d", idx)
-	}
-
-	// 测试不存在的标记
-	idx = findMarker(data, []byte("NOTFOUND"))
-	if idx != -1 {
-		t.Errorf("Expected -1 for not found marker, got %d", idx)
-	}
-
-	// 测试空数据
-	idx = findMarker([]byte{}, marker)
-	if idx != -1 {
-		t.Errorf("Expected -1 for empty data, got %d", idx)
-	}
-}
-
-// TestMatchMarker 测试标记匹配
-func TestMatchMarker(t *testing.T) {
-	data := []byte("-----BEGIN CERTIFICATE-----suffix")
-	marker := []byte("-----BEGIN CERTIFICATE-----")
-
-	if !matchMarker(data, marker) {
-		t.Error("Expected true for matching marker")
-	}
-
-	// 测试不匹配
-	if matchMarker(data, []byte("-----END CERTIFICATE-----")) {
-		t.Error("Expected false for non-matching marker")
-	}
-
-	// 测试数据长度小于标记
-	shortData := []byte("short")
-	if matchMarker(shortData, marker) {
-		t.Error("Expected false when data is shorter than marker")
 	}
 }
 
