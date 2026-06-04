@@ -25,7 +25,6 @@
 package compression
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/mimeutil"
+	"rua.plus/lolly/internal/utils"
 )
 
 // existResult 预压缩文件存在性缓存结果。
@@ -50,16 +50,12 @@ type existResult struct {
 // 检查是否存在预压缩的 .gz 或 .br 文件，如果存在且客户端支持对应编码，
 // 则直接发送，避免实时压缩的 CPU 开销。
 type GzipStatic struct {
-	// root 静态文件根目录路径
-	root string
-	// precompressedExtensions 预压缩文件扩展名列表（如 .br, .gz）
+	root                    string
 	precompressedExtensions []string
-	// extensions 支持预压缩的源文件扩展名列表（如 .html, .css, .js）
-	extensions []string
-	// enabled 是否启用预压缩支持
-	enabled bool
-	// existCache 预压缩文件存在性缓存，避免重复 os.Stat 调用
-	existCache sync.Map
+	extensions              []string
+	extSet                  map[string]bool
+	enabled                 bool
+	existCache              sync.Map
 }
 
 // NewGzipStatic 创建预压缩文件处理器。
@@ -81,12 +77,17 @@ func NewGzipStatic(enabled bool, root string, extensions, precompressedExtension
 	if len(precompressedExtensions) == 0 {
 		precompressedExtensions = []string{".br", ".gz"}
 	}
-	return &GzipStatic{
+	g := &GzipStatic{
 		enabled:                 enabled,
 		root:                    root,
 		extensions:              extensions,
 		precompressedExtensions: precompressedExtensions,
 	}
+	g.extSet = make(map[string]bool, len(g.extensions))
+	for _, e := range g.extensions {
+		g.extSet[strings.ToLower(e)] = true
+	}
+	return g
 }
 
 // ServeFile 发送预压缩文件（如果存在）。
@@ -178,12 +179,7 @@ func (g *GzipStatic) ServeFile(ctx *fasthttp.RequestCtx, filePath string) bool {
 //   - bool: true 表示文件扩展名匹配支持列表
 func (g *GzipStatic) matchExtension(filePath string) bool {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	for _, e := range g.extensions {
-		if strings.ToLower(e) == ext {
-			return true
-		}
-	}
-	return false
+	return g.extSet[ext]
 }
 
 // supportsEncoding 检查客户端是否支持指定编码。
@@ -201,13 +197,11 @@ func supportsEncoding(acceptEncoding []byte, ext string) bool {
 	if len(acceptEncoding) == 0 {
 		return false
 	}
-
-	// 使用 bytes 操作避免字符串分配
 	switch ext {
 	case ".br":
-		return bytes.Contains(bytes.ToLower(acceptEncoding), []byte("br"))
+		return utils.BytesContainsFold(acceptEncoding, []byte("br"))
 	case ".gz":
-		return bytes.Contains(bytes.ToLower(acceptEncoding), []byte("gzip"))
+		return utils.BytesContainsFold(acceptEncoding, []byte("gzip"))
 	default:
 		return false
 	}
