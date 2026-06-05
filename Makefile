@@ -107,7 +107,19 @@ build-windows: | $(BUILD_DIR)
 		-o $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe $(MAIN_PATH)
 	@echo "Built: $(BUILD_DIR)/$(APP_NAME)-windows-amd64.exe"
 
-build-all: build-linux build-darwin build-windows
+build-freebsd: | $(BUILD_DIR)
+	@echo "Building for FreeBSD amd64 (static)..."
+	$(CGO_DISABLE) GOOS=freebsd GOARCH=amd64 go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
+		-o $(BUILD_DIR)/$(APP_NAME)-freebsd-amd64 $(MAIN_PATH)
+	@echo "Built: $(BUILD_DIR)/$(APP_NAME)-freebsd-amd64"
+
+build-openbsd: | $(BUILD_DIR)
+	@echo "Building for OpenBSD amd64 (static)..."
+	$(CGO_DISABLE) GOOS=openbsd GOARCH=amd64 go build $(LDFLAGS) $(PERF_GCFLAGS) $(PERF_ASMFLAGS) -trimpath \
+		-o $(BUILD_DIR)/$(APP_NAME)-openbsd-amd64 $(MAIN_PATH)
+	@echo "Built: $(BUILD_DIR)/$(APP_NAME)-openbsd-amd64"
+
+build-all: build-linux build-darwin build-windows build-freebsd build-openbsd
 	@echo "All platform builds complete."
 
 # ============================================
@@ -380,6 +392,8 @@ help:
 	@echo "  make build-linux    - Build for Linux amd64"
 	@echo "  make build-darwin   - Build for macOS (amd64 + arm64)"
 	@echo "  make build-windows  - Build for Windows amd64"
+	@echo "  make build-freebsd  - Build for FreeBSD amd64"
+	@echo "  make build-openbsd  - Build for OpenBSD amd64"
 	@echo ""
 	@echo "Development:"
 	@echo "  make run            - Run development server"
@@ -426,7 +440,7 @@ help:
 	@echo "  make clean-mod      - Clean module cache"
 	@echo ""
 
-.PHONY: build build-pgo pgo-collect build-linux build-darwin build-windows build-all \
+.PHONY: build build-pgo pgo-collect build-linux build-darwin build-windows build-freebsd build-openbsd build-all \
 	run test-config version \
 	test test-integration test-e2e test-e2e-cover test-e2e-short test-all test-cover \
 	act act-unit \
