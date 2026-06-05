@@ -45,6 +45,8 @@ func (a *App) Run() int {
 		_ = a.upgradeMgr.WritePid()
 	}
 
+	a.signalReady()
+
 	sigChan := make(chan os.Signal, 1)
 	a.setupSignalHandlers(sigChan)
 

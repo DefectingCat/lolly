@@ -1782,8 +1782,7 @@ func TestStartVHostMode_ActualExecution(t *testing.T) {
 			errCh <- s.Start()
 		}()
 
-		// 等待一小段时间让服务器启动
-		time.Sleep(50 * time.Millisecond)
+		waitForServerRunning(s, 2*time.Second)
 
 		// 停止服务器
 		_ = s.GracefulStop(1 * time.Second)
@@ -2146,7 +2145,7 @@ func TestStartVHostMode_ActualServerStart(t *testing.T) {
 			errCh <- s.Start()
 		}()
 
-		time.Sleep(50 * time.Millisecond)
+		waitForServerRunning(s, 2*time.Second)
 		_ = s.GracefulStop(1 * time.Second)
 
 		select {
@@ -2183,7 +2182,7 @@ func TestStartVHostMode_ActualServerStart(t *testing.T) {
 			errCh <- s.Start()
 		}()
 
-		time.Sleep(50 * time.Millisecond)
+		waitForServerRunning(s, 2*time.Second)
 		_ = s.GracefulStop(1 * time.Second)
 
 		select {
@@ -2222,7 +2221,7 @@ func TestStartVHostMode_ActualServerStart(t *testing.T) {
 			errCh <- s.Start()
 		}()
 
-		time.Sleep(50 * time.Millisecond)
+		waitForServerRunning(s, 2*time.Second)
 		_ = s.GracefulStop(1 * time.Second)
 
 		select {
@@ -2255,7 +2254,7 @@ func TestStartVHostMode_ActualServerStart(t *testing.T) {
 			errCh <- s.Start()
 		}()
 
-		time.Sleep(50 * time.Millisecond)
+		waitForServerRunning(s, 2*time.Second)
 		_ = s.GracefulStop(1 * time.Second)
 
 		select {
@@ -2292,7 +2291,7 @@ func TestStartVHostMode_ActualServerStart(t *testing.T) {
 			errCh <- s.Start()
 		}()
 
-		time.Sleep(50 * time.Millisecond)
+		waitForServerRunning(s, 2*time.Second)
 		_ = s.GracefulStop(1 * time.Second)
 
 		select {

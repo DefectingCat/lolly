@@ -57,13 +57,15 @@ func (s *Server) createProxyForConfig(proxyCfg *config.ProxyConfig) *proxy.Proxy
 	if proxyCfg.HealthCheck.Interval > 0 {
 		hc := proxy.NewHealthChecker(targets, &proxyCfg.HealthCheck)
 		hc.Start()
+		s.proxiesMu.Lock()
 		s.healthCheckers = append(s.healthCheckers, hc)
-		// 设置被动健康检查
+		s.proxiesMu.Unlock()
 		p.SetHealthChecker(hc)
 	}
 
-	// 保存代理实例用于缓存统计
+	s.proxiesMu.Lock()
 	s.proxies = append(s.proxies, p)
+	s.proxiesMu.Unlock()
 
 	return p
 }

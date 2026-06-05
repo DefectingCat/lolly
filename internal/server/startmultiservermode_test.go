@@ -275,7 +275,7 @@ func TestStartMultiServerMode_Integration_Basic(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -330,7 +330,7 @@ func TestStartMultiServerMode_Integration_WithProxy(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -385,7 +385,7 @@ func TestStartMultiServerMode_Integration_WithStaticFiles(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -428,7 +428,7 @@ func TestStartMultiServerMode_Integration_WithCacheAPI(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -480,7 +480,7 @@ func TestStartMultiServerMode_Integration_WithHealthCheck(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -533,7 +533,7 @@ func TestStartMultiServerMode_Integration_WithMiddleware(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -580,7 +580,7 @@ func TestStartMultiServerMode_Integration_WithPerformance(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -616,7 +616,7 @@ func TestStartMultiServerMode_Integration_ThreeServers(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -663,7 +663,7 @@ func TestStartMultiServerMode_Integration_WithCompression(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -705,7 +705,7 @@ func TestStartMultiServerMode_Integration_WithRewrite(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -749,7 +749,7 @@ func TestStartMultiServerMode_Integration_WithConnLimiter(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -821,7 +821,7 @@ func TestStartMultiServerMode_Integration_MixedConfigs(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -862,7 +862,7 @@ func TestStartMultiServerMode_GracefulUpgradeFallback(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -957,7 +957,7 @@ func TestStartMultiServerMode_Integration_WithErrorPage(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -1002,7 +1002,7 @@ func TestStartMultiServerMode_Integration_WithMIMETypes(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -1123,7 +1123,7 @@ func TestStartMultiServerMode_Integration_WithAuthRequest(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -1192,7 +1192,7 @@ func TestStartMultiServerMode_Integration_WithDefaultServer(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {

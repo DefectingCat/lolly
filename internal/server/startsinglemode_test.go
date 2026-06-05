@@ -52,9 +52,7 @@ func TestStartSingleMode_Integration_WithStaticFiles(t *testing.T) {
 	}()
 
 	// 等待服务器启动
-	time.Sleep(50 * time.Millisecond)
-
-	// 停止服务器
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -97,7 +95,7 @@ func TestStartSingleMode_Integration_WithProxy(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -141,7 +139,7 @@ func TestStartSingleMode_Integration_WithMonitoring(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -178,7 +176,7 @@ func TestStartSingleMode_Integration_WithCacheAPI(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -215,7 +213,7 @@ func TestStartSingleMode_Integration_WithCompression(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -260,7 +258,7 @@ func TestStartSingleMode_Integration_WithSecurity(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -296,7 +294,7 @@ func TestStartSingleMode_Integration_WithRewrite(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -341,7 +339,7 @@ func TestStartSingleMode_Integration_WithPerformance(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -391,7 +389,7 @@ func TestStartSingleMode_Integration_WithProxyLocationTypes(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -438,7 +436,7 @@ func TestStartSingleMode_Integration_WithStaticLocationTypes(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -484,7 +482,7 @@ func TestStartSingleMode_Integration_WithHealthCheck(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond) // 给健康检查一些时间启动
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -523,7 +521,7 @@ func TestStartSingleMode_Integration_WithMIMETypes(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -568,7 +566,7 @@ func TestStartSingleMode_Integration_WithErrorPage(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -606,7 +604,7 @@ func TestStartSingleMode_Integration_WithConnLimiter(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {
@@ -646,7 +644,7 @@ func TestStartSingleMode_Integration_WithAuthRequest(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(50 * time.Millisecond)
+	waitForServerRunning(s, 2*time.Second)
 	_ = s.GracefulStop(2 * time.Second)
 
 	select {

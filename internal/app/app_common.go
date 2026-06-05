@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"sync"
 	"time"
 
 	"rua.plus/lolly/internal/config"
@@ -35,13 +36,26 @@ type App struct {
 	pidFile    string
 	logFile    string
 	listeners  []net.Listener
+	ready      chan struct{}
+	readyOnce  sync.Once
 }
 
 // NewApp creates a new App instance with the given config path.
 func NewApp(cfgPath string) *App {
 	return &App{
 		cfgPath: cfgPath,
+		ready:   make(chan struct{}),
 	}
+}
+
+// WaitReady blocks until the app has completed initialization.
+func (a *App) WaitReady() {
+	<-a.ready
+}
+
+// signalReady closes the ready channel to unblock callers of WaitReady.
+func (a *App) signalReady() {
+	a.readyOnce.Do(func() { close(a.ready) })
 }
 
 // SetPidFile sets the path to the PID file for the app.

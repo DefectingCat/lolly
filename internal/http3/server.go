@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -54,7 +55,7 @@ type Server struct {
 	listener *quic.EarlyListener
 
 	// running 服务器运行状态
-	running bool
+	running atomic.Bool
 
 	// mu 读写锁
 	mu sync.RWMutex
@@ -103,7 +104,7 @@ func (s *Server) Start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.running {
+	if s.running.Load() {
 		return fmt.Errorf("server already running")
 	}
 
@@ -160,21 +161,18 @@ func (s *Server) Start() error {
 		Handler: s.adapter.Wrap(s.handler),
 	}
 
-	s.running = true
+	s.running.Store(true)
 
 	logging.Info().
 		Str("listen", listenAddr).
 		Bool("0rtt", s.config.Enable0RTT).
 		Msg("HTTP/3 server started")
 
-	// 开始服务
+	http3Server := s.http3Server
+	listener := s.listener
 	go func() {
-		if err := s.http3Server.ServeListener(s.listener); err != nil {
-			s.mu.RLock()
-			running := s.running
-			s.mu.RUnlock()
-
-			if running {
+		if err := http3Server.ServeListener(listener); err != nil {
+			if s.running.Load() {
 				logging.Error().Err(err).Msg("HTTP/3 server error")
 			}
 		}
@@ -193,11 +191,11 @@ func (s *Server) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !s.running {
+	if !s.running.Load() {
 		return nil
 	}
 
-	s.running = false
+	s.running.Store(false)
 
 	if s.http3Server != nil {
 		if err := s.http3Server.Close(); err != nil {

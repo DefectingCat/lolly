@@ -573,8 +573,16 @@ func TestServe_ReceivesAndForwards(t *testing.T) {
 	upstream.targets[0].healthy.Store(true)
 	srv := newUDPServer(proxyConn, upstream, 10*time.Second)
 
-	go srv.serve()
-	go srv.startCleanupTicker()
+	srv.wg.Add(1)
+	go func() {
+		defer srv.wg.Done()
+		srv.serve()
+	}()
+	srv.wg.Add(1)
+	go func() {
+		defer srv.wg.Done()
+		srv.startCleanupTicker()
+	}()
 
 	clientConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
 	require.NoError(t, err)

@@ -76,6 +76,7 @@ type Server struct {
 	fastServer          *fasthttp.Server
 	fastServers         []*fasthttp.Server // 多监听器模式使用
 	proxies             []*proxy.Proxy
+	proxiesMu           sync.Mutex
 	listeners           []net.Listener
 	healthCheckers      []*proxy.HealthChecker
 	locationEngine      *matcher.LocationEngine
@@ -103,6 +104,11 @@ func New(cfg *config.Config) *Server {
 		s.accessLogMiddleware = accesslog.New(&cfg.Logging)
 	}
 	return s
+}
+
+// Running reports whether the server is currently running.
+func (s *Server) Running() bool {
+	return s.running.Load()
 }
 
 func (s *Server) handleRegistrationError(source, path string, err error) error {

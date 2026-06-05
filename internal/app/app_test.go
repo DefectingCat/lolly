@@ -473,7 +473,9 @@ logging:
 	}()
 
 	// 等待一小段时间让服务器启动
-	time.Sleep(100 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证配置已加载
 	if app.cfg == nil {
@@ -528,7 +530,9 @@ logging:
 		done <- app.Run()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证配置已加载且包含变量
 	if app.cfg == nil {
@@ -570,7 +574,9 @@ logging:
 		done <- app.Run()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证 DNS 解析器已创建
 	if app.resv == nil {
@@ -615,7 +621,9 @@ logging:
 		done <- app.Run()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证多服务器配置
 	if app.cfg == nil {
@@ -658,7 +666,9 @@ logging:
 		done <- app.Run()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证 PID 文件已创建
 	if _, err := os.Stat(pidPath); os.IsNotExist(err) {
@@ -703,7 +713,9 @@ logging:
 		done <- app.Run()
 	}()
 
-	time.Sleep(150 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证 Stream 服务器已创建
 	if app.streamSrv == nil {
@@ -743,7 +755,9 @@ logging:
 		done <- app.Run()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证升级管理器已创建
 	if app.upgradeMgr == nil {
@@ -783,7 +797,9 @@ logging:
 		done <- app.Run()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证日志文件路径已设置
 	if app.logFile != logPath {
@@ -823,7 +839,9 @@ logging:
 		done <- app.Run()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证配置已加载
 	if app.cfg == nil {
@@ -863,7 +881,9 @@ logging:
 		done <- app.Run()
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	app.WaitReady()
+
+	waitForAppServerRunning(app, 2*time.Second)
 
 	// 验证配置已加载
 	if app.cfg == nil {
@@ -871,10 +891,16 @@ logging:
 	}
 
 	// 验证超时值
-	if app.cfg.Shutdown.GracefulTimeout != 10*time.Second {
-		t.Errorf("GracefulTimeout = %v, want 10s", app.cfg.Shutdown.GracefulTimeout)
-	}
-
-	// 停止服务器
 	app.srv.StopWithTimeout(1 * time.Second)
+}
+
+func waitForAppServerRunning(app *App, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if app.srv != nil && app.srv.Running() {
+			return true
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return false
 }

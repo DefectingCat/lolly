@@ -159,7 +159,7 @@ func TestNewServer_Success(t *testing.T) {
 		t.Error("TLS config not set correctly")
 	}
 
-	if server.running {
+	if server.running.Load() {
 		t.Error("Server should not be running initially")
 	}
 }
@@ -254,7 +254,7 @@ func TestNewServer_TableDriven(t *testing.T) {
 				assert.NotNil(t, server.handler)
 				assert.NotNil(t, server.adapter)
 				assert.Equal(t, tt.tlsConfig, server.tlsConfig)
-				assert.False(t, server.running)
+				assert.False(t, server.running.Load())
 				assert.Nil(t, server.listener)
 				assert.Nil(t, server.http3Server)
 			}
@@ -281,7 +281,7 @@ func TestNewServer_VerifyInternalFields(t *testing.T) {
 	assert.Equal(t, cfg, server.config)
 	assert.Equal(t, tlsConfig, server.tlsConfig)
 	assert.NotNil(t, server.adapter)
-	assert.False(t, server.running)
+	assert.False(t, server.running.Load())
 	assert.Nil(t, server.listener)
 	assert.Nil(t, server.http3Server)
 }
@@ -364,7 +364,7 @@ func TestStart_Success(t *testing.T) {
 	require.NoError(t, server.Start())
 	t.Cleanup(func() { _ = server.Stop() })
 
-	assert.True(t, server.running)
+	assert.True(t, server.running.Load())
 	assert.NotNil(t, server.listener)
 	assert.NotNil(t, server.http3Server)
 }
@@ -436,7 +436,7 @@ func TestStart_QUICConfigDefaults(t *testing.T) {
 			require.NoError(t, server.Start())
 			t.Cleanup(func() { _ = server.Stop() })
 
-			assert.True(t, server.running)
+			assert.True(t, server.running.Load())
 			assert.NotNil(t, server.listener)
 		})
 	}
@@ -456,17 +456,17 @@ func TestStart_MultipleStartsAndStops(t *testing.T) {
 
 	// 第一次启动
 	require.NoError(t, server.Start())
-	assert.True(t, server.running)
+	assert.True(t, server.running.Load())
 
 	// 停止
 	require.NoError(t, server.Stop())
-	assert.False(t, server.running)
+	assert.False(t, server.running.Load())
 
 	// 第二次启动（使用新端口，因为旧端口可能还在释放中）
 	server.config.Listen = ":0"
 	require.NoError(t, server.Start())
 	t.Cleanup(func() { _ = server.Stop() })
-	assert.True(t, server.running)
+	assert.True(t, server.running.Load())
 }
 
 // TestStop_NotRunning 测试停止未运行的服务器
@@ -481,11 +481,11 @@ func TestStop_NotRunning(t *testing.T) {
 	server, err := NewServer(cfg, handler, tlsConfig)
 	require.NoError(t, err)
 
-	assert.False(t, server.running)
+	assert.False(t, server.running.Load())
 
 	err = server.Stop()
 	require.NoError(t, err)
-	assert.False(t, server.running)
+	assert.False(t, server.running.Load())
 }
 
 // TestStop_Running 测试停止正在运行的服务器
@@ -501,10 +501,10 @@ func TestStop_Running(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, server.Start())
-	assert.True(t, server.running)
+	assert.True(t, server.running.Load())
 
 	require.NoError(t, server.Stop())
-	assert.False(t, server.running)
+	assert.False(t, server.running.Load())
 }
 
 // TestStop_CalledMultipleTimes 测试多次停止不会报错
@@ -525,7 +525,7 @@ func TestStop_CalledMultipleTimes(t *testing.T) {
 	require.NoError(t, server.Stop())
 	require.NoError(t, server.Stop())
 
-	assert.False(t, server.running)
+	assert.False(t, server.running.Load())
 }
 
 // TestStartStop_Lifecycle 测试完整的生命周期
@@ -543,17 +543,17 @@ func TestStartStop_Lifecycle(t *testing.T) {
 	server, err := NewServer(cfg, handler, tlsConfig)
 	require.NoError(t, err)
 
-	assert.False(t, server.running)
+	assert.False(t, server.running.Load())
 	assert.Nil(t, server.listener)
 	assert.Nil(t, server.http3Server)
 
 	require.NoError(t, server.Start())
 
-	assert.True(t, server.running)
+	assert.True(t, server.running.Load())
 	assert.NotNil(t, server.listener)
 	assert.NotNil(t, server.http3Server)
 
 	require.NoError(t, server.Stop())
 
-	assert.False(t, server.running)
+	assert.False(t, server.running.Load())
 }
