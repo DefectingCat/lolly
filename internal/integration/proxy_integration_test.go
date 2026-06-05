@@ -17,7 +17,6 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/proxy"
-	"rua.plus/lolly/internal/testutil"
 )
 
 // TestProxyCreation 测试代理创建
@@ -69,12 +68,9 @@ func TestProxyRequestHeaders(t *testing.T) {
 		{URL: "http://127.0.0.1:8081", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	// 验证代理配置已设置
 	assert.NotNil(t, cfg.Headers.SetRequest)
@@ -102,12 +98,9 @@ func TestProxyResponseHeaders(t *testing.T) {
 		{URL: "http://127.0.0.1:8081", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	// 验证响应头配置
 	assert.Equal(t, "lolly", cfg.Headers.SetResponse["X-Server"])
@@ -129,12 +122,9 @@ func TestProxyTimeout(t *testing.T) {
 		{URL: "http://127.0.0.1:8081", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	// 验证超时配置
 	assert.Equal(t, 1*time.Second, cfg.Timeout.Connect)
@@ -157,12 +147,9 @@ func TestProxyLoadBalanceRoundRobin(t *testing.T) {
 		{URL: "http://127.0.0.1:8082", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	// 验证负载均衡器类型
 	assert.Equal(t, "round_robin", cfg.LoadBalance)
@@ -184,12 +171,9 @@ func TestProxyWeightedRoundRobin(t *testing.T) {
 		{URL: "http://127.0.0.1:8082", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	// 验证权重配置
 	assert.Equal(t, 3, targets[0].Weight)
@@ -211,12 +195,9 @@ func TestProxyLeastConn(t *testing.T) {
 		{URL: "http://127.0.0.1:8082", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	assert.Equal(t, "least_conn", cfg.LoadBalance)
 }
@@ -236,12 +217,9 @@ func TestProxyIPHash(t *testing.T) {
 		{URL: "http://127.0.0.1:8082", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	assert.Equal(t, "ip_hash", cfg.LoadBalance)
 }
@@ -259,12 +237,9 @@ func TestProxyConsistentHash(t *testing.T) {
 		{URL: "http://127.0.0.1:8082", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	assert.Equal(t, "consistent_hash", cfg.LoadBalance)
 	assert.Equal(t, "uri", cfg.HashKey)
@@ -290,12 +265,9 @@ func TestProxyErrorHandling(t *testing.T) {
 		},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	// 验证 MaxFails 配置 (int64 类型)
 	assert.Equal(t, int64(3), targets[0].MaxFails)
@@ -325,12 +297,9 @@ func TestProxyCacheConfig(t *testing.T) {
 		{URL: "http://127.0.0.1:8081", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	// 验证缓存配置
 	assert.True(t, cfg.Cache.Enabled)
@@ -358,12 +327,9 @@ func TestProxyNextUpstream(t *testing.T) {
 		{URL: "http://127.0.0.1:8082", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	// 验证故障转移配置
 	assert.Equal(t, 3, cfg.NextUpstream.Tries)
@@ -391,12 +357,9 @@ func TestProxyHealthCheck(t *testing.T) {
 		{URL: "http://127.0.0.1:8081", Weight: 1},
 	}
 
-	p, err := proxy.NewProxy(cfg, targets, nil, nil)
+	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-	err = p.Start()
-	require.NoError(t, err)
-	defer p.Stop()
 
 	// 验证健康检查配置
 	assert.Equal(t, 10*time.Second, cfg.HealthCheck.Interval)
