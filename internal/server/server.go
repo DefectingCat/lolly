@@ -66,6 +66,8 @@ type Server struct {
 	accessLogMiddleware *accesslog.AccessLog
 	luaEngine           *lua.LuaEngine
 	accessControl       *security.AccessControl
+	accessControls      []*security.AccessControl
+	accessControlsMu    sync.Mutex
 	errorPageManager    *handler.ErrorPageManager
 	fileCache           *cache.FileCache
 	pool                *GoroutinePool
@@ -96,7 +98,11 @@ type Server struct {
 // 返回值：
 //   - *Server: 创建的服务器实例
 func New(cfg *config.Config) *Server {
-	return &Server{config: cfg}
+	s := &Server{config: cfg}
+	if cfg != nil {
+		s.accessLogMiddleware = accesslog.New(&cfg.Logging)
+	}
+	return s
 }
 
 func (s *Server) handleRegistrationError(source, path string, err error) error {

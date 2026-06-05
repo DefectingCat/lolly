@@ -42,8 +42,8 @@ func (s *Server) cleanupResources() {
 	}
 
 	// 关闭 AccessControl (释放 GeoIP 资源)
-	if s.accessControl != nil {
-		if err := s.accessControl.Close(); err != nil {
+	for _, ac := range s.accessControls {
+		if err := ac.Close(); err != nil {
 			logging.Warn().Err(err).Msg("Failed to close AccessControl")
 		}
 	}

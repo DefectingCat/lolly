@@ -12,7 +12,6 @@ import (
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/lua"
 	"rua.plus/lolly/internal/middleware"
-	"rua.plus/lolly/internal/middleware/accesslog"
 	"rua.plus/lolly/internal/middleware/bodylimit"
 	"rua.plus/lolly/internal/middleware/compression"
 	"rua.plus/lolly/internal/middleware/errorintercept"
@@ -40,7 +39,6 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 	var middlewares []middleware.Middleware
 
 	// 1. AccessLog (已集成)
-	s.accessLogMiddleware = accesslog.New(&s.config.Logging)
 	middlewares = append(middlewares, s.accessLogMiddleware)
 
 	// 2. Security: AccessControl (IP 访问控制)
@@ -50,7 +48,10 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 			return nil, fmt.Errorf("failed to create access control middleware: %w", err)
 		}
 		middlewares = append(middlewares, ac)
+		s.accessControlsMu.Lock()
 		s.accessControl = ac
+		s.accessControls = append(s.accessControls, ac)
+		s.accessControlsMu.Unlock()
 	}
 
 	// 3. Security: RateLimiter (速率限制)
