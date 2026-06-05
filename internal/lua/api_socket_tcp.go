@@ -198,7 +198,10 @@ func (s *TCPSocket) ConnectAsync(_ *glua.LState, host string, port int) (*Socket
 	if err != nil {
 		return nil, err
 	}
-	return s.currentOp, nil
+	s.mu.RLock()
+	op := s.currentOp
+	s.mu.RUnlock()
+	return op, nil
 }
 
 // Send 发送数据
@@ -245,13 +248,17 @@ func (s *TCPSocket) SendAsync(data []byte) (*SocketOperation, error) {
 
 	// 开始操作
 	op := s.manager.StartOperation(s, OpSend, s.sendTimeout)
+	s.mu.Lock()
 	s.currentOp = op
+	s.mu.Unlock()
 	s.setState(SocketStateSending)
 
 	// 在 goroutine 中执行发送
 	go func() {
 		defer func() {
+			s.mu.Lock()
 			s.currentOp = nil
+			s.mu.Unlock()
 			s.setState(SocketStateConnected)
 		}()
 
@@ -330,13 +337,17 @@ func (s *TCPSocket) ReceiveAsync(size int) (*SocketOperation, error) {
 
 	// 开始操作
 	op := s.manager.StartOperation(s, OpReceive, s.readTimeout)
+	s.mu.Lock()
 	s.currentOp = op
+	s.mu.Unlock()
 	s.setState(SocketStateReceiving)
 
 	// 在 goroutine 中执行接收
 	go func() {
 		defer func() {
+			s.mu.Lock()
 			s.currentOp = nil
+			s.mu.Unlock()
 			s.setState(SocketStateConnected)
 		}()
 
