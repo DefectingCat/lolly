@@ -248,7 +248,9 @@ func TestTCPSocket_Connect_Failure(t *testing.T) {
 	require.NoError(t, err) // Connect 本身不报错
 
 	// 等待异步连接完成
+	socket.mu.RLock()
 	op := socket.currentOp
+	socket.mu.RUnlock()
 	if op != nil {
 		_, err := op.Wait(context.Background())
 		assert.Error(t, err) // 连接应该失败
