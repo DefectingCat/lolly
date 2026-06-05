@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-05
+
+### Added
+
+#### 核心功能
+
+- Lua gjson 模块：JSON 编码/解码库，支持 sort_keys 选项
+- Lua 路由注册：支持 route 字段的 Lua 脚本按路由执行
+- Config include 指令：支持 glob 模式的配置文件拆分和包含
+- SIGHUP 热重载：配置变更后通过信号触发无中断重载
+- FreeBSD / OpenBSD 构建目标
+- X-Forwarded-Host 和 X-Forwarded-Proto 可配置代理头
+
+#### 平台与构建
+
+- MIT 许可证
+- `docs/plans/` 添加到 .gitignore
+- Makefile 优化和一致性修复
+
+### Performance
+
+- matcher RadixTree 搜索 sync.Pool 零分配
+- loadbalance filterHealthy 池化 + atomic.Bool 重建锁
+- FileInfoCache 近似 LRU 替代读写锁升级
+- resolver O(1) LRU（container/list）
+- proxy 内联 FNV-1a 哈希、消除 WebSocket 字符串分配、缓存键单次遍历
+- compression MIME 预计算字节切片、GeoIP 查找去重、gzip_static 预建扩展名集合
+- ConsistentHash 双锁消除、Balancer healthy slice 池化
+
+### Fixed
+
+- 修复 9 个包的并发数据竞争（`go test -count=3 -race` 零 race）
+  - lua: TCPSocket.currentOp 锁保护、schedulerMu 调度器同步
+  - server: buildMiddlewareChain 并发写、multi-server 模式 goroutine 安全
+  - handler/app/http3/stream: 测试同步和原子操作修复
+- 多服务器模式 status/pprof 注册
+- config include 循环检测
+- atomic.Bool 替代 running 标志消除 data race
+- OCSP 刷新逻辑、DNS resolver double-close panic
+- SSL DER 提取改用 encoding/pem
+- 根路径规范化修复
+
+### Changed
+
+- 删除 ~16.8k 行死代码（disk_cache、tiered_cache、tempfile、upgrade、lua mock engine 等）
+- 提取公共函数到 testutil/netutil/utils
+- 合并冗余 switch、移除 50+ 子目录 AGENTS.md
+- fasthttp 升级至 1.71.0，compress 升级至 1.18.6
+
+### Tests
+
+- 安全中间件覆盖率 75.9% → 88.5%
+- 服务器模块覆盖率 78.6% → 83.3%
+- proxy 覆盖率 71.1% → 80%+
+- variable 覆盖率 74.5% → 85%+
+- http3 覆盖率 46% → 93.1%
+- sslutil 覆盖率 29.2% → 85%+
+- adapter 覆盖率 0% → 80%+
+- stream 覆盖率 57% → 75%+
+
+### Build
+
+- 删除 GitHub Actions workflow 文件
+- 添加 `docs/skills/release.md` 发布流程技能
+
 ## [0.2.2] - 2026-04-30
 
 ### Added
