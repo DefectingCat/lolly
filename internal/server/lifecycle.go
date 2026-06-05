@@ -27,9 +27,11 @@ func (s *Server) cleanupResources() {
 	}
 
 	// 停止健康检查器
+	s.proxiesMu.Lock()
 	for _, hc := range s.healthCheckers {
 		hc.Stop()
 	}
+	s.proxiesMu.Unlock()
 
 	// 关闭访问日志
 	if s.accessLogMiddleware != nil {
@@ -42,11 +44,13 @@ func (s *Server) cleanupResources() {
 	}
 
 	// 关闭 AccessControl (释放 GeoIP 资源)
+	s.accessControlsMu.Lock()
 	for _, ac := range s.accessControls {
 		if err := ac.Close(); err != nil {
 			logging.Warn().Err(err).Msg("Failed to close AccessControl")
 		}
 	}
+	s.accessControlsMu.Unlock()
 
 	// 关闭 Lua 引擎
 	if s.luaEngine != nil {

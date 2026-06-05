@@ -89,7 +89,8 @@ type LuaEngine struct {
 	// 引擎统计
 	stats EngineStats
 
-	schedulerMu sync.RWMutex
+	schedulerMu   sync.RWMutex
+	schedulerDone chan struct{}
 }
 
 // EngineStats 引擎统计信息。
@@ -439,9 +440,12 @@ func (e *LuaEngine) InitSchedulerLState() error {
 
 	q := make(chan *CallbackEntry, 1024)
 
+	done := make(chan struct{})
+
 	e.schedulerMu.Lock()
 	e.schedulerLState = L
 	e.callbackQueue = q
+	e.schedulerDone = done
 	e.schedulerMu.Unlock()
 
 	go e.SchedulerLoop()
@@ -457,6 +461,15 @@ func (e *LuaEngine) InitSchedulerLState() error {
 //
 // 注意：该方法由 InitSchedulerLState 自动启动，不应手动调用。
 func (e *LuaEngine) SchedulerLoop() {
+	defer func() {
+		e.schedulerMu.RLock()
+		d := e.schedulerDone
+		e.schedulerMu.RUnlock()
+		if d != nil {
+			close(d)
+		}
+	}()
+
 	for {
 		e.schedulerMu.RLock()
 		q := e.callbackQueue
@@ -557,6 +570,14 @@ func (e *LuaEngine) CloseScheduler() {
 		close(e.callbackQueue)
 		e.callbackQueue = nil
 	}
+	done := e.schedulerDone
+	e.schedulerMu.Unlock()
+
+	if done != nil {
+		<-done
+	}
+
+	e.schedulerMu.Lock()
 	if e.schedulerLState != nil {
 		e.schedulerLState.Close()
 		e.schedulerLState = nil
