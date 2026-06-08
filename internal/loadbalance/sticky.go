@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -29,10 +30,15 @@ type StickySession struct {
 	shards   []*stickyShard
 	stopCh   chan struct{}
 	wg       sync.WaitGroup
+	started  atomic.Bool
+	stopOnce sync.Once
 }
 
 // NewStickySession 创建一个新的会话粘性负载均衡器。
 func NewStickySession(config StickyConfig, fallback Balancer) *StickySession {
+	if fallback == nil {
+		fallback = NewRoundRobin()
+	}
 	shards := make([]*stickyShard, stickyShardCount)
 	for i := range shards {
 		shards[i] = &stickyShard{
@@ -50,13 +56,21 @@ func NewStickySession(config StickyConfig, fallback Balancer) *StickySession {
 
 // Start 启动后台清理 goroutine。
 func (s *StickySession) Start() {
+	if s.started.Swap(true) {
+		return
+	}
 	s.wg.Add(1)
 	go s.cleanupLoop()
 }
 
 // Stop 停止后台清理 goroutine。
 func (s *StickySession) Stop() {
-	close(s.stopCh)
+	if !s.started.Swap(false) {
+		return
+	}
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
 	s.wg.Wait()
 }
 

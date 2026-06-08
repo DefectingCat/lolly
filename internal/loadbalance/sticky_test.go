@@ -278,6 +278,39 @@ func TestStickySession_ExpiredCookie(t *testing.T) {
 	}
 }
 
+// TestStickySession_DoubleStop 测试重复调用 Stop() 不会 panic。
+func TestStickySession_DoubleStop(t *testing.T) {
+	t.Parallel()
+	fallback := NewRoundRobin()
+	config := DefaultStickyConfig()
+
+	sticky := NewStickySession(config, fallback)
+	sticky.Start()
+	sticky.Stop()
+	sticky.Stop() // Should not panic
+}
+
+// TestStickySession_NilFallback 测试 nil fallback 会使用默认 RoundRobin。
+func TestStickySession_NilFallback(t *testing.T) {
+	t.Parallel()
+	config := DefaultStickyConfig()
+	config.Enabled = true
+
+	sticky := NewStickySession(config, nil)
+	sticky.Start()
+	defer sticky.Stop()
+
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", true),
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+	selected := sticky.Select(ctx, targets)
+	if selected == nil {
+		t.Fatal("expected a target with default fallback")
+	}
+}
+
 // TestStickySession_SelectExcluding 测试排除选择委托给 fallback。
 func TestStickySession_SelectExcluding(t *testing.T) {
 	t.Parallel()
