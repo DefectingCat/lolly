@@ -509,6 +509,9 @@ func validateProxy(p *ProxyConfig) error {
 		if p.LeastTime.Metric != "" && p.LeastTime.Metric != "header" && p.LeastTime.Metric != "last_byte" {
 			return fmt.Errorf("无效的 least_time metric: %s（有效值: header, last_byte）", p.LeastTime.Metric)
 		}
+		if p.LeastTime.DefaultTime < 0 {
+			return fmt.Errorf("least_time default_time 不能为负数")
+		}
 	}
 
 	// validate sticky config
