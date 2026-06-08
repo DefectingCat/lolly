@@ -940,6 +940,8 @@ func TestIsValidAlgorithm(t *testing.T) {
 		{"ip_hash", "ip_hash", true},
 		{"consistent_hash", "consistent_hash", true},
 		{"random", "random", true},
+		{"least_time", "least_time", true},
+		{"sticky", "sticky", true},
 		{"invalid", "invalid", false},
 		{"empty", "", true}, // 空字符串有效（使用默认值）
 		{"unknown", "unknown-algorithm", false},

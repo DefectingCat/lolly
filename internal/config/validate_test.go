@@ -170,6 +170,80 @@ func TestValidateProxy(t *testing.T) {
 			wantErr: true,
 			errMsg:  "无效的负载均衡算法",
 		},
+		{
+			name: "有效 least_time 配置 metric=header",
+			config: ProxyConfig{
+				Path:        "/api",
+				Targets:     []ProxyTarget{{URL: "http://backend:8080"}},
+				LoadBalance: "least_time",
+				LeastTime:   LeastTimeConfig{Metric: "header"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "有效 least_time 配置 metric=last_byte",
+			config: ProxyConfig{
+				Path:        "/api",
+				Targets:     []ProxyTarget{{URL: "http://backend:8080"}},
+				LoadBalance: "least_time",
+				LeastTime:   LeastTimeConfig{Metric: "last_byte"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "无效 least_time metric",
+			config: ProxyConfig{
+				Path:        "/api",
+				Targets:     []ProxyTarget{{URL: "http://backend:8080"}},
+				LoadBalance: "least_time",
+				LeastTime:   LeastTimeConfig{Metric: "invalid"},
+			},
+			wantErr: true,
+			errMsg:  "无效的 least_time metric",
+		},
+		{
+			name: "有效 sticky 配置",
+			config: ProxyConfig{
+				Path:        "/api",
+				Targets:     []ProxyTarget{{URL: "http://backend:8080"}},
+				LoadBalance: "sticky",
+				Sticky:      StickyConfig{Enabled: true, FallbackAlgo: "round_robin"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "无效 sticky enabled=false",
+			config: ProxyConfig{
+				Path:        "/api",
+				Targets:     []ProxyTarget{{URL: "http://backend:8080"}},
+				LoadBalance: "sticky",
+				Sticky:      StickyConfig{Enabled: false},
+			},
+			wantErr: true,
+			errMsg:  "sticky.enabled 必须为 true",
+		},
+		{
+			name: "无效 sticky fallback_balance",
+			config: ProxyConfig{
+				Path:        "/api",
+				Targets:     []ProxyTarget{{URL: "http://backend:8080"}},
+				LoadBalance: "sticky",
+				Sticky:      StickyConfig{Enabled: true, FallbackAlgo: "invalid"},
+			},
+			wantErr: true,
+			errMsg:  "无效的 sticky fallback_balance",
+		},
+		{
+			name: "无效 sticky same_site",
+			config: ProxyConfig{
+				Path:        "/api",
+				Targets:     []ProxyTarget{{URL: "http://backend:8080"}},
+				LoadBalance: "sticky",
+				Sticky:      StickyConfig{Enabled: true, SameSite: "Invalid"},
+			},
+			wantErr: true,
+			errMsg:  "无效的 sticky same_site",
+		},
 	}
 
 	for _, tt := range tests {

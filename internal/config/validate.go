@@ -519,6 +519,12 @@ func validateProxy(p *ProxyConfig) error {
 		if p.Sticky.FallbackAlgo != "" && !loadbalance.IsValidAlgorithm(p.Sticky.FallbackAlgo) {
 			return fmt.Errorf("无效的 sticky fallback_balance: %s", p.Sticky.FallbackAlgo)
 		}
+		if p.Sticky.SameSite != "" {
+			validSameSites := []string{"Lax", "Strict", "None"}
+			if !slices.Contains(validSameSites, p.Sticky.SameSite) {
+				return fmt.Errorf("无效的 sticky same_site: %s（有效值: Lax, Strict, None）", p.Sticky.SameSite)
+			}
+		}
 	}
 
 	// 验证故障转移配置
