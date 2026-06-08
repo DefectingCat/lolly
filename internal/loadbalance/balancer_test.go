@@ -12,9 +12,12 @@ package loadbalance
 
 import (
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/valyala/fasthttp"
 )
 
 // createHealthyTarget 创建并返回一个指定 URL 和健康状态的 Target 实例。
@@ -2092,4 +2095,95 @@ func TestRandomBalancer(t *testing.T) {
 			t.Error("both targets should be selected when connections are equal")
 		}
 	})
+}
+
+// TestBalancerIntegration_LeastTime 验证 Least Time 算法 consistently 选择更快目标。
+func TestBalancerIntegration_LeastTime(t *testing.T) {
+	targets := []*Target{
+		NewTargetFromConfig("http://slow:8080", 1, 0, 0, 0, false, false, ""),
+		NewTargetFromConfig("http://fast:8080", 1, 0, 0, 0, false, false, ""),
+	}
+
+	lt := NewLeastTime("last_byte", time.Millisecond)
+
+	// 模拟：slow 目标有 100ms avg，fast 有 10ms avg
+	for i := 0; i < 10; i++ {
+		targets[0].Stats.Record(50*time.Millisecond, 100*time.Millisecond)
+		targets[1].Stats.Record(5*time.Millisecond, 10*time.Millisecond)
+	}
+
+	// 选择 100 次，应该 mostly 选 fast
+	fastCount := 0
+	for i := 0; i < 100; i++ {
+		selected := lt.Select(targets)
+		if selected.URL == "http://fast:8080" {
+			fastCount++
+		}
+	}
+
+	if fastCount < 80 {
+		t.Errorf("fast target selected %d/100 times, expected >80", fastCount)
+	}
+}
+
+// TestBalancerIntegration_StickyWithLeastTimeFallback 验证 Sticky 在目标不健康时 fallback。
+func TestBalancerIntegration_StickyWithLeastTimeFallback(t *testing.T) {
+	fallback := NewLeastTime("last_byte", time.Millisecond)
+	config := StickyConfig{
+		Enabled:  true,
+		Name:     "test_route",
+		Expires:  time.Hour,
+		Path:     "/",
+		HttpOnly: true,
+	}
+
+	sticky := NewStickySession(config, fallback)
+	sticky.Start()
+	defer sticky.Stop()
+
+	targets := []*Target{
+		NewTargetFromConfig("http://backend1:8080", 1, 0, 0, 0, false, false, ""),
+		NewTargetFromConfig("http://backend2:8080", 1, 0, 0, 0, false, false, ""),
+	}
+
+	ctx := &fasthttp.RequestCtx{}
+
+	// 首次请求
+	selected1 := sticky.Select(ctx, targets)
+	if selected1 == nil {
+		t.Fatal("expected a target")
+	}
+
+	// 验证 cookie 已设置
+	cookie := ctx.Response.Header.PeekCookie("test_route")
+	if len(cookie) == 0 {
+		t.Fatal("expected cookie")
+	}
+
+	// 使 selected1 不健康
+	selected1.Healthy.Store(false)
+
+	// 第二次请求带 cookie 应该 fallback
+	ctx2 := &fasthttp.RequestCtx{}
+	ctx2.Request.Header.SetCookie("test_route", string(extractCookieValue(cookie)))
+
+	selected2 := sticky.Select(ctx2, targets)
+	if selected2 == nil {
+		t.Fatal("expected fallback target")
+	}
+	if selected2.URL == selected1.URL {
+		t.Error("expected different target after fallback")
+	}
+}
+
+// extractCookieValue 从 Set-Cookie header 中提取 cookie 值
+func extractCookieValue(cookieHeader []byte) []byte {
+	s := string(cookieHeader)
+	// Format: "name=value; ..."
+	parts := strings.SplitN(s, "=", 2)
+	if len(parts) != 2 {
+		return nil
+	}
+	valueParts := strings.SplitN(parts[1], ";", 2)
+	return []byte(valueParts[0])
 }
