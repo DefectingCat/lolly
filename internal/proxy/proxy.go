@@ -874,11 +874,10 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		// 记录首字节时间
 		timing.MarkHeaderReceived()
 
-		// 记录响应时间（用于 least_time 负载均衡）
+		// 记录首字节响应时间（用于 least_time 负载均衡）
 		if recorder, ok := p.balancer.(loadbalance.ResponseTimeRecorder); ok {
-			headerTime := timing.connectEnd.Sub(timing.connectStart)
-			lastByteTime := timing.connectEnd.Sub(timing.connectStart)
-			recorder.RecordResponseTime(target, headerTime, lastByteTime)
+			headerTime := timing.headerReceived.Sub(timing.connectEnd)
+			recorder.RecordResponseTime(target, headerTime, 0)
 		}
 
 		// 请求成功，减少连接计数
@@ -985,6 +984,15 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		// 修改响应头
 		p.modifyResponseHeaders(ctx)
+
+		// 记录完整响应时间（用于 least_time 负载均衡）
+		timing.MarkResponseEnd()
+		if recorder, ok := p.balancer.(loadbalance.ResponseTimeRecorder); ok {
+			headerTime := timing.headerReceived.Sub(timing.connectEnd)
+			lastByteTime := timing.responseEnd.Sub(timing.connectEnd)
+			recorder.RecordResponseTime(target, headerTime, lastByteTime)
+		}
+
 		return
 	}
 
