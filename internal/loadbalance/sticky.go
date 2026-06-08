@@ -100,8 +100,8 @@ func (s *StickySession) Select(ctx *fasthttp.RequestCtx, targets []*Target) *Tar
 	// 检查现有 cookie
 	cookieValue := ctx.Request.Header.Cookie(s.config.Name)
 	if len(cookieValue) > 0 {
-		decodedURL, _, ok := decodeStickyCookie(string(cookieValue))
-		if ok && decodedURL != "" {
+		decodedURL, expires, ok := decodeStickyCookie(string(cookieValue))
+		if ok && decodedURL != "" && expires.After(time.Now()) {
 			// 查找对应的目标
 			for _, target := range targets {
 				if target.URL == decodedURL && target.IsAvailable() {

@@ -238,6 +238,46 @@ func TestStickySession_Concurrent(t *testing.T) {
 	wg.Wait()
 }
 
+// TestStickySession_ExpiredCookie 测试过期 cookie 会导致回退到 fallback。
+func TestStickySession_ExpiredCookie(t *testing.T) {
+	t.Parallel()
+	fallback := NewRoundRobin()
+	config := DefaultStickyConfig()
+	config.Enabled = true
+	config.Expires = -time.Hour // Negative = already expired
+
+	sticky := NewStickySession(config, fallback)
+	sticky.Start()
+	defer sticky.Stop()
+
+	// Make backend1 unavailable so we know for sure fallback picks backend2
+	targets := []*Target{
+		createHealthyTarget("http://backend1:8080", false),
+		createHealthyTarget("http://backend2:8080", true),
+	}
+
+	// Create an expired cookie manually
+	expiredCookie := encodeStickyCookie("http://backend1:8080", time.Now().Add(-time.Hour))
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetCookie(config.Name, expiredCookie)
+
+	// Should fallback because cookie is expired (and even if not, backend1 is unavailable)
+	selected := sticky.Select(ctx, targets)
+	if selected == nil {
+		t.Fatal("expected a target")
+	}
+	// Should not route to backend1 because cookie expired / unavailable
+	if selected.URL == "http://backend1:8080" {
+		t.Error("should not route using expired cookie")
+	}
+	// Should set a new cookie
+	newCookie := ctx.Response.Header.PeekCookie(config.Name)
+	if len(newCookie) == 0 {
+		t.Error("expected new cookie to be set")
+	}
+}
+
 // TestStickySession_SelectExcluding 测试排除选择委托给 fallback。
 func TestStickySession_SelectExcluding(t *testing.T) {
 	t.Parallel()
