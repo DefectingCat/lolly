@@ -19,7 +19,7 @@ import (
 // 注意事项：
 //   - Path 使用前缀匹配，较长路径优先匹配
 //   - 至少配置一个 Target 才能正常工作
-//   - 负载均衡算法支持：round_robin、weighted_round_robin、least_conn、ip_hash、consistent_hash、random
+//	- 负载均衡算法支持：round_robin、weighted_round_robin、least_conn、ip_hash、consistent_hash、random、least_time、sticky
 //   - 一致性哈希需要配置 HashKey
 //
 // 使用示例：
@@ -56,6 +56,8 @@ type ProxyConfig struct {
 	NextUpstream  NextUpstreamConfig  `yaml:"next_upstream"`
 	Cache         ProxyCacheConfig    `yaml:"cache"`
 	Timeout       ProxyTimeout        `yaml:"timeout"`
+	LeastTime     LeastTimeConfig     `yaml:"least_time"`
+	Sticky        StickyConfig        `yaml:"sticky"`
 	// 基本类型字段
 	VirtualNodes int `yaml:"virtual_nodes"`
 
@@ -438,6 +440,77 @@ type RedirectRewriteRule struct {
 	// Replacement 替换目标，支持变量展开
 	// 示例: "$scheme://$host:$server_port/" 或 "/"
 	Replacement string `yaml:"replacement"`
+}
+
+// LeastTimeConfig 最小时间负载均衡配置。
+//
+// 基于后端响应时间选择最优后端。
+//
+// 注意事项：
+//   - Metric 决定时间统计方式
+//   - DefaultTime 用于首次请求无样本时
+//
+// 使用示例：
+//
+//	least_time:
+//	  metric: last_byte      # 指标类型（header | last_byte）
+//	  default_time: 1ms      # 无统计样本时的默认响应时间
+type LeastTimeConfig struct {
+	// Metric 时间指标类型
+	// 可选值：header（首字节时间）、last_byte（末字节时间）
+	Metric string `yaml:"metric"`
+
+	// DefaultTime 无统计样本时的默认响应时间
+	// 用于首次请求或新后端加入时
+	DefaultTime time.Duration `yaml:"default_time"`
+}
+
+// StickyConfig Session Sticky 配置。
+//
+// 通过 Cookie 将同一客户端固定到同一后端。
+//
+// 注意事项：
+//   - Enabled 为 true 时启用
+//   - FallbackAlgo 指定当无法找到 sticky 后端时使用的算法
+//
+// 使用示例：
+//
+//	sticky:
+//	  enabled: true
+//	  name: lolly_route     # cookie 名称
+//	  expires: 1h          # session 有效期
+//	  path: /             # cookie 路径
+//	  http_only: true     # HttpOnly flag
+//	  same_site: Lax      # SameSite 属性
+//	  fallback_balance: round_robin  # fallback 算法
+type StickyConfig struct {
+	// Enabled 是否启用 Session Sticky
+	Enabled bool `yaml:"enabled"`
+
+	// Name Cookie 名称
+	Name string `yaml:"name"`
+
+	// Expires session 有效期
+	Expires time.Duration `yaml:"expires"`
+
+	// Domain Cookie 域
+	Domain string `yaml:"domain"`
+
+	// Path Cookie 路径
+	Path string `yaml:"path"`
+
+	// Secure Secure flag
+	Secure bool `yaml:"secure"`
+
+	// HttpOnly HttpOnly flag
+	HttpOnly bool `yaml:"http_only"`
+
+	// SameSite SameSite 属性
+	// 可选值：Lax, Strict, None
+	SameSite string `yaml:"same_site"`
+
+	// FallbackAlgo 无法找到 sticky 后端时的 fallback 算法
+	FallbackAlgo string `yaml:"fallback_balance"`
 }
 
 // NextUpstreamConfig 故障转移配置，定义后端失败时的自动重试行为。

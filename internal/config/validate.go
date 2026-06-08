@@ -504,6 +504,23 @@ func validateProxy(p *ProxyConfig) error {
 		return fmt.Errorf("无效的负载均衡算法：%s", p.LoadBalance)
 	}
 
+	// validate least_time config
+	if p.LoadBalance == "least_time" {
+		if p.LeastTime.Metric != "" && p.LeastTime.Metric != "header" && p.LeastTime.Metric != "last_byte" {
+			return fmt.Errorf("无效的 least_time metric: %s（有效值: header, last_byte）", p.LeastTime.Metric)
+		}
+	}
+
+	// validate sticky config
+	if p.LoadBalance == "sticky" {
+		if !p.Sticky.Enabled {
+			return fmt.Errorf("load_balance=sticky 时 sticky.enabled 必须为 true")
+		}
+		if p.Sticky.FallbackAlgo != "" && !loadbalance.IsValidAlgorithm(p.Sticky.FallbackAlgo) {
+			return fmt.Errorf("无效的 sticky fallback_balance: %s", p.Sticky.FallbackAlgo)
+		}
+	}
+
 	// 验证故障转移配置
 	if err := validateNextUpstream(&p.NextUpstream); err != nil {
 		return fmt.Errorf("next_upstream: %w", err)

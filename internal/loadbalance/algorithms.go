@@ -24,6 +24,8 @@ var validAlgorithms = []string{
 	"ip_hash",
 	"consistent_hash",
 	"random",
+	"least_time",
+	"sticky",
 }
 
 // IsValidAlgorithm 检查给定的算法名称是否有效。
