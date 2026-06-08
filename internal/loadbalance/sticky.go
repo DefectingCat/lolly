@@ -59,6 +59,9 @@ func (s *StickySession) Start() {
 	if s.started.Swap(true) {
 		return
 	}
+	// 重新创建 stopCh 以支持 Start/Stop/Start 模式
+	s.stopCh = make(chan struct{})
+	s.stopOnce = sync.Once{}
 	s.wg.Add(1)
 	go s.cleanupLoop()
 }
