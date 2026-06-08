@@ -3,6 +3,7 @@ package loadbalance
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/valyala/fasthttp"
 )
@@ -16,6 +17,7 @@ func TestStickySession_BasicRoute(t *testing.T) {
 		config.Enabled = true
 		fallback := NewRoundRobin()
 		sticky := NewStickySession(config, fallback)
+		sticky.Start()
 		defer sticky.Stop()
 
 		targets := []*Target{
@@ -41,6 +43,7 @@ func TestStickySession_BasicRoute(t *testing.T) {
 		config.Enabled = true
 		fallback := NewRoundRobin()
 		sticky := NewStickySession(config, fallback)
+		sticky.Start()
 		defer sticky.Stop()
 
 		targets := []*Target{
@@ -80,6 +83,7 @@ func TestStickySession_BasicRoute(t *testing.T) {
 		config.Enabled = false
 		fallback := NewRoundRobin()
 		sticky := NewStickySession(config, fallback)
+		sticky.Start()
 		defer sticky.Stop()
 
 		targets := []*Target{
@@ -107,6 +111,7 @@ func TestStickySession_TargetUnavailable(t *testing.T) {
 		config.Enabled = true
 		fallback := NewRoundRobin()
 		sticky := NewStickySession(config, fallback)
+		sticky.Start()
 		defer sticky.Stop()
 
 		targets := []*Target{
@@ -155,36 +160,44 @@ func TestStickySession_CookieEncodeDecode(t *testing.T) {
 	t.Parallel()
 	t.Run("编码解码round-trip", func(_ *testing.T) {
 		url := "http://backend1:8080"
-		encoded := encodeStickyCookie(url)
+		expires := time.Now().Add(time.Hour)
+		encoded := encodeStickyCookie(url, expires)
 		if encoded == "" {
 			t.Fatal("encodeStickyCookie() 返回空字符串")
 		}
 
-		decoded, err := decodeStickyCookie(encoded)
-		if err != nil {
-			t.Fatalf("decodeStickyCookie() 错误: %v", err)
+		decodedURL, decodedExpires, ok := decodeStickyCookie(encoded)
+		if !ok {
+			t.Fatal("decodeStickyCookie() returned ok=false")
 		}
 
-		if decoded != url {
-			t.Errorf("解码后 URL = %q, want %q", decoded, url)
+		if decodedURL != url {
+			t.Errorf("解码后 URL = %q, want %q", decodedURL, url)
+		}
+		if decodedExpires.Unix() != expires.Unix() {
+			t.Errorf("解码后 expires = %v, want %v", decodedExpires, expires)
 		}
 	})
 
 	t.Run("空URL编码解码", func(_ *testing.T) {
-		encoded := encodeStickyCookie("")
-		decoded, err := decodeStickyCookie(encoded)
-		if err != nil {
-			t.Fatalf("decodeStickyCookie() 错误: %v", err)
+		expires := time.Now().Add(time.Hour)
+		encoded := encodeStickyCookie("", expires)
+		decodedURL, decodedExpires, ok := decodeStickyCookie(encoded)
+		if !ok {
+			t.Fatal("decodeStickyCookie() returned ok=false")
 		}
-		if decoded != "" {
-			t.Errorf("解码后 URL = %q, want 空字符串", decoded)
+		if decodedURL != "" {
+			t.Errorf("解码后 URL = %q, want 空字符串", decodedURL)
+		}
+		if decodedExpires.Unix() != expires.Unix() {
+			t.Errorf("解码后 expires = %v, want %v", decodedExpires, expires)
 		}
 	})
 
 	t.Run("无效编码", func(_ *testing.T) {
-		_, err := decodeStickyCookie("invalid-base64!!!")
-		if err == nil {
-			t.Error("decodeStickyCookie() 应返回错误")
+		decodedURL, decodedExpires, ok := decodeStickyCookie("invalid-base64!!!")
+		if ok {
+			t.Errorf("decodeStickyCookie() = (%q, %v, %v), want ok=false", decodedURL, decodedExpires, ok)
 		}
 	})
 }
@@ -197,6 +210,7 @@ func TestStickySession_Concurrent(t *testing.T) {
 	config.Enabled = true
 	fallback := NewRoundRobin()
 	sticky := NewStickySession(config, fallback)
+	sticky.Start()
 	defer sticky.Stop()
 
 	targets := []*Target{
@@ -213,7 +227,7 @@ func TestStickySession_Concurrent(t *testing.T) {
 			ctx := &fasthttp.RequestCtx{}
 			// 交替使用有 cookie 和没有 cookie 的请求
 			if idx%2 == 0 {
-				ctx.Request.Header.SetCookie(config.Name, encodeStickyCookie("http://backend1:8080"))
+				ctx.Request.Header.SetCookie(config.Name, encodeStickyCookie("http://backend1:8080", time.Now().Add(time.Hour)))
 			}
 			got := sticky.Select(ctx, targets)
 			if got == nil {
@@ -232,6 +246,7 @@ func TestStickySession_SelectExcluding(t *testing.T) {
 		config.Enabled = true
 		fallback := NewRoundRobin()
 		sticky := NewStickySession(config, fallback)
+		sticky.Start()
 		defer sticky.Stop()
 
 		targets := []*Target{
