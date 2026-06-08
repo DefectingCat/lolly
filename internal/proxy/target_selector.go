@@ -119,6 +119,11 @@ func (p *Proxy) selectByBalancer(ctx *fasthttp.RequestCtx, targets []*loadbalanc
 	balancer := p.balancer
 	p.mu.RUnlock()
 
+	// 对于 StickySession 负载均衡器，需要请求上下文
+	if sb, ok := balancer.(*stickyBalancer); ok {
+		return sb.sticky.Select(ctx, targets)
+	}
+
 	// 对于 IPHash 负载均衡器，提取客户端 IP
 	if ipHash, ok := balancer.(*loadbalance.IPHash); ok {
 		clientIP := netutil.ExtractClientIP(ctx)
