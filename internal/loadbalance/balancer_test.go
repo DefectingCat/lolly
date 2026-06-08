@@ -28,7 +28,7 @@ import (
 // 返回值：
 //   - 初始化完成的 Target 指针
 func createHealthyTarget(url string, healthy bool) *Target {
-	t := &Target{URL: url}
+	t := &Target{URL: url, Stats: NewEWMAStats()}
 	t.Healthy.Store(healthy)
 	return t
 }

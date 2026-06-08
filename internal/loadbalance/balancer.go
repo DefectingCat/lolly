@@ -106,6 +106,9 @@ type Target struct {
 	EffectiveWeight atomic.Int64
 	// SlowStart 慢启动时间（配置）
 	SlowStart time.Duration `yaml:"slow_start"`
+
+	// Stats 响应时间统计（用于 least_time 算法）
+	Stats *EWMAStats
 }
 
 // Balancer 是 HTTP 代理（L7 层）负载均衡算法的接口。
@@ -615,6 +618,7 @@ func NewTargetFromConfig(url string, weight int, maxConns int64, maxFails int64,
 		Backup:      backup,
 		Down:        down,
 		ProxyURI:    proxyURI,
+		Stats:       NewEWMAStats(),
 	}
 	t.initHostname()
 	if !down {
