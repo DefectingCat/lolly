@@ -97,5 +97,7 @@ func (l *LeastTime) GetMetric() string {
 	return l.metric
 }
 
-var _ Balancer = (*LeastTime)(nil)
-var _ ResponseTimeRecorder = (*LeastTime)(nil)
+var (
+	_ Balancer             = (*LeastTime)(nil)
+	_ ResponseTimeRecorder = (*LeastTime)(nil)
+)

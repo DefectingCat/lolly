@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-09
+
+### Added
+
+#### 负载均衡
+
+- **Least Time 负载均衡器**：基于 EWMA（指数加权移动平均）统计的最少响应时间算法，自动选择响应最快上游
+- **Session Sticky 负载均衡器**：基于 Cookie 的会话粘性，一致性哈希分片，支持 Cookie 过期、域名、路径、Secure/HttpOnly/SameSite 属性
+- 对应 YAML 配置支持：`least_time`、`sticky` 策略及参数
+
+#### 平台与构建
+
+- FreeBSD 部署示例
+
+### Fixed
+
+- Least Time 响应时间记录修正
+- Sticky Cookie 格式、分片键、过期检查修复
+- Sticky 双重 Stop 防护和重启支持
+- 配置验证：`least_time` 的 `default_time` 不允许负值
+
+### Tests
+
+- Least Time 和 Sticky 负载均衡器集成测试
+- Least Time 和 Sticky 基准测试
+
 ## [0.3.0] - 2026-06-05
 
 ### Added

@@ -71,7 +71,6 @@ func TestProxyRequestHeaders(t *testing.T) {
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-
 	// 验证代理配置已设置
 	assert.NotNil(t, cfg.Headers.SetRequest)
 	assert.Equal(t, "custom-value", cfg.Headers.SetRequest["X-Custom-Header"])
@@ -101,7 +100,6 @@ func TestProxyResponseHeaders(t *testing.T) {
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-
 	// 验证响应头配置
 	assert.Equal(t, "lolly", cfg.Headers.SetResponse["X-Server"])
 	assert.Contains(t, cfg.Headers.Remove, "X-Powered-By")
@@ -124,7 +122,6 @@ func TestProxyTimeout(t *testing.T) {
 
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
-
 
 	// 验证超时配置
 	assert.Equal(t, 1*time.Second, cfg.Timeout.Connect)
@@ -150,7 +147,6 @@ func TestProxyLoadBalanceRoundRobin(t *testing.T) {
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-
 	// 验证负载均衡器类型
 	assert.Equal(t, "round_robin", cfg.LoadBalance)
 	assert.Len(t, targets, 2)
@@ -173,7 +169,6 @@ func TestProxyWeightedRoundRobin(t *testing.T) {
 
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
-
 
 	// 验证权重配置
 	assert.Equal(t, 3, targets[0].Weight)
@@ -198,7 +193,6 @@ func TestProxyLeastConn(t *testing.T) {
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-
 	assert.Equal(t, "least_conn", cfg.LoadBalance)
 }
 
@@ -220,7 +214,6 @@ func TestProxyIPHash(t *testing.T) {
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-
 	assert.Equal(t, "ip_hash", cfg.LoadBalance)
 }
 
@@ -239,7 +232,6 @@ func TestProxyConsistentHash(t *testing.T) {
 
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
-
 
 	assert.Equal(t, "consistent_hash", cfg.LoadBalance)
 	assert.Equal(t, "uri", cfg.HashKey)
@@ -267,7 +259,6 @@ func TestProxyErrorHandling(t *testing.T) {
 
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
-
 
 	// 验证 MaxFails 配置 (int64 类型)
 	assert.Equal(t, int64(3), targets[0].MaxFails)
@@ -300,7 +291,6 @@ func TestProxyCacheConfig(t *testing.T) {
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-
 	// 验证缓存配置
 	assert.True(t, cfg.Cache.Enabled)
 	assert.Equal(t, 60*time.Second, cfg.Cache.MaxAge)
@@ -330,7 +320,6 @@ func TestProxyNextUpstream(t *testing.T) {
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
 
-
 	// 验证故障转移配置
 	assert.Equal(t, 3, cfg.NextUpstream.Tries)
 	assert.Contains(t, cfg.NextUpstream.HTTPCodes, 502)
@@ -359,7 +348,6 @@ func TestProxyHealthCheck(t *testing.T) {
 
 	_, err := proxy.NewProxy(cfg, targets, nil, nil)
 	require.NoError(t, err)
-
 
 	// 验证健康检查配置
 	assert.Equal(t, 10*time.Second, cfg.HealthCheck.Interval)

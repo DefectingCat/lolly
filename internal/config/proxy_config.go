@@ -19,7 +19,7 @@ import (
 // 注意事项：
 //   - Path 使用前缀匹配，较长路径优先匹配
 //   - 至少配置一个 Target 才能正常工作
-//	- 负载均衡算法支持：round_robin、weighted_round_robin、least_conn、ip_hash、consistent_hash、random、least_time、sticky
+//   - 负载均衡算法支持：round_robin、weighted_round_robin、least_conn、ip_hash、consistent_hash、random、least_time、sticky
 //   - 一致性哈希需要配置 HashKey
 //
 // 使用示例：

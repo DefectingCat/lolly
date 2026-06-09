@@ -14,10 +14,12 @@ type EWMAStats struct {
 
 const defaultAlphaScale = 300 // alpha = 0.3
 
+// NewEWMAStats 创建新的 EWMA 统计器。
 func NewEWMAStats() *EWMAStats {
 	return &EWMAStats{}
 }
 
+// Record 记录一次响应时间样本。
 func (e *EWMAStats) Record(headerTime, lastByteTime time.Duration) {
 	e.recordAtomic(&e.headerTime, headerTime)
 	e.recordAtomic(&e.lastByteTime, lastByteTime)
@@ -41,18 +43,22 @@ func (e *EWMAStats) recordAtomic(ptr *atomic.Int64, newValue time.Duration) {
 	}
 }
 
+// HeaderTime 返回首字节时间的 EWMA 值。
 func (e *EWMAStats) HeaderTime() time.Duration {
 	return time.Duration(e.headerTime.Load())
 }
 
+// LastByteTime 返回完整响应时间的 EWMA 值。
 func (e *EWMAStats) LastByteTime() time.Duration {
 	return time.Duration(e.lastByteTime.Load())
 }
 
+// SampleCount 返回已记录的样本数量。
 func (e *EWMAStats) SampleCount() int64 {
 	return e.sampleCount.Load()
 }
 
+// Reset 重置所有统计数据。
 func (e *EWMAStats) Reset() {
 	e.headerTime.Store(0)
 	e.lastByteTime.Store(0)

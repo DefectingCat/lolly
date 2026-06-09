@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	gzipType     = "gzip"
-	offValue     = "off"
-	redirectType = "redirect"
-	staticType   = "static"
+	gzipType        = "gzip"
+	offValue        = "off"
+	redirectType    = "redirect"
+	staticType      = "static"
+	returnDirective = "return"
 )
 
 // Warning represents a conversion warning for unsupported or partially supported directives.
@@ -70,7 +71,7 @@ var unsupportedDirectives = map[string]string{
 	"split_clients":    "the 'split_clients' directive is not supported",
 	"geo":              "the 'geo' directive is not supported; use access.geoip config instead",
 	"range":            "the 'range' directive is not supported",
-	"return":           "the 'return' directive is not supported for non-redirect status codes; only 301/302 are supported",
+	returnDirective:    "the 'return' directive is not supported for non-redirect status codes; only 301/302 are supported",
 }
 
 // Convert converts a parsed nginx configuration to a lolly configuration.
@@ -273,7 +274,7 @@ func convertServerBlock(d *Directive, upstreams map[string]*upstreamInfo, result
 			parseAccessLog(bd, result)
 		case "error_log":
 			parseErrorLog(bd, result)
-		case "return":
+		case returnDirective:
 			parseServerReturn(bd, &baseServer, result)
 		case "rewrite":
 			parseRewrite(bd, &baseServer)
@@ -457,7 +458,7 @@ func parseServerReturn(d *Directive, server *config.ServerConfig, result *Conver
 		})
 	default:
 		result.Warnings = append(result.Warnings, Warning{
-			Directive: "return",
+			Directive: returnDirective,
 			Line:      d.Line,
 			File:      d.File,
 			Message:   fmt.Sprintf("return %d is not a redirect; only 301/302 are supported at server level", code),
@@ -554,7 +555,7 @@ func classifyLocation(d *Directive, serverRoot string, result *ConvertResult) lo
 			hasRootOrAlias = true
 		case "try_files":
 			hasTryFiles = true
-		case "return":
+		case returnDirective:
 			if len(d.Block[i].Args) > 0 {
 				code, err := strconv.Atoi(d.Block[i].Args[0])
 				if err == nil && (code == 301 || code == 302) {
@@ -876,7 +877,7 @@ func convertRedirectDirectives(directives []Directive, locPath string, server *c
 	for i := range directives {
 		d := &directives[i]
 
-		if d.Name != "return" {
+		if d.Name != returnDirective {
 			continue
 		}
 
@@ -900,7 +901,7 @@ func convertRedirectDirectives(directives []Directive, locPath string, server *c
 				Flag:        "permanent",
 			})
 			result.Warnings = append(result.Warnings, Warning{
-				Directive: "return",
+				Directive: returnDirective,
 				Line:      d.Line,
 				File:      d.File,
 				Message:   "return 301 converted to rewrite rule with permanent flag",
@@ -912,14 +913,14 @@ func convertRedirectDirectives(directives []Directive, locPath string, server *c
 				Flag:        "redirect",
 			})
 			result.Warnings = append(result.Warnings, Warning{
-				Directive: "return",
+				Directive: returnDirective,
 				Line:      d.Line,
 				File:      d.File,
 				Message:   "return 302 converted to rewrite rule with redirect flag",
 			})
 		default:
 			result.Warnings = append(result.Warnings, Warning{
-				Directive: "return",
+				Directive: returnDirective,
 				Line:      d.Line,
 				File:      d.File,
 				Message:   fmt.Sprintf("return %d in location is not a redirect; only 301/302 are supported", code),

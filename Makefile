@@ -1,7 +1,7 @@
 # Makefile - Lolly Build Commands
 
 APP_NAME := lolly
-FALLBACK_VERSION := 0.3.0
+FALLBACK_VERSION := 0.4.0
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || echo "$(FALLBACK_VERSION)")
 
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
