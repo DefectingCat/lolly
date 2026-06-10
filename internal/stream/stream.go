@@ -550,6 +550,7 @@ func (s *Server) Stop() {
 	s.mu.Lock()
 	s.listeners = make(map[string]net.Listener)
 	s.udpServers = make(map[string]*udpServer)
+	s.stopCh = make(chan struct{})
 	s.mu.Unlock()
 }
 
