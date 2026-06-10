@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-10
+
+### Fixed
+
+- **stream**: 修复上游选择逻辑，添加优雅关闭支持
+- **stream**: 修复 Stop 后 stopCh 未重置导致的重启问题
+
 ## [0.4.0] - 2026-06-09
 
 ### Added
