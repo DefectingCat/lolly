@@ -51,6 +51,10 @@ logs/
 tmp/
 temp/
 
+# Benchmark results
+benchmarks/*/
+!benchmarks/.gitkeep
+
 # oh-my-claudecode state directory
 .omc/
 
