@@ -252,6 +252,12 @@ func (a *App) shutdownHTTP2() {
 }
 
 // reopenLogs reinitializes the logger from current config.
+func (a *App) shutdownStream() {
+	if a.streamSrv != nil {
+		a.streamSrv.Stop()
+	}
+}
+
 func (a *App) reopenLogs() {
 	if a.cfg != nil {
 		logging.Init(a.cfg.Logging.Error.Level, a.cfg.Logging.Format)

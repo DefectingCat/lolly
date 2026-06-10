@@ -123,6 +123,7 @@ func (a *App) handleSignal(sig os.Signal) bool {
 			timeout = 30 * time.Second
 		}
 		a.logger.LogSignal("SIGQUIT", fmt.Sprintf("Graceful stop (waiting %v)", timeout))
+		a.shutdownStream()
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
 		_ = a.srv.GracefulStop(timeout)
@@ -139,6 +140,7 @@ func (a *App) handleSignal(sig os.Signal) bool {
 		} else {
 			a.logger.LogSignal(sigName(sigTyped), "Stopping server")
 		}
+		a.shutdownStream()
 		a.shutdownHTTP2()
 		a.shutdownHTTP3()
 		_ = a.srv.StopWithTimeout(timeout)
@@ -329,6 +331,7 @@ func (a *App) gracefulUpgrade() {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
+	a.shutdownStream()
 	a.shutdownHTTP2()
 	a.shutdownHTTP3()
 	_ = a.srv.GracefulStop(timeout)

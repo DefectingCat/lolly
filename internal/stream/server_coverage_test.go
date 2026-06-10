@@ -12,6 +12,7 @@
 package stream
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -63,7 +64,7 @@ func TestStart_NoListeners(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, s.running.Load())
 
-	s.running.Store(false)
+	s.Stop()
 }
 
 func TestStart_WithTCPListeners(t *testing.T) {
@@ -81,12 +82,7 @@ func TestStart_WithTCPListeners(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, s.running.Load())
 
-	s.running.Store(false)
-	s.mu.RLock()
-	for _, ln := range s.listeners {
-		_ = ln.Close()
-	}
-	s.mu.RUnlock()
+	s.Stop()
 }
 
 func TestStart_AcceptConnections(t *testing.T) {
@@ -115,7 +111,7 @@ func TestStart_AcceptConnections(t *testing.T) {
 	proxyAddr := ln.Addr().String()
 
 	s.mu.Lock()
-	s.listeners[proxyAddr] = ln
+	s.listeners["test"] = ln
 	s.mu.Unlock()
 
 	err = s.Start()
@@ -136,12 +132,7 @@ func TestStart_AcceptConnections(t *testing.T) {
 
 	_ = clientConn.Close()
 
-	s.running.Store(false)
-	s.mu.RLock()
-	for _, l := range s.listeners {
-		_ = l.Close()
-	}
-	s.mu.RUnlock()
+	s.Stop()
 	_ = backendLn.Close()
 }
 
@@ -636,4 +627,139 @@ func TestStartCleanupTicker_StopsOnSignal(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("startCleanupTicker did not stop after signal")
 	}
+}
+
+func TestHandleConnection_MultipleUpstreams(t *testing.T) {
+	s := NewServer()
+
+	backend1, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	backend2, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer backend1.Close()
+	defer backend2.Close()
+
+	go func() {
+		conn, err := backend1.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		buf := make([]byte, 1024)
+		n, _ := conn.Read(buf)
+		_, _ = conn.Write(append([]byte("backend1:"), buf[:n]...))
+	}()
+
+	go func() {
+		conn, err := backend2.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		buf := make([]byte, 1024)
+		n, _ := conn.Read(buf)
+		_, _ = conn.Write(append([]byte("backend2:"), buf[:n]...))
+	}()
+
+	_ = s.AddUpstream("upstream1", []TargetSpec{{Addr: backend1.Addr().String()}}, "round_robin", HealthCheckSpec{})
+	_ = s.AddUpstream("upstream2", []TargetSpec{{Addr: backend2.Addr().String()}}, "round_robin", HealthCheckSpec{})
+	s.upstreams["upstream1"].targets[0].healthy.Store(true)
+	s.upstreams["upstream2"].targets[0].healthy.Store(true)
+
+	ln1, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	ln2, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	s.mu.Lock()
+	s.listeners["upstream1"] = ln1
+	s.listeners["upstream2"] = ln2
+	s.mu.Unlock()
+
+	err = s.Start()
+	require.NoError(t, err)
+	defer s.Stop()
+
+	conn1, err := net.DialTimeout("tcp", ln1.Addr().String(), 2*time.Second)
+	require.NoError(t, err)
+	defer conn1.Close()
+
+	_, err = conn1.Write([]byte("hello"))
+	require.NoError(t, err)
+
+	buf := make([]byte, 1024)
+	_ = conn1.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err := conn1.Read(buf)
+	require.NoError(t, err)
+	assert.True(t, bytes.HasPrefix(buf[:n], []byte("backend1:")), "should route to backend1, got: %s", string(buf[:n]))
+
+	conn2, err := net.DialTimeout("tcp", ln2.Addr().String(), 2*time.Second)
+	require.NoError(t, err)
+	defer conn2.Close()
+
+	_, err = conn2.Write([]byte("world"))
+	require.NoError(t, err)
+
+	_ = conn2.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, err = conn2.Read(buf)
+	require.NoError(t, err)
+	assert.True(t, bytes.HasPrefix(buf[:n], []byte("backend2:")), "should route to backend2, got: %s", string(buf[:n]))
+}
+
+func TestStop(t *testing.T) {
+	s := NewServer()
+
+	backendLn, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer backendLn.Close()
+
+	go func() {
+		for {
+			conn, err := backendLn.Accept()
+			if err != nil {
+				return
+			}
+			_, _ = io.Copy(conn, conn)
+			_ = conn.Close()
+		}
+	}()
+
+	_ = s.AddUpstream("test", []TargetSpec{{Addr: backendLn.Addr().String()}}, "round_robin", HealthCheckSpec{})
+	s.upstreams["test"].targets[0].healthy.Store(true)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	s.mu.Lock()
+	s.listeners["test"] = ln
+	s.mu.Unlock()
+
+	err = s.Start()
+	require.NoError(t, err)
+
+	clientConn, err := net.DialTimeout("tcp", ln.Addr().String(), 2*time.Second)
+	require.NoError(t, err)
+	_ = clientConn.Close()
+
+	s.Stop()
+
+	assert.False(t, s.running.Load())
+
+	s.mu.RLock()
+	assert.Empty(t, s.listeners)
+	s.mu.RUnlock()
+}
+
+func TestStop_Idempotent(t *testing.T) {
+	s := NewServer()
+	s.Stop()
+	s.Stop()
+}
+
+func TestStart_DoubleStart(t *testing.T) {
+	s := NewServer()
+	err := s.Start()
+	require.NoError(t, err)
+	err = s.Start()
+	assert.Error(t, err)
+	s.Stop()
 }

@@ -157,7 +157,7 @@ func TestHandleConnection_NoHealthyTarget(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		s.handleConnection(clientConn, "127.0.0.1:0")
+		s.handleConnection(clientConn, "test2")
 		close(done)
 	}()
 
@@ -200,7 +200,7 @@ func TestHandleConnection_DialFail(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		s.handleConnection(clientConn, "127.0.0.1:0")
+		s.handleConnection(clientConn, "test3")
 		close(done)
 	}()
 

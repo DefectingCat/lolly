@@ -29,6 +29,7 @@
 package stream
 
 import (
+	"fmt"
 	"hash/fnv"
 	"io"
 	"net"
@@ -286,18 +287,14 @@ func (i *ipHash) SelectByIP(targets []*Target, clientIP string) *Target {
 
 // Server TCP/UDP Stream 代理服务器。
 type Server struct {
-	// listeners TCP 监听器映射，按 upstream 名称索引
-	listeners map[string]net.Listener
-	// udpServers UDP 服务器映射
+	listeners  map[string]net.Listener
 	udpServers map[string]*udpServer
-	// upstreams 上游配置映射
-	upstreams map[string]*Upstream
-	// connCount 当前连接数
-	connCount atomic.Int64
-	// mu 读写锁，保护并发访问
-	mu sync.RWMutex
-	// running 运行状态标志
-	running atomic.Bool
+	upstreams  map[string]*Upstream
+	connCount  atomic.Int64
+	mu         sync.RWMutex
+	running    atomic.Bool
+	wg         sync.WaitGroup
+	stopCh     chan struct{}
 }
 
 // Upstream Stream 上游配置。
@@ -393,6 +390,7 @@ func NewServer() *Server {
 		listeners:  make(map[string]net.Listener),
 		udpServers: make(map[string]*udpServer),
 		upstreams:  make(map[string]*Upstream),
+		stopCh:     make(chan struct{}),
 	}
 }
 
@@ -491,23 +489,68 @@ func (s *Server) ListenUDP(addr string, upstreamName string, timeout time.Durati
 
 // Start 启动 Stream 服务器。
 func (s *Server) Start() error {
-	s.running.Store(true)
+	if !s.running.CompareAndSwap(false, true) {
+		return fmt.Errorf("stream server already running")
+	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// 启动 TCP 监听器
 	for addr, listener := range s.listeners {
-		go s.acceptLoop(addr, listener)
+		s.wg.Add(1)
+		go func(a string, ln net.Listener) {
+			defer s.wg.Done()
+			s.acceptLoop(a, ln)
+		}(addr, listener)
 	}
 
-	// 启动 UDP 服务器
 	for _, udpSrv := range s.udpServers {
-		go udpSrv.serve()
-		go udpSrv.startCleanupTicker()
+		s.wg.Add(1)
+		go func(u *udpServer) {
+			defer s.wg.Done()
+			u.serve()
+		}(udpSrv)
+		s.wg.Add(1)
+		go func(u *udpServer) {
+			defer s.wg.Done()
+			u.startCleanupTicker()
+		}(udpSrv)
 	}
 
 	return nil
+}
+
+// Stop stops the stream server, closing all listeners and waiting for goroutines to finish.
+func (s *Server) Stop() {
+	if !s.running.CompareAndSwap(true, false) {
+		return
+	}
+
+	close(s.stopCh)
+
+	s.mu.Lock()
+	for _, ln := range s.listeners {
+		_ = ln.Close()
+	}
+	for _, udpSrv := range s.udpServers {
+		close(udpSrv.stopCh)
+		if udpSrv.conn != nil {
+			_ = udpSrv.conn.Close()
+		}
+	}
+	for _, upstream := range s.upstreams {
+		if upstream.healthChk != nil && upstream.healthChk.stopCh != nil {
+			close(upstream.healthChk.stopCh)
+		}
+	}
+	s.mu.Unlock()
+
+	s.wg.Wait()
+
+	s.mu.Lock()
+	s.listeners = make(map[string]net.Listener)
+	s.udpServers = make(map[string]*udpServer)
+	s.mu.Unlock()
 }
 
 // acceptLoop 接受连接循环。
@@ -523,7 +566,12 @@ func (s *Server) acceptLoop(addr string, listener net.Listener) {
 		conn, err := listener.Accept()
 		if err != nil {
 			if !s.running.Load() {
-				return // 正常关闭
+				return
+			}
+			select {
+			case <-s.stopCh:
+				return
+			default:
 			}
 			continue
 		}
@@ -544,19 +592,14 @@ func (s *Server) acceptLoop(addr string, listener net.Listener) {
 // 参数：
 //   - clientConn: 客户端连接
 //   - addr: 监听地址
-func (s *Server) handleConnection(clientConn net.Conn, _ string) {
+func (s *Server) handleConnection(clientConn net.Conn, addr string) {
 	defer func() {
 		_ = clientConn.Close()
 		s.connCount.Add(-1)
 	}()
 
 	s.mu.RLock()
-	// 根据监听地址找到对应 upstream（简化：用第一个）
-	var upstream *Upstream
-	for _, up := range s.upstreams {
-		upstream = up
-		break
-	}
+	upstream := s.upstreams[addr]
 	s.mu.RUnlock()
 
 	if upstream == nil {
