@@ -476,7 +476,7 @@ func (s *Server) startSingleMode() error {
 	s.locationEngine = matcher.NewLocationEngine()
 
 	// 注册状态监控端点（如果配置）
-	if s.config.Monitoring.Status.Path != "" || len(s.config.Monitoring.Status.Allow) > 0 {
+	if s.config.Monitoring.Status.Enabled {
 		statusHandler, err := NewStatusHandler(s, &s.config.Monitoring.Status)
 		if err != nil {
 			logging.Error().Msg("Failed to create status handler: " + err.Error())

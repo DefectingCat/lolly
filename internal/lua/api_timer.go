@@ -21,12 +21,12 @@ package lua
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	glua "github.com/yuin/gopher-lua"
+	"rua.plus/lolly/internal/logging"
 )
 
 // CallbackEntry 回调队列条目，封装定时器触发的 Lua 回调。
@@ -261,7 +261,7 @@ func (m *TimerManager) executeTimer(entry *TimerEntry) {
 			m.queueMu.Unlock()
 		default:
 			m.queueMu.Unlock()
-			log.Printf("[lua] timer callback dropped: queue full")
+			logging.Warn().Msg("[lua] timer callback dropped: queue full")
 		}
 	}
 }
@@ -277,7 +277,7 @@ func (m *TimerManager) schedulerLoop() {
 		// 从字节码重建函数并执行
 		fn := m.schedulerL.NewFunctionFromProto(entry.proto)
 		if fn == nil {
-			log.Printf("[lua] timer callback: failed to create function from proto")
+			logging.Error().Msg("[lua] timer callback: failed to create function from proto")
 			continue
 		}
 
@@ -286,7 +286,7 @@ func (m *TimerManager) schedulerLoop() {
 			Fn:   fn,
 			NRet: 0,
 		}, entry.args...); err != nil {
-			log.Printf("[lua] timer callback error: %v", err)
+			logging.Error().Err(err).Msg("[lua] timer callback error")
 		}
 	}
 }
@@ -405,7 +405,7 @@ func (m *TimerManager) gracefulShutdown(timeout time.Duration) {
 	case <-time.After(timeout):
 		abandoned := len(m.callbackQueue)
 		if abandoned > 0 {
-			log.Printf("[lua] shutdown timeout: %d callbacks abandoned", abandoned)
+			logging.Warn().Int("abandoned", abandoned).Msg("[lua] shutdown timeout: callbacks abandoned")
 		}
 	}
 }

@@ -14,13 +14,13 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/utils"
 	"rua.plus/lolly/internal/version"
 )
@@ -299,7 +299,7 @@ func (h *StatusHandler) servePrometheus(ctx *fasthttp.RequestCtx, status *Status
 	}
 
 	if _, err := ctx.WriteString(buf.String()); err != nil {
-		log.Printf("failed to write metrics response: %v", err)
+		logging.Error().Err(err).Msg("failed to write metrics response")
 	}
 }
 
@@ -315,7 +315,7 @@ func (h *StatusHandler) serveJSON(ctx *fasthttp.RequestCtx, status *Status) {
 	}
 
 	if _, err := ctx.Write(data); err != nil {
-		log.Printf("failed to write status response: %v", err)
+		logging.Error().Err(err).Msg("failed to write status response")
 	}
 }
 
@@ -372,7 +372,7 @@ func (h *StatusHandler) serveText(ctx *fasthttp.RequestCtx, status *Status) {
 	}
 
 	if _, err := ctx.WriteString(buf.String()); err != nil {
-		log.Printf("failed to write text response: %v", err)
+		logging.Error().Err(err).Msg("failed to write text response")
 	}
 }
 
@@ -477,7 +477,7 @@ func (h *StatusHandler) serveHTML(ctx *fasthttp.RequestCtx, status *Status) {
 	buf.WriteString("</html>\n")
 
 	if _, err := ctx.WriteString(buf.String()); err != nil {
-		log.Printf("failed to write html response: %v", err)
+		logging.Error().Err(err).Msg("failed to write html response")
 	}
 }
 

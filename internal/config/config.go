@@ -134,8 +134,12 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
+	// 从默认值开始，YAML 只覆盖显式配置的字段。
+	// 注意：yaml.v3 对 slice 会整体替换，因此用户显式配置的 Servers[]
+	// 元素不会继承 server-level 默认值；但顶层 struct 字段（Performance、
+	// Monitoring、Resolver）的默认值会被保留。
+	cfg := DefaultConfig()
+	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %w", err)
 	}
 
@@ -145,16 +149,16 @@ func Load(path string) (*Config, error) {
 			return nil, fmt.Errorf("获取配置文件绝对路径失败: %w", err)
 		}
 		visited := map[string]bool{absPath: true}
-		if err := processIncludes(&cfg, filepath.Dir(path), 0, visited); err != nil {
+		if err := processIncludes(cfg, filepath.Dir(path), 0, visited); err != nil {
 			return nil, fmt.Errorf("处理配置引入失败: %w", err)
 		}
 	}
 
-	if err := Validate(&cfg); err != nil {
+	if err := Validate(cfg); err != nil {
 		return nil, fmt.Errorf("配置验证失败: %w", err)
 	}
 
-	return &cfg, nil
+	return cfg, nil
 }
 
 const maxIncludeDepth = 10
