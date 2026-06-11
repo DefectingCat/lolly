@@ -352,6 +352,57 @@ func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 	h.handleStandard(ctx, reqPath)
 }
 
+// tryServeFromFileCache 尝试从文件缓存直接响应。
+// 命中缓存且文件未修改时直接写入响应并返回 true。
+func (h *StaticHandler) tryServeFromFileCache(ctx *fasthttp.RequestCtx, filePath string, info os.FileInfo) bool {
+	if h.fileCache == nil {
+		return false
+	}
+	entry, ok := h.fileCache.Get(filePath)
+	if !ok {
+		return false
+	}
+
+	// TTL 验证（cacheTTL > 0 时启用）
+	if h.cacheTTL > 0 && time.Since(entry.CachedAt) < h.cacheTTL {
+		if isNotModified(ctx, entry.ETag, info.ModTime()) {
+			ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
+			ctx.Response.Header.Set("ETag", entry.ETag)
+			ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+			ctx.Response.SkipBody = true
+			return true
+		}
+		ctx.Response.SetBody(entry.Data)
+		ctx.Response.Header.SetContentType(entry.ContentType)
+		ctx.Response.Header.Set("ETag", entry.ETag)
+		ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+		return true
+	}
+
+	// TTL 过期或未启用 TTL，验证文件新鲜度
+	if entry.ModTime.Equal(info.ModTime()) {
+		if isNotModified(ctx, entry.ETag, info.ModTime()) {
+			ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
+			ctx.Response.Header.Set("ETag", entry.ETag)
+			ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+			ctx.Response.SkipBody = true
+			return true
+		}
+		if h.cacheTTL > 0 {
+			h.fileCache.RefreshCachedAt(filePath)
+		}
+		ctx.Response.SetBody(entry.Data)
+		ctx.Response.Header.SetContentType(entry.ContentType)
+		ctx.Response.Header.Set("ETag", entry.ETag)
+		ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
+		return true
+	}
+
+	// 文件已修改，删除缓存
+	h.fileCache.Delete(filePath)
+	return false
+}
+
 // handleTryFiles 处理 try_files 逻辑。
 //
 // 按顺序尝试查找文件，支持 $uri 和 $uri/ 占位符。
@@ -389,6 +440,9 @@ func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string)
 					continue
 				}
 				if !idxInfo.IsDir() {
+					if h.tryServeFromFileCache(ctx, idxPath, idxInfo) {
+						return
+					}
 					h.serveFile(ctx, idxPath, idxInfo, false)
 					return
 				}
@@ -532,6 +586,9 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 			idxPath := filepath.Join(filePath, idx)
 			idxInfo, idxExists, _ := h.statWithCache(idxPath)
 			if idxExists && !idxInfo.IsDir() {
+				if h.tryServeFromFileCache(ctx, idxPath, idxInfo) {
+					return
+				}
 				h.serveFile(ctx, idxPath, idxInfo, true)
 				return
 			}
@@ -551,52 +608,9 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 		return
 	}
 
-	// Phase 2: 缓存查找 + TTL 验证	// 在 serveFile 调用前检查缓存，减少 os.ReadFile 调用
-	// 注意: CachedAt 迁移已在 FileCache.Get() 内部完成，确保并发安全
-	if h.fileCache != nil {
-		if entry, ok := h.fileCache.Get(filePath); ok {
-			// TTL 验证（cacheTTL > 0 时启用）
-			if h.cacheTTL > 0 && time.Since(entry.CachedAt) < h.cacheTTL {
-				// TTL 内直接返回（无需验证 ModTime）
-				// 使用缓存的 ETag，避免重新生成
-				if isNotModified(ctx, entry.ETag, info.ModTime()) {
-					ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
-					ctx.Response.Header.Set("ETag", entry.ETag)
-					ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
-					ctx.Response.SkipBody = true
-					return
-				}
-				ctx.Response.SetBody(entry.Data)
-				ctx.Response.Header.SetContentType(entry.ContentType)
-				ctx.Response.Header.Set("ETag", entry.ETag)
-				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
-				return
-			}
-
-			// TTL 过期或未启用 TTL，验证文件新鲜度
-			if entry.ModTime.Equal(info.ModTime()) {
-				// 文件未修改，刷新 TTL 并返回
-				// 使用缓存的 ETag，避免重新生成
-				if isNotModified(ctx, entry.ETag, info.ModTime()) {
-					ctx.Response.SetStatusCode(fasthttp.StatusNotModified)
-					ctx.Response.Header.Set("ETag", entry.ETag)
-					ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
-					ctx.Response.SkipBody = true
-					return
-				}
-				if h.cacheTTL > 0 {
-					h.fileCache.RefreshCachedAt(filePath)
-				}
-				ctx.Response.SetBody(entry.Data)
-				ctx.Response.Header.SetContentType(entry.ContentType)
-				ctx.Response.Header.Set("ETag", entry.ETag)
-				ctx.Response.Header.Set("Last-Modified", info.ModTime().UTC().Format(httpTimeFormat))
-				return
-			}
-
-			// 文件已修改，删除缓存继续处理
-			h.fileCache.Delete(filePath)
-		}
+	// Phase 2: 缓存查找 + TTL 验证，减少 os.ReadFile 调用
+	if h.tryServeFromFileCache(ctx, filePath, info) {
+		return
 	}
 
 	// Phase 3: 缓存未命中，调用 serveFile 处理
