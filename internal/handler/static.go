@@ -40,6 +40,40 @@ const (
 	expiresMax = "max"
 )
 
+// statWithCache 从 FileInfo 缓存获取文件信息，支持负缓存。
+//
+// 返回值：
+//   - info: 文件信息（命中负缓存或出错时为 nil）
+//   - ok:   true 表示文件存在且缓存命中
+//   - err:  错误信息（命中负缓存时返回 nil，表示已知文件不存在）
+func (h *StaticHandler) statWithCache(filePath string) (os.FileInfo, bool, error) {
+	if h.fileInfoCache == nil {
+		info, err := os.Stat(filePath)
+		if err != nil {
+			return nil, false, err
+		}
+		return info, true, nil
+	}
+
+	info, hit, exists := h.fileInfoCache.GetWithNotFound(filePath)
+	if hit {
+		if exists {
+			return info, true, nil
+		}
+		// 命中负缓存：已知文件不存在
+		return nil, false, os.ErrNotExist
+	}
+
+	// 缓存未命中，调用 os.Stat
+	info, err := os.Stat(filePath)
+	if err != nil {
+		h.fileInfoCache.SetWithNotFound(filePath, nil, true)
+		return nil, false, err
+	}
+	h.fileInfoCache.SetWithNotFound(filePath, info, false)
+	return info, true, nil
+}
+
 // StaticHandler 静态文件处理器。
 //
 // 提供静态文件服务，支持目录索引、文件缓存和零拷贝传输。
@@ -107,13 +141,17 @@ func NewStaticHandler(root, pathPrefix string, index []string, useSendfile bool)
 		prefixLen = 0 // 根路径无需剥离
 	}
 
-	return &StaticHandler{
+	h := &StaticHandler{
 		root:          cleanRoot,
 		pathPrefix:    pathPrefix,
 		pathPrefixLen: prefixLen,
 		index:         index,
 		useSendfile:   useSendfile,
+		fileInfoCache: NewFileInfoCache(),
 	}
+	// 默认 cacheTTL=0（每次验证 ModTime），同步禁用 fileInfoCache
+	h.fileInfoCache.SetTTL(0)
+	return h
 }
 
 // SetAlias 设置路径别名。
@@ -267,6 +305,9 @@ func (h *StaticHandler) SetAutoIndex(enabled bool, format string, localtime, exa
 // 默认 TTL 为 5 秒。
 func (h *StaticHandler) SetCacheTTL(ttl time.Duration) {
 	h.cacheTTL = ttl
+	if h.fileInfoCache != nil {
+		h.fileInfoCache.SetTTL(ttl)
+	}
 }
 
 // Handle 处理静态文件请求。
@@ -333,46 +374,19 @@ func (h *StaticHandler) handleTryFiles(ctx *fasthttp.RequestCtx, reqPath string)
 		// 构建完整文件路径
 		filePath := h.buildFilePath(targetPath)
 
-		// 检查文件/目录是否存在
-		// 先查 FileInfo 缓存
-		var info os.FileInfo
-		var err error
-
-		if h.fileInfoCache != nil {
-			if cachedInfo, ok := h.fileInfoCache.Get(filePath); ok {
-				info = cachedInfo
-			}
-		}
-
-		if info == nil {
-			// 缓存未命中，调用 os.Stat
-			info, err = os.Stat(filePath)
-			if err != nil {
-				continue // 不存在，尝试下一个
-			}
-			if h.fileInfoCache != nil {
-				h.fileInfoCache.Set(filePath, info)
-			}
+		// 检查文件/目录是否存在（带负缓存）
+		info, exists, _ := h.statWithCache(filePath)
+		if !exists {
+			continue // 不存在，尝试下一个
 		}
 
 		if info.IsDir() {
 			// 如果是目录，尝试查找索引文件
 			for _, idx := range h.index {
 				idxPath := filepath.Join(filePath, idx)
-				var idxInfo os.FileInfo
-				if h.fileInfoCache != nil {
-					if cachedInfo, ok := h.fileInfoCache.Get(idxPath); ok {
-						idxInfo = cachedInfo
-					}
-				}
-				if idxInfo == nil {
-					idxInfo, err = os.Stat(idxPath)
-					if err != nil {
-						continue
-					}
-					if h.fileInfoCache != nil {
-						h.fileInfoCache.Set(idxPath, idxInfo)
-					}
+				idxInfo, idxExists, _ := h.statWithCache(idxPath)
+				if !idxExists {
+					continue
 				}
 				if !idxInfo.IsDir() {
 					h.serveFile(ctx, idxPath, idxInfo, false)
@@ -468,25 +482,14 @@ func (h *StaticHandler) handleInternalRedirect(ctx *fasthttp.RequestCtx, targetP
 	// tryFilesPass 为 false（默认），直接服务文件，不触发中间件
 	filePath := h.buildFilePath(targetPath)
 
-	// 先查 FileInfo 缓存
-	var info os.FileInfo
-	var err error
-
-	if h.fileInfoCache != nil {
-		if cachedInfo, ok := h.fileInfoCache.Get(filePath); ok {
-			info = cachedInfo
-		}
-	}
-
-	if info == nil {
-		info, err = os.Stat(filePath)
+	info, exists, err := h.statWithCache(filePath)
+	if !exists {
 		if err != nil {
 			utils.SendError(ctx, utils.ErrNotFound)
-			return
+		} else {
+			utils.SendError(ctx, utils.ErrForbidden)
 		}
-		if h.fileInfoCache != nil {
-			h.fileInfoCache.Set(filePath, info)
-		}
+		return
 	}
 
 	if info.IsDir() {
@@ -508,27 +511,11 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 	// 构建完整文件路径
 	filePath := h.buildFilePath(relPath)
 
-	// 检查文件/目录是否存在
-	// 先查 FileInfo 缓存（TTL 内信任缓存，不验证 ModTime）
-	var info os.FileInfo
-	var err error
-
-	if h.fileInfoCache != nil {
-		if cachedInfo, ok := h.fileInfoCache.Get(filePath); ok {
-			info = cachedInfo
-		}
-	}
-
-	if info == nil {
-		// 缓存未命中，调用 os.Stat
-		info, err = os.Stat(filePath)
-		if err != nil {
-			utils.SendError(ctx, utils.ErrNotFound)
-			return
-		}
-		if h.fileInfoCache != nil {
-			h.fileInfoCache.Set(filePath, info)
-		}
+	// 检查文件/目录是否存在（带负缓存）
+	info, exists, _ := h.statWithCache(filePath)
+	if !exists {
+		utils.SendError(ctx, utils.ErrNotFound)
+		return
 	}
 
 	// 符号链接安全检查
@@ -539,11 +526,12 @@ func (h *StaticHandler) handleStandard(ctx *fasthttp.RequestCtx, reqPath string)
 		}
 	}
 
-	// 如果是目录，尝试索引文件
+	// 如果是目录，尝试索引文件（带负缓存）
 	if info.IsDir() {
 		for _, idx := range h.index {
 			idxPath := filepath.Join(filePath, idx)
-			if idxInfo, err := os.Stat(idxPath); err == nil && !idxInfo.IsDir() {
+			idxInfo, idxExists, _ := h.statWithCache(idxPath)
+			if idxExists && !idxInfo.IsDir() {
 				h.serveFile(ctx, idxPath, idxInfo, true)
 				return
 			}

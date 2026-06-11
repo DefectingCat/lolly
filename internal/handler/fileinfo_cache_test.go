@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"container/list"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,10 +15,7 @@ func TestFileInfoCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cache := &FileInfoCache{
-		entries: make(map[string]*fileInfoEntry, fileInfoCacheMaxEntries),
-		lruList: list.New(),
-	}
+	cache := NewFileInfoCache()
 
 	t.Run("缓存未命中", func(t *testing.T) {
 		info, ok := cache.Get(tmpFile)
@@ -66,10 +62,7 @@ func TestFileInfoCacheTTL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cache := &FileInfoCache{
-		entries: make(map[string]*fileInfoEntry, fileInfoCacheMaxEntries),
-		lruList: list.New(),
-	}
+	cache := NewFileInfoCache()
 	realInfo, _ := os.Stat(tmpFile)
 
 	// 存入缓存
@@ -84,7 +77,7 @@ func TestFileInfoCacheTTL(t *testing.T) {
 	// 模拟过期：修改 cachedAt
 	cache.mu.Lock()
 	if entry, exists := cache.entries[tmpFile]; exists {
-		entry.cachedAt = time.Now().Add(-fileInfoCacheTTL - time.Second)
+		entry.cachedAt = time.Now().Add(-cache.ttl - time.Second)
 	}
 	cache.mu.Unlock()
 
@@ -96,10 +89,7 @@ func TestFileInfoCacheTTL(t *testing.T) {
 }
 
 func TestFileInfoCacheLRU(t *testing.T) {
-	cache := &FileInfoCache{
-		entries: make(map[string]*fileInfoEntry, fileInfoCacheMaxEntries),
-		lruList: list.New(),
-	}
+	cache := NewFileInfoCache()
 
 	// 创建测试文件信息
 	tmpDir := t.TempDir()

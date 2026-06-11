@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/cache"
@@ -220,6 +221,43 @@ func BenchmarkStaticFileLookupWithAlias(b *testing.B) {
 	for b.Loop() {
 		ctx := &fasthttp.RequestCtx{}
 		ctx.Request.SetRequestURI("/static/style.css")
+		handler.Handle(ctx)
+	}
+}
+
+// BenchmarkStaticFileNotFoundRepeated 测试重复访问不存在路径的性能。
+//
+// 启用 fileInfoCache (TTL=2s) 模拟生产配置，负缓存可避免重复的 os.Stat 调用。
+func BenchmarkStaticFileNotFoundRepeated(b *testing.B) {
+	dir, cleanup := setupStaticTestDir()
+	defer cleanup()
+
+	handler := NewStaticHandler(dir, "/", []string{"index.html"}, false)
+	handler.SetCacheTTL(2 * time.Second)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Request.SetRequestURI("/does-not-exist.css")
+		handler.Handle(ctx)
+	}
+}
+
+// BenchmarkStaticFileNotFoundRepeatedNoCache 测试无 fileInfoCache 时的性能基准。
+func BenchmarkStaticFileNotFoundRepeatedNoCache(b *testing.B) {
+	dir, cleanup := setupStaticTestDir()
+	defer cleanup()
+
+	handler := NewStaticHandler(dir, "/", []string{"index.html"}, false)
+	// cacheTTL=0 表示禁用 fileInfoCache（旧行为）
+	handler.SetCacheTTL(0)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		ctx := &fasthttp.RequestCtx{}
+		ctx.Request.SetRequestURI("/does-not-exist.css")
 		handler.Handle(ctx)
 	}
 }

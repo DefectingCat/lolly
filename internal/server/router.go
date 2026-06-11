@@ -149,9 +149,10 @@ func (s *Server) configureStaticHandler(static *config.StaticConfig, cfg *config
 	}
 	if s.fileCache != nil {
 		staticHandler.SetFileCache(s.fileCache)
-		// 设置默认缓存 TTL (5s)
-		staticHandler.SetCacheTTL(5 * time.Second)
 	}
+	// 始终启用 fileInfoCache 以减少 os.Stat 调用
+	// 默认 TTL 2s，在静态文件修改可见性和性能间取得平衡
+	staticHandler.SetCacheTTL(2 * time.Second)
 	if cfg.Compression.GzipStatic {
 		// extensions: 源文件类型，为空使用默认值
 		// GzipStaticExtensions: 预压缩文件扩展名（如 .br, .gz）
