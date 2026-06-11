@@ -332,20 +332,20 @@ func buildWebSocketUpgradeRequest(ctx *fasthttp.RequestCtx, targetHost string, h
 // 返回值：
 //   - *http.Response: HTTP 响应对象
 //   - error: 读取失败时返回错误
-func readWebSocketUpgradeResponse(conn net.Conn, timeout time.Duration) (*http.Response, error) {
+func readWebSocketUpgradeResponse(conn net.Conn, timeout time.Duration) (*http.Response, *bufio.Reader, error) {
 	// 设置读取超时
 	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// 使用 bufio.Reader 读取 HTTP 响应
 	reader := bufio.NewReader(conn)
 	resp, err := http.ReadResponse(reader, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read upgrade response: %w", err)
+		return nil, nil, fmt.Errorf("failed to read upgrade response: %w", err)
 	}
 
-	return resp, nil
+	return resp, reader, nil
 }
 
 // WebSocket 处理 WebSocket 代理请求。
@@ -400,7 +400,7 @@ func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout tim
 	}
 
 	// 步骤4: 读取升级响应
-	resp, err := readWebSocketUpgradeResponse(targetConn, timeout)
+	resp, bufferedReader, err := readWebSocketUpgradeResponse(targetConn, timeout)
 	if err != nil {
 		return fmt.Errorf("failed to read upgrade response: %w", err)
 	}
@@ -421,6 +421,16 @@ func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout tim
 
 	// 注意: WebSocket 升级成功后，resp.Body 不需要显式关闭
 	// 因为底层连接已被 bridge 用于双向数据传输
+
+	// 如果 bufferedReader 已经缓冲了 WebSocket frame 数据，
+	// 需要包装连接使后续读取先消耗缓冲区
+	if bufferedReader != nil && bufferedReader.Buffered() > 0 {
+		targetConn = &bufferedConn{
+			Conn:   targetConn,
+			reader: bufferedReader,
+		}
+		bridge.targetConn = targetConn
+	}
 
 	// 步骤7: 启动桥接（阻塞直到连接关闭）
 	return bridge.Bridge()
@@ -468,4 +478,20 @@ func writeUpgradeResponse(conn net.Conn, resp *http.Response) error {
 	}
 
 	return nil
+}
+
+// bufferedConn 包装 net.Conn，优先从 bufio.Reader 的缓冲区读取数据。
+//
+// 用于 WebSocket 升级响应后，消耗 bufio.Reader 可能已缓冲的 frame 数据。
+type bufferedConn struct {
+	net.Conn
+	reader *bufio.Reader
+}
+
+// Read 优先从内部 bufio.Reader 读取，若缓冲区为空则回退到原始连接。
+func (bc *bufferedConn) Read(p []byte) (int, error) {
+	if bc.reader.Buffered() > 0 {
+		return bc.reader.Read(p)
+	}
+	return bc.Conn.Read(p)
 }

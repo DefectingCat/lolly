@@ -70,6 +70,7 @@ type RateLimiter struct {
 	cleanupTicker *time.Ticker
 	stopCleanupCh chan struct{}
 	cleanupDone   chan struct{}
+	stopOnce      sync.Once
 	rate          float64
 	burst         float64
 }
@@ -494,18 +495,9 @@ func (rl *RateLimiter) startCleanup(interval time.Duration) {
 // 发送停止信号并等待 goroutine 完成，确保资源正确释放。
 // 该方法应在限流器不再使用时调用（如服务器关闭时）。
 func (rl *RateLimiter) StopCleanup() {
-	// 使用原子操作或简单的标志检查来避免竞争
-	// 关闭 stopCleanupCh 会广播给所有等待的 goroutine
-	select {
-	case <-rl.stopCleanupCh:
-		// 已经关闭
-		return
-	default:
-	}
-
 	if rl.cleanupTicker != nil {
 		rl.cleanupTicker.Stop()
-		close(rl.stopCleanupCh)
+		rl.stopOnce.Do(func() { close(rl.stopCleanupCh) })
 		<-rl.cleanupDone
 		rl.cleanupTicker = nil // 防止重复关闭
 	}

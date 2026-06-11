@@ -80,10 +80,12 @@ func SendFile(ctx *fasthttp.RequestCtx, file *os.File, offset, length int64) err
 // 返回值：
 //   - error: 传输过程中的错误，nil 表示成功
 func linuxSendfile(conn net.Conn, fileFd uintptr, _, length int64) error {
-	socketFd, err := getSocketFd(conn)
+	socketFile, err := getSocketFile(conn)
 	if err != nil {
 		return err
 	}
+	defer func() { _ = socketFile.Close() }()
+	socketFd := socketFile.Fd()
 
 	// Linux sendfile: sendfile(out_fd, in_fd, offset, count)
 	var sent int64
@@ -148,23 +150,13 @@ func linuxSendfile(conn net.Conn, fileFd uintptr, _, length int64) error {
 // 返回值：
 //   - uintptr: socket 文件描述符，失败时返回 0
 //   - error: 获取失败时的错误，不支持的连接类型返回 ENOTSUP
-func getSocketFd(conn net.Conn) (uintptr, error) {
+func getSocketFile(conn net.Conn) (*os.File, error) {
 	switch c := conn.(type) {
 	case *net.TCPConn:
-		file, err := c.File()
-		if err != nil {
-			return 0, err
-		}
-		defer func() { _ = file.Close() }()
-		return file.Fd(), nil
+		return c.File()
 	case *net.UnixConn:
-		file, err := c.File()
-		if err != nil {
-			return 0, err
-		}
-		defer func() { _ = file.Close() }()
-		return file.Fd(), nil
+		return c.File()
 	default:
-		return 0, syscall.ENOTSUP
+		return nil, syscall.ENOTSUP
 	}
 }

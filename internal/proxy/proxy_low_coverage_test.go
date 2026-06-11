@@ -752,7 +752,7 @@ func TestWebSocket_UpgradeRejected(t *testing.T) {
 	// 发送一个请求让服务端触发
 	_, _ = conn.Write([]byte("GET /ws HTTP/1.1\r\nHost: localhost\r\n\r\n"))
 
-	resp, err := readWebSocketUpgradeResponse(conn, 1*time.Second)
+	resp, _, err := readWebSocketUpgradeResponse(conn, 1*time.Second)
 	require.NoError(t, err)
 	assert.Equal(t, 400, resp.StatusCode)
 }
@@ -1274,7 +1274,7 @@ func TestReadWebSocketUpgradeResponse_ReadError(t *testing.T) {
 	conn1, conn2 := net.Pipe()
 	_ = conn2.Close()
 
-	_, err := readWebSocketUpgradeResponse(conn1, 100*time.Millisecond)
+	_, _, err := readWebSocketUpgradeResponse(conn1, 100*time.Millisecond)
 	assert.Error(t, err)
 	_ = conn1.Close()
 }

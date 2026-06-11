@@ -982,7 +982,13 @@ func (s *udpServer) serve() {
 					continue
 				}
 			}
-			continue
+			// 非超时错误（如连接关闭），检查 stopCh 后退出
+			select {
+			case <-s.stopCh:
+				return
+			default:
+				continue
+			}
 		}
 
 		// 获取或创建会话

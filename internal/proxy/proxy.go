@@ -721,6 +721,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		if bytes.ContainsAny(path, "@\r\n") {
 			logging.Warn().Msgf("rejected suspicious proxy path containing dangerous chars: %s", path)
 			upstreamStatus = 502
+			loadbalance.DecrementConnections(target)
 			utils.SendErrorWithDetail(ctx, utils.ErrBadGateway, "invalid proxy path")
 			return
 		}

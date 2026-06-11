@@ -114,7 +114,7 @@ func TestCopyFile(t *testing.T) {
 
 // TestGetSocketFd_NilConn 测试 nil 连接的情况
 func TestGetSocketFd_NilConn(t *testing.T) {
-	_, err := getSocketFd(nil)
+	_, err := getSocketFile(nil)
 	if err == nil {
 		t.Error("expected error for nil connection")
 	}
@@ -123,7 +123,7 @@ func TestGetSocketFd_NilConn(t *testing.T) {
 // TestGetSocketFd_UnsupportedType 测试不支持的连接类型
 func TestGetSocketFd_UnsupportedType(t *testing.T) {
 	conn := &mockConn{}
-	_, err := getSocketFd(conn)
+	_, err := getSocketFile(conn)
 	if err != syscall.ENOTSUP {
 		t.Errorf("expected ENOTSUP for unsupported conn type, got: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestGetSocketFd_UnsupportedType(t *testing.T) {
 
 // mockConn 是一个不实现 TCPConn/UnixConn 的模拟连接。
 //
-// 用于测试 getSocketFd 对不支持连接类型的处理。
+// 用于测试 getSocketFile 对不支持连接类型的处理。
 type mockConn struct{}
 
 func (m *mockConn) Read([]byte) (n int, err error)   { return 0, nil }
@@ -449,11 +449,11 @@ func TestGetSocketFd_UnixConn(t *testing.T) {
 	}
 	defer clientConn.Close()
 
-	fd, err := getSocketFd(clientConn)
+	f, err := getSocketFile(clientConn)
 	if err != nil {
-		t.Errorf("getSocketFd failed: %v", err)
+		t.Errorf("getSocketFile failed: %v", err)
 	}
-	if fd == 0 {
+	if f == nil {
 		t.Error("Expected non-zero fd")
 	}
 
@@ -616,11 +616,11 @@ func TestGetSocketFd_TCPConn(t *testing.T) {
 	}
 	defer clientConn.Close()
 
-	fd, err := getSocketFd(clientConn)
+	f, err := getSocketFile(clientConn)
 	if err != nil {
-		t.Errorf("getSocketFd failed for TCPConn: %v", err)
+		t.Errorf("getSocketFile failed for TCPConn: %v", err)
 	}
-	if fd == 0 {
+	if f == nil {
 		t.Error("Expected non-zero fd for TCPConn")
 	}
 

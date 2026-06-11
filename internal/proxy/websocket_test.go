@@ -557,7 +557,7 @@ func TestReadWebSocketUpgradeResponse(t *testing.T) {
 	}()
 
 	// 读取响应
-	resp, err := readWebSocketUpgradeResponse(conn1, 1*time.Second)
+	resp, _, err := readWebSocketUpgradeResponse(conn1, 1*time.Second)
 	if err != nil {
 		t.Fatalf("readWebSocketUpgradeResponse failed: %v", err)
 	}
@@ -579,7 +579,7 @@ func TestReadWebSocketUpgradeResponse_Timeout(t *testing.T) {
 	defer func() { _ = conn2.Close() }()
 
 	// 使用很短的超时
-	_, err := readWebSocketUpgradeResponse(conn1, 10*time.Millisecond)
+	_, _, err := readWebSocketUpgradeResponse(conn1, 10*time.Millisecond)
 	if err == nil {
 		t.Error("Expected timeout error, got nil")
 	}

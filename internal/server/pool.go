@@ -179,9 +179,14 @@ func (p *GoroutinePool) Submit(ctx *fasthttp.RequestCtx, task Task) error {
 		// 队列满，需要启动新 worker 或直接执行
 		if atomic.LoadInt32(&p.workers) < p.maxWorkers {
 			p.startWorker()
-			// 重新尝试入队
-			p.taskQueue <- task
-			return nil
+			// 非阻塞尝试入队，避免新 worker 尚未就绪时死锁
+			select {
+			case p.taskQueue <- task:
+				return nil
+			default:
+				task(ctx)
+				return nil
+			}
 		}
 
 		// 达到最大 worker，直接执行（fallback）
