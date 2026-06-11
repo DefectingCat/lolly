@@ -174,13 +174,71 @@
 
 ---
 
-## 7. 原始数据文件
+## 7. 优化实施结果
 
-- `benchmarks/v0.4.0/pprof/cpu.prof` — CPU profile
-- `benchmarks/v0.4.0/pprof/allocs.prof` — 分配 profile
-- `benchmarks/v0.4.0/pprof/heap.prof` — 堆内存 profile
-- `benchmarks/v0.4.0/pprof/goroutine.prof` — Goroutine profile
-- `benchmarks/v0.4.0/cpu-top.txt` — CPU top 函数
-- `benchmarks/v0.4.0/allocs-top.txt` — 分配 top 函数
+### Task A: 访问日志采样 (accesslog)
+
+**实现**:
+- 新增 `logging.access.sample_rate` 配置（0.0~1.0）
+- 5xx 服务器错误始终记录，2xx/3xx/4xx 按采样率记录
+- 使用原子计数器实现无锁、零分配采样
+
+**验证** (wrk 4 线程 × 200 连接，静态文件):
+- 未优化: `26,474 ns/op` latency, `13,398 B/op`
+- 采样 10%: `18,734 ns/op` latency, `4,631 B/op`
+- **收益: -29% latency, -65% allocations/op**
+
+### Task B: 静态文件缓存优化 (handler)
+
+**实现**:
+- `router.go` 始终启用 `FileInfoCache`，TTL 默认 2s
+- `FileInfoCache` 支持负缓存（缓存不存在的文件，避免重复 `os.Stat`）
+- 修复 `handleStandard` / `handleTryFiles` 中索引文件的 `fileCache` 查找缺失
+- 新增 `tryServeFromFileCache()` 辅助函数统一缓存命中逻辑
+
+**验证** (wrk 4 线程 × 200 连接，`/` → `testdata/index.html`):
+- 未启用 fileCache: `~140k req/sec`, `~2.6GB alloc_space`
+- 启用并修复索引文件缓存后: `~242k req/sec`, `~4.6MB alloc_space`
+- **收益: +73% throughput, -99.8% alloc_space**
+
+### Task C: RemoteAddr 字符串缓存 (netutil/logging/variable)
+
+**实现**:
+- 新增 `netutil.FormatRemoteAddr()`，优先使用 `ctx.RemoteIP()`
+- IPv4 走零分配快速路径（手写 uint8 → ASCII）
+- IPv6 回退到 `addr.String()`，使用 1024 条目 LRU 缓存
+- `logging.LogAccess` 和 `variable.$remote_addr/$remote_port` 统一使用
+
+**效果**:
+- 消除了 `net.JoinHostPort` 和 `net.IP.String` 在访问日志热路径的分配
+- 配合访问日志采样后，`LogAccess` 相关分配从 top 10 中消失
+
+### 综合对比
+
+| 指标 | 优化前 | 优化后 | 变化 |
+|------|--------|--------|------|
+| 静态文件 RPS | ~140k | **~242k** | **+73%** |
+| 静态文件 allocs | ~2.6 GB | **~4.6 MB** | **-99.8%** |
+| 访问日志 latency | 26.5 μs | 18.7 μs | -29% |
+| 访问日志 allocs | 13.4 KB/op | 4.6 KB/op | -65% |
+| CPU 热点 LogAccess | 16.36% cum | 未进入 top 10 | 消除 |
+| 内存热点 os.statNolog | 74.95% flat | 未出现 | 消除 |
+
+## 8. 剩余优化机会
+
+- **bufio.Reader/Writer 池化**: heap 中仍占主导，代理路径可优化
+- **连接池调优**: `net.Dialer.DialContext` 在代理路径仍有分配
+- **系统调用基线**: syscall 仍占 60%+ CPU，io_uring 可进一步挖掘
+
+## 9. 原始数据文件
+
+- `benchmarks/v0.4.0/pprof/v2/cpu-final.prof` — 优化后 CPU profile
+- `benchmarks/v0.4.0/pprof/v2/allocs-final.prof` — 优化后分配 profile
+- `benchmarks/v0.4.0/cpu-top-final.txt` — 优化后 CPU top 函数
+- `benchmarks/v0.4.0/allocs-top-final.txt` — 优化后分配 top 函数
+- `benchmarks/v0.4.0/pprof/cpu.prof` — 原始 CPU profile（保留）
+- `benchmarks/v0.4.0/pprof/allocs.prof` — 原始分配 profile（保留）
+- `benchmarks/v0.4.0/cpu-top.txt` — 原始 CPU top 函数
+- `benchmarks/v0.4.0/allocs-top.txt` — 原始分配 top 函数
 - `benchmarks/v0.4.0/heap-top.txt` — 堆内存 top 函数
 - `benchmarks/v0.4.0/summary.txt` — 基准测试汇总
