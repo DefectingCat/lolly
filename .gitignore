@@ -51,9 +51,12 @@ logs/
 tmp/
 temp/
 
-# Benchmark results
+# Benchmark results: keep structure but ignore large raw data
 benchmarks/*/
 !benchmarks/.gitkeep
+benchmarks/**/*.txt
+!benchmarks/*/summary.txt
+!benchmarks/*/REPORT.md
 
 # oh-my-claudecode state directory
 .omc/
@@ -77,5 +80,8 @@ main
 .crush
 
 # Planning and specification documents (agent-generated)
-docs/superpowers/
+# Keep generated specs/plans checked in for traceability
+docs/superpowers/*/
+!docs/superpowers/specs/
+!docs/superpowers/plans/
 docs/plans/

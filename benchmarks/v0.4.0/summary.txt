@@ -1,0 +1,335 @@
+=== cache.txt ===
+BenchmarkFileCacheGet/Size100-10                         	21736779	        52.62 ns/op	      16 B/op	       1 allocs/op
+BenchmarkFileCacheGet/Size1000-10                        	22091924	        50.41 ns/op	      16 B/op	       1 allocs/op
+BenchmarkFileCacheGet/Size10000-10                       	24389118	        44.63 ns/op	      21 B/op	       1 allocs/op
+BenchmarkFileCacheSet/Size100-10                         	 2482664	       513.3 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet/Size1000-10                        	 2469159	       482.6 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet/Size10000-10                       	 2264976	       713.2 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet_Pooled/Size100-10                  	 2663748	       449.6 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet_Pooled/Size1000-10                 	 1215387	       895.9 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet_Pooled/Size10000-10                	 1000000	      3025 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSetNoEviction-10                       	 2499050	       912.4 ns/op	     112 B/op	       5 allocs/op
+BenchmarkFileCacheConcurrent/Size100-10                  	 8061500	       139.6 ns/op	      26 B/op	       1 allocs/op
+BenchmarkFileCacheConcurrent/Size1000-10                 	 5312031	       222.8 ns/op	      31 B/op	       2 allocs/op
+BenchmarkFileCacheConcurrent/Size10000-10                	 5357617	       227.2 ns/op	      31 B/op	       2 allocs/op
+BenchmarkFileCacheGetOnly-10                             	15445342	        78.82 ns/op	      29 B/op	       1 allocs/op
+BenchmarkFileCacheSizeEviction-10                        	 1275866	       942.1 ns/op	    1121 B/op	       5 allocs/op
+BenchmarkFileCacheLRUTouch-10                            	10095694	       115.6 ns/op	      16 B/op	       1 allocs/op
+BenchmarkProxyCacheGet-10                                	29701370	       125.0 ns/op	      13 B/op	       1 allocs/op
+BenchmarkProxyCacheSet-10                                	  717621	      1754 ns/op	     251 B/op	       3 allocs/op
+BenchmarkProxyCacheConcurrent-10                         	 4811952	       276.0 ns/op	      69 B/op	       2 allocs/op
+BenchmarkFileCacheSetAllocation_New-10                   	 2149519	       522.3 ns/op	      97 B/op	       4 allocs/op
+BenchmarkFileCacheSetAllocation_Update-10                	 3871534	       348.9 ns/op	      45 B/op	       2 allocs/op
+BenchmarkFileCacheSetAllocation_Eviction-10              	 2248743	       552.0 ns/op	      96 B/op	       4 allocs/op
+BenchmarkFileCacheSetAllocation_EvictionWithPool-10      	 2310462	       515.7 ns/op	      96 B/op	       4 allocs/op
+BenchmarkFileCacheSetAllocation_MemoryLimit-10           	 2186145	       563.2 ns/op	      96 B/op	       4 allocs/op
+BenchmarkFileCacheSetAllocation_Concurrent-10            	 1934901	       654.7 ns/op	      88 B/op	       3 allocs/op
+BenchmarkFileCacheSetAllocation_ConcurrentEviction-10    	 2139834	       609.0 ns/op	      96 B/op	       3 allocs/op
+BenchmarkFileCacheEntryPool_GetPut-10                    	85020030	        12.46 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFileCacheLRUList_PushFront-10                   	 6249896	       206.8 ns/op	     232 B/op	       4 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/cache	45.363s
+
+=== handler.txt ===
+BenchmarkGenerateAutoIndex_HTML-10       	    3960	    267700 ns/op	   87857 B/op	     836 allocs/op
+BenchmarkStaticFileLookup-10             	   90567	     13565 ns/op	    5050 B/op	      33 allocs/op
+BenchmarkStaticFileCacheHit-10           	   90382	     14694 ns/op	    5109 B/op	      35 allocs/op
+BenchmarkStaticFileCacheMiss_1KB-10      	   89732	     13796 ns/op	    5042 B/op	      33 allocs/op
+BenchmarkStaticFileCacheMiss_10KB-10     	   63474	     19300 ns/op	   23990 B/op	      33 allocs/op
+BenchmarkStaticTryFiles-10               	   70876	     16249 ns/op	    4970 B/op	      51 allocs/op
+BenchmarkStaticIndex-10                  	   93171	     12437 ns/op	    3577 B/op	      33 allocs/op
+BenchmarkStaticNestedFile-10             	   84880	     14478 ns/op	   13679 B/op	      33 allocs/op
+BenchmarkStaticFileNotFound-10           	  492165	      2527 ns/op	    2225 B/op	      15 allocs/op
+BenchmarkStaticWithCacheParallel-10      	   56725	     19007 ns/op	   11592 B/op	      34 allocs/op
+BenchmarkStaticFileLookupWithAlias-10    	  101319	     11805 ns/op	    5090 B/op	      34 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/handler	13.431s
+
+=== http.txt ===
+BenchmarkAdapterConversion-10                          	 1512100	       824.2 ns/op	     256 B/op	      10 allocs/op
+BenchmarkAdapterWithBody-10                            	  226002	      5080 ns/op	    6928 B/op	      30 allocs/op
+BenchmarkServerCreation-10                             	 4511774	       265.1 ns/op	     416 B/op	       5 allocs/op
+BenchmarkHTTP2ServerStart-10                           	 4156614	       245.0 ns/op	     416 B/op	       5 allocs/op
+BenchmarkHTTP2FrameEncoding/SettingsFrame-10           	55689206	        18.42 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2FrameEncoding/DataFrame-10               	33784801	        37.93 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2FrameEncoding/DataFrame_Small-10         	65797820	        17.68 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2FrameEncoding/DataFrame_Large-10         	 2523252	       492.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2FrameEncoding/PingFrame-10               	94094857	        13.64 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2FrameEncoding/RSTStreamFrame-10          	100000000	        11.41 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2FrameEncoding/WindowUpdateFrame-10       	100000000	        12.14 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2FrameEncoding/GoAwayFrame-10             	66041313	        18.02 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2HeadersEncoding/CommonHeaders-10         	 2735127	       438.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2HeadersEncoding/CommonHeaders_Parallel-10         	  786241	      1505 ns/op	    1992 B/op	      28 allocs/op
+BenchmarkHTTP2HeadersEncoding/AuthHeaders-10                    	 1694182	       711.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2HeadersEncoding/BodyHeaders-10                    	 3570954	       389.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2HeadersEncoding/RepeatedHeaders-10                	 2209392	       514.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkHTTP2StreamCreate-10                                   	  221667	      4558 ns/op	    6731 B/op	      29 allocs/op
+BenchmarkHTTP2ConcurrentStreams-10                              	  328290	      4151 ns/op	    6742 B/op	      31 allocs/op
+BenchmarkHTTP2RequestRoundTrip-10                               	  638324	      1630 ns/op	     343 B/op	      12 allocs/op
+BenchmarkHTTP2RequestRoundTrip_WithBody-10                      	  232758	      4992 ns/op	    7391 B/op	      33 allocs/op
+BenchmarkHTTP2RequestRoundTrip_WithBody_Parallel-10             	  232129	      4407 ns/op	    7288 B/op	      32 allocs/op
+BenchmarkHTTP2AdapterWithHPACKHeaders-10                        	  245524	      4732 ns/op	    6780 B/op	      31 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/http2	27.192s
+BenchmarkAdapterWrap-10                        	 2033492	       565.5 ns/op	     520 B/op	       7 allocs/op
+BenchmarkAdapterConvertRequest-10              	 1272426	       937.9 ns/op	     164 B/op	       6 allocs/op
+BenchmarkAdapterConvertRequestBody_1KB-10      	  200964	      5239 ns/op	    3338 B/op	      13 allocs/op
+BenchmarkAdapterConvertRequestBody_10KB-10     	   78788	     13594 ns/op	   34841 B/op	      20 allocs/op
+BenchmarkAdapterConvertRequestBody_100KB-10    	   34011	     34759 ns/op	  213538 B/op	      10 allocs/op
+
+=== loadbalance.txt ===
+BenchmarkRoundRobinSelect/3targets-10        	75176475	        15.67 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobinSelect/50targets-10       	46881991	        25.77 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRoundRobinSelect/200targets-10      	13730298	        89.31 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWeightedRoundRobin/3targets_equal-10         	74647123	        15.59 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWeightedRoundRobin/3targets_weighted-10      	68335051	        15.72 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWeightedRoundRobin/50targets_equal-10        	35494826	        32.86 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWeightedRoundRobin/50targets_weighted-10     	33776556	        34.54 ns/op	       0 B/op	       0 allocs/op
+BenchmarkWeightedRoundRobin/200targets_equal-10       	10033557	       118.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkConsistentHashSelect/10targets_50vnodes-10   	37505451	        27.27 ns/op	       0 B/op	       0 allocs/op
+BenchmarkConsistentHashSelect/10targets_150vnodes-10  	44527291	        26.94 ns/op	       0 B/op	       0 allocs/op
+BenchmarkConsistentHashSelect/10targets_200vnodes-10  	46628412	        26.60 ns/op	       0 B/op	       0 allocs/op
+BenchmarkConsistentHashSelect/50targets_150vnodes-10  	43033684	        26.59 ns/op	       0 B/op	       0 allocs/op
+BenchmarkConsistentHashSelect/100targets_150vnodes-10 	46417550	        26.51 ns/op	       0 B/op	       0 allocs/op
+BenchmarkConsistentHashRebuild/10targets_150vnodes-10 	    8913	    119725 ns/op	  114009 B/op	      35 allocs/op
+BenchmarkConsistentHashRebuild/50targets_150vnodes-10 	    1285	    905655 ns/op	  828420 B/op	     108 allocs/op
+BenchmarkConsistentHashRebuild/100targets_150vnodes-10         	     606	   1945285 ns/op	 1623333 B/op	     210 allocs/op
+BenchmarkConsistentHashSelectExcluding/50targets_150vnodes_exclude5-10         	 1000000	      1091 ns/op	       0 B/op	       0 allocs/op
+BenchmarkConsistentHashSelectExcluding/50targets_150vnodes_exclude10-10        	 1000000	      1174 ns/op	       0 B/op	       0 allocs/op
+BenchmarkConsistentHashSelectExcluding/100targets_150vnodes_exclude5-10        	  596529	      2061 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLeastConnSelect/3targets-10                                           	1000000000	         0.3424 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLeastConnSelect/50targets-10                                          	245764088	         4.778 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLeastConnSelect/200targets-10                                         	64952187	        17.68 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIPHashSelect/3targets-10                                              	253943542	         4.684 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIPHashSelect/50targets-10                                             	48979803	        24.41 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIPHashSelect/200targets-10                                            	12602810	        87.73 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAllBalancers/RoundRobin-10                                            	 6389318	       187.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAllBalancers/WeightedRoundRobin-10                                    	 5199241	       234.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAllBalancers/LeastConnections-10                                      	35844194	        31.77 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAllBalancers/IPHash-10                                                	 6075333	       190.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkAllBalancers/ConsistentHash-10                                        	41145982	        28.54 ns/op	       0 B/op	       0 allocs/op
+
+=== logging.txt ===
+
+=== lua.txt ===
+BenchmarkCoroutineCreation-10                	 1080924	      1199 ns/op	     272 B/op	       4 allocs/op
+BenchmarkLuaContextPool-10                   	13166972	        82.07 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBytecodeCompilation-10              	 1000000	      1060 ns/op	     360 B/op	       5 allocs/op
+BenchmarkSharedDictSetGet-10                 	21471429	        52.44 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTimerCallbackThroughput-10          	  450582	      2337 ns/op	     509 B/op	       6 allocs/op
+BenchmarkTimerCallbackWithLuaExecution-10    	   20617	     56030 ns/op	   53561 B/op	     120 allocs/op
+BenchmarkUpvalueDetection-10                 	   30464	     36669 ns/op	   54112 B/op	     149 allocs/op
+BenchmarkTimerGracefulShutdown-10            	     148	   7389734 ns/op	12962100 B/op	   47107 allocs/op
+BenchmarkLuaContextPoolReuse-10              	24460232	        56.96 ns/op	       0 B/op	       0 allocs/op
+BenchmarkLuaCoroutinePoolThroughput-10       	 2039503	       520.7 ns/op	     272 B/op	       4 allocs/op
+BenchmarkLuaTablePool/NewTable_NoPool-10     	  864272	      2798 ns/op	    3368 B/op	      16 allocs/op
+BenchmarkLuaTablePool/SharedDict_AsPool-10   	 3215400	       403.8 ns/op	     128 B/op	       3 allocs/op
+BenchmarkLuaMiddlewareOverhead-10            	   10000	    121057 ns/op	   84627 B/op	     351 allocs/op
+BenchmarkLuaMiddlewareMultiPhase-10          	    6144	    256399 ns/op	  167706 B/op	     700 allocs/op
+BenchmarkLuaMiddlewareNgxExit-10             	   10000	    135602 ns/op	   86886 B/op	     393 allocs/op
+BenchmarkCosocket_Connect-10                 	    1041	   1095333 ns/op	    6442 B/op	      43 allocs/op
+BenchmarkCosocket_SendReceive-10             	   24416	     49961 ns/op	    1040 B/op	       2 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/lua	23.109s
+
+=== matcher.txt ===
+BenchmarkRadixTreeFindLongestPrefix-10            	19755723	        60.87 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRadixTreeFindLongestPrefixParallel-10    	122318263	        10.27 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/matcher	3.460s
+
+=== middleware.txt ===
+PASS
+ok  	rua.plus/lolly/internal/middleware	0.005s
+BenchmarkAccessLogProcess-10            	  458827	      2197 ns/op	    1987 B/op	      17 allocs/op
+BenchmarkAccessLogProcessParallel-10    	  365294	      3255 ns/op	    1959 B/op	      16 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/middleware/accesslog	2.244s
+BenchmarkBodyLimitProcess-10         	 1000000	      1210 ns/op	    1768 B/op	      11 allocs/op
+BenchmarkBodyLimitGetLimit-10        	17057452	        77.30 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBodyLimitPathMatching-10    	 7554831	       162.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkParseSize-10                	29615168	        40.98 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/middleware/bodylimit	4.980s
+BenchmarkGzipCompress_1KB-10                   	   55242	     20921 ns/op	     900 B/op	       4 allocs/op
+BenchmarkGzipCompress_10KB-10                  	   41601	     28889 ns/op	     906 B/op	       4 allocs/op
+BenchmarkGzipCompress_100KB-10                 	   10000	    119901 ns/op	    2012 B/op	       5 allocs/op
+BenchmarkBrotliCompress_1KB-10                 	   33718	     35480 ns/op	     403 B/op	       2 allocs/op
+BenchmarkBrotliCompress_10KB-10                	   25119	     46113 ns/op	     433 B/op	       2 allocs/op
+BenchmarkCompressionPool-10                    	   50222	     21297 ns/op	     901 B/op	       4 allocs/op
+BenchmarkCompressionMiddleware-10              	   35152	     33261 ns/op	   12016 B/op	      17 allocs/op
+BenchmarkCompressionMiddlewareNoCompress-10    	  421274	      3153 ns/op	   10324 B/op	       6 allocs/op
+BenchmarkIsCompressible-10                     	19387118	        54.13 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCompressionLevelComparison/Level1-10  	   57207	     21935 ns/op	     894 B/op	       4 allocs/op
+BenchmarkCompressionLevelComparison/Level6-10  	   35198	     32387 ns/op	     911 B/op	       4 allocs/op
+BenchmarkCompressionLevelComparison/Level9-10  	   16784	     72023 ns/op	     948 B/op	       4 allocs/op
+BenchmarkCompressionMiddlewareParallel-10      	  170314	      6881 ns/op	   12700 B/op	      17 allocs/op
+BenchmarkGzipPool_GetPut-10                    	  118927	     10414 ns/op	      22 B/op	       1 allocs/op
+BenchmarkGzipWriter_New-10                     	    3289	    504494 ns/op	  814744 B/op	      21 allocs/op
+BenchmarkGzipWriter_Pool-10                    	   59080	     20177 ns/op	     898 B/op	       4 allocs/op
+BenchmarkCompressionMiddleware_Pool-10         	   31626	     39955 ns/op	   14310 B/op	      18 allocs/op
+BenchmarkGzipCompress_Sizes/100B-10            	  141144	      7318 ns/op	     247 B/op	       3 allocs/op
+
+=== proxy.txt ===
+BenchmarkCacheKeyHashValue_ZeroAlloc-10       	11774799	        85.10 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheKeyHash_WithAlloc-10            	 5119413	       285.8 ns/op	      48 B/op	       1 allocs/op
+BenchmarkCacheKeyHash_Compare/ZeroAlloc-10    	12423754	        92.28 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCacheKeyHash_Compare/WithAlloc-10    	 6716290	       171.4 ns/op	      32 B/op	       1 allocs/op
+BenchmarkConnectionPool_Normal-10             	       1	3100765506 ns/op	   10000 B/op	      96 allocs/op
+BenchmarkConnectionPool_HighConcurrency-10    	       2	1550554418 ns/op	   11152 B/op	      86 allocs/op
+BenchmarkConnectionPool_SmallBody-10          	       1	3000232015 ns/op	   71792 B/op	      81 allocs/op
+BenchmarkConnectionPool_LargeBody-10          	       2	1948867432 ns/op	    9616 B/op	      76 allocs/op
+BenchmarkConnectionPool_MultiTarget-10        	       1	1200480850 ns/op	   85392 B/op	     158 allocs/op
+BenchmarkHostClient_AcquireRelease-10         	       1	3000973314 ns/op	    8944 B/op	      61 allocs/op
+BenchmarkProxyForward/concurrency1-10         	       2	1500263114 ns/op	   41692 B/op	      85 allocs/op
+BenchmarkProxyForward/concurrency10-10        	       2	1500346107 ns/op	   11280 B/op	      82 allocs/op
+BenchmarkProxyForward/concurrency100-10       	       2	1500509108 ns/op	   41660 B/op	      85 allocs/op
+BenchmarkProxyForwardSmallRequest-10          	       2	1500492839 ns/op	   11344 B/op	      82 allocs/op
+BenchmarkProxyForwardLargeRequest-10          	       2	1500835596 ns/op	   46780 B/op	      97 allocs/op
+BenchmarkProxyForwardMultipleTargets-10       	       2	1500471841 ns/op	    7704 B/op	      72 allocs/op
+BenchmarkProxyHostClient-10                   	       2	1981847248 ns/op	   37060 B/op	      40 allocs/op
+BenchmarkProxyHostClientParallel-10           	       2	1500465370 ns/op	    4112 B/op	      42 allocs/op
+BenchmarkProxyWithMockBackend-10              	   96135	     12150 ns/op	    3065 B/op	      42 allocs/op
+BenchmarkProxyLoadBalancerSelection/round_robin_3-10         	21344373	        59.75 ns/op	      16 B/op	       1 allocs/op
+BenchmarkProxyLoadBalancerSelection/round_robin_50-10        	13515140	        86.74 ns/op	      16 B/op	       1 allocs/op
+BenchmarkProxyLoadBalancerSelection/weighted_round_robin_3-10         	18620368	        61.38 ns/op	      16 B/op	       1 allocs/op
+BenchmarkProxyLoadBalancerSelection/least_conn_3-10                   	20915076	        56.56 ns/op	      16 B/op	       1 allocs/op
+BenchmarkProxyLoadBalancerSelection/ip_hash_3-10                      	12006486	        94.68 ns/op	      48 B/op	       3 allocs/op
+BenchmarkProxyHeaderProcessing-10                                     	  386919	      2660 ns/op	    2930 B/op	      35 allocs/op
+BenchmarkBuildCacheKeyHash/buildCacheKeyHash_with_string-10           	17636347	        63.94 ns/op	      24 B/op	       1 allocs/op
+BenchmarkBuildCacheKeyHash/buildCacheKeyHashValue_direct-10           	38463036	        31.97 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProxyObjectPoolGetRelease/UpstreamTiming_Pooled-10           	   29078	     40040 ns/op	       0 B/op	       0 allocs/op
+BenchmarkProxyObjectPoolGetRelease/VariableContext_Pooled-10          	15730250	        76.39 ns/op	       8 B/op	       1 allocs/op
+BenchmarkProxyResponsePoolParallel-10                                 	       1	3000834054 ns/op	   79184 B/op	     133 allocs/op
+
+=== resolver.txt ===
+BenchmarkDNSResolverLookupWithCache-10    	 6284577	       236.4 ns/op	      48 B/op	       1 allocs/op
+BenchmarkDNSResolverConcurrent-10         	 6265792	       206.6 ns/op	      48 B/op	       1 allocs/op
+BenchmarkDNSResolverCacheExpiry-10        	 2145366	       548.2 ns/op	     144 B/op	       3 allocs/op
+BenchmarkDNSResolverCacheWriteLock-10     	 7186472	       167.5 ns/op	      32 B/op	       2 allocs/op
+BenchmarkDNSResolverMixedWorkload-10      	 3976573	       322.6 ns/op	      64 B/op	       2 allocs/op
+BenchmarkDNSCacheEntryRLock-10            	100000000	        22.01 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDNSCacheEntryRWLock-10           	 5163608	       241.5 ns/op	     175 B/op	       5 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/resolver	11.167s
+
+=== server.txt ===
+BenchmarkMiddlewareNewChainApply-10                 	 7164360	       154.6 ns/op	      48 B/op	       3 allocs/op
+BenchmarkMiddlewareProcessChain-10                  	1000000000	         1.098 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMiddlewareChainExecution-10                	182316565	         6.727 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMiddlewareChainExecutionWithResponse-10    	 1052726	      1024 ns/op	    1568 B/op	       3 allocs/op
+BenchmarkMiddlewareEmptyChain-10                    	40100878	       498.1 ns/op	      12 B/op	       0 allocs/op
+BenchmarkMiddlewareSingleMiddleware-10              	88622024	        23.34 ns/op	      10 B/op	       0 allocs/op
+BenchmarkGoroutinePoolSubmit-10                     	70090189	        17.06 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolParallel-10                   	45083467	        36.31 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolSubmit_BlockingPath-10        	133075401	        10.14 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolQueueFull-10                  	126751026	        13.89 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolWorkerRecycle-10              	      15	  71130566 ns/op	   17697 B/op	     220 allocs/op
+BenchmarkGoroutinePoolSubmitWithWork/Workers10-10   	 5490272	       223.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolSubmitWithWork/Workers100-10  	 5219361	       225.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolSubmitWithWork/Workers1000-10 	 2774235	       462.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolMinWorkers/WithMinWorkers-10  	85318759	        16.51 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolMinWorkers/NoMinWorkers-10    	81247957	        17.23 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolObjectPool/PoolTask_Submit-10 	60380559	        16.60 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGoroutinePoolObjectPool/PoolTask_Reuse_NoClosure-10         	62161117	        16.80 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMemoryReuse/WithPool_GetPut-10                          	93926037	        12.02 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPoolMemoryReuse/WithoutPool_Alloc-10                        	10268364	       119.9 ns/op	     256 B/op	       1 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/server	45.979s
+
+=== stream.txt ===
+BenchmarkStreamFilterHealthy/3_healthy-10           	51941268	        24.31 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamFilterHealthy/10_healthy_80-10       	52304758	        37.76 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamFilterHealthy/50_healthy_50-10       	51739732	        39.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamFilterHealthy/100_healthy_80-10      	49306483	        41.64 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamFilterHealthyPreallocated-10         	100000000	        10.45 ns/op	       0 B/op	       0 allocs/op
+BenchmarkUDPSessionAllocations/no_pool_65k-10       	   33656	     37885 ns/op	   65536 B/op	       1 allocs/op
+BenchmarkUDPSessionAllocations/sync_pool_65k-10     	10833096	        93.02 ns/op	      24 B/op	       1 allocs/op
+BenchmarkUDPSessionAllocations/no_pool_16k-10       	  269760	      4646 ns/op	   16384 B/op	       1 allocs/op
+BenchmarkUDPSessionAllocations/sync_pool_16k-10     	31780728	        37.38 ns/op	      24 B/op	       1 allocs/op
+BenchmarkUDPSessionGetOrCreate-10                   	15100776	        70.40 ns/op	      32 B/op	       3 allocs/op
+BenchmarkUDPSessionGetOnly-10                       	19103670	        66.96 ns/op	      32 B/op	       3 allocs/op
+BenchmarkStreamBalancerSelect/round_robin_3-10      	47924217	        24.54 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamBalancerSelect/round_robin_10-10     	56421152	        22.36 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamBalancerSelect/round_robin_50-10     	47163234	        22.13 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamBalancerSelect/weighted_round_robin_3-10         	37397344	        32.71 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamBalancerSelect/weighted_round_robin_10-10        	40612486	        29.41 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamBalancerSelect/least_conn_3-10                   	1000000000	         0.7223 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamBalancerSelect/least_conn_10-10                  	826034833	         1.427 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamBalancerSelect/ip_hash_3-10                      	70855179	        22.03 ns/op	      16 B/op	       1 allocs/op
+BenchmarkStreamBalancerSelect/ip_hash_10-10                     	93524262	        18.33 ns/op	      16 B/op	       1 allocs/op
+BenchmarkStreamRoundRobinWithUnhealthy/3_1_unhealthy-10         	68404255	        15.29 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamRoundRobinWithUnhealthy/10_3_unhealthy-10        	54019622	        22.22 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamRoundRobinWithUnhealthy/50_20_unhealthy-10       	22136433	        55.78 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamLeastConnWithVaryingConns/uniform-10             	426217518	         2.781 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamLeastConnWithVaryingConns/varying-10             	434543780	         2.777 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamLeastConnWithVaryingConns/extreme-10             	411333520	         2.789 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamWeightedRoundRobinDistribution/equal-10          	64135672	        18.20 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamWeightedRoundRobinDistribution/linear-10         	66114645	        19.27 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamWeightedRoundRobinDistribution/heavy-10          	56737513	        19.44 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStreamWeightedRoundRobinDistribution/exponential-10    	58088670	        21.10 ns/op	       0 B/op	       0 allocs/op
+
+=== summary.txt ===
+BenchmarkFileCacheGet/Size100-10                         	21736779	        52.62 ns/op	      16 B/op	       1 allocs/op
+BenchmarkFileCacheGet/Size1000-10                        	22091924	        50.41 ns/op	      16 B/op	       1 allocs/op
+BenchmarkFileCacheGet/Size10000-10                       	24389118	        44.63 ns/op	      21 B/op	       1 allocs/op
+BenchmarkFileCacheSet/Size100-10                         	 2482664	       513.3 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet/Size1000-10                        	 2469159	       482.6 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet/Size10000-10                       	 2264976	       713.2 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet_Pooled/Size100-10                  	 2663748	       449.6 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet_Pooled/Size1000-10                 	 1215387	       895.9 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSet_Pooled/Size10000-10                	 1000000	      3025 ns/op	     120 B/op	       5 allocs/op
+BenchmarkFileCacheSetNoEviction-10                       	 2499050	       912.4 ns/op	     112 B/op	       5 allocs/op
+BenchmarkFileCacheConcurrent/Size100-10                  	 8061500	       139.6 ns/op	      26 B/op	       1 allocs/op
+BenchmarkFileCacheConcurrent/Size1000-10                 	 5312031	       222.8 ns/op	      31 B/op	       2 allocs/op
+BenchmarkFileCacheConcurrent/Size10000-10                	 5357617	       227.2 ns/op	      31 B/op	       2 allocs/op
+BenchmarkFileCacheGetOnly-10                             	15445342	        78.82 ns/op	      29 B/op	       1 allocs/op
+BenchmarkFileCacheSizeEviction-10                        	 1275866	       942.1 ns/op	    1121 B/op	       5 allocs/op
+BenchmarkFileCacheLRUTouch-10                            	10095694	       115.6 ns/op	      16 B/op	       1 allocs/op
+BenchmarkProxyCacheGet-10                                	29701370	       125.0 ns/op	      13 B/op	       1 allocs/op
+BenchmarkProxyCacheSet-10                                	  717621	      1754 ns/op	     251 B/op	       3 allocs/op
+BenchmarkProxyCacheConcurrent-10                         	 4811952	       276.0 ns/op	      69 B/op	       2 allocs/op
+BenchmarkFileCacheSetAllocation_New-10                   	 2149519	       522.3 ns/op	      97 B/op	       4 allocs/op
+BenchmarkFileCacheSetAllocation_Update-10                	 3871534	       348.9 ns/op	      45 B/op	       2 allocs/op
+BenchmarkFileCacheSetAllocation_Eviction-10              	 2248743	       552.0 ns/op	      96 B/op	       4 allocs/op
+BenchmarkFileCacheSetAllocation_EvictionWithPool-10      	 2310462	       515.7 ns/op	      96 B/op	       4 allocs/op
+BenchmarkFileCacheSetAllocation_MemoryLimit-10           	 2186145	       563.2 ns/op	      96 B/op	       4 allocs/op
+BenchmarkFileCacheSetAllocation_Concurrent-10            	 1934901	       654.7 ns/op	      88 B/op	       3 allocs/op
+BenchmarkFileCacheSetAllocation_ConcurrentEviction-10    	 2139834	       609.0 ns/op	      96 B/op	       3 allocs/op
+BenchmarkFileCacheEntryPool_GetPut-10                    	85020030	        12.46 ns/op	       0 B/op	       0 allocs/op
+BenchmarkFileCacheLRUList_PushFront-10                   	 6249896	       206.8 ns/op	     232 B/op	       4 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/cache	45.363s
+
+=== utils.txt ===
+BenchmarkExtractClientIP/X-Forwarded-For_single_IP-10         	15637682	        76.06 ns/op	      32 B/op	       2 allocs/op
+BenchmarkExtractClientIP/X-Forwarded-For_multiple_IPs-10      	11151398	       107.4 ns/op	      96 B/op	       2 allocs/op
+BenchmarkExtractClientIP/X-Real-IP_only-10                    	16888720	        71.44 ns/op	      16 B/op	       1 allocs/op
+BenchmarkExtractClientIP/RemoteAddr_fallback-10               	14076492	        85.15 ns/op	       8 B/op	       1 allocs/op
+BenchmarkExtractClientIPNet/X-Forwarded-For_single_IP-10      	 9092592	       133.8 ns/op	      48 B/op	       3 allocs/op
+BenchmarkExtractClientIPNet/X-Real-IP_only-10                 	 9696522	       125.2 ns/op	      32 B/op	       2 allocs/op
+BenchmarkExtractClientIPNet/RemoteAddr_fallback-10            	22064487	        52.76 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStripPort/IPv4_with_port-10                          	298226187	         3.951 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStripPort/IPv6_with_port-10                          	286273158	         4.211 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStripPort/no_port-10                                 	252196581	         4.841 ns/op	       0 B/op	       0 allocs/op
+BenchmarkStripPort/empty_string-10                            	1000000000	         0.4960 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/netutil	12.508s
+BenchmarkLoadCACertPool-10                           	   74826	     15530 ns/op	    6448 B/op	      54 allocs/op
+BenchmarkGenerateTicketKey-10                        	11567258	       101.1 ns/op	      32 B/op	       1 allocs/op
+BenchmarkSessionTicketManager_GetKeys-10             	10594251	       116.0 ns/op	     176 B/op	       4 allocs/op
+BenchmarkSessionTicketManager_RotateKey-10           	 8896942	       135.0 ns/op	      80 B/op	       1 allocs/op
+BenchmarkTLSHandshake-10                             	    1578	    758396 ns/op	  117043 B/op	     844 allocs/op
+BenchmarkTLSHandshake_TLS13Only-10                   	    1525	    752984 ns/op	  116542 B/op	     839 allocs/op
+BenchmarkTLSCertificateLoad-10                       	   27265	     44040 ns/op	    8637 B/op	     121 allocs/op
+BenchmarkTLSCertificateLoad_InMemory-10              	   44395	     27435 ns/op	    6796 B/op	     111 allocs/op
+BenchmarkTLSCertificateLoad_Parallel-10              	   73044	     16299 ns/op	    8681 B/op	     121 allocs/op
+BenchmarkTLSRenegotiation-10                         	    1742	    651865 ns/op	   41879 B/op	     442 allocs/op
+BenchmarkOCSPStapling-10                             	49240950	        23.65 ns/op	       0 B/op	       0 allocs/op
+BenchmarkOCSPStapling_Miss-10                        	49655992	        23.88 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSessionTicketManager_ApplyToTLSConfig-10    	  948468	      1204 ns/op	     928 B/op	       7 allocs/op
+BenchmarkCipherSuiteParsing-10                       	13597928	        86.37 ns/op	      16 B/op	       1 allocs/op
+BenchmarkTLSVersionsParsing-10                       	235120939	         5.090 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	rua.plus/lolly/internal/ssl	18.173s
+
