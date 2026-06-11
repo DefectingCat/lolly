@@ -146,16 +146,17 @@ func DetectContentType(filePath string) string {
 		}
 	}
 
-	// 插入新条目
-	entry := &mimeCacheEntry{ext: ext, mimeType: mimeType}
-	entry.element = mimeLRU.PushFront(entry)
-	mimeCache[ext] = entry
-
+	// 未知扩展名回退到默认值
 	if mimeType == "" {
 		defaultMutex.RLock()
 		mimeType = defaultMIME
 		defaultMutex.RUnlock()
 	}
+
+	// 插入新条目
+	entry := &mimeCacheEntry{ext: ext, mimeType: mimeType}
+	entry.element = mimeLRU.PushFront(entry)
+	mimeCache[ext] = entry
 
 	return mimeType
 }

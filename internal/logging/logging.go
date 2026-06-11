@@ -142,9 +142,15 @@ func getOutput(path string) io.Writer {
 func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, duration time.Duration) {
 	// JSON 格式或空格式：输出结构化 JSON
 	if l.accessFormat == formatJSON || l.accessFormat == "" {
+		method := ctx.Method()
+		path := ctx.Path()
+		req := make([]byte, 0, len(method)+1+len(path))
+		req = append(req, method...)
+		req = append(req, ' ')
+		req = append(req, path...)
 		l.accessLog.Info().
 			Str("remote_addr", netutil.FormatRemoteAddr(ctx)).
-			Bytes("request", append(append(ctx.Method(), ' '), ctx.Path()...)).
+			Bytes("request", req).
 			Int("status", status).
 			Int64("body_bytes_sent", size).
 			Dur("request_time", duration).

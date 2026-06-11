@@ -255,7 +255,7 @@ func init() {
 		Name:        VarTimeLocal,
 		Description: "本地时间（格式：02/Jan/2024:15:04:05 +0800）",
 		Getter: func(_ *fasthttp.RequestCtx) string {
-			return time.Now().Format("02/Jan/2006:15:04:05 +0800")
+			return time.Now().Format("02/Jan/2006:15:04:05 -0700")
 		},
 	})
 
@@ -273,13 +273,15 @@ func init() {
 		Name:        VarRequestID,
 		Description: "唯一请求标识符",
 		Getter: func(ctx *fasthttp.RequestCtx) string {
-			// 先从 UserValue 获取，如果没有则生成
+			// 先从 UserValue 获取，如果没有则生成并缓存
 			if v := ctx.UserValue(VarRequestID); v != nil {
 				if s, ok := v.(string); ok {
 					return s
 				}
 			}
-			return uuid.New().String()
+			id := uuid.New().String()
+			ctx.SetUserValue(VarRequestID, id)
+			return id
 		},
 	})
 }

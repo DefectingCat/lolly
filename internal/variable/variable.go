@@ -117,7 +117,12 @@ func NewContext(ctx *fasthttp.RequestCtx) *Context {
 	vc, ok := pool.Get().(*Context)
 	if !ok {
 		// 池中类型不正确时返回新 Context
-		return &Context{ctx: ctx}
+		return &Context{
+			ctx:        ctx,
+			store:      make(map[string]string),
+			cache:      make(map[string]string),
+			bytesCache: make(map[string][]byte),
+		}
 	}
 	vc.ctx = ctx
 	vc.status = 0
