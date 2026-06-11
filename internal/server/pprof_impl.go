@@ -131,6 +131,24 @@ func writeMutexProfile(w io.Writer) {
 	}
 }
 
+// writeAllocsProfile 写入分配 profile。
+//
+// 与 heap profile 使用同一份数据，但默认以分配视角展示（Samples=alloc_*）。
+// 等价于 net/http/pprof 的 /debug/pprof/allocs。
+//
+// 参数：
+//   - w: 输出 writer，用于写入 profile 数据
+func writeAllocsProfile(w io.Writer) {
+	p := pprof.Lookup("allocs")
+	if p != nil {
+		_ = p.WriteTo(w, 0)
+		return
+	}
+	// 如果 allocs profile 未注册，回退到 heap profile
+	runtime.GC()
+	_ = pprof.WriteHeapProfile(w)
+}
+
 // bufioWriterAdapter 将 bufio.Writer 包装为 io.Writer，自动 Flush。
 //
 // 该结构体实现 io.Writer 接口，在每次写入后自动调用 Flush，

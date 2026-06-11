@@ -131,6 +131,8 @@ func (h *PprofHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		h.handleBlock(ctx)
 	case "/mutex":
 		h.handleMutex(ctx)
+	case "/allocs":
+		h.handleAllocs(ctx)
 	default:
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
 		ctx.SetBodyString("Unknown profile: " + subPath)
@@ -175,7 +177,8 @@ func (h *PprofHandler) handleIndex(ctx *fasthttp.RequestCtx) {
 <h1>Pprof Profiles</h1>
 <table>
 <tr><td><a href="%s/profile?seconds=30">CPU Profile (30s)</a></td><td>CPU profile for 30 seconds</td></tr>
-<tr><td><a href="%s/heap">Heap Profile</a></td><td>Memory allocation profile</td></tr>
+<tr><td><a href="%s/heap">Heap Profile</a></td><td>Memory allocation profile (in-use)</td></tr>
+<tr><td><a href="%s/allocs">Allocs Profile</a></td><td>Memory allocation profile (allocations)</td></tr>
 <tr><td><a href="%s/goroutine">Goroutine Profile</a></td><td>Goroutine stack traces</td></tr>
 <tr><td><a href="%s/block">Block Profile</a></td><td>Blocking profile</td></tr>
 <tr><td><a href="%s/mutex">Mutex Profile</a></td><td>Mutex contention profile</td></tr>
@@ -183,7 +186,7 @@ func (h *PprofHandler) handleIndex(ctx *fasthttp.RequestCtx) {
 <p>Usage: curl %s/profile?seconds=30 > cpu.pgo</p>
 </body>
 </html>`
-	ctx.SetBodyString(fmt.Sprintf(html, h.path, h.path, h.path, h.path, h.path, h.path))
+	ctx.SetBodyString(fmt.Sprintf(html, h.path, h.path, h.path, h.path, h.path, h.path, h.path))
 }
 
 // handleCPU 处理 CPU profile 请求。
@@ -267,11 +270,26 @@ func (h *PprofHandler) handleBlock(ctx *fasthttp.RequestCtx) {
 // 采集互斥锁竞争的 profile 数据并返回。
 //
 // 参数：
-//   - ctx: fasthttp 请求上下文，用于写入响应
+//   - ctx: 请求上下文，用于写入响应
 func (h *PprofHandler) handleMutex(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/octet-stream")
 	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
 		writeMutexProfile(wrapBufioWriter(w))
+		_ = w.Flush()
+	})
+}
+
+// handleAllocs 处理内存分配 profile 请求。
+//
+// 返回与 heap 同源但以分配视角展示的 profile 数据，
+// 等价于 net/http/pprof 的 /debug/pprof/allocs。
+//
+// 参数：
+//   - ctx: 请求上下文，用于写入响应
+func (h *PprofHandler) handleAllocs(ctx *fasthttp.RequestCtx) {
+	ctx.SetContentType("application/octet-stream")
+	ctx.SetBodyStreamWriter(func(w *bufio.Writer) {
+		writeAllocsProfile(wrapBufioWriter(w))
 		_ = w.Flush()
 	})
 }
