@@ -492,6 +492,31 @@ func (s *Server) startSingleMode() error {
 		}
 	}
 
+	if s.config.Monitoring.Healthz.Enabled {
+		hzPath := s.config.Monitoring.Healthz.Path
+		if hzPath == "" {
+			hzPath = "/healthz"
+		}
+		if regErr := s.locationEngine.AddExact(hzPath, HealthzHandler, false); regErr != nil {
+			if err := s.handleRegistrationError("healthz", hzPath, regErr); err != nil {
+				return err
+			}
+		}
+	}
+
+	if s.config.Monitoring.Readyz.Enabled {
+		rzPath := s.config.Monitoring.Readyz.Path
+		if rzPath == "" {
+			rzPath = "/readyz"
+		}
+		readyzHandler := NewReadyzHandler(DefaultReadyzChecker(s))
+		if regErr := s.locationEngine.AddExact(rzPath, readyzHandler, false); regErr != nil {
+			if err := s.handleRegistrationError("readyz", rzPath, regErr); err != nil {
+				return err
+			}
+		}
+	}
+
 	if s.config.Monitoring.Pprof.Enabled {
 		pprofHandler, err := NewPprofHandler(&s.config.Monitoring.Pprof)
 		if err != nil {
@@ -801,6 +826,25 @@ func (s *Server) registerMonitoringEndpoints(router *handler.Router, serverCfg *
 			logging.Error().Msg("Failed to create cache purge handler: " + err.Error())
 		} else {
 			router.POST(purgeHandler.Path(), purgeHandler.ServeHTTP)
+		}
+	}
+
+	if isDefault {
+		if s.config.Monitoring.Healthz.Enabled {
+			hzPath := s.config.Monitoring.Healthz.Path
+			if hzPath == "" {
+				hzPath = "/healthz"
+			}
+			router.GET(hzPath, HealthzHandler)
+		}
+
+		if s.config.Monitoring.Readyz.Enabled {
+			rzPath := s.config.Monitoring.Readyz.Path
+			if rzPath == "" {
+				rzPath = "/readyz"
+			}
+			readyzHandler := NewReadyzHandler(DefaultReadyzChecker(s))
+			router.GET(rzPath, readyzHandler)
 		}
 	}
 }

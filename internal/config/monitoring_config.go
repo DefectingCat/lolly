@@ -20,13 +20,22 @@ package config
 //	    path: "/status"
 //	    allow: ["127.0.0.1", "10.0.0.0/8"]
 type MonitoringConfig struct {
-	// Status 状态端点配置
-	// 服务健康状态检查端点
-	Status StatusConfig `yaml:"status"`
+	Status  StatusConfig  `yaml:"status"`
+	Pprof   PprofConfig   `yaml:"pprof"`
+	Healthz HealthzConfig `yaml:"healthz"`
+	Readyz  ReadyzConfig  `yaml:"readyz"`
+}
 
-	// Pprof pprof 性能分析端点配置
-	// 用于收集 CPU、内存等性能数据，支持 PGO 优化
-	Pprof PprofConfig `yaml:"pprof"`
+// HealthzConfig configures the /healthz liveness probe endpoint.
+type HealthzConfig struct {
+	Path    string `yaml:"path"`
+	Enabled bool   `yaml:"enabled"`
+}
+
+// ReadyzConfig configures the /readyz readiness probe endpoint.
+type ReadyzConfig struct {
+	Path    string `yaml:"path"`
+	Enabled bool   `yaml:"enabled"`
 }
 
 // PprofConfig pprof 性能分析端点配置。
