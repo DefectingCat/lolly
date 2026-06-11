@@ -9,6 +9,7 @@ package netutil
 import (
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/valyala/fasthttp"
 )
@@ -109,4 +110,88 @@ func GetRemoteAddrIP(ctx *fasthttp.RequestCtx) net.IP {
 		}
 	}
 	return nil
+}
+
+// remoteAddrCache 缓存 RemoteAddr 字符串化结果，避免重复的 net.TCPAddr.String() 分配。
+type remoteAddrCache struct {
+	mu      sync.RWMutex
+	entries map[string]string
+	maxSize int
+}
+
+var globalRemoteAddrCache = &remoteAddrCache{
+	entries: make(map[string]string, 1024),
+	maxSize: 1024,
+}
+
+// FormatRemoteAddr 使用缓存格式化 RemoteAddr，避免重复的地址字符串分配。
+// 优先使用 ctx.RemoteIP() 获取 IP，对 IPv4 直接零分配格式化，IPv6 回退到 addr.String()。
+func FormatRemoteAddr(ctx *fasthttp.RequestCtx) string {
+	ip := ctx.RemoteIP()
+	if ip == nil {
+		addr := ctx.RemoteAddr()
+		if addr == nil {
+			return "-"
+		}
+		return addr.String()
+	}
+
+	// 优先尝试 IPv4 快速路径（零分配）
+	if ipv4 := ip.To4(); ipv4 != nil {
+		return formatIPv4(ipv4)
+	}
+
+	// IPv6：尝试缓存
+	ipStr := ip.String()
+	globalRemoteAddrCache.mu.RLock()
+	if cached, ok := globalRemoteAddrCache.entries[ipStr]; ok {
+		globalRemoteAddrCache.mu.RUnlock()
+		return cached
+	}
+	globalRemoteAddrCache.mu.RUnlock()
+
+	// 未命中缓存，回退到 addr.String()
+	addr := ctx.RemoteAddr()
+	if addr == nil {
+		return "-"
+	}
+	result := addr.String()
+
+	globalRemoteAddrCache.mu.Lock()
+	if len(globalRemoteAddrCache.entries) < globalRemoteAddrCache.maxSize {
+		globalRemoteAddrCache.entries[ipStr] = result
+	}
+	globalRemoteAddrCache.mu.Unlock()
+	return result
+}
+
+// formatIPv4 将 4 字节 IPv4 地址格式化为字符串（零分配）。
+func formatIPv4(ip net.IP) string {
+	var buf [15]byte
+	n := 0
+	for i := 0; i < 4; i++ {
+		if i > 0 {
+			buf[n] = '.'
+			n++
+		}
+		n += writeUint8(buf[n:], ip[i])
+	}
+	return string(buf[:n])
+}
+
+// writeUint8 将 uint8 写入 buf，返回写入的字节数。
+func writeUint8(buf []byte, v byte) int {
+	if v >= 100 {
+		buf[0] = byte('0' + v/100)
+		buf[1] = byte('0' + (v/10)%10)
+		buf[2] = byte('0' + v%10)
+		return 3
+	}
+	if v >= 10 {
+		buf[0] = byte('0' + v/10)
+		buf[1] = byte('0' + v%10)
+		return 2
+	}
+	buf[0] = byte('0' + v)
+	return 1
 }

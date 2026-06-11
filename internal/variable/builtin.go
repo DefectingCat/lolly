@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/netutil"
 )
 
 // 内置变量常量
@@ -81,11 +82,7 @@ func init() {
 		Name:        VarRemoteAddr,
 		Description: "客户端 IP 地址",
 		Getter: func(ctx *fasthttp.RequestCtx) string {
-			addr := ctx.RemoteAddr()
-			if addr == nil {
-				return "-"
-			}
-			return addr.String()
+			return netutil.FormatRemoteAddr(ctx)
 		},
 	})
 
@@ -98,8 +95,8 @@ func init() {
 			if addr == nil {
 				return "-"
 			}
-			// 解析地址获取端口
-			s := addr.String()
+			// 解析地址获取端口，优先用 FormatRemoteAddr 缓存的结果
+			s := netutil.FormatRemoteAddr(ctx)
 			for i := len(s) - 1; i >= 0; i-- {
 				if s[i] == ':' {
 					return s[i+1:]

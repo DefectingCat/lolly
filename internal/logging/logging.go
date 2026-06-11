@@ -27,6 +27,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/netutil"
 	"rua.plus/lolly/internal/variable"
 )
 
@@ -142,7 +143,7 @@ func (l *Logger) LogAccess(ctx *fasthttp.RequestCtx, status int, size int64, dur
 	// JSON 格式或空格式：输出结构化 JSON
 	if l.accessFormat == formatJSON || l.accessFormat == "" {
 		l.accessLog.Info().
-			Str("remote_addr", ctx.RemoteAddr().String()).
+			Str("remote_addr", netutil.FormatRemoteAddr(ctx)).
 			Bytes("request", append(append(ctx.Method(), ' '), ctx.Path()...)).
 			Int("status", status).
 			Int64("body_bytes_sent", size).
