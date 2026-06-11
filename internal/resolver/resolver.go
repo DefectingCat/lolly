@@ -131,7 +131,7 @@ type DNSCacheEntry struct {
 // 返回值：
 //   - Resolver: DNS 解析器接口实现，禁用时返回 noopResolver
 func New(cfg *config.ResolverConfig) Resolver {
-	if !cfg.Enabled {
+	if cfg == nil || !cfg.Enabled {
 		return &noopResolver{}
 	}
 

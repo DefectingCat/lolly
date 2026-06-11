@@ -87,6 +87,9 @@ type windowCounter struct {
 // 返回值：
 //   - *SlidingWindowLimiter: 创建的限流器实例
 func NewSlidingWindowLimiter(window time.Duration, limit int, precise bool) *SlidingWindowLimiter {
+	if window <= 0 {
+		window = time.Second
+	}
 	s := &SlidingWindowLimiter{
 		window:  window,
 		limit:   limit,

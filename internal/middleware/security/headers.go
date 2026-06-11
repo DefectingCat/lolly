@@ -211,6 +211,9 @@ func formatHSTSValue(maxAge int, includeSubDomains bool, preload bool) string {
 // 参数：
 //   - cfg: 新的安全头配置
 func (sh *HeadersMiddleware) UpdateConfig(cfg *config.SecurityHeaders) {
+	if cfg == nil {
+		return
+	}
 	sh.mu.Lock()
 	sh.config = cfg
 	sh.formatHSTS()

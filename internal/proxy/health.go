@@ -78,6 +78,9 @@ type HealthChecker struct {
 //
 // 返回的 HealthChecker 尚未启动；调用 Start() 开始健康检查。
 func NewHealthChecker(targets []*loadbalance.Target, cfg *config.HealthCheckConfig) *HealthChecker {
+	if cfg == nil {
+		cfg = &config.HealthCheckConfig{}
+	}
 	interval := cfg.Interval
 	if interval <= 0 {
 		interval = 10 * time.Second

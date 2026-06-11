@@ -94,6 +94,9 @@ func (a *App) initVariables() {
 func (a *App) logServerAddresses() {
 	a.logger.LogStartup("Config loaded successfully", map[string]string{"config_path": a.cfgPath})
 
+	if len(a.cfg.Servers) == 0 {
+		return
+	}
 	mode := a.cfg.GetMode()
 	if mode == config.ServerModeMultiServer {
 		for i, srv := range a.cfg.Servers {
@@ -173,7 +176,7 @@ func (a *App) initStreamServers() {
 
 // initHTTP3 starts the HTTP/3 server if enabled.
 func (a *App) initHTTP3() {
-	if !a.cfg.HTTP3.Enabled || a.cfg.Servers[0].SSL.Cert == "" {
+	if len(a.cfg.Servers) == 0 || !a.cfg.HTTP3.Enabled || a.cfg.Servers[0].SSL.Cert == "" {
 		return
 	}
 
@@ -199,7 +202,7 @@ func (a *App) initHTTP3() {
 
 // initHTTP2 starts the HTTP/2 server if enabled.
 func (a *App) initHTTP2() {
-	if !a.cfg.Servers[0].SSL.HTTP2.Enabled || a.cfg.Servers[0].SSL.Cert == "" {
+	if len(a.cfg.Servers) == 0 || !a.cfg.Servers[0].SSL.HTTP2.Enabled || a.cfg.Servers[0].SSL.Cert == "" {
 		return
 	}
 

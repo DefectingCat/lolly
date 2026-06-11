@@ -248,7 +248,7 @@ func (api *ngxLogAPI) luaLog(L *glua.LState) int {
 	if api.logger != nil {
 		switch level {
 		case LogEmerg, LogAlert, LogCrit:
-			api.logger.Fatal().Msg(msg)
+			api.logger.Error().Str("lua_level", "critical").Msg(msg)
 		case LogErr:
 			api.logger.Error().Msg(msg)
 		case LogWarn:
