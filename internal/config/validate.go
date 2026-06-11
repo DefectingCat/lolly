@@ -645,24 +645,52 @@ func validateSSL(s *SSLConfig) error {
 // 返回值：
 //   - error: 验证失败时返回错误信息，成功返回 nil
 func validateSecurity(s *SecurityConfig) error {
-	// 验证访问控制配置
 	if err := validateAccess(&s.Access); err != nil {
 		return fmt.Errorf("access: %w", err)
 	}
 
-	// 验证认证配置
 	if err := validateAuth(&s.Auth); err != nil {
 		return fmt.Errorf("auth: %w", err)
 	}
 
-	// 验证速率限制配置
 	if err := validateRateLimit(&s.RateLimit); err != nil {
 		return fmt.Errorf("rate_limit: %w", err)
 	}
 
-	// 验证安全头部配置
 	if err := validateSecurityHeaders(&s.Headers); err != nil {
 		return fmt.Errorf("headers: %w", err)
+	}
+
+	if err := validateCORS(&s.CORS); err != nil {
+		return fmt.Errorf("cors: %w", err)
+	}
+
+	return nil
+}
+
+func validateCORS(c *CORSConfig) error {
+	if !c.Enabled {
+		return nil
+	}
+
+	if len(c.AllowedOrigins) == 0 {
+		return errors.New("启用 CORS 时必须配置 allowed_origins")
+	}
+
+	hasWildcard := false
+	for _, o := range c.AllowedOrigins {
+		if o == "*" {
+			hasWildcard = true
+			break
+		}
+	}
+
+	if hasWildcard && c.AllowCredentials {
+		return errors.New("allowed_origins 包含 \"*\" 时不能同时启用 allow_credentials（CORS 规范不允许）")
+	}
+
+	if c.MaxAge < 0 {
+		return errors.New("max_age 不能为负数")
 	}
 
 	return nil

@@ -41,6 +41,18 @@ type SecurityConfig struct {
 	Auth        AuthConfig        `yaml:"auth"`
 	AuthRequest AuthRequestConfig `yaml:"auth_request"`
 	RateLimit   RateLimitConfig   `yaml:"rate_limit"`
+	CORS        CORSConfig        `yaml:"cors"`
+}
+
+// CORSConfig configures Cross-Origin Resource Sharing (CORS) headers.
+type CORSConfig struct {
+	Enabled          bool     `yaml:"enabled"`
+	AllowedOrigins   []string `yaml:"allowed_origins"`
+	AllowedMethods   []string `yaml:"allowed_methods"`
+	AllowedHeaders   []string `yaml:"allowed_headers"`
+	ExposeHeaders    []string `yaml:"expose_headers"`
+	AllowCredentials bool     `yaml:"allow_credentials"`
+	MaxAge           int      `yaml:"max_age"`
 }
 
 // AccessConfig IP 访问控制配置。

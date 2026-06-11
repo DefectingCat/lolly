@@ -142,6 +142,9 @@ func DefaultConfig() *Config {
 				AuthRequest: AuthRequestConfig{
 					Timeout: 5 * time.Second,
 				},
+				CORS: CORSConfig{
+					Enabled: false,
+				},
 			},
 			Compression: CompressionConfig{
 				Type:                 "gzip",
@@ -198,6 +201,14 @@ func DefaultConfig() *Config {
 				Enabled: false,
 				Path:    DefaultPprofPath,
 				Allow:   []string{"127.0.0.1"},
+			},
+			Healthz: HealthzConfig{
+				Enabled: true,
+				Path:    "/healthz",
+			},
+			Readyz: ReadyzConfig{
+				Enabled: true,
+				Path:    "/readyz",
 			},
 		},
 		HTTP3: HTTP3Config{
