@@ -117,15 +117,21 @@ func NewSessionTicketManager(cfg config.SessionTicketsConfig) (*SessionTicketMan
 // 必须在调用 GetKeys 之前启动。
 func (m *SessionTicketManager) Start() {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.started {
-		m.mu.Unlock()
 		return
 	}
 	m.started = true
-	m.mu.Unlock()
+
+	// 重建 stopCh 以支持 Start-Stop-Start 周期
+	select {
+	case <-m.stopCh:
+		m.stopCh = make(chan struct{})
+	default:
+	}
 
 	// 启动轮换定时器
-	m.scheduleRotation()
+	m.scheduleRotationLocked()
 }
 
 // Stop 停止密钥轮换定时器。
@@ -138,12 +144,17 @@ func (m *SessionTicketManager) Stop() {
 		return
 	}
 	m.started = false
-	m.mu.Unlock()
-
-	close(m.stopCh)
-
 	if m.rotateTimer != nil {
 		m.rotateTimer.Stop()
+		m.rotateTimer = nil
+	}
+	m.mu.Unlock()
+
+	select {
+	case <-m.stopCh:
+		// 已经关闭
+	default:
+		close(m.stopCh)
 	}
 }
 
@@ -230,6 +241,12 @@ func (m *SessionTicketManager) ApplyToTLSConfig(tlsCfg *tls.Config) {
 //
 // 使用定时器在指定间隔后执行密钥轮换。
 func (m *SessionTicketManager) scheduleRotation() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.scheduleRotationLocked()
+}
+
+func (m *SessionTicketManager) scheduleRotationLocked() {
 	if !m.started {
 		return
 	}

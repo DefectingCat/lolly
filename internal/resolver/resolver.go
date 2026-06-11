@@ -357,6 +357,13 @@ func (r *DNSResolver) Start() error {
 
 	r.started.Store(true)
 
+	// 重建 stopCh 以支持 Start-Stop-Start 周期
+	select {
+	case <-r.stopCh:
+		r.stopCh = make(chan struct{})
+	default:
+	}
+
 	// 启动后台刷新协程
 	go r.refreshLoop()
 

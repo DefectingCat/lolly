@@ -94,6 +94,13 @@ func (m *SlowStartManager) Start() {
 		return // 已经在运行
 	}
 
+	// 重建 stopCh 以支持 Start-Stop-Start 周期
+	select {
+	case <-m.stopCh:
+		m.stopCh = make(chan struct{})
+	default:
+	}
+
 	go m.updateLoop()
 }
 
@@ -102,7 +109,12 @@ func (m *SlowStartManager) Stop() {
 	if !m.running.Swap(false) {
 		return
 	}
-	close(m.stopCh)
+	select {
+	case <-m.stopCh:
+		// 已经关闭
+	default:
+		close(m.stopCh)
+	}
 }
 
 // updateLoop 后台更新循环。

@@ -94,12 +94,15 @@ func New(cfg *config.LoggingConfig) *Logger {
 	}
 
 	accessWriter := getOutput(cfg.Access.Path)
+	errorWriter := getOutput(cfg.Error.Path)
 
 	logger := &Logger{
 		accessFormat: cfg.Access.Format,
 		accessWriter: accessWriter,
+		accessFile:   writerFile(accessWriter),
+		errorFile:    writerFile(errorWriter),
 		accessLog:    zerolog.New(accessWriter).With().Timestamp().Logger(),
-		errorLog:     zerolog.New(getOutput(cfg.Error.Path)).Level(parseLevel(cfg.Error.Level)).With().Timestamp().Logger(),
+		errorLog:     zerolog.New(errorWriter).Level(parseLevel(cfg.Error.Level)).With().Timestamp().Logger(),
 	}
 
 	return logger
@@ -131,6 +134,14 @@ func getOutput(path string) io.Writer {
 		return os.Stdout
 	}
 	return f
+}
+
+// writerFile 从 io.Writer 中提取底层的 *os.File，如果不是或为标准流则返回 nil。
+func writerFile(w io.Writer) *os.File {
+	if f, ok := w.(*os.File); ok && f != os.Stdout && f != os.Stderr {
+		return f
+	}
+	return nil
 }
 
 // LogAccess 记录访问日志（全局实例）。

@@ -308,7 +308,12 @@ func (p *connectionPool) remove(key string, conn net.Conn) {
 	conns := p.conns[key]
 	for i, c := range conns {
 		if c == conn {
-			p.conns[key] = append(conns[:i], conns[i+1:]...)
+			conns = append(conns[:i], conns[i+1:]...)
+			if len(conns) == 0 {
+				delete(p.conns, key)
+			} else {
+				p.conns[key] = conns
+			}
 			break
 		}
 	}

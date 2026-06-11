@@ -74,6 +74,9 @@ type TLSManager struct {
 	// certificates 解析后的证书映射，用于 OCSP
 	certificates map[string]*x509.Certificate
 
+	// defaultCert 默认证书的解析结果，避免每次握手重新解析
+	defaultCert *x509.Certificate
+
 	// issuers 颁发者证书映射，用于 OCSP
 	issuers map[string]*x509.Certificate
 
@@ -163,26 +166,29 @@ func NewTLSManager(cfg *config.SSLConfig) (*TLSManager, error) {
 		// 解析证书用于 OCSP
 		if len(cert.Certificate) > 0 {
 			parsedCert, err := x509.ParseCertificate(cert.Certificate[0])
-			if err == nil && len(parsedCert.OCSPServer) > 0 {
-				// 存储证书用于 OCSP 查询
-				serial := parsedCert.SerialNumber.String()
-				manager.certificates[serial] = parsedCert
+			if err == nil {
+				manager.defaultCert = parsedCert
+				if len(parsedCert.OCSPServer) > 0 {
+					// 存储证书用于 OCSP 查询
+					serial := parsedCert.SerialNumber.String()
+					manager.certificates[serial] = parsedCert
 
-				// 尝试从证书链解析颁发者证书
-				if len(cert.Certificate) > 1 {
-					issuerCert, err := x509.ParseCertificate(cert.Certificate[1])
-					if err == nil {
-						manager.issuers[serial] = issuerCert
-						if err := ocspMgr.RegisterCertificate(parsedCert, issuerCert); err != nil {
-							logging.Warn().Err(err).Msg("OCSP Stapling 注册失败")
+					// 尝试从证书链解析颁发者证书
+					if len(cert.Certificate) > 1 {
+						issuerCert, err := x509.ParseCertificate(cert.Certificate[1])
+						if err == nil {
+							manager.issuers[serial] = issuerCert
+							if err := ocspMgr.RegisterCertificate(parsedCert, issuerCert); err != nil {
+								logging.Warn().Err(err).Msg("OCSP Stapling 注册失败")
+							}
 						}
 					}
 				}
-
-				// 设置 GetConfigForClient 回调用于 OCSP Stapling
-				tlsCfg.GetConfigForClient = manager.getConfigForClientWithOCSP
 			}
 		}
+
+		// 设置 GetConfigForClient 回调用于 OCSP Stapling
+		tlsCfg.GetConfigForClient = manager.getConfigForClientWithOCSP
 
 		ocspMgr.Start()
 	}
@@ -262,10 +268,12 @@ func (m *TLSManager) getConfigForClientWithOCSP(hello *tls.ClientHelloInfo) (*tl
 	// 将 OCSP 响应附加到证书
 	cert := &cfgCopy.Certificates[0]
 	if len(cert.Certificate) > 0 {
-		// 解析叶子证书以获取序列号
-		leafCert, err := x509.ParseCertificate(cert.Certificate[0])
-		if err == nil {
-			serial := leafCert.SerialNumber.String()
+		// 使用已缓存的证书解析结果获取序列号
+		m.mu.RLock()
+		parsedCert := m.defaultCert
+		m.mu.RUnlock()
+		if parsedCert != nil {
+			serial := parsedCert.SerialNumber.String()
 			ocspResp := m.ocspManager.GetOCSPResponse(serial)
 			if ocspResp != nil {
 				// 将 OCSP 响应附加到证书

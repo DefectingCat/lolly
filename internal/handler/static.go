@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -84,6 +85,7 @@ func (h *StaticHandler) statWithCache(filePath string) (os.FileInfo, bool, error
 //   - 大文件（>= 8KB）自动启用零拷贝传输
 //   - alias 与 root 互斥，同时配置时 alias 优先
 type StaticHandler struct {
+	mu sync.RWMutex // 保护以下字段的并发访问
 	// 指针类型字段（按大小排列）
 	fileCache     *cache.FileCache
 	fileInfoCache *FileInfoCache // FileInfo 缓存，减少 os.Stat 调用
@@ -161,6 +163,8 @@ func NewStaticHandler(root, pathPrefix string, index []string, useSendfile bool)
 // 参数：
 //   - alias: 路径别名
 func (h *StaticHandler) SetAlias(alias string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.alias = alias
 	if alias != "" {
 		h.root = ""
@@ -201,6 +205,8 @@ func (h *StaticHandler) buildFilePath(relPath string) string {
 //   - 仅对小于 1MB 的文件启用缓存
 //   - 缓存会自动检测文件修改并更新
 func (h *StaticHandler) SetFileCache(fc *cache.FileCache) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.fileCache = fc
 }
 
@@ -217,6 +223,8 @@ func (h *StaticHandler) SetFileCache(fc *cache.FileCache) {
 //
 //	handler.SetGzipStatic(true, nil, []string{".gz", ".br"})
 func (h *StaticHandler) SetGzipStatic(enabled bool, extensions, precompressedExtensions []string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	if enabled {
 		h.gzipStatic = compression.NewGzipStatic(true, h.root, extensions, precompressedExtensions)
 	}
@@ -236,6 +244,8 @@ func (h *StaticHandler) SetGzipStatic(enabled bool, extensions, precompressedExt
 //
 //	handler.SetTryFiles([]string{"$uri", "$uri/", "/index.html"}, false, nil)
 func (h *StaticHandler) SetTryFiles(tryFiles []string, tryFilesPass bool, router *Router) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.tryFiles = tryFiles
 	h.tryFilesPass = tryFilesPass
 	h.router = router
@@ -249,6 +259,8 @@ func (h *StaticHandler) SetTryFiles(tryFiles []string, tryFilesPass bool, router
 // 参数：
 //   - enabled: 是否启用符号链接安全检查
 func (h *StaticHandler) SetSymlinkCheck(enabled bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.symlinkCheck = enabled
 }
 
@@ -260,6 +272,8 @@ func (h *StaticHandler) SetSymlinkCheck(enabled bool) {
 // 参数：
 //   - enabled: 是否启用内部访问限制
 func (h *StaticHandler) SetInternal(enabled bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.internal = enabled
 }
 
@@ -271,6 +285,8 @@ func (h *StaticHandler) SetInternal(enabled bool) {
 // 参数：
 //   - expires: 过期时间字符串
 func (h *StaticHandler) SetExpires(expires string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.expires = expires
 }
 
@@ -284,6 +300,8 @@ func (h *StaticHandler) SetExpires(expires string) {
 //   - localtime: 使用本地时间
 //   - exactSize: 显示精确大小
 func (h *StaticHandler) SetAutoIndex(enabled bool, format string, localtime, exactSize bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.autoIndex = enabled
 	h.autoIndexFormat = format
 	h.autoIndexLocaltime = localtime
@@ -304,6 +322,8 @@ func (h *StaticHandler) SetAutoIndex(enabled bool, format string, localtime, exa
 //
 // 默认 TTL 为 5 秒。
 func (h *StaticHandler) SetCacheTTL(ttl time.Duration) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.cacheTTL = ttl
 	if h.fileInfoCache != nil {
 		h.fileInfoCache.SetTTL(ttl)
@@ -328,6 +348,9 @@ func (h *StaticHandler) SetCacheTTL(ttl time.Duration) {
 //  7. 大文件使用零拷贝传输
 //  8. 读取文件并存入缓存
 func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
 	reqPath := string(ctx.Path())
 
 	// 检查 internal 限制
