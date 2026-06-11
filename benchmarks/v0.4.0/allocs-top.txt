@@ -1,0 +1,30 @@
+File: lolly
+Build ID: 91ef2ed3a6e5dbfe48cc1c157eb0ae7ab47d63c1
+Type: alloc_space
+Time: 2026-06-11 13:47:29 CST
+Showing nodes accounting for 1626.28MB, 95.80% of 1697.53MB total
+Dropped 135 nodes (cum <= 8.49MB)
+      flat  flat%   sum%        cum   cum%
+ 1272.22MB 74.95% 74.95%  1354.22MB 79.78%  os.statNolog
+      82MB  4.83% 79.78%       82MB  4.83%  syscall.ByteSliceFromString
+   81.50MB  4.80% 84.58%    81.50MB  4.80%  net.IP.String
+      77MB  4.54% 89.11%       77MB  4.54%  net.JoinHostPort (inline)
+   76.50MB  4.51% 93.62%    76.50MB  4.51%  internal/bytealg.MakeNoZero
+   13.01MB  0.77% 94.39%    13.01MB  0.77%  sync.(*poolChain).pushHead
+   12.55MB  0.74% 95.13%    12.55MB  0.74%  bufio.NewReaderSize (inline)
+    6.50MB  0.38% 95.51%    40.50MB  2.39%  net.(*Dialer).DialContext
+    4.50MB  0.27% 95.77%    11.50MB  0.68%  context.AfterFunc
+    0.50MB 0.029% 95.80%    12.50MB  0.74%  net.(*netFD).connect
+         0     0% 95.80%    12.01MB  0.71%  github.com/rs/zerolog.(*Event).Msg (inline)
+         0     0% 95.80%    13.01MB  0.77%  github.com/rs/zerolog.(*Event).msg
+         0     0% 95.80%    13.01MB  0.77%  github.com/rs/zerolog.(*Event).write
+         0     0% 95.80%     9.01MB  0.53%  github.com/rs/zerolog.putEvent
+         0     0% 95.80%    48.50MB  2.86%  github.com/valyala/fasthttp.(*HostClient).AcquireConn
+         0     0% 95.80%    57.53MB  3.39%  github.com/valyala/fasthttp.(*HostClient).Do
+         0     0% 95.80%    48.50MB  2.86%  github.com/valyala/fasthttp.(*HostClient).dialHostHard
+         0     0% 95.80%    57.53MB  3.39%  github.com/valyala/fasthttp.(*HostClient).do
+         0     0% 95.80%    57.53MB  3.39%  github.com/valyala/fasthttp.(*HostClient).doNonNilReqResp
+         0     0% 95.80%  1684.31MB 99.22%  github.com/valyala/fasthttp.(*Server).serveConn
+         0     0% 95.80%    48.50MB  2.86%  github.com/valyala/fasthttp.(*TCPDialer).Dial (inline)
+         0     0% 95.80%    48.50MB  2.86%  github.com/valyala/fasthttp.(*TCPDialer).dial
+         0     0% 95.80%       48MB  2.83%  github.com/valyala/fasthttp.(*TCPDialer).tryDial

@@ -1,0 +1,30 @@
+File: lolly
+Build ID: 91ef2ed3a6e5dbfe48cc1c157eb0ae7ab47d63c1
+Type: inuse_space
+Time: 2026-06-11 13:47:29 CST
+Showing nodes accounting for 11291.78kB, 100% of 11291.78kB total
+      flat  flat%   sum%        cum   cum%
+ 3084.01kB 27.31% 27.31%  3084.01kB 27.31%  bufio.NewReaderSize (inline)
+ 3082.04kB 27.29% 54.61%  3082.04kB 27.29%  bufio.NewWriterSize (inline)
+ 2048.03kB 18.14% 72.74%  2048.03kB 18.14%  github.com/valyala/fasthttp.(*RequestHeader).parseFirstLine
+    1026kB  9.09% 81.83%     1026kB  9.09%  runtime.mallocgc
+  514.63kB  4.56% 86.39%   514.63kB  4.56%  golang.org/x/net/http2/hpack.init
+  512.75kB  4.54% 90.93%   512.75kB  4.54%  github.com/valyala/fasthttp.(*Server).acquireCtx
+  512.25kB  4.54% 95.47%   512.25kB  4.54%  github.com/rs/zerolog.init.func3
+  512.06kB  4.53%   100%   512.06kB  4.53%  sync.(*poolChain).pushHead
+         0     0%   100%   512.25kB  4.54%  github.com/rs/zerolog.(*Logger).Info (inline)
+         0     0%   100%   512.25kB  4.54%  github.com/rs/zerolog.(*Logger).newEvent
+         0     0%   100%   512.25kB  4.54%  github.com/rs/zerolog.newEvent
+         0     0%   100%      514kB  4.55%  github.com/valyala/fasthttp.(*HostClient).AcquireReader
+         0     0%   100%   512.06kB  4.53%  github.com/valyala/fasthttp.(*HostClient).CloseConn
+         0     0%   100%  1026.06kB  9.09%  github.com/valyala/fasthttp.(*HostClient).Do
+         0     0%   100%  1026.06kB  9.09%  github.com/valyala/fasthttp.(*HostClient).do
+         0     0%   100%  1026.06kB  9.09%  github.com/valyala/fasthttp.(*HostClient).doNonNilReqResp
+         0     0%   100%  2048.03kB 18.14%  github.com/valyala/fasthttp.(*RequestHeader).Read (inline)
+         0     0%   100%  2048.03kB 18.14%  github.com/valyala/fasthttp.(*RequestHeader).parse
+         0     0%   100%  2048.03kB 18.14%  github.com/valyala/fasthttp.(*RequestHeader).readLoop
+         0     0%   100%  2048.03kB 18.14%  github.com/valyala/fasthttp.(*RequestHeader).tryRead
+         0     0%   100%  9751.15kB 86.36%  github.com/valyala/fasthttp.(*Server).serveConn
+         0     0%   100%  1026.06kB  9.09%  github.com/valyala/fasthttp.(*transport).RoundTrip
+         0     0%   100%  9751.15kB 86.36%  github.com/valyala/fasthttp.(*workerPool).getCh.func1
+         0     0%   100%  9751.15kB 86.36%  github.com/valyala/fasthttp.(*workerPool).workerFunc

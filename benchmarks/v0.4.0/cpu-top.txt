@@ -1,0 +1,30 @@
+File: lolly
+Build ID: 91ef2ed3a6e5dbfe48cc1c157eb0ae7ab47d63c1
+Type: cpu
+Time: 2026-06-11 13:46:57 CST
+Duration: 30s, Total samples = 78.99s (263.28%)
+Showing nodes accounting for 63.79s, 80.76% of 78.99s total
+Dropped 642 nodes (cum <= 0.39s)
+      flat  flat%   sum%        cum   cum%
+    48.69s 61.64% 61.64%     48.69s 61.64%  internal/runtime/syscall/linux.Syscall6
+     1.68s  2.13% 63.77%      1.68s  2.13%  runtime.memmove
+     0.90s  1.14% 64.91%      1.08s  1.37%  github.com/rs/zerolog/internal/json.Encoder.AppendString
+     0.79s  1.00% 65.91%      0.79s  1.00%  time.runtimeNow
+     0.69s  0.87% 66.78%     73.20s 92.67%  github.com/valyala/fasthttp.(*Server).serveConn
+     0.56s  0.71% 67.49%      0.56s  0.71%  runtime.futex
+     0.55s   0.7% 68.19%      0.55s   0.7%  indexbytebody
+     0.52s  0.66% 68.84%      0.58s  0.73%  runtime.exitsyscall
+     0.52s  0.66% 69.50%      0.52s  0.66%  runtime.nanotime (inline)
+     0.38s  0.48% 69.98%      0.40s  0.51%  runtime.gopark
+     0.30s  0.38% 70.36%      0.43s  0.54%  runtime.reentersyscall
+     0.26s  0.33% 70.69%     47.80s 60.51%  syscall.RawSyscall6
+     0.24s   0.3% 71.00%      3.45s  4.37%  runtime.schedule
+     0.23s  0.29% 71.29%      1.22s  1.54%  runtime.netpoll
+     0.22s  0.28% 71.57%      1.03s  1.30%  github.com/valyala/fasthttp.(*RequestHeader).parseHeaders
+     0.20s  0.25% 71.82%      0.58s  0.73%  internal/strconv.genericFtoa
+     0.19s  0.24% 72.06%      8.46s 10.71%  internal/poll.(*FD).Read
+     0.18s  0.23% 72.29%      8.74s 11.06%  bufio.(*Reader).fill
+     0.18s  0.23% 72.52%      7.74s  9.80%  github.com/rs/zerolog.(*Event).msg
+     0.18s  0.23% 72.74%     12.92s 16.36%  rua.plus/lolly/internal/logging.(*Logger).LogAccess
+     0.18s  0.23% 72.97%      0.42s  0.53%  sync.(*Pool).Get
+     0.17s  0.22% 73.19%      6.56s  8.30%  github.com/rs/zerolog.(*Event).write
