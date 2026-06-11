@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Check formatting
+        run: |
+          go install mvdan.cc/gofumpt@latest
+          output=$(gofumpt -l .)
+          if [ -n "$output" ]; then
+            echo "::error::Files need formatting:"
+            echo "$output"
+            exit 1
+          fi
+
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.1
+
+      - name: Run lint
+        run: golangci-lint run ./...
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run unit tests
+        run: go test -race -count=1 ./internal/...
+
+  build:
+    name: Build
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: make build
+
+      - name: Verify binary
+        run: ./bin/lolly --help
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lolly
+          path: bin/lolly
+
+  docker:
+    name: Docker
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: docker build -t lolly:latest .
