@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/valyala/fasthttp"
+	"rua.plus/lolly/internal/middleware/requestid"
 	"rua.plus/lolly/internal/netutil"
 )
 
@@ -104,6 +105,13 @@ func SetForwardedHeaders(headers *fasthttp.RequestHeader, fh ForwardedHeaders, a
 	// 设置 X-Forwarded-Proto（仅在 setProto 为 true 时）
 	if setProto && fh.Proto != "" {
 		headers.Set("X-Forwarded-Proto", fh.Proto)
+	}
+}
+
+// SetRequestIDHeader propagates X-Request-ID from the request context to upstream headers.
+func SetRequestIDHeader(headers *fasthttp.RequestHeader, ctx *fasthttp.RequestCtx) {
+	if id := requestid.GetRequestID(ctx); id != "" {
+		headers.Set("X-Request-ID", id)
 	}
 }
 

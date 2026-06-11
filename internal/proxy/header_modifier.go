@@ -50,6 +50,7 @@ func (p *Proxy) modifyRequestHeaders(ctx *fasthttp.RequestCtx, target *loadbalan
 	}
 
 	SetForwardedHeaders(headers, fh, true, setHost, setProto)
+	SetRequestIDHeader(headers, ctx)
 
 	// 从配置设置自定义请求头（支持变量展开）
 	if p.config.Headers.SetRequest != nil {

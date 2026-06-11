@@ -14,7 +14,9 @@ import (
 	"rua.plus/lolly/internal/middleware"
 	"rua.plus/lolly/internal/middleware/bodylimit"
 	"rua.plus/lolly/internal/middleware/compression"
+	"rua.plus/lolly/internal/middleware/cors"
 	"rua.plus/lolly/internal/middleware/errorintercept"
+	"rua.plus/lolly/internal/middleware/requestid"
 	"rua.plus/lolly/internal/middleware/rewrite"
 	"rua.plus/lolly/internal/middleware/security"
 )
@@ -37,6 +39,9 @@ import (
 //   - 未配置的中间件不会添加到链中
 func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middleware.Chain, error) {
 	var middlewares []middleware.Middleware
+
+	// 0. Request-ID (最先执行，确保后续中间件和日志可使用 $request_id)
+	middlewares = append(middlewares, requestid.New())
 
 	// 1. AccessLog (已集成)
 	middlewares = append(middlewares, s.accessLogMiddleware)
@@ -140,6 +145,19 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 		serverCfg.Security.Headers.PermissionsPolicy != "" {
 		headers := security.NewHeadersWithHSTS(&serverCfg.Security.Headers, &serverCfg.SSL.HSTS)
 		middlewares = append(middlewares, headers)
+	}
+
+	// 7.5 CORS (跨域资源共享)
+	if serverCfg.Security.CORS.Enabled {
+		middlewares = append(middlewares, cors.New(&cors.CORSConfig{
+			Enabled:          serverCfg.Security.CORS.Enabled,
+			AllowedOrigins:   serverCfg.Security.CORS.AllowedOrigins,
+			AllowedMethods:   serverCfg.Security.CORS.AllowedMethods,
+			AllowedHeaders:   serverCfg.Security.CORS.AllowedHeaders,
+			ExposeHeaders:    serverCfg.Security.CORS.ExposeHeaders,
+			AllowCredentials: serverCfg.Security.CORS.AllowCredentials,
+			MaxAge:           serverCfg.Security.CORS.MaxAge,
+		}))
 	}
 
 	// 8. ErrorIntercept (错误页面拦截)
