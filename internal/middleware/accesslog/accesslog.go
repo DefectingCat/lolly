@@ -50,12 +50,14 @@ type AccessLog struct {
 //   - *AccessLog: 访问日志中间件实例
 func New(cfg *config.LoggingConfig) *AccessLog {
 	sampleRate := cfg.Access.SampleRate
-	if sampleRate <= 0.0 || sampleRate > 1.0 {
+	// sampleRate=0 明确表示禁用访问日志
+	// sampleRate<0 或 >1 修正为 1.0（全量记录）
+	if sampleRate < 0.0 || sampleRate > 1.0 {
 		sampleRate = 1.0
 	}
 
 	var sampleInterval uint64 = 1
-	if sampleRate < 1.0 {
+	if sampleRate > 0.0 && sampleRate < 1.0 {
 		// 使用 1000 作为基数以提高精度，例如 0.123 -> 间隔约 8
 		sampleInterval = uint64((1.0 / sampleRate) + 0.5)
 		if sampleInterval < 1 {
@@ -81,17 +83,21 @@ func (a *AccessLog) Name() string {
 // shouldLog 判断当前请求是否应记录访问日志。
 //
 // 规则：
+//   - 5xx 服务器错误始终记录（便于排查错误）
+//   - sampleRate=0 时不记录 2xx/3xx/4xx
 //   - 采样率为 1.0 时始终记录
-//   - 非 2xx 响应始终记录（便于排查错误）
-//   - 2xx 响应按采样率决定是否记录
+//   - 其他情况按 sampleRate 采样
 //
 // 使用原子计数器实现无锁、零分配采样。
 func (a *AccessLog) shouldLog(status int) bool {
-	if a.sampleRate >= 1.0 {
+	// 5xx 服务器错误始终记录
+	if status >= 500 {
 		return true
 	}
-	// 非成功响应始终记录
-	if status < 200 || status >= 300 {
+	if a.sampleRate == 0.0 {
+		return false
+	}
+	if a.sampleRate >= 1.0 {
 		return true
 	}
 	// 确定性采样：每 sampleInterval 个请求记录一个

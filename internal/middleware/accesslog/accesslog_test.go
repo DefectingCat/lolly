@@ -91,14 +91,21 @@ func TestAccessLog_SampleRateAlwaysRecordErrors(t *testing.T) {
 	al := New(&config.LoggingConfig{
 		Access: config.AccessLogConfig{
 			Format:     "json",
-			SampleRate: 0.0, // 理论上不采样成功请求，但错误始终记录
+			SampleRate: 0.0, // 理论上不采样成功请求，但 5xx 始终记录
 		},
 	})
 
-	// 非 2xx 请求应始终记录
-	for _, status := range []int{199, 300, 400, 500} {
+	// 5xx 请求应始终记录
+	for _, status := range []int{500, 502, 503, 504} {
 		if !al.shouldLog(status) {
 			t.Errorf("status %d should always be logged regardless of sample rate", status)
+		}
+	}
+
+	// 2xx/3xx/4xx 请求按采样率（0% 不记录）
+	for _, status := range []int{200, 301, 404} {
+		if al.shouldLog(status) {
+			t.Errorf("status %d should not be logged with sample_rate=0", status)
 		}
 	}
 
