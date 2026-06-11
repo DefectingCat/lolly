@@ -68,3 +68,37 @@ func BenchmarkAccessLogProcessParallel(b *testing.B) {
 		}
 	})
 }
+
+// BenchmarkAccessLogProcessSampled 测试采样模式下的访问日志性能。
+//
+// 当 sample_rate=0.1 时，90% 的成功请求会跳过日志记录，
+// 预期性能应显著优于全量记录。
+func BenchmarkAccessLogProcessSampled(b *testing.B) {
+	cfg := &config.LoggingConfig{
+		Access: config.AccessLogConfig{
+			Path:       "/dev/null",
+			Format:     "combined",
+			SampleRate: 0.1,
+		},
+	}
+	al := New(cfg)
+	defer func() { _ = al.Close() }()
+
+	mockHandler := func(ctx *fasthttp.RequestCtx) {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+		ctx.SetBodyString("OK")
+	}
+
+	handler := al.Process(mockHandler)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			ctx := &fasthttp.RequestCtx{}
+			ctx.Request.Header.SetMethod(fasthttp.MethodGet)
+			ctx.Request.SetRequestURI("/api/test")
+			handler(ctx)
+		}
+	})
+}

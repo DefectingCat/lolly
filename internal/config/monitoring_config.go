@@ -154,12 +154,15 @@ type LoggingConfig struct {
 //   - Path 为日志文件路径，为空则输出到 stdout
 //   - Format 支持预设格式或自定义格式
 //   - 常用预设格式：common、combined
+//   - SampleRate 控制采样率，1.0 表示记录所有请求，0.1 表示记录 10%
+//   - 非 2xx 请求不受采样率限制，始终记录
 //
 // 使用示例：
 //
 //	access:
 //	  path: "/var/log/lolly/access.log"
 //	  format: "combined"
+//	  sample_rate: 0.1
 type AccessLogConfig struct {
 	// Path 日志文件路径
 	// 访问日志的输出文件，为空则输出到标准输出
@@ -168,6 +171,11 @@ type AccessLogConfig struct {
 	// Format 日志格式
 	// 预设格式或自定义日志格式字符串
 	Format string `yaml:"format"`
+
+	// SampleRate 访问日志采样率
+	// 范围 0.0-1.0，默认 1.0（记录所有请求）
+	// 非 2xx 响应始终记录，不受采样率影响
+	SampleRate float64 `yaml:"sample_rate"`
 }
 
 // ErrorLogConfig 错误日志配置。

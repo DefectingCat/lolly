@@ -4,6 +4,7 @@
 //   - 请求方法和路径记录
 //   - 响应状态码和大小记录
 //   - 请求处理耗时记录
+//   - 访问日志采样（按 sample_rate 比例记录成功请求）
 //
 // 使用示例：
 //
@@ -14,6 +15,7 @@
 package accesslog
 
 import (
+	"sync/atomic"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -25,6 +27,18 @@ import (
 type AccessLog struct {
 	// logger 日志记录器实例，用于输出访问日志
 	logger *logging.Logger
+
+	// sampleRate 采样率，范围 0.0-1.0
+	// 1.0 表示记录所有请求
+	sampleRate float64
+
+	// sampleCounter 原子计数器，用于确定性采样
+	// 每请求原子自增，与 1/sampleRate 取模决定是否记录
+	sampleCounter atomic.Uint64
+
+	// sampleInterval 采样间隔，由 sampleRate 计算得出
+	// 例如 sampleRate=0.1 时 interval=10，每 10 个请求记录 1 个
+	sampleInterval uint64
 }
 
 // New 创建访问日志中间件。
@@ -35,8 +49,24 @@ type AccessLog struct {
 // 返回值：
 //   - *AccessLog: 访问日志中间件实例
 func New(cfg *config.LoggingConfig) *AccessLog {
+	sampleRate := cfg.Access.SampleRate
+	if sampleRate <= 0.0 || sampleRate > 1.0 {
+		sampleRate = 1.0
+	}
+
+	var sampleInterval uint64 = 1
+	if sampleRate < 1.0 {
+		// 使用 1000 作为基数以提高精度，例如 0.123 -> 间隔约 8
+		sampleInterval = uint64((1.0 / sampleRate) + 0.5)
+		if sampleInterval < 1 {
+			sampleInterval = 1
+		}
+	}
+
 	return &AccessLog{
-		logger: logging.New(cfg),
+		logger:         logging.New(cfg),
+		sampleRate:     sampleRate,
+		sampleInterval: sampleInterval,
 	}
 }
 
@@ -46,6 +76,26 @@ func New(cfg *config.LoggingConfig) *AccessLog {
 //   - string: 中间件名称 "accesslog"
 func (a *AccessLog) Name() string {
 	return "accesslog"
+}
+
+// shouldLog 判断当前请求是否应记录访问日志。
+//
+// 规则：
+//   - 采样率为 1.0 时始终记录
+//   - 非 2xx 响应始终记录（便于排查错误）
+//   - 2xx 响应按采样率决定是否记录
+//
+// 使用原子计数器实现无锁、零分配采样。
+func (a *AccessLog) shouldLog(status int) bool {
+	if a.sampleRate >= 1.0 {
+		return true
+	}
+	// 非成功响应始终记录
+	if status < 200 || status >= 300 {
+		return true
+	}
+	// 确定性采样：每 sampleInterval 个请求记录一个
+	return a.sampleCounter.Add(1)%a.sampleInterval == 1
 }
 
 // Process 包装 handler，在请求处理后记录访问日志。
@@ -59,8 +109,12 @@ func (a *AccessLog) Process(next fasthttp.RequestHandler) fasthttp.RequestHandle
 	return func(ctx *fasthttp.RequestCtx) {
 		start := time.Now()
 		next(ctx)
+		status := ctx.Response.StatusCode()
+		if !a.shouldLog(status) {
+			return
+		}
 		duration := time.Since(start)
-		a.logger.LogAccess(ctx, ctx.Response.StatusCode(), int64(len(ctx.Response.Body())), duration)
+		a.logger.LogAccess(ctx, status, int64(len(ctx.Response.Body())), duration)
 	}
 }
 
