@@ -134,6 +134,8 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("读取配置文件失败: %w", err)
 	}
 
+	data = ExpandEnv(data)
+
 	// 从默认值开始，YAML 只覆盖显式配置的字段。
 	// 注意：yaml.v3 对 slice 会整体替换，因此用户显式配置的 Servers[]
 	// 元素不会继承 server-level 默认值；但顶层 struct 字段（Performance、
@@ -205,6 +207,8 @@ func processIncludes(cfg *Config, baseDir string, depth int, visited map[string]
 			if err != nil {
 				return fmt.Errorf("读取引入文件 %q 失败: %w", match, err)
 			}
+
+			data = ExpandEnv(data)
 
 			var included Config
 			if err := yaml.Unmarshal(data, &included); err != nil {
