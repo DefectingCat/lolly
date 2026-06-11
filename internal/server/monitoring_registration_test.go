@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -22,21 +23,18 @@ func TestMonitoringEndpoints_OnlyRegisteredWhenEnabled(t *testing.T) {
 		}},
 	}
 
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+	defer ln.Close()
+	addr := ln.Addr().String()
+
+	cfg.Servers[0].Listen = addr
 	srv := New(cfg)
+	srv.SetListeners([]net.Listener{ln})
 	go srv.Start()
 	defer srv.StopWithTimeout(5 * time.Second)
-
-	var addr string
-	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
-		listeners := srv.GetListeners()
-		if len(listeners) > 0 {
-			addr = listeners[0].Addr().String()
-			break
-		}
-	}
-	if addr == "" {
-		t.Fatal("server has no listeners")
-	}
 
 	client := &fasthttp.Client{}
 	req := fasthttp.AcquireRequest()
@@ -74,21 +72,18 @@ func TestMonitoringEndpoints_ReachableWhenEnabled(t *testing.T) {
 		}},
 	}
 
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen failed: %v", err)
+	}
+	defer ln.Close()
+	addr := ln.Addr().String()
+
+	cfg.Servers[0].Listen = addr
 	srv := New(cfg)
+	srv.SetListeners([]net.Listener{ln})
 	go srv.Start()
 	defer srv.StopWithTimeout(5 * time.Second)
-
-	var addr string
-	for start := time.Now(); time.Since(start) < 2*time.Second; time.Sleep(10 * time.Millisecond) {
-		listeners := srv.GetListeners()
-		if len(listeners) > 0 {
-			addr = listeners[0].Addr().String()
-			break
-		}
-	}
-	if addr == "" {
-		t.Fatal("server has no listeners")
-	}
 
 	client := &fasthttp.Client{}
 	req := fasthttp.AcquireRequest()
