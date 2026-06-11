@@ -194,6 +194,13 @@ func (s *TCPSocket) Connect(host string, port int) error {
 //   - *SocketOperation: 连接操作实例
 //   - error: 连接失败时返回错误
 func (s *TCPSocket) ConnectAsync(_ *glua.LState, host string, port int) (*SocketOperation, error) {
+	s.mu.Lock()
+	if s.currentOp != nil {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("socket already has an active operation")
+	}
+	s.mu.Unlock()
+
 	err := s.Connect(host, port)
 	if err != nil {
 		return nil, err

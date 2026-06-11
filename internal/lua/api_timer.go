@@ -309,9 +309,10 @@ func (m *TimerManager) Cancel(handle *TimerHandle) bool {
 		return false // 定时器不存在或已执行
 	}
 
-	// 停止定时器
+	// 停止定时器；如果成功停止，回调不会执行
+	stopped := true
 	if entry.timer != nil {
-		entry.timer.Stop()
+		stopped = entry.timer.Stop()
 	}
 
 	// 发送取消信号
@@ -319,7 +320,11 @@ func (m *TimerManager) Cancel(handle *TimerHandle) bool {
 
 	// 清理
 	delete(m.timers, entry.id)
-	m.active.Add(-1)
+
+	// 如果成功停止定时器（回调不会执行），递减 active
+	if stopped {
+		m.active.Add(-1)
+	}
 
 	return true
 }

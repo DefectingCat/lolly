@@ -397,27 +397,32 @@ func (m *OCSPManager) singleOCSPAttempt(url string, req []byte) ([]byte, error) 
 func (m *OCSPManager) GetOCSPResponse(serial string) []byte {
 	m.mu.RLock()
 	resp, ok := m.responses[serial]
-	m.mu.RUnlock()
-
 	if !ok || resp == nil {
+		m.mu.RUnlock()
 		return nil
 	}
+	status := resp.status
+	nextUpdate := resp.nextUpdate
+	response := resp.response
+	m.mu.RUnlock()
 
 	// 检查响应是否仍可用
-	switch resp.status {
+	switch status {
 	case statusValid:
 		// 检查过期
-		if time.Now().After(resp.nextUpdate) {
+		if time.Now().After(nextUpdate) {
 			// 标记为过期但仍返回（优雅降级）
 			m.mu.Lock()
-			resp.status = statusStale
+			if r, exists := m.responses[serial]; exists && r == resp {
+				r.status = statusStale
+			}
 			m.mu.Unlock()
 		}
-		return resp.response
+		return response
 	case statusStale:
 		// 返回过期响应用于优雅降级
 		// 这允许即使 OCSP 刷新失败也能继续 TLS 握手
-		return resp.response
+		return response
 	case statusFailed:
 		// 无响应可用
 		return nil

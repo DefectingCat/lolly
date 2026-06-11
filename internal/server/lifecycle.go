@@ -221,11 +221,13 @@ func (s *Server) GracefulStop(timeout time.Duration) error {
 // getProxyCacheStats 收集所有代理缓存的统计信息。
 func (s *Server) getProxyCacheStats() ProxyCacheStats {
 	var total ProxyCacheStats
+	s.proxiesMu.RLock()
 	for _, p := range s.proxies {
 		if stats := p.GetCacheStats(); stats != nil {
 			total.Entries += stats.Entries
 			total.Pending += stats.Pending
 		}
 	}
+	s.proxiesMu.RUnlock()
 	return total
 }

@@ -124,12 +124,14 @@ func (h *PurgeHandler) purgeByPath(path string, method string) int {
 	hashKey := cache.HashPathWithMethod(path, method)
 	deleted := 0
 
+	h.server.proxiesMu.RLock()
 	for _, p := range h.server.proxies {
 		if pcache := p.GetCache(); pcache != nil {
 			_ = pcache.Delete(hashKey)
 			deleted++
 		}
 	}
+	h.server.proxiesMu.RUnlock()
 
 	return deleted
 }
@@ -142,11 +144,13 @@ func (h *PurgeHandler) purgeByPattern(pattern string, method string) int {
 
 	deleted := 0
 
+	h.server.proxiesMu.RLock()
 	for _, p := range h.server.proxies {
 		if pcache := p.GetCache(); pcache != nil {
 			deleted += pcache.DeleteByPatternWithMethod(pattern, method)
 		}
 	}
+	h.server.proxiesMu.RUnlock()
 
 	return deleted
 }

@@ -47,7 +47,7 @@ type compressorPool struct {
 
 // newGzipPool 创建 gzip writer 池。
 func newGzipPool(level int) *compressorPool {
-	return &compressorPool{
+	p := &compressorPool{
 		level: level,
 		factory: func(level int) resettableWriteCloser {
 			w, err := gzip.NewWriterLevel(nil, level)
@@ -57,11 +57,13 @@ func newGzipPool(level int) *compressorPool {
 			return w
 		},
 	}
+	p.pool.New = func() any { return p.factory(p.level) }
+	return p
 }
 
 // newBrotliPool 创建 brotli writer 池。
 func newBrotliPool(level int) *compressorPool {
-	return &compressorPool{
+	p := &compressorPool{
 		level: level,
 		factory: func(level int) resettableWriteCloser {
 			return brotli.NewWriterOptions(nil, brotli.WriterOptions{
@@ -69,15 +71,12 @@ func newBrotliPool(level int) *compressorPool {
 			})
 		},
 	}
+	p.pool.New = func() any { return p.factory(p.level) }
+	return p
 }
 
 // Get 从池中获取 writer。
 func (p *compressorPool) Get() (resettableWriteCloser, bool) {
-	if p.pool.New == nil {
-		p.pool.New = func() any {
-			return p.factory(p.level)
-		}
-	}
 	v, ok := p.pool.Get().(resettableWriteCloser)
 	return v, ok
 }

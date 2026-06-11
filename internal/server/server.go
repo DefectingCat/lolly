@@ -76,7 +76,7 @@ type Server struct {
 	fastServer          *fasthttp.Server
 	fastServers         []*fasthttp.Server // 多监听器模式使用
 	proxies             []*proxy.Proxy
-	proxiesMu           sync.Mutex
+	proxiesMu           sync.RWMutex
 	listeners           []net.Listener
 	healthCheckers      []*proxy.HealthChecker
 	locationEngine      *matcher.LocationEngine
