@@ -28,7 +28,6 @@
 //
 // 作者：xfy
 //
-//go:generate go test -v ./...
 package proxy
 
 import (
