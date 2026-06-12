@@ -10,25 +10,26 @@ on:
 permissions:
   contents: read
 
-env:
-  GO_MIRROR: https://mirrors.aliyun.com/golang
-  GOPROXY: https://goproxy.cn,direct
-
 jobs:
-  lint:
-    name: Lint
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Go
+      - name: Install Go and run checks
         run: |
+          export PATH="/usr/local/go/bin:$(go env GOPATH 2>/dev/null || echo /root/go)/bin:$PATH"
           GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')
-          curl -sL "${GO_MIRROR}/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
+          if ! command -v go &>/dev/null; then
+            curl -sL "https://mirrors.aliyun.com/golang/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
+          fi
+          export GOPROXY=https://goproxy.cn,direct
 
-      - name: Check formatting
-        run: |
+          echo "=== Go Version ==="
+          go version
+
+          echo "=== Check Formatting ==="
           go install mvdan.cc/gofumpt@latest
           output=$(gofumpt -l .)
           if [ -n "$output" ]; then
@@ -36,45 +37,32 @@ jobs:
             echo "$output"
             exit 1
           fi
+          echo "Formatting OK"
 
-      - name: Run vet
-        run: |
-          which go
-          go version
+          echo "=== Go Vet ==="
           go vet ./...
+          echo "Vet OK"
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Go
-        run: |
-          GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')
-          curl -sL "${GO_MIRROR}/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
-
-      - name: Run unit tests
-        run: go test -race -count=1 ./internal/...
+          echo "=== Unit Tests ==="
+          go test -race -count=1 ./internal/...
 
   build:
     name: Build
-    needs: [lint, test]
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install Go
+      - name: Install Go and build
         run: |
+          export PATH="/usr/local/go/bin:$PATH"
           GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')
-          curl -sL "${GO_MIRROR}/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
+          if ! command -v go &>/dev/null; then
+            curl -sL "https://mirrors.aliyun.com/golang/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
+          fi
+          export GOPROXY=https://goproxy.cn,direct
 
-      - name: Build
-        run: make build
-
-      - name: Verify binary
-        run: ./bin/lolly --help
+          make build
+          ./bin/lolly --help
