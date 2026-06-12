@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+env:
+  GO_MIRROR: https://mirrors.aliyun.com/golang
+  GOPROXY: https://goproxy.cn,direct
+
 jobs:
   lint:
     name: Lint
@@ -20,7 +24,7 @@ jobs:
       - name: Install Go
         run: |
           GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')
-          curl -sL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
+          curl -sL "${GO_MIRROR}/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
           echo "/usr/local/go/bin" >> $GITHUB_PATH
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
@@ -48,7 +52,7 @@ jobs:
       - name: Install Go
         run: |
           GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')
-          curl -sL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
+          curl -sL "${GO_MIRROR}/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
           echo "/usr/local/go/bin" >> $GITHUB_PATH
 
       - name: Run unit tests
@@ -66,7 +70,7 @@ jobs:
       - name: Install Go
         run: |
           GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')
-          curl -sL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
+          curl -sL "${GO_MIRROR}/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
           echo "/usr/local/go/bin" >> $GITHUB_PATH
 
       - name: Build
