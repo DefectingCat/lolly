@@ -26,7 +26,6 @@ jobs:
           GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')
           curl -sL "${GO_MIRROR}/go${GO_VERSION}.linux-amd64.tar.gz" | tar -C /usr/local -xzf -
           echo "/usr/local/go/bin" >> $GITHUB_PATH
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Check formatting
         run: |
@@ -39,7 +38,10 @@ jobs:
           fi
 
       - name: Run vet
-        run: go vet ./...
+        run: |
+          which go
+          go version
+          go vet ./...
 
   test:
     name: Test
