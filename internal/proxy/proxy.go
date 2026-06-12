@@ -27,7 +27,6 @@
 //   - Lua 脚本执行有超时保护，默认 100ms
 //
 // 作者：xfy
-//
 package proxy
 
 import (

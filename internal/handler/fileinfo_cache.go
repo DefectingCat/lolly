@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	fileInfoCacheMaxEntries   = 2000
-	defaultFileInfoCacheTTL   = 10 * time.Second
+	fileInfoCacheMaxEntries     = 2000
+	defaultFileInfoCacheTTL     = 10 * time.Second
 	defaultFileNotFoundCacheTTL = 2 * time.Second
 )
 
