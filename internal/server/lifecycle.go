@@ -43,6 +43,14 @@ func (s *Server) cleanupResources() {
 		s.tlsManager.Close()
 	}
 
+	// 关闭多服务器模式下创建的子 TLS 管理器
+	s.tlsManagersMu.Lock()
+	for _, m := range s.tlsManagers {
+		m.Close()
+	}
+	s.tlsManagers = nil
+	s.tlsManagersMu.Unlock()
+
 	// 关闭 AccessControl (释放 GeoIP 资源)
 	s.accessControlsMu.Lock()
 	for _, ac := range s.accessControls {

@@ -63,6 +63,8 @@ type Server struct {
 	handler             fasthttp.RequestHandler
 	resolver            resolver.Resolver
 	tlsManager          *ssl.TLSManager
+	tlsManagers         []*ssl.TLSManager
+	tlsManagersMu       sync.Mutex
 	accessLogMiddleware *accesslog.AccessLog
 	luaEngine           *lua.LuaEngine
 	accessControl       *security.AccessControl
@@ -768,6 +770,10 @@ func (s *Server) startMultiServerMode() error {
 					return
 				}
 				fastSrv.TLSConfig = tlsManager.GetTLSConfig()
+
+				s.tlsManagersMu.Lock()
+				s.tlsManagers = append(s.tlsManagers, tlsManager)
+				s.tlsManagersMu.Unlock()
 			}
 
 			s.fastServers[idx] = fastSrv
