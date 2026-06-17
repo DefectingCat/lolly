@@ -59,6 +59,9 @@ type Server struct {
 
 	// mu 读写锁
 	mu sync.RWMutex
+
+	// maxBodySize 请求体大小限制
+	maxBodySize int64
 }
 
 // NewServer 创建 HTTP/3 服务器。
@@ -85,12 +88,14 @@ func NewServer(cfg *config.HTTP3Config, handler fasthttp.RequestHandler, tlsConf
 	}
 
 	adapter := NewAdapter()
+	adapter.MaxBodySize = cfg.MaxBodySize
 
 	return &Server{
-		config:    cfg,
-		handler:   handler,
-		adapter:   adapter,
-		tlsConfig: tlsConfig,
+		config:      cfg,
+		handler:     handler,
+		adapter:     adapter,
+		tlsConfig:   tlsConfig,
+		maxBodySize: cfg.MaxBodySize,
 	}, nil
 }
 

@@ -67,7 +67,11 @@ func (a *Adapter) Wrap(handler fasthttp.RequestHandler) http.Handler {
 		a.ResetContext(ctx)
 
 		// 转换请求
-		a.convertRequest(r, ctx)
+		if err := a.convertRequest(r, ctx); err != nil {
+			// Write a 413 response directly.
+			http.Error(w, "Request Entity Too Large", http.StatusRequestEntityTooLarge)
+			return
+		}
 
 		// 设置 ResponseWriter 用于后续写入
 		ctx.SetUserValue("http3_response_writer", w)
@@ -85,7 +89,10 @@ func (a *Adapter) Wrap(handler fasthttp.RequestHandler) http.Handler {
 // 参数：
 //   - r: 标准库 HTTP 请求
 //   - ctx: FastHTTP 请求上下文
-func (a *Adapter) convertRequest(r *http.Request, ctx *fasthttp.RequestCtx) {
+//
+// 返回值：
+//   - error: 请求体超过限制时返回错误
+func (a *Adapter) convertRequest(r *http.Request, ctx *fasthttp.RequestCtx) error {
 	// 设置方法
 	ctx.Request.Header.SetMethod(r.Method)
 
@@ -107,7 +114,9 @@ func (a *Adapter) convertRequest(r *http.Request, ctx *fasthttp.RequestCtx) {
 	}
 
 	// 设置请求体（使用流式处理优化）
-	a.StreamRequestBody(r, ctx)
+	if err := a.StreamRequestBody(r, ctx); err != nil {
+		return err
+	}
 
 	// 设置远程地址
 	if r.RemoteAddr != "" {
@@ -118,6 +127,7 @@ func (a *Adapter) convertRequest(r *http.Request, ctx *fasthttp.RequestCtx) {
 
 	// 设置协议版本
 	ctx.Request.Header.SetProtocol("HTTP/3")
+	return nil
 }
 
 // convertResponse 将 fasthttp.RequestCtx 响应写入 http.ResponseWriter。

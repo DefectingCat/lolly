@@ -774,6 +774,31 @@ func TestHandleWebSocket(t *testing.T) {
 	}
 }
 
+// TestWebSocketConnectionCountReleasedOnFailure 测试 WebSocket 升级失败后连接计数被释放。
+// testutil 创建的请求上下文不支持 Hijack，会导致 WebSocket 代理失败；
+// 失败后应确保 IncrementConnections 对应的 DecrementConnections 被调用。
+func TestWebSocketConnectionCountReleasedOnFailure(t *testing.T) {
+	cfg := testutil.NewTestProxyConfig("/ws")
+	targets := testutil.NewTestTargets("http://127.0.0.1:1")
+	targets[0].MaxFails = 1
+
+	p, err := NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	ctx := testutil.NewRequestCtxWithHeader("GET", "/ws", map[string]string{
+		"Upgrade":    "websocket",
+		"Connection": "Upgrade",
+	})
+
+	p.ServeHTTP(ctx)
+
+	if got := atomic.LoadInt64(&targets[0].Connections); got != 0 {
+		t.Fatalf("expected connection count 0 after failed WebSocket, got %d", got)
+	}
+}
+
 // TestSetHealthChecker 测试健康检查器设置
 // 注意：SetHealthChecker 是公开方法，但 healthChecker 是私有字段
 // 此测试验证方法可以正常调用

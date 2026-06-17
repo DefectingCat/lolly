@@ -1,3 +1,5 @@
+//go:build integration
+
 // resolver_integration_test.go - DNS 解析器集成测试
 //
 // 测试 DNS 解析器与代理的集成

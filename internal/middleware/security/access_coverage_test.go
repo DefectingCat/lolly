@@ -202,7 +202,7 @@ func TestAccessControlProcess_TrustedProxies_UntrustedSource(t *testing.T) {
 	}
 }
 
-// TestAccessControlProcess_TrustedProxies_XRealIP 测试可信代理 X-Real-IP
+// TestAccessControlProcess_TrustedProxies_XRealIP 测试可信代理 X-Real-IP 不被单独信任
 func TestAccessControlProcess_TrustedProxies_XRealIP(t *testing.T) {
 	ac, err := NewAccessControl(&config.AccessConfig{
 		TrustedProxies: []string{"10.0.0.0/8"},
@@ -225,8 +225,8 @@ func TestAccessControlProcess_TrustedProxies_XRealIP(t *testing.T) {
 	ctx.Request.Header.Set("X-Real-IP", "192.168.1.50")
 	handler(ctx)
 
-	if !called {
-		t.Error("Process() should use X-Real-IP from trusted proxy")
+	if called {
+		t.Error("Process() should NOT use X-Real-IP without X-Forwarded-For")
 	}
 }
 

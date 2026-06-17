@@ -654,7 +654,7 @@ func TestBackgroundRefresh_WithCacheEntry(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := testutil.NewRequestCtx("GET", "/api/test")
-	hashKey, origKey := p.buildCacheKeyHash(ctx)
+	hashKey, origKey := p.buildCacheKeyHash(ctx, nil)
 
 	p.cache.Set(hashKey, origKey, []byte("old content"), map[string]string{
 		"Content-Type":  "text/plain",
@@ -712,7 +712,7 @@ func TestDialTarget_Success(t *testing.T) {
 		}
 	}()
 
-	conn, err := dialTarget("http://"+ln.Addr().String(), 1*time.Second)
+	conn, err := dialTarget("http://"+ln.Addr().String(), 1*time.Second, nil)
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 	_ = conn.Close()
@@ -720,7 +720,7 @@ func TestDialTarget_Success(t *testing.T) {
 
 // TestDialTarget_Timeout 测试连接超时。
 func TestDialTarget_Timeout(t *testing.T) {
-	_, err := dialTarget("http://10.255.255.1:9999", 50*time.Millisecond)
+	_, err := dialTarget("http://10.255.255.1:9999", 50*time.Millisecond, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to connect")
 }
@@ -770,7 +770,7 @@ func TestWebSocket_BackendSuccess(t *testing.T) {
 	target := &loadbalance.Target{URL: "http://127.0.0.1:1"}
 	target.Healthy.Store(true)
 
-	err := WebSocket(ctx, target, 2*time.Second, nil)
+	err := WebSocket(ctx, target, 2*time.Second, nil, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "hijack")
 }
@@ -1068,7 +1068,7 @@ func TestServeHTTP_CacheStaleWhileRevalidate(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := testutil.NewRequestCtx("GET", "/api/cached")
-	hashKey, origKey := p.buildCacheKeyHash(ctx)
+	hashKey, origKey := p.buildCacheKeyHash(ctx, nil)
 
 	headers := map[string]string{"Content-Type": "text/plain"}
 	p.cache.Set(hashKey, origKey, []byte("stale content"), headers, 200, -1*time.Second)
@@ -1399,7 +1399,7 @@ func TestWebSocket_ReadResponseError(t *testing.T) {
 	target := &loadbalance.Target{URL: "http://" + ln.Addr().String()}
 	target.Healthy.Store(true)
 
-	err = WebSocket(ctx, target, 1*time.Second, nil)
+	err = WebSocket(ctx, target, 1*time.Second, nil, nil)
 	require.Error(t, err)
 }
 
@@ -1434,7 +1434,7 @@ func TestWebSocket_HijackFails(t *testing.T) {
 	target := &loadbalance.Target{URL: "http://127.0.0.1:1"}
 	target.Healthy.Store(true)
 
-	err := WebSocket(ctx, target, 100*time.Millisecond, nil)
+	err := WebSocket(ctx, target, 100*time.Millisecond, nil, nil)
 	require.Error(t, err)
 }
 

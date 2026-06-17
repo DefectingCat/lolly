@@ -219,7 +219,7 @@ func isConnectionClosedError(err error) bool {
 // 返回值：
 //   - net.Conn: 建立的连接（TLS 连接或普通 TCP 连接）
 //   - error: 连接失败时返回错误
-func dialTarget(targetURL string, timeout time.Duration) (net.Conn, error) {
+func dialTarget(targetURL string, timeout time.Duration, proxySSL *config.ProxySSLConfig) (net.Conn, error) {
 	// 解析目标 URL
 	addr, isTLS := netutil.ParseTargetURL(targetURL, true)
 
@@ -233,24 +233,34 @@ func dialTarget(targetURL string, timeout time.Duration) (net.Conn, error) {
 		return nil, fmt.Errorf("failed to connect to target: %w", err)
 	}
 
-	// 如果是 HTTPS，建立 TLS 连接
-	if isTLS {
-		tlsConn := tls.Client(conn, &tls.Config{
-			InsecureSkipVerify: false,
-			ServerName:         strings.Split(addr, ":")[0],
-		})
-		if err := tlsConn.SetDeadline(time.Now().Add(timeout)); err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("failed to set TLS deadline: %w", err)
-		}
-		if err := tlsConn.Handshake(); err != nil {
-			_ = conn.Close()
-			return nil, fmt.Errorf("TLS handshake failed: %w", err)
-		}
-		return tlsConn, nil
+	if !isTLS {
+		return conn, nil
 	}
 
-	return conn, nil
+	tlsCfg, err := CreateTLSConfig(proxySSL, addr)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	if tlsCfg.ServerName == "" {
+		tlsCfg.ServerName = host
+	}
+
+	tlsConn := tls.Client(conn, tlsCfg)
+	if err := tlsConn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	if err := tlsConn.Handshake(); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("TLS handshake failed: %w", err)
+	}
+	return tlsConn, nil
 }
 
 // buildWebSocketUpgradeRequest 构建 WebSocket 升级 HTTP 请求。
@@ -365,7 +375,7 @@ func readWebSocketUpgradeResponse(conn net.Conn, timeout time.Duration) (*http.R
 //
 // 返回值：
 //   - error: 代理过程中的错误
-func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout time.Duration, headersConfig *config.ProxyHeaders) error {
+func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout time.Duration, headersConfig *config.ProxyHeaders, proxySSL *config.ProxySSLConfig) error {
 	// 使用 Hijack 获取客户端 TCP 连接
 	var clientConn net.Conn
 
@@ -378,7 +388,7 @@ func WebSocket(ctx *fasthttp.RequestCtx, target *loadbalance.Target, timeout tim
 	}
 
 	// 步骤1: 建立到后端目标的连接
-	targetConn, err := dialTarget(target.URL, timeout)
+	targetConn, err := dialTarget(target.URL, timeout, proxySSL)
 	if err != nil {
 		_ = clientConn.Close()
 		return fmt.Errorf("failed to connect to backend: %w", err)

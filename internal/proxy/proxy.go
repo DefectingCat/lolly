@@ -42,6 +42,7 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
+	"golang.org/x/sync/singleflight"
 	"rua.plus/lolly/internal/cache"
 	"rua.plus/lolly/internal/config"
 	"rua.plus/lolly/internal/loadbalance"
@@ -92,16 +93,6 @@ const (
 	lbSticky             = "sticky"               // 会话粘性
 )
 
-// headersPool 复用缓存 headers map，减少分配。
-// 预容量 20 覆盖大多数 HTTP 响应头数量。
-// 注意：从 pool 获取的 map 使用后不能 Put 回 pool，
-// 因为 cache.Set 存储了 map 引用。
-var headersPool = sync.Pool{
-	New: func() any {
-		return make(map[string]string, 20)
-	},
-}
-
 var upstreamTimingPool = sync.Pool{
 	New: func() any {
 		return NewUpstreamTiming()
@@ -131,6 +122,7 @@ type Proxy struct {
 	mu               sync.RWMutex                    // 保护并发访问的读写锁
 	started          atomic.Bool                     // 代理启动标志
 	cacheIgnoreSet   map[string]bool                 // 缓存时忽略的响应头集合
+	refreshGroup     singleflight.Group              // 合并并发后台缓存刷新
 }
 
 // NewProxy 使用给定的配置和后台目标创建一个新的反向代理实例。
@@ -227,6 +219,39 @@ func NewProxy(cfg *config.ProxyConfig, targets []*loadbalance.Target, transportC
 	p.cacheIgnoreSet = cacheIgnoreSet
 
 	return p, nil
+}
+
+// cacheVaryHeaders 返回用于构建缓存键的 Vary 请求头列表。
+//
+// 当 varyResponse 非空时，将响应中的 Vary 头与配置的值合并去重。
+// 请求头名称统一按大小写不敏感方式比较，避免重复。
+func (p *Proxy) cacheVaryHeaders(varyResponse []byte) []string {
+	configured := p.config.Cache.Vary
+	if len(varyResponse) == 0 {
+		return configured
+	}
+
+	result := make([]string, 0, len(configured)+bytes.Count(varyResponse, []byte(","))+1)
+	result = append(result, configured...)
+	seen := make(map[string]struct{}, len(result))
+	for _, h := range result {
+		seen[strings.ToLower(h)] = struct{}{}
+	}
+
+	for _, part := range strings.Split(b2s(varyResponse), ",") {
+		name := strings.TrimSpace(part)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, name)
+	}
+
+	return result
 }
 
 // stickyBalancer wraps StickySession to implement loadbalance.Balancer.
@@ -583,15 +608,11 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	}
 	timing.reset()
 
-	var cacheHashKey uint64
-	var cacheOrigKey string
-	cacheKeyComputed := false
-	computeCacheKey := func() (uint64, string) {
-		if !cacheKeyComputed {
-			cacheHashKey, cacheOrigKey = p.buildCacheKeyHash(ctx)
-			cacheKeyComputed = true
-		}
-		return cacheHashKey, cacheOrigKey
+	// 在请求头被修改前捕获原始 Host，用于构建缓存键。
+	// 防止 modifyRequestHeaders 将 Host 改为上游目标后导致缓存键丢失客户端 Host 区分。
+	cacheHost := ctx.Request.Header.Host()
+	computeCacheKey := func(varyHeaders []string) (uint64, string) {
+		return p.buildCacheKeyHashWithHost(ctx, cacheHost, varyHeaders)
 	}
 
 	// 创建变量上下文用于设置上游变量
@@ -681,18 +702,18 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 		// 检查是否为 WebSocket 升级请求
 		if isWebSocketRequest(ctx) {
-			// WebSocket 使用 defer 确保连接计数释放
-			defer loadbalance.DecrementConnections(target)
+			defer func() {
+				loadbalance.DecrementConnections(target)
+			}()
+			defer timing.MarkConnectEnd()
 			timing.MarkConnectStart()
-			err := WebSocket(ctx, target, p.config.Timeout.Connect, &p.config.Headers)
-			timing.MarkConnectEnd()
+			err := WebSocket(ctx, target, p.config.Timeout.Connect, &p.config.Headers, p.config.ProxySSL)
 			if err != nil {
-				upstreamStatus = 502
-				logging.Error().Msgf("WebSocket proxy error: %v", err)
+				upstreamStatus = fasthttp.StatusBadGateway
+				logging.Error().Err(err).Msg("WebSocket proxy error")
 				return
 			}
-			// WebSocket 成功
-			upstreamStatus = 101
+			upstreamStatus = fasthttp.StatusSwitchingProtocols
 			return
 		}
 
@@ -749,7 +770,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 			path := string(ctx.Request.URI().Path())
 			rule := p.cache.MatchRule(path, method, 0)
 			if rule != nil {
-				hashKey, origKey := computeCacheKey()
+				hashKey, origKey := computeCacheKey(p.cacheVaryHeaders(nil))
 				if entry, ok, stale := p.cache.Get(hashKey, origKey); ok {
 					// 缓存命中
 					loadbalance.DecrementConnections(target)
@@ -768,10 +789,17 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 						entry.Updating.Store(true)
 						reqCopy := fasthttp.AcquireRequest()
 						ctx.Request.CopyTo(reqCopy)
+						key := origKey
 						go func() {
 							defer entry.Updating.Store(false)
 							defer fasthttp.ReleaseRequest(reqCopy)
-							p.backgroundRefresh(reqCopy, target, hashKey, origKey)
+							_, err, _ := p.refreshGroup.Do(key, func() (interface{}, error) {
+								p.backgroundRefresh(reqCopy, target, hashKey, origKey)
+								return nil, nil
+							})
+							if err != nil {
+								logging.Error().Err(err).Msg("background cache refresh failed")
+							}
 						}()
 					}
 					upstreamAddr = upstreamCache
@@ -840,7 +868,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 			// 尝试使用 stale 缓存
 			if p.cache != nil {
-				hashKey, origKey := computeCacheKey()
+				hashKey, origKey := computeCacheKey(p.cacheVaryHeaders(nil))
 				isTimeout := errors.Is(err, fasthttp.ErrTimeout)
 				if staleEntry, ok := p.cache.GetStale(hashKey, origKey, isTimeout); ok {
 					logging.Info().Msgf("[PROXY] 使用 stale 缓存: key=%s, isTimeout=%v", origKey, isTimeout)
@@ -853,8 +881,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 
 			// 释放缓存锁
 			if p.cache != nil && attempt == 0 {
-				computeCacheKey()
-				hashKey := cacheHashKey
+				hashKey, _ := computeCacheKey(p.cacheVaryHeaders(nil))
 				p.cache.ReleaseLock(hashKey, err)
 			}
 
@@ -904,8 +931,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 		if shouldRetry {
 			// 释放缓存锁
 			if p.cache != nil && attempt == 0 {
-				computeCacheKey()
-				hashKey := cacheHashKey
+				hashKey, _ := computeCacheKey(p.cacheVaryHeaders(nil))
 				p.cache.ReleaseLock(hashKey, fmt.Errorf("HTTP %d", statusCode))
 			}
 
@@ -934,7 +960,7 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 				return
 			}
 
-			hashKey, origKey := computeCacheKey()
+			hashKey, origKey := computeCacheKey(p.cacheVaryHeaders(ctx.Response.Header.Peek("Vary")))
 			if statusCode >= 200 && statusCode < 300 {
 				// 检查 MinUses 阈值
 				if entry, ok, _ := p.cache.Get(hashKey, origKey); ok {
@@ -945,14 +971,8 @@ func (p *Proxy) ServeHTTP(ctx *fasthttp.RequestCtx) {
 					}
 				}
 
-				// 提取响应头（使用 pool 复用 map）
-				headers, ok := headersPool.Get().(map[string]string)
-				if !ok {
-					headers = make(map[string]string, 20)
-				}
-				for k := range headers {
-					delete(headers, k)
-				}
+				// 提取响应头
+				headers := make(map[string]string, 20)
 
 				var lastModified, etag string
 				for key, value := range ctx.Response.Header.All() {

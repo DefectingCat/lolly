@@ -348,49 +348,10 @@ func (ac *AccessControl) SetDefault(action string) error {
 // 返回值：
 //   - net.IP: 客户端 IP 地址，无法获取时返回 nil
 func (ac *AccessControl) getClientIP(ctx *fasthttp.RequestCtx) net.IP {
-	remoteIP := netutil.GetRemoteAddrIP(ctx)
-
-	if len(ac.trustedProxies) == 0 || remoteIP == nil {
-		return remoteIP
-	}
-
-	isTrusted := false
-	for _, network := range ac.trustedProxies {
-		if network.Contains(remoteIP) {
-			isTrusted = true
-			break
-		}
-	}
-	if !isTrusted {
-		return remoteIP
-	}
-
-	if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
-		ips := strings.Split(string(xff), ",")
-		for _, v := range slices.Backward(ips) {
-			ipStr := strings.TrimSpace(v)
-			if ip := net.ParseIP(ipStr); ip != nil {
-				trusted := false
-				for _, network := range ac.trustedProxies {
-					if network.Contains(ip) {
-						trusted = true
-						break
-					}
-				}
-				if !trusted {
-					return ip
-				}
-			}
-		}
-	}
-
-	if xri := ctx.Request.Header.Peek("X-Real-IP"); len(xri) > 0 {
-		if ip := net.ParseIP(string(xri)); ip != nil {
-			return ip
-		}
-	}
-
-	return remoteIP
+	ac.mu.RLock()
+	trusted := ac.trustedProxies
+	ac.mu.RUnlock()
+	return netutil.ExtractClientIPWithTrustedProxies(ctx, trusted)
 }
 
 // AccessStats 访问控制统计信息结构。

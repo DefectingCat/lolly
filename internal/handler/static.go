@@ -359,8 +359,10 @@ func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	// 安全检查：防止目录遍历
-	if strings.Contains(reqPath, "..") {
+	// 安全检查：解析后的绝对路径必须位于 root/alias 目录下
+	requestedPath := string(ctx.Path())
+	rawPath := string(ctx.Request.URI().PathOriginal())
+	if !h.isPathSafe(requestedPath, rawPath) {
 		utils.SendError(ctx, utils.ErrForbidden)
 		return
 	}
@@ -373,6 +375,54 @@ func (h *StaticHandler) Handle(ctx *fasthttp.RequestCtx) {
 
 	// 标准处理流程
 	h.handleStandard(ctx, reqPath)
+}
+
+// isPathSafe 检查请求路径解析后是否始终位于 root/alias 目录范围内。
+// 它同时检查规范化后的路径和原始编码路径，防止通过 URL 编码的 ..
+// 或经过 fasthttp 规范化后超出目录边界。
+func (h *StaticHandler) isPathSafe(reqPath, rawPath string) bool {
+	// 快速拒绝原始路径中的遍历片段（在 URL 解码/规范化之前）。
+	// 特别拦截编码的 traversal，如 /..%2fsecret.txt。
+	if strings.Contains(rawPath, "..") && strings.Contains(rawPath, "%") {
+		return false
+	}
+
+	// 拒绝规范化路径中仍包含 .. 的字符串（如 file..txt）。
+	if strings.Contains(reqPath, "..") {
+		return false
+	}
+
+	base := h.root
+	if h.alias != "" {
+		base = h.alias
+	}
+	if base == "" {
+		return false
+	}
+
+	absRoot, err := filepath.Abs(base)
+	if err != nil {
+		return false
+	}
+
+	// 使用与后续文件服务一致的相对路径计算方式，并单独清理相对部分，
+	// 避免 filepath.Clean 删除对前缀剥离有意义的尾部斜杠。
+	relPath := h.stripPathPrefix(reqPath)
+	if relPath == "" {
+		relPath = "."
+	}
+	target := filepath.Join(absRoot, filepath.Clean(relPath))
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return false
+	}
+
+	sep := string(filepath.Separator)
+	if !strings.HasPrefix(absTarget, absRoot+sep) && absTarget != absRoot {
+		return false
+	}
+
+	return true
 }
 
 // tryServeFromFileCache 尝试从文件缓存直接响应。

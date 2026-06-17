@@ -42,7 +42,7 @@ func BenchmarkCacheKeyHashValue_ZeroAlloc(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		hash := p.buildCacheKeyHashValue(ctx)
+		hash := p.buildCacheKeyHashValue(ctx, nil)
 		_ = hash
 	}
 }
@@ -72,7 +72,7 @@ func BenchmarkCacheKeyHash_WithAlloc(b *testing.B) {
 	b.ResetTimer()
 
 	for b.Loop() {
-		hash, key := p.buildCacheKeyHash(ctx)
+		hash, key := p.buildCacheKeyHash(ctx, nil)
 		_ = hash
 		_ = key
 	}
@@ -96,7 +96,7 @@ func BenchmarkCacheKeyHash_Compare(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_ = p.buildCacheKeyHashValue(ctx)
+			_ = p.buildCacheKeyHashValue(ctx, nil)
 		}
 	})
 
@@ -104,7 +104,7 @@ func BenchmarkCacheKeyHash_Compare(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			_, _ = p.buildCacheKeyHash(ctx)
+			_, _ = p.buildCacheKeyHash(ctx, nil)
 		}
 	})
 }

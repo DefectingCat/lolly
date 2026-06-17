@@ -15,41 +15,46 @@ import (
 
 // buildCacheKeyHash 使用 FNV-64a 计算缓存键的 uint64 哈希值。
 // 使用零分配方式构建哈希，避免 []byte(origKey) 转换。
-func (p *Proxy) buildCacheKeyHash(ctx *fasthttp.RequestCtx) (uint64, string) {
+// 缓存键包含请求方法、Host、URI 以及配置的 Vary 请求头，防止缓存中毒。
+func (p *Proxy) buildCacheKeyHash(ctx *fasthttp.RequestCtx, varyHeaders []string) (uint64, string) {
+	return p.buildCacheKeyHashWithHost(ctx, ctx.Request.Header.Host(), varyHeaders)
+}
+
+// buildCacheKeyHashWithHost 与 buildCacheKeyHash 相同，但使用显式传入的 Host，
+// 避免请求头在缓存键计算前被修改（例如 proxy 将 Host 改写为上游目标）。
+func (p *Proxy) buildCacheKeyHashWithHost(ctx *fasthttp.RequestCtx, host []byte, varyHeaders []string) (uint64, string) {
 	method := ctx.Request.Header.Method()
 	uri := ctx.Request.URI().RequestURI()
 
 	var h uint64 = 14695981039346656037
-	for i := 0; i < len(method); i++ {
-		h ^= uint64(method[i])
+	for _, b := range [][]byte{method, host, uri} {
+		h ^= uint64(':')
 		h *= 1099511628211
-	}
-	h ^= uint64(':')
-	h *= 1099511628211
-	for i := 0; i < len(uri); i++ {
-		h ^= uint64(uri[i])
-		h *= 1099511628211
+		for i := 0; i < len(b); i++ {
+			h ^= uint64(b[i])
+			h *= 1099511628211
+		}
 	}
 
-	origKey := b2s(method) + ":" + b2s(uri)
+	for _, name := range varyHeaders {
+		value := ctx.Request.Header.Peek(name)
+		h ^= uint64(':')
+		h *= 1099511628211
+		for i := 0; i < len(value); i++ {
+			h ^= uint64(value[i])
+			h *= 1099511628211
+		}
+	}
+
+	origKey := b2s(method) + ":" + b2s(host) + b2s(uri)
+	for _, name := range varyHeaders {
+		origKey += ":" + name + "=" + b2s(ctx.Request.Header.Peek(name))
+	}
 	return h, origKey
 }
 
-func (p *Proxy) buildCacheKeyHashValue(ctx *fasthttp.RequestCtx) uint64 {
-	method := ctx.Request.Header.Method()
-	uri := ctx.Request.URI().RequestURI()
-
-	var h uint64 = 14695981039346656037
-	for i := 0; i < len(method); i++ {
-		h ^= uint64(method[i])
-		h *= 1099511628211
-	}
-	h ^= uint64(':')
-	h *= 1099511628211
-	for i := 0; i < len(uri); i++ {
-		h ^= uint64(uri[i])
-		h *= 1099511628211
-	}
+func (p *Proxy) buildCacheKeyHashValue(ctx *fasthttp.RequestCtx, varyHeaders []string) uint64 {
+	h, _ := p.buildCacheKeyHash(ctx, varyHeaders)
 	return h
 }
 
@@ -121,14 +126,8 @@ func (p *Proxy) backgroundRefresh(req *fasthttp.Request, target *loadbalance.Tar
 		return
 	}
 
-	// 提取响应头（使用 pool 复用 map）
-	headers, ok := headersPool.Get().(map[string]string)
-	if !ok {
-		headers = make(map[string]string, 20)
-	}
-	for k := range headers {
-		delete(headers, k)
-	}
+	// 提取响应头
+	headers := make(map[string]string, 20)
 	for key, value := range resp.Header.All() {
 		headers[string(key)] = string(value)
 	}

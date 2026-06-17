@@ -12,6 +12,7 @@
 package security
 
 import (
+	"net"
 	"runtime"
 	"testing"
 	"time"
@@ -900,5 +901,65 @@ func TestRateLimiter_MultipleCreateDestroy(t *testing.T) {
 	// 允许少量波动，但不应有明显泄漏
 	if after-before > 5 {
 		t.Fatalf("goroutine leak detected: before=%d, after=%d", before, after)
+	}
+}
+
+// TestRateLimiter_TrustedProxies 验证令牌桶限流器使用可信代理安全提取客户端 IP。
+func TestRateLimiter_TrustedProxies(t *testing.T) {
+	mw, err := NewRateLimiter(&config.RateLimitConfig{
+		RequestRate: 1,
+		Burst:       1,
+	}, "10.0.0.0/8")
+	if err != nil {
+		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+
+	rl, ok := mw.(*RateLimiter)
+	if !ok {
+		t.Fatalf("Expected *RateLimiter, got %T", mw)
+	}
+	defer rl.StopCleanup()
+
+	callCount := 0
+	nextHandler := func(ctx *fasthttp.RequestCtx) {
+		callCount++
+		ctx.SetStatusCode(200)
+	}
+	handler := rl.Process(nextHandler)
+
+	// 来自可信代理的请求，使用 X-Forwarded-For 中的真实客户端 IP
+	ctx1 := testutil.NewRequestCtx("GET", "/test")
+	ctx1.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("10.0.0.1")})
+	ctx1.Request.Header.Set("X-Forwarded-For", "1.2.3.4")
+	handler(ctx1)
+	if ctx1.Response.StatusCode() != 200 {
+		t.Errorf("first trusted request should be allowed, got %d", ctx1.Response.StatusCode())
+	}
+
+	// 同一个真实客户端 IP 的第二个请求应被拒绝
+	ctx2 := testutil.NewRequestCtx("GET", "/test")
+	ctx2.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("10.0.0.2")})
+	ctx2.Request.Header.Set("X-Forwarded-For", "1.2.3.4")
+	handler(ctx2)
+	if ctx2.Response.StatusCode() != 429 {
+		t.Errorf("second request from same client IP should be rate limited, got %d", ctx2.Response.StatusCode())
+	}
+
+	// 不同真实客户端 IP 的请求应被允许
+	ctx3 := testutil.NewRequestCtx("GET", "/test")
+	ctx3.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("10.0.0.1")})
+	ctx3.Request.Header.Set("X-Forwarded-For", "5.6.7.8")
+	handler(ctx3)
+	if ctx3.Response.StatusCode() != 200 {
+		t.Errorf("request from different client IP should be allowed, got %d", ctx3.Response.StatusCode())
+	}
+
+	// 不可信代理：忽略 XFF，使用 remoteAddr 作为限流键
+	ctx4 := testutil.NewRequestCtx("GET", "/test")
+	ctx4.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("192.168.1.1")})
+	ctx4.Request.Header.Set("X-Forwarded-For", "1.2.3.4")
+	handler(ctx4)
+	if ctx4.Response.StatusCode() != 200 {
+		t.Errorf("request from untrusted proxy should use remote IP and be allowed, got %d", ctx4.Response.StatusCode())
 	}
 }

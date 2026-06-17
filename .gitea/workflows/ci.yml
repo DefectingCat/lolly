@@ -46,6 +46,18 @@ jobs:
           echo "=== Unit Tests ==="
           go test -race -count=1 ./internal/...
 
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin latest
+
+      - name: Lint
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          golangci-lint run ./...
+
+      - name: Integration Tests
+        run: go test -race -tags=integration -count=1 ./internal/integration/...
+
   build:
     name: Build
     needs: [test]

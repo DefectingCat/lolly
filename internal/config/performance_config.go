@@ -40,6 +40,7 @@ type HTTP2Config struct {
 	PushEnabled             bool          `yaml:"push_enabled"`
 	H2CEnabled              bool          `yaml:"h2c_enabled"`
 	GracefulShutdownTimeout time.Duration `yaml:"graceful_shutdown_timeout"`
+	MaxBodySize             int64         `yaml:"max_body_size,omitempty"`
 }
 
 // HTTP3Config HTTP/3 (QUIC) 配置。
@@ -67,6 +68,7 @@ type HTTP3Config struct {
 	IdleTimeout time.Duration `yaml:"idle_timeout"`
 	Enabled     bool          `yaml:"enabled"`
 	Enable0RTT  bool          `yaml:"enable_0rtt"`
+	MaxBodySize int64         `yaml:"max_body_size,omitempty"`
 }
 
 // PerformanceConfig 性能配置。

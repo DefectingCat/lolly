@@ -27,12 +27,13 @@ services:
     #     reservations:
     #       memory: 256M
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/_status || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+    # Scratch 镜像没有 wget/curl，如需健康检查请使用外部 HTTP 探针或挂载包含工具的 sidecar。
+    # healthcheck:
+    #   test: ["CMD", "/lolly", "--healthcheck"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 10s
 
   # 示例后端服务（用于反向代理测试）
   # backend:

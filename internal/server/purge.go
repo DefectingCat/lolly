@@ -80,7 +80,7 @@ func (h *PurgeHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	}
 
 	// 检查 IP 访问权限
-	if !utils.CheckIPAccess(ctx, h.allowed) {
+	if !utils.CheckIPAccess(ctx, h.allowed, nil) {
 		utils.SendJSONError(ctx, fasthttp.StatusForbidden, "forbidden")
 		return
 	}

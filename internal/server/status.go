@@ -166,7 +166,7 @@ func (h *StatusHandler) Path() string {
 //   - ctx: FastHTTP 请求上下文
 func (h *StatusHandler) ServeHTTP(ctx *fasthttp.RequestCtx) {
 	// 步骤1: 检查 IP 访问权限
-	if !utils.CheckIPAccess(ctx, h.allowed) {
+	if !utils.CheckIPAccess(ctx, h.allowed, nil) {
 		utils.SendErrorWithDetail(ctx, utils.ErrForbidden, "Access denied")
 		return
 	}

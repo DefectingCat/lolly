@@ -42,6 +42,7 @@ type Server struct {
 	stopChan                chan struct{}
 	connWg                  sync.WaitGroup
 	GracefulShutdownTimeout time.Duration
+	maxBodySize             int64
 	mu                      sync.RWMutex
 	running                 bool
 }
@@ -104,6 +105,7 @@ func NewServer(cfg *config.HTTP2Config, handler fasthttp.RequestHandler, tlsConf
 		handler:                 handler,
 		pool:                    newConnectionPool(),
 		GracefulShutdownTimeout: gracefulTimeout,
+		maxBodySize:             cfg.MaxBodySize,
 	}, nil
 }
 
@@ -211,6 +213,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 // serveHTTP2 使用 HTTP/2 协议服务连接。
 func (s *Server) serveHTTP2(conn net.Conn) {
 	adapter := NewFastHTTPHandlerAdapter(s.handler)
+	adapter.MaxBodySize = s.maxBodySize
 
 	opts := &http2.ServeConnOpts{
 		Context:    context.Background(),

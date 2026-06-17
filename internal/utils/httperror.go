@@ -66,12 +66,13 @@ func SendJSONError(ctx *fasthttp.RequestCtx, status int, errMsg string) {
 
 // CheckIPAccess checks whether the client IP is in the allowed list.
 // If allowed is empty, all access is permitted.
-func CheckIPAccess(ctx *fasthttp.RequestCtx, allowed []net.IPNet) bool {
+// trustedProxies is used to safely extract the client IP from X-Forwarded-For.
+func CheckIPAccess(ctx *fasthttp.RequestCtx, allowed []net.IPNet, trustedProxies []net.IPNet) bool {
 	if len(allowed) == 0 {
 		return true
 	}
 
-	clientIP := netutil.ExtractClientIPNet(ctx)
+	clientIP := netutil.ExtractClientIPWithTrustedProxies(ctx, trustedProxies)
 	if clientIP == nil {
 		return false
 	}

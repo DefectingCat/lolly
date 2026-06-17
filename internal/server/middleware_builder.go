@@ -61,7 +61,7 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 
 	// 3. Security: RateLimiter (速率限制)
 	if serverCfg.Security.RateLimit.RequestRate > 0 {
-		rl, err := security.NewRateLimiter(&serverCfg.Security.RateLimit)
+		rl, err := security.NewRateLimiter(&serverCfg.Security.RateLimit, serverCfg.Security.Access.TrustedProxies...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create rate limiter middleware: %w", err)
 		}

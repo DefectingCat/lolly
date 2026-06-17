@@ -2125,3 +2125,22 @@ func TestParseExpires(t *testing.T) {
 		})
 	}
 }
+
+// TestStaticHandlerPathTraversalEncoded 测试 URL 编码的路径遍历被拦截。
+func TestStaticHandlerPathTraversalEncoded(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "secret.txt"), []byte("secret"), 0o600); err != nil {
+		t.Fatalf("创建测试文件失败: %v", err)
+	}
+
+	handler := NewStaticHandler(root, "/", []string{"index.html", "index.htm"}, false)
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.SetRequestURI("/..%2fsecret.txt")
+	handler.Handle(ctx)
+
+	if ctx.Response.StatusCode() != fasthttp.StatusForbidden {
+		t.Fatalf("expected 403, got %d", ctx.Response.StatusCode())
+	}
+}

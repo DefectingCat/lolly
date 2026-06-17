@@ -112,6 +112,48 @@ func GetRemoteAddrIP(ctx *fasthttp.RequestCtx) net.IP {
 	return nil
 }
 
+// ExtractClientIPWithTrustedProxies 从请求上下文安全提取客户端 IP。
+// 仅当 remoteAddr 属于 trustedProxies 时，才解析 X-Forwarded-For 头部，
+// 并取右侧（最接近服务器）第一个非可信 IP 作为真实客户端 IP。
+func ExtractClientIPWithTrustedProxies(ctx *fasthttp.RequestCtx, trustedProxies []net.IPNet) net.IP {
+	remoteIP := GetRemoteAddrIP(ctx)
+	if remoteIP == nil || len(trustedProxies) == 0 {
+		return remoteIP
+	}
+
+	trusted := false
+	for i := range trustedProxies {
+		if trustedProxies[i].Contains(remoteIP) {
+			trusted = true
+			break
+		}
+	}
+	if !trusted {
+		return remoteIP
+	}
+
+	if xff := ctx.Request.Header.Peek("X-Forwarded-For"); len(xff) > 0 {
+		ips := strings.Split(string(xff), ",")
+		for i := len(ips) - 1; i >= 0; i-- {
+			ipStr := strings.TrimSpace(ips[i])
+			if ip := net.ParseIP(ipStr); ip != nil {
+				isTrusted := false
+				for j := range trustedProxies {
+					if trustedProxies[j].Contains(ip) {
+						isTrusted = true
+						break
+					}
+				}
+				if !isTrusted {
+					return ip
+				}
+			}
+		}
+	}
+
+	return remoteIP
+}
+
 // remoteAddrCache 缓存 RemoteAddr 字符串化结果，避免重复的 net.TCPAddr.String() 分配。
 type remoteAddrCache struct {
 	mu      sync.RWMutex

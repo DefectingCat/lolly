@@ -136,7 +136,7 @@ func TestIsConnectionClosedError(t *testing.T) {
 // TestDialTarget_InvalidAddress 测试无效地址的拨号
 func TestDialTarget_InvalidAddress(t *testing.T) {
 	// 测试连接到无效端口
-	_, err := dialTarget("http://127.0.0.1:1", 100*time.Millisecond)
+	_, err := dialTarget("http://127.0.0.1:1", 100*time.Millisecond, nil)
 	if err == nil {
 		t.Error("Expected error for invalid address")
 	}
@@ -145,7 +145,7 @@ func TestDialTarget_InvalidAddress(t *testing.T) {
 // TestDialTarget_HTTPS 测试 HTTPS 连接（会失败，但验证错误处理）
 func TestDialTarget_HTTPS(t *testing.T) {
 	// 测试 HTTPS 连接到无效端口
-	_, err := dialTarget("https://127.0.0.1:1", 100*time.Millisecond)
+	_, err := dialTarget("https://127.0.0.1:1", 100*time.Millisecond, nil)
 	if err == nil {
 		t.Error("Expected error for invalid HTTPS address")
 	}
@@ -258,7 +258,7 @@ func TestDialTarget_URLParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := dialTarget(tt.url, 10*time.Millisecond)
+			_, err := dialTarget(tt.url, 10*time.Millisecond, nil)
 			if tt.expectError {
 				if err == nil {
 					t.Error("Expected error, got nil")
@@ -589,7 +589,7 @@ func TestReadWebSocketUpgradeResponse_Timeout(t *testing.T) {
 // TestDialTarget_TLS 测试 TLS 连接（连接无效端口应失败）
 func TestDialTarget_TLS(t *testing.T) {
 	// 测试 HTTPS 连接到无效端口
-	_, err := dialTarget("https://127.0.0.1:1", 100*time.Millisecond)
+	_, err := dialTarget("https://127.0.0.1:1", 100*time.Millisecond, nil)
 	if err == nil {
 		t.Error("Expected error for invalid HTTPS address")
 	}

@@ -16,6 +16,7 @@ import (
 	"rua.plus/lolly/internal/http2"
 	"rua.plus/lolly/internal/http3"
 	"rua.plus/lolly/internal/logging"
+	"rua.plus/lolly/internal/middleware/bodylimit"
 	"rua.plus/lolly/internal/resolver"
 	"rua.plus/lolly/internal/server"
 	"rua.plus/lolly/internal/stream"
@@ -174,6 +175,15 @@ func (a *App) initStreamServers() {
 	}()
 }
 
+// clientMaxBodySize parses the first server's client_max_body_size into bytes.
+func (a *App) clientMaxBodySize() int64 {
+	size, err := bodylimit.ParseSize(a.cfg.Servers[0].ClientMaxBodySize)
+	if err != nil {
+		return bodylimit.DefaultMaxBodySize
+	}
+	return size
+}
+
 // initHTTP3 starts the HTTP/3 server if enabled.
 func (a *App) initHTTP3() {
 	if len(a.cfg.Servers) == 0 || !a.cfg.HTTP3.Enabled || a.cfg.Servers[0].SSL.Cert == "" {
@@ -185,6 +195,8 @@ func (a *App) initHTTP3() {
 		a.logger.Error().Err(err).Msg("Failed to get TLS config, skipping HTTP/3")
 		return
 	}
+
+	a.cfg.HTTP3.MaxBodySize = a.clientMaxBodySize()
 
 	a.http3Srv, err = http3.NewServer(&a.cfg.HTTP3, a.srv.GetHandler(), tlsConfig)
 	if err != nil {
@@ -211,6 +223,8 @@ func (a *App) initHTTP2() {
 		a.logger.Error().Err(err).Msg("Failed to get TLS config, skipping HTTP/2")
 		return
 	}
+
+	a.cfg.Servers[0].SSL.HTTP2.MaxBodySize = a.clientMaxBodySize()
 
 	a.http2Srv, err = http2.NewServer(&a.cfg.Servers[0].SSL.HTTP2, a.srv.GetHandler(), tlsConfig)
 	if err != nil {

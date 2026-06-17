@@ -1,3 +1,5 @@
+//go:build integration
+
 // Package integration 提供后端故障切换 E2E 基准测试。
 //
 // 该文件测试负载均衡器剔除/恢复后端的开销。

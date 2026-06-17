@@ -1,3 +1,5 @@
+//go:build integration
+
 // Package integration 提供端到端集成基准测试。
 //
 // 该文件测试完整请求路径的吞吐量，涵盖静态文件、代理转发、

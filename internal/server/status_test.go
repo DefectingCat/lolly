@@ -918,7 +918,7 @@ func TestStatusHandler_checkAccess_AllowList(t *testing.T) {
 			ctx := &fasthttp.RequestCtx{}
 			ctx.SetRemoteAddr(&net.TCPAddr{IP: tt.remoteIP, Port: 12345})
 
-			got := utils.CheckIPAccess(ctx, h.allowed)
+			got := utils.CheckIPAccess(ctx, h.allowed, nil)
 			if got != tt.wantAccess {
 				t.Errorf("expected access %v, got %v", tt.wantAccess, got)
 			}
@@ -1214,7 +1214,7 @@ func TestStatusHandler_ServeHTTP_AccessDenied_XForwardedFor(t *testing.T) {
 	}
 }
 
-func TestStatusHandler_ServeHTTP_AccessAllowed_XForwardedFor(t *testing.T) {
+func TestStatusHandler_ServeHTTP_AccessAllowed_RemoteAddr(t *testing.T) {
 	t.Parallel()
 	cfg := &config.StatusConfig{
 		Path:   "/_status",
@@ -1232,12 +1232,12 @@ func TestStatusHandler_ServeHTTP_AccessAllowed_XForwardedFor(t *testing.T) {
 
 	ctx := &fasthttp.RequestCtx{}
 	ctx.Request.SetRequestURI("/_status")
-	ctx.Request.Header.Set("X-Forwarded-For", "10.5.5.5")
+	ctx.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("10.5.5.5"), Port: 12345})
 
 	h.ServeHTTP(ctx)
 
 	if ctx.Response.StatusCode() != 200 {
-		t.Errorf("expected status 200 for allowed access via X-Forwarded-For, got %d", ctx.Response.StatusCode())
+		t.Errorf("expected status 200 for allowed access via RemoteAddr, got %d", ctx.Response.StatusCode())
 	}
 }
 

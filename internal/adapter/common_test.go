@@ -35,7 +35,7 @@ func TestNewCommonAdapter(t *testing.T) {
 	a := NewCommonAdapter()
 
 	require.NotNil(t, a, "返回值不应为 nil")
-	require.NotNil(t, a.CtxPool, "CtxPool 应该被初始化")
+	require.NotNil(t, a.CtxPool.New, "CtxPool.New 应该被初始化")
 
 	// 验证 pool 能创建 *fasthttp.RequestCtx
 	obj := a.CtxPool.Get()
@@ -162,7 +162,8 @@ func TestStreamRequestBody(t *testing.T) {
 			}
 
 			ctx := &fasthttp.RequestCtx{}
-			a.StreamRequestBody(r, ctx)
+			err := a.StreamRequestBody(r, ctx)
+			require.NoError(t, err, "StreamRequestBody 不应返回错误")
 
 			if tt.wantBodySet {
 				assert.Equal(t, tt.wantBody, string(ctx.Request.Body()), "请求体内容应匹配")
@@ -185,8 +186,9 @@ func TestStreamRequestBody_ReadError(t *testing.T) {
 	}
 
 	ctx := &fasthttp.RequestCtx{}
-	// 不应该 panic
-	a.StreamRequestBody(r, ctx)
+	// 读取错误应被返回
+	err := a.StreamRequestBody(r, ctx)
+	require.Error(t, err, "读取错误应返回错误")
 }
 
 // errorReader 是一个始终返回错误的 io.Reader
@@ -210,10 +212,11 @@ func TestStreamRequestBody_PartialReadError(t *testing.T) {
 	}
 
 	ctx := &fasthttp.RequestCtx{}
-	a.StreamRequestBody(r, ctx)
+	err := a.StreamRequestBody(r, ctx)
+	require.Error(t, err, "部分读取后出错应返回错误")
 
-	// 部分读取的数据应该保留
-	assert.Equal(t, "partial", string(ctx.Request.Body()), "已读取的部分数据应保留")
+	// 出错后不再保留已读取的部分数据
+	assert.Equal(t, 0, len(ctx.Request.Body()), "出错后请求体应为空")
 }
 
 // partialErrorReader 先返回数据，再返回错误
@@ -336,7 +339,8 @@ func TestConcurrentStreamRequestBody(t *testing.T) {
 			}
 
 			ctx := &fasthttp.RequestCtx{}
-			a.StreamRequestBody(r, ctx)
+			err := a.StreamRequestBody(r, ctx)
+			require.NoError(t, err)
 			assert.Equal(t, "concurrent body data", string(ctx.Request.Body()))
 		}()
 	}
@@ -355,7 +359,8 @@ func TestStreamRequestBody_ClosesBody(t *testing.T) {
 	}
 
 	ctx := &fasthttp.RequestCtx{}
-	a.StreamRequestBody(r, ctx)
+	err := a.StreamRequestBody(r, ctx)
+	require.NoError(t, err)
 
 	assert.True(t, closeTracker.closed, "请求体应该被关闭")
 }
@@ -373,4 +378,25 @@ func (r *trackableReader) Read(p []byte) (int, error) {
 func (r *trackableReader) Close() error {
 	r.closed = true
 	return nil
+}
+
+// TestStreamRequestBodyEnforcesMaxBodySize 测试请求体超过最大限制时被拒绝。
+func TestStreamRequestBodyEnforcesMaxBodySize(t *testing.T) {
+	a := NewCommonAdapter()
+	a.MaxBodySize = 10
+
+	ctx := &fasthttp.RequestCtx{}
+	body := strings.NewReader("this body is way too large")
+	r := &http.Request{
+		Body:          io.NopCloser(body),
+		ContentLength: int64(body.Len()),
+	}
+
+	err := a.StreamRequestBody(r, ctx)
+	if err == nil {
+		t.Fatal("expected error for oversized body")
+	}
+	if ctx.Response.StatusCode() != fasthttp.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d", ctx.Response.StatusCode())
+	}
 }

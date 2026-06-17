@@ -235,7 +235,7 @@ func TestBuildCacheKeyHash(t *testing.T) {
 
 	ctx := testutil.NewRequestCtx("GET", "/api/test")
 
-	hashKey, origKey := p.buildCacheKeyHash(ctx)
+	hashKey, origKey := p.buildCacheKeyHash(ctx, nil)
 	if hashKey == 0 {
 		t.Error("buildCacheKeyHash() should return non-zero hash")
 	}
@@ -245,14 +245,14 @@ func TestBuildCacheKeyHash(t *testing.T) {
 
 	// 相同请求应产生相同哈希
 	ctx2 := testutil.NewRequestCtx("GET", "/api/test")
-	hashKey2, _ := p.buildCacheKeyHash(ctx2)
+	hashKey2, _ := p.buildCacheKeyHash(ctx2, nil)
 	if hashKey != hashKey2 {
 		t.Error("Same request should produce same hash")
 	}
 
 	// 不同请求应产生不同哈希
 	ctx3 := testutil.NewRequestCtx("POST", "/api/other")
-	hashKey3, _ := p.buildCacheKeyHash(ctx3)
+	hashKey3, _ := p.buildCacheKeyHash(ctx3, nil)
 	if hashKey == hashKey3 {
 		t.Error("Different request should produce different hash")
 	}
@@ -273,13 +273,13 @@ func TestBuildCacheKeyHashValue(t *testing.T) {
 
 	ctx := testutil.NewRequestCtx("GET", "/api/test")
 
-	hashValue := p.buildCacheKeyHashValue(ctx)
+	hashValue := p.buildCacheKeyHashValue(ctx, nil)
 	if hashValue == 0 {
 		t.Error("buildCacheKeyHashValue() should return non-zero hash")
 	}
 
 	// 应该与 buildCacheKeyHash 结果一致
-	hashKey, _ := p.buildCacheKeyHash(ctx)
+	hashKey, _ := p.buildCacheKeyHash(ctx, nil)
 	if hashValue != hashKey {
 		t.Error("buildCacheKeyHashValue() should match buildCacheKeyHash()")
 	}
@@ -624,7 +624,8 @@ func TestServeHTTP_CacheHit(t *testing.T) {
 
 	// 预填充缓存
 	ctx := testutil.NewRequestCtx("GET", "/api/cached")
-	hashKey, origKey := p.buildCacheKeyHash(ctx)
+	ctx.Request.Header.SetHost("localhost:8080")
+	hashKey, origKey := p.buildCacheKeyHash(ctx, nil)
 	p.cache.Set(hashKey, origKey, []byte("cached!"), map[string]string{
 		"Content-Type": "text/plain",
 	}, 200, 10*time.Second)
@@ -705,7 +706,8 @@ func TestServeHTTP_WithRedirectRewrite_CacheHit(t *testing.T) {
 	}
 
 	ctx := testutil.NewRequestCtx("GET", "/api/test")
-	hashKey, origKey := p.buildCacheKeyHash(ctx)
+	ctx.Request.Header.SetHost("localhost:8080")
+	hashKey, origKey := p.buildCacheKeyHash(ctx, nil)
 	p.cache.Set(hashKey, origKey, []byte("ok"), map[string]string{
 		"Content-Type": "text/plain",
 	}, 200, 10*time.Second)

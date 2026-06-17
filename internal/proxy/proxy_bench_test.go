@@ -451,7 +451,7 @@ func BenchmarkBuildCacheKeyHash(b *testing.B) {
 	b.Run("buildCacheKeyHash_with_string", func(b *testing.B) {
 		b.ResetTimer()
 		for b.Loop() {
-			hashKey, _ := p.buildCacheKeyHash(ctx)
+			hashKey, _ := p.buildCacheKeyHash(ctx, nil)
 			_ = hashKey
 		}
 	})
@@ -459,7 +459,7 @@ func BenchmarkBuildCacheKeyHash(b *testing.B) {
 	b.Run("buildCacheKeyHashValue_direct", func(b *testing.B) {
 		b.ResetTimer()
 		for b.Loop() {
-			hashKey := p.buildCacheKeyHashValue(ctx)
+			hashKey := p.buildCacheKeyHashValue(ctx, nil)
 			_ = hashKey
 		}
 	})
@@ -585,7 +585,7 @@ func BenchmarkProxyZeroAllocPath(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			hash := p.buildCacheKeyHashValue(ctx)
+			hash := p.buildCacheKeyHashValue(ctx, nil)
 			_ = hash
 		}
 	})
@@ -594,7 +594,7 @@ func BenchmarkProxyZeroAllocPath(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			hash, key := p.buildCacheKeyHash(ctx)
+			hash, key := p.buildCacheKeyHash(ctx, nil)
 			_ = hash
 			_ = key
 		}

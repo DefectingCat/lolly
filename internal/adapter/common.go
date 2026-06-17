@@ -17,6 +17,7 @@
 package adapter
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"sync"
@@ -50,6 +51,9 @@ type CommonAdapter struct {
 	// CtxPool 用于复用 fasthttp.RequestCtx 对象
 	// 每个协议适配器实例独立维护自己的 ctxPool
 	CtxPool sync.Pool
+
+	// MaxBodySize 限制允许读取的请求体最大字节数（<=0 表示不限制）
+	MaxBodySize int64
 }
 
 // NewCommonAdapter 创建新的共享适配器实例。
@@ -90,33 +94,52 @@ func (a *CommonAdapter) ResetContext(ctx *fasthttp.RequestCtx) {
 //
 // 对于小于等于 DefaultBodyThreshold（64KB）的请求体，直接读取到内存；
 // 对于大于阈值的请求体，使用共享 bufferPool 进行流式处理，避免内存峰值。
+// 超过 MaxBodySize 的请求体会被拒绝并返回 413 错误。
 //
 // 参数：
 //   - r: 标准库的 HTTP 请求
 //   - ctx: fasthttp 请求上下文，用于存储读取的请求体
-func (a *CommonAdapter) StreamRequestBody(r *http.Request, ctx *fasthttp.RequestCtx) {
+//
+// 返回值：
+//   - error: 读取或限制失败时返回错误
+func (a *CommonAdapter) StreamRequestBody(r *http.Request, ctx *fasthttp.RequestCtx) error {
 	if r.Body == nil || r.Body == http.NoBody {
-		return
+		return nil
 	}
 
 	defer func() {
 		_ = r.Body.Close()
 	}()
 
-	// 小请求体：直接读取到内存（<= 64KB）
-	if r.ContentLength > 0 && r.ContentLength <= DefaultBodyThreshold {
-		body, err := io.ReadAll(r.Body)
-		if err == nil {
-			ctx.Request.SetBody(body)
-		}
-		return
+	limit := a.MaxBodySize
+	if limit <= 0 {
+		limit = 1 << 20 // 1MB default when unset
 	}
 
-	// 大请求体：使用流式缓冲区（> 64KB 或未知长度）
-	// 从全局 pool 获取缓冲区
+	// Reject early via Content-Length when possible.
+	if r.ContentLength > 0 && r.ContentLength > limit {
+		ctx.Error("Request Entity Too Large", fasthttp.StatusRequestEntityTooLarge)
+		return fmt.Errorf("request body %d exceeds limit %d", r.ContentLength, limit)
+	}
+
+	// Stream with a hard cap so chunked/unknown-length bodies cannot OOM us.
+	limitedBody := io.LimitReader(r.Body, limit+1)
+
+	if r.ContentLength > 0 && r.ContentLength <= DefaultBodyThreshold {
+		body, err := io.ReadAll(limitedBody)
+		if err != nil {
+			return err
+		}
+		if int64(len(body)) > limit {
+			ctx.Error("Request Entity Too Large", fasthttp.StatusRequestEntityTooLarge)
+			return fmt.Errorf("request body exceeds limit %d", limit)
+		}
+		ctx.Request.SetBody(body)
+		return nil
+	}
+
 	bufPtr, ok := bufferPoolInstance.Get().(*[]byte)
 	if !ok {
-		// 如果类型断言失败，创建新的缓冲区（不应该发生）
 		buf := make([]byte, 4096)
 		bufPtr = &buf
 	}
@@ -124,29 +147,33 @@ func (a *CommonAdapter) StreamRequestBody(r *http.Request, ctx *fasthttp.Request
 
 	buf := *bufPtr
 	var body []byte
-
-	// 如果已知 ContentLength，预分配精确大小的缓冲区
 	if r.ContentLength > 0 {
 		body = make([]byte, 0, r.ContentLength)
 	}
 
-	// 分块读取请求体
+	var total int64
 	for {
-		n, err := r.Body.Read(buf)
+		n, err := limitedBody.Read(buf)
 		if n > 0 {
 			body = append(body, buf[:n]...)
+			total += int64(n)
 		}
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			break
+			return err
+		}
+		if total > limit {
+			ctx.Error("Request Entity Too Large", fasthttp.StatusRequestEntityTooLarge)
+			return fmt.Errorf("request body exceeds limit %d", limit)
 		}
 	}
 
 	if len(body) > 0 {
 		ctx.Request.SetBody(body)
 	}
+	return nil
 }
 
 // GetContext 从 pool 获取一个 fasthttp.RequestCtx。

@@ -97,8 +97,6 @@ func TestWrapRoutedHandler_有AccessLog(t *testing.T) {
 	}
 	s := New(cfg)
 
-	s.accessLogMiddleware = s.accessLogMiddleware
-
 	called := false
 	original := func(ctx *fasthttp.RequestCtx) {
 		called = true

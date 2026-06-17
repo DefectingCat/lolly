@@ -130,3 +130,32 @@ func TestGetRemoteAddrIP(_ *testing.T) {
 	// Just verify it doesn't panic
 	_ = got
 }
+
+func TestExtractClientIPWithTrustedProxies(t *testing.T) {
+	trusted := []net.IPNet{mustParseCIDR(t, "10.0.0.0/8")}
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("10.0.0.1")})
+	ctx.Request.Header.Set("X-Forwarded-For", "1.2.3.4, 10.0.0.2")
+
+	ip := ExtractClientIPWithTrustedProxies(ctx, trusted)
+	if ip == nil || ip.String() != "1.2.3.4" {
+		t.Fatalf("expected 1.2.3.4, got %v", ip)
+	}
+
+	// Untrusted proxy: ignore XFF.
+	ctx.SetRemoteAddr(&net.TCPAddr{IP: net.ParseIP("192.168.1.1")})
+	ip = ExtractClientIPWithTrustedProxies(ctx, trusted)
+	if ip == nil || ip.String() != "192.168.1.1" {
+		t.Fatalf("expected 192.168.1.1, got %v", ip)
+	}
+}
+
+func mustParseCIDR(t *testing.T, s string) net.IPNet {
+	t.Helper()
+	_, ipNet, err := net.ParseCIDR(s)
+	if err != nil {
+		t.Fatalf("failed to parse CIDR %s: %v", s, err)
+	}
+	return *ipNet
+}

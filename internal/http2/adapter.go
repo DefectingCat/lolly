@@ -63,7 +63,11 @@ func (a *FastHTTPHandlerAdapter) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	a.convertRequest(r, ctx)
 
 	// 流式处理请求体
-	a.StreamRequestBody(r, ctx)
+	if err := a.StreamRequestBody(r, ctx); err != nil {
+		// ctx already contains the 413 response; write it back.
+		a.convertResponse(ctx, w)
+		return
+	}
 
 	// 调用 fasthttp handler
 	a.handler(ctx)

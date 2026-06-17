@@ -32,6 +32,7 @@ package security
 import (
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -65,14 +66,15 @@ type shardedBucket struct {
 //   - 所有方法均为并发安全
 //   - 启动后会自动后台清理过期的桶
 type RateLimiter struct {
-	shards        [16]shardedBucket
-	keyFunc       KeyFunc
-	cleanupTicker *time.Ticker
-	stopCleanupCh chan struct{}
-	cleanupDone   chan struct{}
-	stopOnce      sync.Once
-	rate          float64
-	burst         float64
+	shards         [16]shardedBucket
+	keyFunc        KeyFunc
+	cleanupTicker  *time.Ticker
+	stopCleanupCh  chan struct{}
+	cleanupDone    chan struct{}
+	stopOnce       sync.Once
+	rate           float64
+	burst          float64
+	trustedProxies []net.IPNet
 }
 
 // tokenBucket 表示单个限流键的令牌桶。
@@ -95,11 +97,12 @@ type KeyFunc func(ctx *fasthttp.RequestCtx) string
 //
 // 参数：
 //   - cfg: 限流配置，包含速率、突发量和键类型
+//   - trustedProxies: 可信代理 CIDR 列表，用于安全提取客户端真实 IP
 //
 // 返回值：
 //   - *RateLimiter: 配置好的限流器实例
 //   - error: 配置无效时返回错误（如速率小于 0）
-func NewRateLimiter(cfg *config.RateLimitConfig) (middleware.Middleware, error) {
+func NewRateLimiter(cfg *config.RateLimitConfig, trustedProxies ...string) (middleware.Middleware, error) {
 	if cfg == nil {
 		return nil, errors.New("rate limit config is nil")
 	}
@@ -116,7 +119,7 @@ func NewRateLimiter(cfg *config.RateLimitConfig) (middleware.Middleware, error) 
 
 	switch algorithm {
 	case "token_bucket", "":
-		return newTokenBucketLimiter(cfg)
+		return newTokenBucketLimiter(cfg, trustedProxies)
 	case "sliding_window":
 		window := time.Duration(cfg.SlidingWindow) * time.Second
 		if window <= 0 {
@@ -130,7 +133,7 @@ func NewRateLimiter(cfg *config.RateLimitConfig) (middleware.Middleware, error) 
 }
 
 // newTokenBucketLimiter 创建令牌桶限流器。
-func newTokenBucketLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
+func newTokenBucketLimiter(cfg *config.RateLimitConfig, trustedProxies []string) (*RateLimiter, error) {
 	if cfg.Burst < cfg.RequestRate {
 		return nil, errors.New("burst must be at least equal to request rate")
 	}
@@ -149,12 +152,24 @@ func newTokenBucketLimiter(cfg *config.RateLimitConfig) (*RateLimiter, error) {
 		}
 	}
 
-	// 根据配置设置键提取函数
-	keyFunc, err := parseKeyFunc(cfg.Key)
-	if err != nil {
-		return nil, err
+	// 解析可信代理 CIDR
+	for _, cidr := range trustedProxies {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid trusted proxy CIDR %s: %w", cidr, err)
+		}
+		rl.trustedProxies = append(rl.trustedProxies, *ipNet)
 	}
-	rl.keyFunc = keyFunc
+
+	// 根据配置设置键提取函数
+	switch cfg.Key {
+	case "ip", "":
+		rl.keyFunc = rl.keyByIP
+	case rateLimitHeader:
+		rl.keyFunc = rl.keyByHeader
+	default:
+		return nil, fmt.Errorf("unknown key type: %s", cfg.Key)
+	}
 
 	// 启动后台清理 goroutine
 	rl.startCleanup(10 * time.Minute)
@@ -392,6 +407,29 @@ func keyByHeader(ctx *fasthttp.RequestCtx) string {
 	if len(key) == 0 {
 		// 头部不存在时回退到 IP
 		return keyByIP(ctx)
+	}
+	return string(key)
+}
+
+// keyByIP 提取客户端 IP 作为限流键（令牌桶限流器方法）。
+//
+// 仅当请求来自可信代理时，才解析 X-Forwarded-For 头部获取真实客户端 IP。
+func (rl *RateLimiter) keyByIP(ctx *fasthttp.RequestCtx) string {
+	ip := netutil.ExtractClientIPWithTrustedProxies(ctx, rl.trustedProxies)
+	if ip == nil {
+		return accessUnknown
+	}
+	return ip.String()
+}
+
+// keyByHeader 提取头部值作为限流键（令牌桶限流器方法）。
+//
+// 默认使用 X-RateLimit-Key 头部，如果不存在则回退到 IP。
+func (rl *RateLimiter) keyByHeader(ctx *fasthttp.RequestCtx) string {
+	key := ctx.Request.Header.Peek("X-RateLimit-Key")
+	if len(key) == 0 {
+		// 头部不存在时回退到 IP
+		return rl.keyByIP(ctx)
 	}
 	return string(key)
 }

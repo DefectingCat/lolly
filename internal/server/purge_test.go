@@ -236,7 +236,7 @@ func TestPurgeHandler_checkAccess(t *testing.T) {
 
 			if len(h.allowed) == 0 {
 				// 无白名单时应允许所有访问
-				if !utils.CheckIPAccess(nil, h.allowed) {
+				if !utils.CheckIPAccess(nil, h.allowed, nil) {
 					t.Error("expected access to be true when no allow list configured")
 				}
 				return
@@ -654,7 +654,7 @@ func TestPurgeHandler_checkAccess_NilContext(t *testing.T) {
 		}
 
 		// Empty allow list should allow access (returns true even with nil context)
-		if !utils.CheckIPAccess(nil, h.allowed) {
+		if !utils.CheckIPAccess(nil, h.allowed, nil) {
 			t.Error("expected checkAccess to return true with empty allow list")
 		}
 	})
@@ -705,7 +705,7 @@ func TestPurgeHandler_checkAccess_WithAllowedIP(t *testing.T) {
 		ctx.Init(&fasthttp.Request{}, nil, nil)
 
 		// context with nil remote address - should return false (no client IP)
-		if utils.CheckIPAccess(ctx, h.allowed) {
+		if utils.CheckIPAccess(ctx, h.allowed, nil) {
 			t.Error("expected checkAccess to return false with no client IP")
 		}
 	})

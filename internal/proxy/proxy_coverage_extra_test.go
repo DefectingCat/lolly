@@ -848,14 +848,14 @@ func TestSelectTarget_EmptyTargets(t *testing.T) {
 func TestDialTarget(t *testing.T) {
 	t.Run("连接超时", func(t *testing.T) {
 		// 使用不可达地址测试超时
-		_, err := dialTarget("http://10.255.255.1:9999", 100*time.Millisecond)
+		_, err := dialTarget("http://10.255.255.1:9999", 100*time.Millisecond, nil)
 		if err == nil {
 			t.Error("dialTarget() should return error for unreachable address")
 		}
 	})
 
 	t.Run("HTTPS 连接失败", func(t *testing.T) {
-		_, err := dialTarget("https://10.255.255.1:9999", 100*time.Millisecond)
+		_, err := dialTarget("https://10.255.255.1:9999", 100*time.Millisecond, nil)
 		if err == nil {
 			t.Error("dialTarget() should return error for unreachable HTTPS address")
 		}
@@ -876,7 +876,7 @@ func TestDialTarget(t *testing.T) {
 		}()
 
 		addr := ln.Addr().String()
-		conn, err := dialTarget("http://"+addr, 1*time.Second)
+		conn, err := dialTarget("http://"+addr, 1*time.Second, nil)
 		if err != nil {
 			t.Errorf("dialTarget() error: %v", err)
 		}
@@ -972,7 +972,7 @@ func TestWebSocket_ErrorCases(t *testing.T) {
 		target.Healthy.Store(true)
 
 		// 使用很短的超时
-		err := WebSocket(ctx, target, 10*time.Millisecond, nil)
+		err := WebSocket(ctx, target, 10*time.Millisecond, nil, nil)
 		if err == nil {
 			t.Error("WebSocket() should return error for invalid backend")
 		}
@@ -983,7 +983,7 @@ func TestWebSocket_ErrorCases(t *testing.T) {
 func TestDialTarget_TLS_Extra(t *testing.T) {
 	t.Run("TLS 握手失败", func(t *testing.T) {
 		// 使用不可达的 HTTPS 地址
-		_, err := dialTarget("https://10.255.255.1:9999", 100*time.Millisecond)
+		_, err := dialTarget("https://10.255.255.1:9999", 100*time.Millisecond, nil)
 		if err == nil {
 			t.Error("dialTarget() should return error for unreachable HTTPS address")
 		}
@@ -1469,7 +1469,7 @@ func TestBackgroundRefresh_304(t *testing.T) {
 
 	// 预先设置缓存条目
 	ctx := testutil.NewRequestCtx("GET", "/api/test")
-	hashKey, origKey := p.buildCacheKeyHash(ctx)
+	hashKey, origKey := p.buildCacheKeyHash(ctx, nil)
 	p.cache.Set(hashKey, origKey, []byte("cached"), map[string]string{
 		"Last-Modified": "Tue, 20 Oct 2015 07:28:00 GMT",
 		"ETag":          "\"old\"",

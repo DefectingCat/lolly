@@ -36,6 +36,7 @@ type ProxyCacheConfig struct {
 	CacheLockTimeout        time.Duration `yaml:"cache_lock_timeout"`        // 缓存锁超时时间
 	BackgroundUpdateDisable bool          `yaml:"background_update_disable"` // 禁用后台更新（默认 false = 启用后台更新）
 	CacheIgnoreHeaders      []string      `yaml:"cache_ignore_headers"`      // 缓存时忽略的响应头
+	Vary                    []string      `yaml:"vary"`                      // 参与缓存键的 Vary 请求头
 	Revalidate              bool          `yaml:"revalidate"`                // 启用条件请求（If-Modified-Since/If-None-Match）
 }
 

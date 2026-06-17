@@ -257,7 +257,7 @@ func TestConcurrentConnections(t *testing.T) {
 	wg.Wait()
 
 	if s.connCount.Load() != 100 {
-		t.Errorf("Expected 100 connections, got %d", s.connCount)
+		t.Errorf("Expected 100 connections, got %d", s.connCount.Load())
 	}
 }
 

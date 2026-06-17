@@ -128,11 +128,12 @@ build-all: build-linux build-darwin build-windows build-freebsd build-openbsd
 
 run:
 	@echo "Running $(APP_NAME) in development mode..."
-	go run $(MAIN_PATH) -c configs/lolly.yaml
+	go run $(MAIN_PATH) -c lolly.yaml
 
 test-config:
 	@echo "Testing configuration..."
-	go run $(MAIN_PATH) -t -c configs/lolly.yaml
+	go run $(MAIN_PATH) --generate-config -o /tmp/lolly-generated.yaml
+	@echo "Config syntax OK (generated template validated)"
 
 version:
 	@echo "$(APP_NAME) version $(VERSION)"

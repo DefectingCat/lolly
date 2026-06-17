@@ -1,3 +1,5 @@
+//go:build integration
+
 // variable_integration_test.go - 变量系统集成测试
 //
 // 测试变量系统与日志、代理、重写的端到端集成
