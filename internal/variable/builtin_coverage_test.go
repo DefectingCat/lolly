@@ -440,6 +440,42 @@ func TestInit_ArgsGetterBytes(t *testing.T) {
 	assert.Equal(t, []byte("key=val"), result)
 }
 
+// TestRequestID_GeneratedOnce 验证 request_id 在一次请求中只生成一次并存储在 UserValue。
+func TestRequestID_GeneratedOnce(t *testing.T) {
+	ctx := &fasthttp.RequestCtx{}
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	id1, ok1 := vc.Get(VarRequestID)
+	id2, ok2 := vc.Get(VarRequestID)
+
+	require.True(t, ok1, "第一次获取 request_id 应该成功")
+	require.True(t, ok2, "第二次获取 request_id 应该成功")
+	assert.Equal(t, id1, id2, "同一请求的 request_id 应该相同")
+	assert.NotEmpty(t, id1, "request_id 不应为空")
+
+	// 验证已存储在 UserValue 中
+	uv := ctx.UserValue(VarRequestID)
+	require.NotNil(t, uv)
+	assert.Equal(t, id1, uv)
+}
+
+// TestTimeLocal_Format 验证 time_local 使用 -0700 时区格式。
+func TestTimeLocal_Format(t *testing.T) {
+	ctx := &fasthttp.RequestCtx{}
+	vc := NewContext(ctx)
+	defer ReleaseContext(vc)
+
+	value, ok := vc.Get(VarTimeLocal)
+	require.True(t, ok, "time_local 应该存在")
+	assert.NotEmpty(t, value, "time_local 不应为空")
+
+	// 格式示例：16/Jun/2026:10:23:42 +0000
+	// 必须包含时区偏移（+/-HHMM）
+	assert.Regexp(t, `\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2} [+-]\d{4}`, value,
+		"time_local 格式应为 02/Jan/2006:15:04:05 -0700")
+}
+
 // TestInit_MethodGetterBytes 测试 request_method 变量有 GetterBytes
 func TestInit_MethodGetterBytes(t *testing.T) {
 	builtin := GetBuiltin(VarRequestMethod)

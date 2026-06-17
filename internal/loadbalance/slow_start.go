@@ -89,19 +89,32 @@ func (m *SlowStartManager) OnTargetUnhealthy(target *Target) {
 // Start 启动后台权重更新。
 //
 // 定期遍历所有慢启动中的目标，计算并更新 EffectiveWeight。
+// 支持 Start-Stop-Start 周期：每次启动都会重新创建 stopCh，
+// 避免 Stop 关闭通道后 updateLoop 立即退出。
 func (m *SlowStartManager) Start() {
 	if m.running.Swap(true) {
 		return // 已经在运行
 	}
 
-	// 重建 stopCh 以支持 Start-Stop-Start 周期
-	select {
-	case <-m.stopCh:
-		m.stopCh = make(chan struct{})
-	default:
-	}
+	// 重新创建 stopCh，确保新一轮更新循环使用未关闭的通道
+	m.mu.Lock()
+	m.stopCh = make(chan struct{})
+	stopCh := m.stopCh
+	m.mu.Unlock()
+	go m.updateLoop(stopCh)
+}
 
-	go m.updateLoop()
+// SetFindTarget 设置目标查找回调。
+//
+// 慢启动管理器通过该回调在内部状态与负载均衡目标之间建立映射，
+// 用于更新 EffectiveWeight。必须在 Start 之前设置。
+//
+// 参数：
+//   - findTarget: 根据 target URL 查找对应 Target 的回调函数
+func (m *SlowStartManager) SetFindTarget(findTarget func(url string) *Target) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.findTarget = findTarget
 }
 
 // Stop 停止后台更新。
@@ -118,7 +131,7 @@ func (m *SlowStartManager) Stop() {
 }
 
 // updateLoop 后台更新循环。
-func (m *SlowStartManager) updateLoop() {
+func (m *SlowStartManager) updateLoop(stopCh <-chan struct{}) {
 	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
@@ -126,7 +139,7 @@ func (m *SlowStartManager) updateLoop() {
 		select {
 		case <-ticker.C:
 			m.updateEffectiveWeights()
-		case <-m.stopCh:
+		case <-stopCh:
 			return
 		}
 	}

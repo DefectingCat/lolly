@@ -21,7 +21,7 @@
 //	    log.Fatal(err)
 //	}
 //
-//	server.ListenTCP(":3306")
+//	server.ListenTCP(":3306", "mysql")
 //	server.Start()
 //	defer server.Stop()
 //
@@ -287,14 +287,15 @@ func (i *ipHash) SelectByIP(targets []*Target, clientIP string) *Target {
 
 // Server TCP/UDP Stream 代理服务器。
 type Server struct {
-	listeners  map[string]net.Listener
-	udpServers map[string]*udpServer
-	upstreams  map[string]*Upstream
-	connCount  atomic.Int64
-	mu         sync.RWMutex
-	running    atomic.Bool
-	wg         sync.WaitGroup
-	stopCh     chan struct{}
+	listeners         map[string]net.Listener
+	udpServers        map[string]*udpServer
+	upstreams         map[string]*Upstream
+	listenerUpstreams map[string]*Upstream // 监听地址到上游的映射
+	connCount         atomic.Int64
+	mu                sync.RWMutex
+	running           atomic.Bool
+	wg                sync.WaitGroup
+	stopCh            chan struct{}
 }
 
 // Upstream Stream 上游配置。
@@ -387,10 +388,11 @@ type HealthCheckSpec struct {
 //   - *Server: 初始化的 Stream 代理服务器实例
 func NewServer() *Server {
 	return &Server{
-		listeners:  make(map[string]net.Listener),
-		udpServers: make(map[string]*udpServer),
-		upstreams:  make(map[string]*Upstream),
-		stopCh:     make(chan struct{}),
+		listeners:         make(map[string]net.Listener),
+		udpServers:        make(map[string]*udpServer),
+		upstreams:         make(map[string]*Upstream),
+		listenerUpstreams: make(map[string]*Upstream),
+		stopCh:            make(chan struct{}),
 	}
 }
 
@@ -446,7 +448,10 @@ func (s *Server) AddUpstream(name string, targets []TargetSpec, lbType string, h
 }
 
 // ListenTCP 开始监听 TCP 端口。
-func (s *Server) ListenTCP(addr string) error {
+//
+// upstreamName 指定该监听地址对应的上游配置名称，建立 listener->upstream 映射，
+// 使 handleConnection 可以根据监听地址找到正确的上游。
+func (s *Server) ListenTCP(addr string, upstreamName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -456,6 +461,7 @@ func (s *Server) ListenTCP(addr string) error {
 	}
 
 	s.listeners[addr] = listener
+	s.listenerUpstreams[addr] = s.upstreams[upstreamName]
 	return nil
 }
 
@@ -533,10 +539,12 @@ func (s *Server) Stop() {
 		_ = ln.Close()
 	}
 	for _, udpSrv := range s.udpServers {
+		udpSrv.running.Store(false)
 		close(udpSrv.stopCh)
 		if udpSrv.conn != nil {
 			_ = udpSrv.conn.Close()
 		}
+		udpSrv.closeSessions()
 	}
 	for _, upstream := range s.upstreams {
 		if upstream.healthChk != nil && upstream.healthChk.stopCh != nil {
@@ -600,7 +608,11 @@ func (s *Server) handleConnection(clientConn net.Conn, addr string) {
 	}()
 
 	s.mu.RLock()
-	upstream := s.upstreams[addr]
+	upstream := s.listenerUpstreams[addr]
+	if upstream == nil {
+		// 兼容未建立映射的历史用法：回退到按监听地址查找上游
+		upstream = s.upstreams[addr]
+	}
 	s.mu.RUnlock()
 
 	if upstream == nil {
@@ -887,6 +899,19 @@ func (s *udpServer) removeSession(clientAddr *net.UDPAddr) {
 		session.close()
 		delete(s.sessions, key)
 	}
+}
+
+// closeSessions 关闭所有 UDP 会话。
+//
+// 在服务器停止时调用，释放后端连接并退出响应监听 goroutine。
+func (s *udpServer) closeSessions() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, session := range s.sessions {
+		session.close()
+	}
+	clear(s.sessions)
 }
 
 // close 关闭会话。

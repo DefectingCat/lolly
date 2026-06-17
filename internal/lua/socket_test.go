@@ -17,26 +17,41 @@ func init() {
 	testingSSRFGuardDisabled = true
 }
 
-// mockEchoServer 模拟 echo 服务器
+// mockEchoServer 模拟 echo 服务器。
+//
+// 使用短 deadline 的 Accept 循环，确保收到停止信号后能在关闭 listener 前退出，
+// 避免 listener.Close 与 listener.Accept 并发执行触发 race detector。
 func mockEchoServer(t *testing.T, addr string) (net.Listener, func()) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
 
+	tcpLn, ok := ln.(*net.TCPListener)
+	if !ok {
+		t.Fatalf("Expected TCPListener, got %T", ln)
+	}
+
 	var wg sync.WaitGroup
 	stop := make(chan struct{})
+	done := make(chan struct{})
 
 	go func() {
+		defer close(done)
 		for {
-			conn, err := ln.Accept()
+			select {
+			case <-stop:
+				return
+			default:
+			}
+
+			_ = tcpLn.SetDeadline(time.Now().Add(100 * time.Millisecond))
+			conn, err := tcpLn.Accept()
 			if err != nil {
-				select {
-				case <-stop:
-					return
-				default:
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 					continue
 				}
+				return
 			}
 
 			wg.Add(1)
@@ -60,7 +75,8 @@ func mockEchoServer(t *testing.T, addr string) (net.Listener, func()) {
 
 	cleanup := func() {
 		close(stop)
-		ln.Close()
+		<-done
+		_ = ln.Close()
 		wg.Wait()
 	}
 

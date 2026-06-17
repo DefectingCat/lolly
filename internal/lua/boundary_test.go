@@ -80,6 +80,8 @@ func TestBoundaryCoroutineYieldAllowed(t *testing.T) {
 }
 
 // TestBoundaryTimerHandleCancel 测试定时器句柄取消。
+//
+// Cancel 仅关闭 cancel 通道，active 计数由 executeTimer 的 defer 在到期后统一递减。
 func TestBoundaryTimerHandleCancel(t *testing.T) {
 	engine, err := NewEngine(DefaultConfig())
 	require.NoError(t, err)
@@ -100,7 +102,7 @@ func TestBoundaryTimerHandleCancel(t *testing.T) {
 		function timer_callback()
 			-- 空回调
 		end
-		local handle, err = ngx.timer.at(10, timer_callback)
+		local handle, err = ngx.timer.at(0.01, timer_callback)
 		if not handle then
 			error("Failed to create timer: " .. tostring(err))
 		end
@@ -113,8 +115,10 @@ func TestBoundaryTimerHandleCancel(t *testing.T) {
 	`)
 	assert.NoError(t, err)
 
-	// 验证定时器已取消
-	assert.Equal(t, int32(0), timerMgr.ActiveCount())
+	// 等待定时器到期后 active 计数递减到 0
+	require.Eventually(t, func() bool {
+		return timerMgr.ActiveCount() == 0
+	}, 500*time.Millisecond, 10*time.Millisecond)
 }
 
 // TestBoundaryTimerHandleDoubleCancel 测试重复取消定时器。
@@ -151,6 +155,9 @@ func TestBoundaryTimerHandleDoubleCancel(t *testing.T) {
 }
 
 // TestBoundaryTimerRunningCount 测试定时器运行计数。
+//
+// Cancel 仅关闭 cancel 通道，active 计数由 executeTimer 的 defer 统一递减，
+// 因此取消后定时器仍会在到期时触发并减少计数。
 func TestBoundaryTimerRunningCount(t *testing.T) {
 	engine, err := NewEngine(DefaultConfig())
 	require.NoError(t, err)
@@ -171,28 +178,25 @@ func TestBoundaryTimerRunningCount(t *testing.T) {
 			error("Initial count should be 0")
 		end
 
-		-- 创建定时器
-		local h1 = ngx.timer.at(10, function() end)
-		local h2 = ngx.timer.at(10, function() end)
-		local h3 = ngx.timer.at(10, function() end)
+		-- 创建定时器（使用较短延迟便于测试完成）
+		local h1 = ngx.timer.at(0.01, function() end)
+		local h2 = ngx.timer.at(0.01, function() end)
+		local h3 = ngx.timer.at(0.01, function() end)
 
 		count = ngx.timer.running_count()
 		if count ~= 3 then
 			error("Count should be 3, got " .. tostring(count))
 		end
 
-		-- 取消一个
+		-- 取消一个；计数仍由 executeTimer 在到期时统一递减
 		h1:cancel()
-		count = ngx.timer.running_count()
-		if count ~= 2 then
-			error("Count should be 2 after cancel, got " .. tostring(count))
-		end
-
-		-- 清理
-		h2:cancel()
-		h3:cancel()
 	`)
 	assert.NoError(t, err)
+
+	// 等待定时器到期并递减 active 计数
+	require.Eventually(t, func() bool {
+		return timerMgr.ActiveCount() == 0
+	}, 500*time.Millisecond, 10*time.Millisecond)
 }
 
 // TestBoundaryTimerUpvalueRejected 测试定时器拒绝闭包变量。

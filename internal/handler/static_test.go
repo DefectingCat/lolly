@@ -20,6 +20,7 @@ package handler
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -2050,6 +2051,49 @@ func TestSetCacheHeaders(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestStaticHandler_ConcurrentSetterAndHandle 验证 setter 与 Handle 并发访问无数据竞争。
+func TestStaticHandler_ConcurrentSetterAndHandle(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatalf("创建测试文件失败: %v", err)
+	}
+
+	handler := newTestHandler(t, tmpDir)
+
+	var wg sync.WaitGroup
+	// 并发执行 setter
+	for i := range 10 {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			switch id % 5 {
+			case 0:
+				handler.SetExpires("1h")
+			case 1:
+				handler.SetCacheTTL(time.Second)
+			case 2:
+				handler.SetFileCache(nil)
+			case 3:
+				handler.SetGzipStatic(false, nil, nil)
+			case 4:
+				handler.SetTryFiles([]string{"$uri"}, false, nil)
+			}
+		}(i)
+	}
+
+	// 并发执行 Handle
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ctx := newTestContext(t, "/test.txt")
+			handler.Handle(ctx)
+		}()
+	}
+
+	wg.Wait()
 }
 
 // TestParseExpires 测试 parseExpires 函数。

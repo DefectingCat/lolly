@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"io"
 	"slices"
+	"sync"
 	"testing"
 
 	"github.com/andybalholm/brotli"
@@ -543,4 +544,33 @@ func TestMiddleware_CompressWhenNoPrecompressed(t *testing.T) {
 	if len(body) >= len(originalBody) {
 		t.Errorf("Expected compressed body smaller than original, got %d >= %d", len(body), len(originalBody))
 	}
+}
+
+// TestCompressorPoolConcurrentGet 验证并发从池中获取 writer 不会产生竞态。
+//
+// 该测试针对 pool.New 在构造函数中初始化的场景，确保多个 goroutine 同时
+// Get/Put 时 sync.Pool 的行为是安全的。
+func TestCompressorPoolConcurrentGet(t *testing.T) {
+	m, err := New(&config.CompressionConfig{
+		Type:    "gzip",
+		Level:   6,
+		MinSize: 10,
+		Types:   []string{"text/html"},
+	})
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	for range 100 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w, ok := m.gzipPool.Get()
+			if ok {
+				m.gzipPool.Put(w)
+			}
+		}()
+	}
+	wg.Wait()
 }

@@ -107,3 +107,16 @@ func TestAddTypes(t *testing.T) {
 		})
 	}
 }
+
+// TestDetectContentTypeUnknownCached 测试未知扩展名多次查询均回退到默认 MIME 类型。
+// 防止缓存中写入空字符串导致后续查询返回错误值。
+func TestDetectContentTypeUnknownCached(t *testing.T) {
+	const unknownFile = "test.unknownxyz"
+
+	for range 3 {
+		got := DetectContentType(unknownFile)
+		if got != defaultMIME {
+			t.Errorf("DetectContentType(%q) = %q, want %q", unknownFile, got, defaultMIME)
+		}
+	}
+}

@@ -10,6 +10,17 @@ import (
 	"rua.plus/lolly/internal/config"
 )
 
+// TestNewResolver_NilConfig 验证 nil 解析器配置不会 panic。
+func TestNewResolver_NilConfig(t *testing.T) {
+	r := New(nil)
+	if r == nil {
+		t.Fatal("New(nil) should return non-nil resolver")
+	}
+	if _, ok := r.(*noopResolver); !ok {
+		t.Error("New(nil) should return *noopResolver")
+	}
+}
+
 // TestNewResolver 测试解析器创建。
 func TestNewResolver(t *testing.T) {
 	// 测试启用状态
@@ -317,6 +328,49 @@ func TestStartStop(t *testing.T) {
 	if r.started.Load() {
 		t.Error("resolver should be stopped")
 	}
+}
+
+// TestStartStopStart 验证 resolver 在 Stop 后可以重新 Start。
+func TestStartStopStart(t *testing.T) {
+	cfg := &config.ResolverConfig{
+		Enabled:   true,
+		Addresses: []string{"8.8.8.8:53"},
+		Valid:     30 * time.Second,
+	}
+
+	r := New(cfg).(*DNSResolver)
+
+	// 第一次启动
+	if err := r.Start(); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	if !r.started.Load() {
+		t.Error("resolver should be started")
+	}
+
+	// 停止
+	if err := r.Stop(); err != nil {
+		t.Fatalf("Stop failed: %v", err)
+	}
+	if r.started.Load() {
+		t.Error("resolver should be stopped")
+	}
+
+	// 再次启动：验证 stopCh 被正确重建，refreshLoop 不会立即退出
+	if err := r.Start(); err != nil {
+		t.Fatalf("second Start failed: %v", err)
+	}
+	if !r.started.Load() {
+		t.Error("resolver should be started again")
+	}
+
+	// 等待一段时间，确认 refreshLoop 仍在运行
+	time.Sleep(50 * time.Millisecond)
+	if !r.started.Load() {
+		t.Error("resolver should still be running after sleep")
+	}
+
+	_ = r.Stop()
 }
 
 // TestDeleteCacheEntry 测试删除缓存条目。

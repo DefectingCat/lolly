@@ -23,6 +23,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -548,4 +549,32 @@ func TestOCSPManager_StopTwice(t *testing.T) {
 	if running {
 		t.Error("Expected manager to be stopped")
 	}
+}
+
+// TestOCSPGetOCSPResponse_Concurrent 验证并发读取 OCSP 响应不会产生竞态。
+func TestOCSPGetOCSPResponse_Concurrent(t *testing.T) {
+	mgr := NewOCSPManager(nil)
+
+	serial := "12345"
+	testResp := []byte("concurrent-test-response")
+
+	mgr.mu.Lock()
+	mgr.responses[serial] = &ocspResponse{
+		response:   testResp,
+		thisUpdate: time.Now(),
+		nextUpdate: time.Now().Add(1 * time.Hour),
+		status:     statusValid,
+		fetchedAt:  time.Now(),
+	}
+	mgr.mu.Unlock()
+
+	var wg sync.WaitGroup
+	for range 100 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = mgr.GetOCSPResponse(serial)
+		}()
+	}
+	wg.Wait()
 }

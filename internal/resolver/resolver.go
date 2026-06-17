@@ -357,21 +357,20 @@ func (r *DNSResolver) Start() error {
 
 	r.started.Store(true)
 
-	// 重建 stopCh 以支持 Start-Stop-Start 周期
-	select {
-	case <-r.stopCh:
-		r.stopCh = make(chan struct{})
-	default:
-	}
+	// 重新创建 stopCh，确保新一轮刷新循环使用未关闭的通道
+	r.mu.Lock()
+	r.stopCh = make(chan struct{})
+	stopCh := r.stopCh
+	r.mu.Unlock()
 
 	// 启动后台刷新协程
-	go r.refreshLoop()
+	go r.refreshLoop(stopCh)
 
 	return nil
 }
 
 // refreshLoop 后台刷新循环。
-func (r *DNSResolver) refreshLoop() {
+func (r *DNSResolver) refreshLoop(stopCh <-chan struct{}) {
 	// 刷新间隔为 TTL / 2
 	interval := max(r.config.TTL()/2, time.Second)
 
@@ -382,7 +381,7 @@ func (r *DNSResolver) refreshLoop() {
 		select {
 		case <-ticker.C:
 			r.doRefresh()
-		case <-r.stopCh:
+		case <-stopCh:
 			return
 		}
 	}

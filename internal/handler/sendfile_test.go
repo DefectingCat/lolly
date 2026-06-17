@@ -945,3 +945,66 @@ func TestSendFile_NegativeLength(t *testing.T) {
 		t.Errorf("Expected body %s, got %s", content, ctx.Response.Body())
 	}
 }
+
+// TestLinuxSendfile_DataIntegrity 验证 sendfile 真正传输了完整文件内容，即 socket FD 在使用前未被关闭。
+func TestLinuxSendfile_DataIntegrity(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "integrity.bin")
+
+	content := make([]byte, 16*1024)
+	for i := range content {
+		content[i] = byte(i % 256)
+	}
+	if err := os.WriteFile(tmpFile, content, 0o644); err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	file, err := os.Open(tmpFile)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	defer func() { _ = file.Close() }()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer ln.Close()
+
+	received := make(chan []byte, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		c, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer c.Close()
+		_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
+		buf, _ := io.ReadAll(c)
+		received <- buf
+	}()
+
+	clientConn, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer clientConn.Close()
+
+	_ = clientConn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+
+	err = linuxSendfile(clientConn, file.Fd(), 0, int64(len(content)))
+	if err != nil && err != syscall.EPIPE && err != syscall.ECONNRESET {
+		t.Fatalf("linuxSendfile failed: %v", err)
+	}
+
+	_ = clientConn.Close()
+	wg.Wait()
+	close(received)
+
+	buf := <-received
+	if !bytes.Equal(buf, content) {
+		t.Errorf("sendfile data integrity mismatch: sent %d bytes, received %d bytes", len(content), len(buf))
+	}
+}

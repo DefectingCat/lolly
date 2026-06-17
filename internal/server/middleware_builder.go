@@ -66,6 +66,10 @@ func (s *Server) buildMiddlewareChain(serverCfg *config.ServerConfig) (*middlewa
 			return nil, fmt.Errorf("failed to create rate limiter middleware: %w", err)
 		}
 		middlewares = append(middlewares, rl)
+		// 跟踪 token_bucket 限流器的清理 goroutine，在服务器停止/重载时释放
+		if tokenRl, ok := rl.(*security.RateLimiter); ok {
+			s.trackRateLimiter(tokenRl)
+		}
 	}
 
 	// 3.5 Security: ConnLimiter (连接数限制)

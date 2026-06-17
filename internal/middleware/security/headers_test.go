@@ -2,11 +2,37 @@
 //
 // 该文件测试安全头部模块的各项功能，包括：
 //   - HSTS 值格式化
+//   - nil 配置保护
 //
 // 作者：xfy
 package security
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/valyala/fasthttp"
+)
+
+// TestAddHeadersNilConfig 验证配置在运行时被置为 nil 也不会 panic。
+func TestAddHeadersNilConfig(t *testing.T) {
+	sh := NewHeadersWithHSTS(nil, nil)
+	// 故意将内部配置置为 nil，模拟异常状态
+	sh.config = nil
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.Header.SetMethod("GET")
+	ctx.Request.Header.SetRequestURI("/")
+
+	// 不应 panic
+	sh.addHeaders(ctx)
+
+	if string(ctx.Response.Header.Peek("X-Frame-Options")) != "DENY" {
+		t.Errorf("expected default X-Frame-Options=DENY, got %q", ctx.Response.Header.Peek("X-Frame-Options"))
+	}
+	if string(ctx.Response.Header.Peek("X-Content-Type-Options")) != "nosniff" {
+		t.Errorf("expected default X-Content-Type-Options=nosniff, got %q", ctx.Response.Header.Peek("X-Content-Type-Options"))
+	}
+}
 
 func TestFormatHSTSValue(t *testing.T) {
 	tests := []struct {

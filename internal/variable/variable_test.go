@@ -457,6 +457,33 @@ func TestExpandOnlyDollar(t *testing.T) {
 	}
 }
 
+// TestNewContext_NilMaps 验证 NewContext 能防御性地初始化 nil map。
+func TestNewContext_NilMaps(t *testing.T) {
+	ctx := mockRequestCtx(t)
+
+	// 向池中放入多个 map 为 nil 的 Context，模拟异常状态
+	for range 10 {
+		pool.Put(&Context{})
+	}
+
+	// 连续获取，确保所有返回的 Context 都能安全使用，不会 panic
+	for range 10 {
+		vc := NewContext(ctx)
+
+		vc.Set("key", "value")
+		if v, ok := vc.Get("key"); !ok || v != "value" {
+			t.Errorf("expected key=value, got %q", v)
+		}
+
+		// 验证缓存也能正常工作
+		if v, ok := vc.Get("host"); !ok || v != "example.com" {
+			t.Errorf("expected host=example.com, got %q", v)
+		}
+
+		ReleaseContext(vc)
+	}
+}
+
 // TestPoolFunctions 测试 Pool 相关函数
 func TestPoolFunctions(t *testing.T) {
 	ctx := mockRequestCtx(t)

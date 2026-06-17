@@ -450,3 +450,44 @@ func TestPoolSubmit_StartWorkerWhenNoIdle(t *testing.T) {
 
 	close(blockCh)
 }
+
+// TestPoolSubmit_ContinuousFullLoad 验证队列满载时持续 Submit 不会阻塞。
+func TestPoolSubmit_ContinuousFullLoad(t *testing.T) {
+	p := NewGoroutinePool(PoolConfig{
+		MaxWorkers:  2,
+		MinWorkers:  1,
+		QueueSize:   1,
+		IdleTimeout: 5 * time.Second,
+	})
+
+	p.Start()
+	defer p.Stop()
+
+	// 阻塞唯一 worker，使队列保持满载
+	blockCh := make(chan struct{})
+	started := make(chan struct{})
+	_ = p.Submit(nil, func(*fasthttp.RequestCtx) {
+		close(started)
+		<-blockCh
+	})
+	<-started
+
+	// 填满队列
+	_ = p.Submit(nil, func(*fasthttp.RequestCtx) {})
+
+	done := make(chan struct{})
+	go func() {
+		for range 100 {
+			_ = p.Submit(nil, func(*fasthttp.RequestCtx) {})
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("continuous Submit under full load blocked")
+	}
+
+	close(blockCh)
+}

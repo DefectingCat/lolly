@@ -258,11 +258,10 @@ func (m *TimerManager) executeTimer(entry *TimerEntry) {
 		}
 		select {
 		case m.callbackQueue <- cbEntry:
-			m.queueMu.Unlock()
 		default:
-			m.queueMu.Unlock()
 			logging.Warn().Msg("[lua] timer callback dropped: queue full")
 		}
+		m.queueMu.Unlock()
 	}
 }
 
@@ -309,22 +308,11 @@ func (m *TimerManager) Cancel(handle *TimerHandle) bool {
 		return false // 定时器不存在或已执行
 	}
 
-	// 停止定时器；如果成功停止，回调不会执行
-	stopped := true
-	if entry.timer != nil {
-		stopped = entry.timer.Stop()
-	}
-
-	// 发送取消信号
+	// 发送取消信号；executeTimer 检查到后会在 defer 中递减 active
 	close(entry.cancel)
 
 	// 清理
 	delete(m.timers, entry.id)
-
-	// 如果成功停止定时器（回调不会执行），递减 active
-	if stopped {
-		m.active.Add(-1)
-	}
 
 	return true
 }
@@ -347,13 +335,14 @@ func (m *TimerManager) WaitAll(timeout time.Duration) bool {
 	start := time.Now()
 	for m.active.Load() > 0 {
 		if time.Since(start) > timeout {
-			// 超时，强制取消所有
+			// 超时，发送取消信号给所有剩余定时器
 			m.mu.Lock()
 			for _, entry := range m.timers {
-				if entry.timer != nil {
-					entry.timer.Stop()
+				select {
+				case <-entry.cancel:
+				default:
+					close(entry.cancel)
 				}
-				close(entry.cancel)
 			}
 			m.timers = make(map[uint64]*TimerEntry)
 			m.mu.Unlock()

@@ -12,6 +12,7 @@
 package security
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -865,5 +866,39 @@ func TestConnLimiter_MiddlewareIdentity(t *testing.T) {
 	// 验证返回的实例实现了 Middleware 接口
 	if middleware.Name() != "conn_limiter" {
 		t.Errorf("Name() = %s, want 'conn_limiter'", middleware.Name())
+	}
+}
+
+// TestRateLimiter_MultipleCreateDestroy 验证多次创建/销毁限流器不会泄漏 goroutine 也不会 panic。
+func TestRateLimiter_MultipleCreateDestroy(t *testing.T) {
+	cfg := &config.RateLimitConfig{
+		RequestRate: 100,
+		Burst:       200,
+	}
+
+	// 预热：先创建并销毁一次，让 runtime 稳定
+	mw, err := NewRateLimiter(cfg)
+	if err != nil {
+		t.Fatalf("NewRateLimiter() error: %v", err)
+	}
+	rl := mw.(*RateLimiter)
+	rl.StopCleanup()
+
+	before := runtime.NumGoroutine()
+
+	for range 10 {
+		mw, err = NewRateLimiter(cfg)
+		if err != nil {
+			t.Fatalf("NewRateLimiter() error: %v", err)
+		}
+		mw.(*RateLimiter).StopCleanup()
+		// 重复调用不应 panic
+		mw.(*RateLimiter).StopCleanup()
+	}
+
+	after := runtime.NumGoroutine()
+	// 允许少量波动，但不应有明显泄漏
+	if after-before > 5 {
+		t.Fatalf("goroutine leak detected: before=%d, after=%d", before, after)
 	}
 }

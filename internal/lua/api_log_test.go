@@ -3,6 +3,7 @@ package lua
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -36,6 +37,36 @@ func TestNgxLogAPIWithoutLogger(t *testing.T) {
 		ngx.log(ngx.INFO, "message without logger")
 	`)
 	assert.NoError(t, err)
+}
+
+// TestNgxLogEmergDoesNotExit 验证 ngx.EMERG 不会导致进程退出。
+func TestNgxLogEmergDoesNotExit(t *testing.T) {
+	engine, err := NewEngine(DefaultConfig())
+	require.NoError(t, err)
+	defer engine.Close()
+
+	ctx := mockRequestCtxForLog()
+	luaCtx := NewContext(engine, ctx)
+
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf)
+
+	api := newNgxLogAPI(ctx, luaCtx, &logger)
+	L := engine.GetLStateForTest()
+	RegisterNgxLogAPI(L, api)
+
+	// 不应 panic 或退出进程
+	err = L.DoString(`
+		ngx.log(ngx.EMERG, "emergency message")
+		ngx.log(ngx.ALERT, "alert message")
+		ngx.log(ngx.CRIT, "critical message")
+	`)
+	require.NoError(t, err)
+
+	output := buf.String()
+	if !strings.Contains(output, "emergency message") {
+		t.Error("expected emerg message to be logged")
+	}
 }
 
 // TestNgxLogAPIIntegration 集成测试

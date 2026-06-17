@@ -219,7 +219,7 @@ func BenchmarkStreamTCPForward(b *testing.B) {
 	// 设置 upstream 健康
 	srv.SetHealthy("test", 0, true)
 
-	_ = srv.ListenTCP("127.0.0.1:0")
+	_ = srv.ListenTCP("127.0.0.1:0", "test")
 	_ = srv.Start()
 	defer srv.Stop()
 

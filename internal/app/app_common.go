@@ -160,7 +160,7 @@ func (a *App) initStreamServers() {
 				a.logger.Error().Err(err).Str("listen", sc.Listen).Msg("Failed to listen on UDP")
 			}
 		} else {
-			if err := a.streamSrv.ListenTCP(sc.Listen); err != nil {
+			if err := a.streamSrv.ListenTCP(sc.Listen, sc.Listen); err != nil {
 				a.logger.Error().Err(err).Str("listen", sc.Listen).Msg("Failed to listen on TCP")
 			}
 		}

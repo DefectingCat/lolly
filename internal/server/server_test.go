@@ -656,6 +656,26 @@ func TestServer_TrackStats_EmptyBody(t *testing.T) {
 	}
 }
 
+// TestStart_NilConfig 测试 nil 配置启动返回错误而非 panic。
+func TestStart_NilConfig(t *testing.T) {
+	s := New(nil)
+
+	err := s.Start()
+	if err == nil {
+		t.Error("Start() with nil config should return error")
+	}
+}
+
+// TestStart_EmptyServers 测试空服务器列表启动返回错误而非 panic。
+func TestStart_EmptyServers(t *testing.T) {
+	s := New(&config.Config{})
+
+	err := s.Start()
+	if err == nil {
+		t.Error("Start() with empty servers should return error")
+	}
+}
+
 // TestStart_Success 测试服务器配置初始化
 func TestStart_Success(t *testing.T) {
 	cfg := &config.Config{

@@ -21,6 +21,7 @@
 package proxy
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -781,4 +782,46 @@ func TestCopyData_WriteError(t *testing.T) {
 	}
 
 	_ = src1.Close()
+}
+
+// TestReadWebSocketUpgradeResponse_BuffersTrailingData 验证升级响应后紧跟的帧数据不会被丢弃。
+func TestReadWebSocketUpgradeResponse_BuffersTrailingData(t *testing.T) {
+	conn1, conn2 := net.Pipe()
+	defer func() { _ = conn1.Close() }()
+	defer func() { _ = conn2.Close() }()
+
+	trailing := []byte("first websocket frame data")
+	go func() {
+		response := "HTTP/1.1 101 Switching Protocols\r\n" +
+			"Upgrade: websocket\r\n" +
+			"Connection: Upgrade\r\n" +
+			"\r\n"
+		// 一次性写入响应头和后续帧数据，模拟真实后端在同一 TCP 段发送的场景
+		_, _ = conn2.Write(append([]byte(response), trailing...))
+	}()
+
+	resp, reader, err := readWebSocketUpgradeResponse(conn1, 1*time.Second)
+	if err != nil {
+		t.Fatalf("readWebSocketUpgradeResponse failed: %v", err)
+	}
+	if resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Errorf("expected 101, got %d", resp.StatusCode)
+	}
+	if reader == nil {
+		t.Fatal("expected buffered reader")
+	}
+	if reader.Buffered() != len(trailing) {
+		t.Errorf("expected %d buffered trailing bytes, got %d", len(trailing), reader.Buffered())
+	}
+
+	// 使用 bufferedConn 消费缓冲区数据
+	bc := &bufferedConn{Conn: conn1, reader: reader}
+	buf := make([]byte, len(trailing))
+	n, err := io.ReadFull(bc, buf)
+	if err != nil {
+		t.Fatalf("failed to read buffered trailing data: %v", err)
+	}
+	if !bytes.Equal(buf[:n], trailing) {
+		t.Errorf("trailing data mismatch: expected %q, got %q", trailing, buf[:n])
+	}
 }

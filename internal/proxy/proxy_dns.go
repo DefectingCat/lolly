@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/valyala/fasthttp"
 	"rua.plus/lolly/internal/loadbalance"
 	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/resolver"
@@ -141,8 +142,10 @@ func (p *Proxy) refreshDNS() {
 
 // updateHostClientAddr 更新 HostClient 的连接地址。
 //
-// 从目标 URL 中解析出端口，与新的 IP 地址组合后更新对应
-// HostClient 的 Addr 字段。旧连接不受影响，新连接将使用新地址。
+// 从目标 URL 中解析出端口，与新的 IP 地址组合后创建新的 HostClient
+// 并替换连接池中的旧实例。旧连接不受影响，新连接将使用新地址。
+// 通过重建 client 而不是直接修改 Addr 字段，避免与正在使用旧 client
+// 的 goroutine 产生数据竞争。
 //
 // 参数：
 //   - target: 负载均衡目标，包含原始 URL
@@ -169,12 +172,49 @@ func (p *Proxy) updateHostClientAddr(target *loadbalance.Target, ip string) {
 
 	newAddr := net.JoinHostPort(ip, port)
 
-	// 更新 HostClient 的 Addr
-	// 注意：新连接将使用新 IP，旧连接继续使用旧 IP 直到超时
-	if client, ok := p.clients[target.URL]; ok {
-		client.Addr = newAddr
-		logging.Debug().Msgf("Updated HostClient addr for %s to %s", target.URL, newAddr)
+	// 与 getClient 保持一致的 key 计算逻辑
+	key := target.URL
+	if p.config.ProxyBind != "" {
+		key = target.URL + "|" + p.config.ProxyBind
 	}
+
+	oldClient, ok := p.clients[key]
+	if !ok {
+		return
+	}
+
+	// 创建新的 HostClient，复制旧 client 的配置，仅修改 Addr
+	// 新连接将使用新 IP，旧连接继续使用旧 IP 直到超时
+	newClient := &fasthttp.HostClient{
+		Addr:                   newAddr,
+		IsTLS:                  oldClient.IsTLS,
+		ReadTimeout:            oldClient.ReadTimeout,
+		WriteTimeout:           oldClient.WriteTimeout,
+		MaxIdleConnDuration:    oldClient.MaxIdleConnDuration,
+		MaxConns:               oldClient.MaxConns,
+		MaxConnWaitTimeout:     oldClient.MaxConnWaitTimeout,
+		DisablePathNormalizing: oldClient.DisablePathNormalizing,
+		SecureErrorLogMessage:  oldClient.SecureErrorLogMessage,
+		Dial:                   oldClient.Dial,
+		StreamResponseBody:     oldClient.StreamResponseBody,
+		ReadBufferSize:         oldClient.ReadBufferSize,
+		WriteBufferSize:        oldClient.WriteBufferSize,
+		TLSConfig:              oldClient.TLSConfig,
+	}
+
+	// 兼容旧版 RetryIf 配置，转换为 RetryIfErr。
+	// RetryIf 已被 fasthttp 标记为 deprecated，新连接使用 RetryIfErr 替代。
+	//nolint:staticcheck // 需要读取旧 client 的 deprecated RetryIf 以兼容已有配置。
+	if oldClient.RetryIf != nil {
+		//nolint:staticcheck // 同上，读取旧 client 的 deprecated RetryIf。
+		oldRetryIf := oldClient.RetryIf
+		newClient.RetryIfErr = func(req *fasthttp.Request, _ int, _ error) (bool, bool) {
+			return false, oldRetryIf(req)
+		}
+	}
+
+	p.clients[key] = newClient
+	logging.Debug().Msgf("Updated HostClient addr for %s to %s", target.URL, newAddr)
 }
 
 // getResolverTTL 获取 DNS 解析记录的过期时间。

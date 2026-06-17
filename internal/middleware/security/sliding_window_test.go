@@ -36,6 +36,27 @@ func TestNewSlidingWindowLimiter(t *testing.T) {
 			t.Error("precise should be true")
 		}
 	})
+
+	t.Run("window 为零时使用默认值避免除零", func(t *testing.T) {
+		limiter := NewSlidingWindowLimiter(0, 10, false)
+		if limiter.window <= 0 {
+			t.Errorf("window = %v, want > 0", limiter.window)
+		}
+		// 验证不会触发除零 panic
+		if !limiter.Allow("test-key") {
+			t.Error("第一个请求应该被允许")
+		}
+	})
+
+	t.Run("window 为负时使用默认值避免除零", func(t *testing.T) {
+		limiter := NewSlidingWindowLimiter(-time.Second, 10, false)
+		if limiter.window <= 0 {
+			t.Errorf("window = %v, want > 0", limiter.window)
+		}
+		if !limiter.Allow("test-key") {
+			t.Error("第一个请求应该被允许")
+		}
+	})
 }
 
 func TestSlidingWindowLimiter_Allow(t *testing.T) {

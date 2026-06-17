@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"rua.plus/lolly/internal/config"
+	"rua.plus/lolly/internal/logging"
 	"rua.plus/lolly/internal/version"
 )
 
@@ -892,6 +894,36 @@ logging:
 
 	// 验证超时值
 	app.srv.StopWithTimeout(1 * time.Second)
+}
+
+// TestInitHTTP3_EmptyServers 验证空服务器配置时 HTTP/3 初始化直接跳过。
+func TestInitHTTP3_EmptyServers(t *testing.T) {
+	app := &App{
+		cfg:    &config.Config{Servers: []config.ServerConfig{}},
+		logger: logging.NewAppLogger(nil),
+	}
+
+	// 不应 panic
+	app.initHTTP3()
+
+	if app.http3Srv != nil {
+		t.Error("http3Srv should remain nil when no servers are configured")
+	}
+}
+
+// TestInitHTTP2_EmptyServers 验证空服务器配置时 HTTP/2 初始化直接跳过。
+func TestInitHTTP2_EmptyServers(t *testing.T) {
+	app := &App{
+		cfg:    &config.Config{Servers: []config.ServerConfig{}},
+		logger: logging.NewAppLogger(nil),
+	}
+
+	// 不应 panic
+	app.initHTTP2()
+
+	if app.http2Srv != nil {
+		t.Error("http2Srv should remain nil when no servers are configured")
+	}
 }
 
 func waitForAppServerRunning(app *App, timeout time.Duration) bool {

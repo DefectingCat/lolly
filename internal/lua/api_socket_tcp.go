@@ -110,10 +110,19 @@ func NewTCPSocket(manager *CosocketManager) *TCPSocket {
 // 返回值：
 //   - error: 状态不正确或地址解析失败时返回错误
 func (s *TCPSocket) Connect(host string, port int) error {
+	_, err := s.connectWithOp(host, port)
+	return err
+}
+
+// connectWithOp 连接到指定地址并返回 SocketOperation。
+//
+// 将 SocketOperation 直接返回给调用方，避免 ConnectAsync 在 Connect 返回后
+// 读取 s.currentOp 时与后台 goroutine 设置 s.currentOp = nil 产生竞态。
+func (s *TCPSocket) connectWithOp(host string, port int) (*SocketOperation, error) {
 	s.mu.Lock()
 	if s.state != SocketStateIdle {
 		s.mu.Unlock()
-		return fmt.Errorf("socket not idle, current state: %s", s.state)
+		return nil, fmt.Errorf("socket not idle, current state: %s", s.state)
 	}
 	s.state = SocketStateConnecting
 	s.mu.Unlock()
@@ -122,13 +131,13 @@ func (s *TCPSocket) Connect(host string, port int) error {
 	addr, err := s.manager.TCPAddr(host, port)
 	if err != nil {
 		s.setState(SocketStateError)
-		return fmt.Errorf("resolve address: %w", err)
+		return nil, fmt.Errorf("resolve address: %w", err)
 	}
 
 	// IP 字面量：立即检查受限地址
 	if !s.manager.DisableSSRFGuard && addr.IP != nil && isRestrictedIP(addr.IP) {
 		s.setState(SocketStateError)
-		return fmt.Errorf("connection to restricted address denied: %s", addr.IP)
+		return nil, fmt.Errorf("connection to restricted address denied: %s", addr.IP)
 	}
 
 	s.addr = addr
@@ -183,12 +192,12 @@ func (s *TCPSocket) Connect(host string, port int) error {
 		s.manager.CompleteOperation(op.ID, conn, nil)
 	}()
 
-	return nil
+	return op, nil
 }
 
 // ConnectAsync 异步连接（用于 Lua yield/resume）。
 //
-// 调用 Connect 并返回关联的 SocketOperation，供 Lua 协程 yield 等待。
+// 调用 connectWithOp 并返回关联的 SocketOperation，供 Lua 协程 yield 等待。
 //
 // 返回值：
 //   - *SocketOperation: 连接操作实例
@@ -201,13 +210,10 @@ func (s *TCPSocket) ConnectAsync(_ *glua.LState, host string, port int) (*Socket
 	}
 	s.mu.Unlock()
 
-	err := s.Connect(host, port)
+	op, err := s.connectWithOp(host, port)
 	if err != nil {
 		return nil, err
 	}
-	s.mu.RLock()
-	op := s.currentOp
-	s.mu.RUnlock()
 	return op, nil
 }
 

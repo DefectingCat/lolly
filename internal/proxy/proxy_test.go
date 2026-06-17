@@ -20,6 +20,7 @@ package proxy
 
 import (
 	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1123,5 +1124,89 @@ func TestUpstreamTiming_PartialMarks(t *testing.T) {
 	timing.MarkResponseEnd()
 	if timing.GetResponseTime() != 0 {
 		t.Errorf("GetResponseTime() without connectEnd = %v, want 0", timing.GetResponseTime())
+	}
+}
+
+// TestProxyConnectionCount_InternalRedirect 验证 X-Accel-Redirect 后连接计数归零。
+func TestProxyConnectionCount_InternalRedirect(t *testing.T) {
+	backend := &fasthttp.Server{
+		Handler: func(ctx *fasthttp.RequestCtx) {
+			ctx.Response.Header.Set("X-Accel-Redirect", "/redirect/new-path")
+			ctx.SetStatusCode(200)
+		},
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	go func() { _ = backend.Serve(ln) }()
+	time.Sleep(50 * time.Millisecond)
+
+	targets := testutil.NewTestHealthyTargets("http://" + ln.Addr().String())
+	cfg := testutil.NewTestProxyConfig("/")
+	p, err := NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create proxy: %v", err)
+	}
+
+	ctx := testutil.NewRequestCtxWithHeader("GET", "/api", map[string]string{
+		"Host": "example.com",
+	})
+
+	p.ServeHTTP(ctx)
+
+	if atomic.LoadInt64(&targets[0].Connections) != 0 {
+		t.Errorf("expected connections to return to 0 after internal redirect, got %d", targets[0].Connections)
+	}
+}
+
+// TestProxyConnectionCount_Retry 验证重试路径后连接计数归零。
+func TestProxyConnectionCount_Retry(t *testing.T) {
+	backend := &fasthttp.Server{
+		Handler: func(ctx *fasthttp.RequestCtx) {
+			ctx.SetStatusCode(503)
+		},
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to create listener: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	go func() { _ = backend.Serve(ln) }()
+	time.Sleep(50 * time.Millisecond)
+
+	targets := testutil.NewTestHealthyTargets("http://" + ln.Addr().String())
+	cfg := &config.ProxyConfig{
+		Path:        "/",
+		LoadBalance: "round_robin",
+		Timeout: config.ProxyTimeout{
+			Connect: 5 * time.Second,
+			Read:    5 * time.Second,
+			Write:   5 * time.Second,
+		},
+		NextUpstream: config.NextUpstreamConfig{
+			Tries:     2,
+			HTTPCodes: []int{503},
+		},
+	}
+
+	p, err := NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to create proxy: %v", err)
+	}
+
+	ctx := testutil.NewRequestCtxWithHeader("GET", "/api", map[string]string{
+		"Host": "example.com",
+	})
+
+	p.ServeHTTP(ctx)
+
+	if atomic.LoadInt64(&targets[0].Connections) != 0 {
+		t.Errorf("expected connections to return to 0 after retry, got %d", targets[0].Connections)
 	}
 }

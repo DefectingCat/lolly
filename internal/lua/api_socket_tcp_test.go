@@ -1348,3 +1348,33 @@ func TestSocketOperation_Touch(t *testing.T) {
 	op.Touch()
 	assert.True(t, op.LastActivity.After(oldTime))
 }
+
+// TestTCPSocket_ConnectAsync_Concurrent 验证并发 ConnectAsync 不会返回 nil op 导致 panic。
+func TestTCPSocket_ConnectAsync_Concurrent(t *testing.T) {
+	_, cleanup := mockEchoServer(t, "127.0.0.1:18820")
+	defer cleanup()
+
+	cm := NewCosocketManager()
+	defer cm.Close()
+
+	L := glua.NewState()
+	defer L.Close()
+
+	var wg sync.WaitGroup
+	for range 50 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			socket := NewTCPSocket(cm)
+			defer socket.Close()
+
+			op, err := socket.ConnectAsync(L, "127.0.0.1", 18820)
+			if err != nil {
+				return
+			}
+			require.NotNil(t, op)
+			_, _ = op.Wait(context.Background())
+		}()
+	}
+	wg.Wait()
+}

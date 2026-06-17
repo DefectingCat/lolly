@@ -134,6 +134,16 @@ func NewContext(ctx *fasthttp.RequestCtx) *Context {
 	vc.upstreamResponseTime = 0
 	vc.upstreamConnectTime = 0
 	vc.upstreamHeaderTime = 0
+	// 防御性初始化：防止从池中取出的 Context 因 map 为 nil 而 panic
+	if vc.store == nil {
+		vc.store = make(map[string]string)
+	}
+	if vc.cache == nil {
+		vc.cache = make(map[string]string)
+	}
+	if vc.bytesCache == nil {
+		vc.bytesCache = make(map[string][]byte)
+	}
 	// 清空内置变量缓存
 	for k := range vc.cache {
 		delete(vc.cache, k)

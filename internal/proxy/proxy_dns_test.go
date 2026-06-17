@@ -161,4 +161,116 @@ func TestSetResolver(t *testing.T) {
 
 // TestMultipleTargets_Refresh 测试多目标刷新。
 
+// TestUpdateHostClientAddr_ReplacesClient 验证 DNS 更新时重建 HostClient 而不是修改 Addr。
+func TestUpdateHostClientAddr_ReplacesClient(t *testing.T) {
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
+	}
+	targets := []*loadbalance.Target{
+		{URL: "http://backend.example.com:8080"},
+	}
+
+	p, err := NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	oldClient := p.clients["http://backend.example.com:8080"]
+	if oldClient == nil {
+		t.Fatal("old client should not be nil")
+	}
+	oldAddr := oldClient.Addr
+
+	p.updateHostClientAddr(targets[0], "192.168.1.100")
+
+	newClient := p.clients["http://backend.example.com:8080"]
+	if newClient == nil {
+		t.Fatal("new client should not be nil")
+	}
+	if newClient == oldClient {
+		t.Error("updateHostClientAddr should replace the HostClient instead of mutating it")
+	}
+	if newClient.Addr != "192.168.1.100:8080" {
+		t.Errorf("new client addr = %q, want %q", newClient.Addr, "192.168.1.100:8080")
+	}
+	// 旧 client 的 Addr 不应被修改，旧连接继续使用
+	if oldClient.Addr != oldAddr {
+		t.Errorf("old client addr was mutated: got %q, want %q", oldClient.Addr, oldAddr)
+	}
+}
+
+// TestUpdateHostClientAddr_WithProxyBind 验证配置了 proxy_bind 时使用正确的 client key。
+func TestUpdateHostClientAddr_WithProxyBind(t *testing.T) {
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
+		ProxyBind:   "127.0.0.1",
+	}
+	targets := []*loadbalance.Target{
+		{URL: "http://backend.example.com:8080"},
+	}
+
+	p, err := NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	key := "http://backend.example.com:8080|127.0.0.1"
+	if p.clients[key] == nil {
+		t.Fatalf("client with proxy_bind key should exist")
+	}
+
+	p.updateHostClientAddr(targets[0], "192.168.1.200")
+
+	newClient := p.clients[key]
+	if newClient == nil {
+		t.Fatal("new client should not be nil")
+	}
+	if newClient.Addr != "192.168.1.200:8080" {
+		t.Errorf("new client addr = %q, want %q", newClient.Addr, "192.168.1.200:8080")
+	}
+}
+
+// TestUpdateHostClientAddr_ConcurrentRead 验证更新 Addr 时不会与 getClient 产生数据竞争。
+func TestUpdateHostClientAddr_ConcurrentRead(t *testing.T) {
+	cfg := &config.ProxyConfig{
+		Path:        "/api",
+		LoadBalance: "round_robin",
+		Timeout:     config.ProxyTimeout{Connect: 5 * time.Second},
+	}
+	targets := []*loadbalance.Target{
+		{URL: "http://backend.example.com:8080"},
+	}
+
+	p, err := NewProxy(cfg, targets, nil, nil)
+	if err != nil {
+		t.Fatalf("NewProxy() error: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	// 并发读取 client
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client := p.getClient(targets[0].URL)
+			_ = client.Addr
+		}()
+	}
+
+	// 并发更新 client
+	for i := range 10 {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			p.updateHostClientAddr(targets[0], "192.168.1."+string(rune('0'+id)))
+		}(i)
+	}
+
+	wg.Wait()
+}
+
 // TestStopResolverFails 测试停止解析器失败时返回错误。

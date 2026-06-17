@@ -207,6 +207,27 @@ func TestCheckTarget(t *testing.T) {
 	})
 }
 
+// TestNewHealthChecker_NilConfig 验证 nil 健康检查配置不会 panic。
+func TestNewHealthChecker_NilConfig(t *testing.T) {
+	target := &loadbalance.Target{URL: "http://127.0.0.1:8080"}
+
+	// 不应 panic
+	checker := NewHealthChecker([]*loadbalance.Target{target}, nil)
+	if checker == nil {
+		t.Fatal("NewHealthChecker(nil) should return non-nil checker")
+	}
+
+	if checker.interval != 10*time.Second {
+		t.Errorf("expected default interval 10s, got %v", checker.interval)
+	}
+	if checker.timeout != 5*time.Second {
+		t.Errorf("expected default timeout 5s, got %v", checker.timeout)
+	}
+	if checker.path != healthPath {
+		t.Errorf("expected default path %q, got %q", healthPath, checker.path)
+	}
+}
+
 // TestMarkUnhealthy 测试 MarkUnhealthy 方法。
 func TestMarkUnhealthy(t *testing.T) {
 	t.Run("标记不健康", func(t *testing.T) {

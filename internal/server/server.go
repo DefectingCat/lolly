@@ -68,6 +68,8 @@ type Server struct {
 	accessControl       *security.AccessControl
 	accessControls      []*security.AccessControl
 	accessControlsMu    sync.Mutex
+	rateLimiters        []*security.RateLimiter
+	rateLimitersMu      sync.Mutex
 	errorPageManager    *handler.ErrorPageManager
 	fileCache           *cache.FileCache
 	pool                *GoroutinePool
@@ -109,6 +111,23 @@ func New(cfg *config.Config) *Server {
 // Running reports whether the server is currently running.
 func (s *Server) Running() bool {
 	return s.running.Load()
+}
+
+// trackRateLimiter 记录创建的令牌桶限流器，便于后续统一释放后台清理 goroutine。
+func (s *Server) trackRateLimiter(rl *security.RateLimiter) {
+	s.rateLimitersMu.Lock()
+	defer s.rateLimitersMu.Unlock()
+	s.rateLimiters = append(s.rateLimiters, rl)
+}
+
+// stopRateLimiters 停止所有已记录的令牌桶限流器。
+func (s *Server) stopRateLimiters() {
+	s.rateLimitersMu.Lock()
+	defer s.rateLimitersMu.Unlock()
+	for _, rl := range s.rateLimiters {
+		rl.StopCleanup()
+	}
+	s.rateLimiters = s.rateLimiters[:0]
 }
 
 func (s *Server) handleRegistrationError(source, path string, err error) error {
@@ -270,6 +289,9 @@ func (s *Server) GetHandler() fasthttp.RequestHandler {
 func (s *Server) Start() error {
 	if s.config == nil {
 		return fmt.Errorf("server config is nil")
+	}
+	if len(s.config.Servers) == 0 {
+		return fmt.Errorf("no servers configured")
 	}
 	logging.Init(s.config.Logging.Error.Level, s.config.Logging.Format)
 
@@ -469,6 +491,10 @@ func DupListener(ln net.Listener) (net.Listener, error) {
 //   - 静态文件服务作为 fallback 处理非代理路径的请求
 //   - 使用零拷贝传输优化大文件传输
 func (s *Server) startSingleMode() error {
+	if len(s.config.Servers) == 0 {
+		return fmt.Errorf("no servers configured")
+	}
+
 	// 使用 Servers[0] 配置（迁移后 Server 字段为空）
 	serverCfg := &s.config.Servers[0]
 

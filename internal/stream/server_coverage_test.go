@@ -28,7 +28,7 @@ func TestListenTCP_Success(t *testing.T) {
 
 	s := NewServer()
 
-	err := s.ListenTCP("127.0.0.1:0")
+	err := s.ListenTCP("127.0.0.1:0", "")
 	require.NoError(t, err)
 
 	s.mu.RLock()
@@ -47,7 +47,7 @@ func TestListenTCP_InvalidAddress(t *testing.T) {
 
 	s := NewServer()
 
-	err := s.ListenTCP("256.256.256.256:99999")
+	err := s.ListenTCP("256.256.256.256:99999", "")
 	assert.Error(t, err)
 
 	s.mu.RLock()
@@ -75,7 +75,7 @@ func TestStart_WithTCPListeners(t *testing.T) {
 	}
 	_ = s.AddUpstream("test", targets, "round_robin", HealthCheckSpec{})
 
-	err := s.ListenTCP("127.0.0.1:0")
+	err := s.ListenTCP("127.0.0.1:0", "")
 	require.NoError(t, err)
 
 	err = s.Start()
@@ -762,4 +762,143 @@ func TestStart_DoubleStart(t *testing.T) {
 	err = s.Start()
 	assert.Error(t, err)
 	s.Stop()
+}
+
+// TestListenTCP_AssociatesUpstream 验证 ListenTCP 会建立 listener->upstream 映射。
+func TestListenTCP_AssociatesUpstream(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer()
+
+	_ = s.AddUpstream("test", []TargetSpec{{Addr: "127.0.0.1:8001", Weight: 1}}, "round_robin", HealthCheckSpec{})
+
+	err := s.ListenTCP("127.0.0.1:0", "test")
+	require.NoError(t, err)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	require.Len(t, s.listeners, 1)
+	require.Len(t, s.listenerUpstreams, 1)
+	for addr, up := range s.listenerUpstreams {
+		assert.NotNil(t, up, "addr=%s", addr)
+		assert.Equal(t, "test", up.name)
+	}
+}
+
+// TestListenTCP_UnknownUpstream 验证为不存在的上游建立映射时不会 panic。
+func TestListenTCP_UnknownUpstream(t *testing.T) {
+	t.Parallel()
+
+	s := NewServer()
+
+	err := s.ListenTCP("127.0.0.1:0", "missing")
+	require.NoError(t, err)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	require.Len(t, s.listenerUpstreams, 1)
+	for _, up := range s.listenerUpstreams {
+		assert.Nil(t, up)
+	}
+}
+
+// TestStart_TCPForwardsViaListenerUpstreamMapping 验证 TCP stream proxy 通过 listener->upstream 映射转发到后端。
+func TestStart_TCPForwardsViaListenerUpstreamMapping(t *testing.T) {
+	s := NewServer()
+
+	backendLn, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer backendLn.Close()
+
+	go func() {
+		for {
+			conn, acceptErr := backendLn.Accept()
+			if acceptErr != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				buf := make([]byte, 1024)
+				n, _ := c.Read(buf)
+				_, _ = c.Write(append([]byte("backend:"), buf[:n]...))
+			}(conn)
+		}
+	}()
+
+	_ = s.AddUpstream("test", []TargetSpec{{Addr: backendLn.Addr().String(), Weight: 1}}, "round_robin", HealthCheckSpec{})
+	s.upstreams["test"].targets[0].healthy.Store(true)
+
+	err = s.ListenTCP("127.0.0.1:0", "test")
+	require.NoError(t, err)
+
+	s.mu.RLock()
+	var proxyAddr string
+	for _, ln := range s.listeners {
+		proxyAddr = ln.Addr().String()
+	}
+	s.mu.RUnlock()
+
+	err = s.Start()
+	require.NoError(t, err)
+	defer s.Stop()
+
+	clientConn, err := net.DialTimeout("tcp", proxyAddr, 2*time.Second)
+	require.NoError(t, err)
+	defer clientConn.Close()
+
+	testData := []byte("hello mapping")
+	_, err = clientConn.Write(testData)
+	require.NoError(t, err)
+
+	_ = clientConn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	buf := make([]byte, 1024)
+	n, err := clientConn.Read(buf)
+	require.NoError(t, err)
+	assert.Equal(t, append([]byte("backend:"), testData...), buf[:n])
+}
+
+// TestStop_UDP 验证 UDP stream server 的 Stop 能正常完成，不会死锁。
+func TestStop_UDP(t *testing.T) {
+	s := NewServer()
+
+	backendAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	require.NoError(t, err)
+	backendConn, err := net.ListenUDP("udp", backendAddr)
+	require.NoError(t, err)
+	defer backendConn.Close()
+
+	go func() {
+		buf := make([]byte, 65535)
+		for {
+			n, addr, readErr := backendConn.ReadFromUDP(buf)
+			if readErr != nil {
+				return
+			}
+			_, _ = backendConn.WriteToUDP(buf[:n], addr)
+		}
+	}()
+
+	_ = s.AddUpstream("udp-test", []TargetSpec{{Addr: backendConn.LocalAddr().String(), Weight: 1}}, "round_robin", HealthCheckSpec{})
+
+	err = s.ListenUDP("127.0.0.1:0", "udp-test", 100*time.Millisecond)
+	require.NoError(t, err)
+
+	err = s.Start()
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	go func() {
+		s.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("UDP server Stop did not complete in time")
+	}
+
+	assert.False(t, s.running.Load())
 }

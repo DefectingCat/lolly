@@ -115,7 +115,7 @@ func NewHealthChecker(targets []*loadbalance.Target, cfg *config.HealthCheckConf
 		slowStartManager = loadbalance.NewSlowStartManager(cfg.SlowStart)
 	}
 
-	return &HealthChecker{
+	h := &HealthChecker{
 		targets:          targets,
 		interval:         interval,
 		timeout:          timeout,
@@ -128,6 +128,13 @@ func NewHealthChecker(targets []*loadbalance.Target, cfg *config.HealthCheckConf
 			WriteTimeout: timeout,
 		},
 	}
+
+	// 初始化慢启动管理器的目标查找回调
+	if h.slowStartManager != nil {
+		h.slowStartManager.SetFindTarget(h.findTargetByURL)
+	}
+
+	return h
 }
 
 // Start 启动后台健康检查进程。
@@ -280,4 +287,23 @@ func (h *HealthChecker) MarkHealthy(target *loadbalance.Target) {
 	if h.slowStartManager != nil {
 		h.slowStartManager.OnTargetHealthy(target)
 	}
+}
+
+// findTargetByURL 根据 URL 查找对应的后端目标。
+//
+// 作为 SlowStartManager 的目标查找回调，用于将慢启动状态
+// 同步到负载均衡目标的 EffectiveWeight。
+//
+// 参数：
+//   - url: 后端目标 URL
+//
+// 返回值：
+//   - *loadbalance.Target: 找到的目标，不存在时返回 nil
+func (h *HealthChecker) findTargetByURL(url string) *loadbalance.Target {
+	for _, t := range h.targets {
+		if t.URL == url {
+			return t
+		}
+	}
+	return nil
 }

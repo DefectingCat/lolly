@@ -133,6 +133,15 @@ func (sh *HeadersMiddleware) addHeaders(ctx *fasthttp.RequestCtx) {
 	hstsValue := sh.hsts
 	sh.mu.RUnlock()
 
+	// nil 保护：防止并发更新将配置置为 nil 后 panic
+	if cfg == nil {
+		cfg = &config.SecurityHeaders{
+			XFrameOptions:       "DENY",
+			XContentTypeOptions: "nosniff",
+			ReferrerPolicy:      "strict-origin-when-cross-origin",
+		}
+	}
+
 	// X-Frame-Options
 	if cfg.XFrameOptions != "" {
 		headers.Set("X-Frame-Options", cfg.XFrameOptions)

@@ -434,3 +434,57 @@ func TestLoggerClose(t *testing.T) {
 		t.Errorf("Unexpected error on Close: %v", err)
 	}
 }
+
+// TestLoggerClose_ClosesFileHandles 验证 Close 真正关闭了底层文件句柄。
+func TestLoggerClose_ClosesFileHandles(t *testing.T) {
+	tmpDir := t.TempDir()
+	accessPath := filepath.Join(tmpDir, "access.log")
+	errorPath := filepath.Join(tmpDir, "error.log")
+
+	cfg := &config.LoggingConfig{
+		Access: config.AccessLogConfig{Path: accessPath},
+		Error:  config.ErrorLogConfig{Path: errorPath},
+	}
+
+	logger := New(cfg)
+
+	// 先写入一些日志
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/closed")
+	ctx.Request.Header.SetMethod("GET")
+	logger.LogAccess(ctx, 200, 10, 100*time.Millisecond)
+	logger.Error().Msg("error before close")
+
+	// 关闭后应能正常删除文件（Windows 下需要句柄关闭）
+	if err := logger.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	if err := os.Remove(accessPath); err != nil {
+		t.Errorf("should be able to remove access log after Close: %v", err)
+	}
+	if err := os.Remove(errorPath); err != nil {
+		t.Errorf("should be able to remove error log after Close: %v", err)
+	}
+}
+
+// TestLogAccessDoesNotMutateBuffer 验证访问日志不会修改 fasthttp 内部缓冲区。
+func TestLogAccessDoesNotMutateBuffer(t *testing.T) {
+	logger := New(&config.LoggingConfig{Access: config.AccessLogConfig{Format: "json"}})
+
+	ctx := &fasthttp.RequestCtx{}
+	ctx.Request.SetRequestURI("/api/users")
+	ctx.Request.Header.SetMethod("POST")
+
+	methodBefore := string(ctx.Method())
+	pathBefore := string(ctx.Path())
+
+	logger.LogAccess(ctx, 200, 10, 100*time.Millisecond)
+
+	if string(ctx.Method()) != methodBefore {
+		t.Errorf("Method buffer was mutated: got %q, want %q", ctx.Method(), methodBefore)
+	}
+	if string(ctx.Path()) != pathBefore {
+		t.Errorf("Path buffer was mutated: got %q, want %q", ctx.Path(), pathBefore)
+	}
+}

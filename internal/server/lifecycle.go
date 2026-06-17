@@ -52,6 +52,9 @@ func (s *Server) cleanupResources() {
 	}
 	s.accessControlsMu.Unlock()
 
+	// 停止 RateLimiter 的后台清理 goroutine
+	s.stopRateLimiters()
+
 	// 关闭 Lua 引擎
 	if s.luaEngine != nil {
 		s.luaEngine.Close()

@@ -2,6 +2,7 @@
 package lua
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -148,5 +149,39 @@ func TestTimerRunningCount(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// 应该回到 0
+	assert.Equal(t, int32(0), manager.ActiveCount())
+}
+
+// TestTimerManager_CancelConcurrent 验证并发 Cancel 与定时器触发不会产生负 active 计数或 panic。
+func TestTimerManager_CancelConcurrent(t *testing.T) {
+	engine, err := NewEngine(DefaultConfig())
+	require.NoError(t, err)
+	defer engine.Close()
+
+	manager := engine.TimerManager()
+
+	L := engine.GetLStateForTest()
+	defer engine.PutLStateForTest(L)
+
+	var wg sync.WaitGroup
+	for range 100 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			callback := L.NewFunction(func(_ *glua.LState) int {
+				return 0
+			})
+			handle, err := manager.At(10*time.Millisecond, callback, nil)
+			require.NoError(t, err)
+			manager.Cancel(handle)
+		}()
+	}
+	wg.Wait()
+
+	// 等待所有定时器触发/取消完成
+	time.Sleep(200 * time.Millisecond)
+
+	// active 计数不应为负
+	require.GreaterOrEqual(t, manager.ActiveCount(), int32(0))
 	assert.Equal(t, int32(0), manager.ActiveCount())
 }
