@@ -148,6 +148,17 @@ func (c *FileCache) Get(path string) (*FileEntry, bool) {
 		return entry, true
 	}
 
+	// 更新近似 LRU 访问时间（每 5 秒或超过 10% inactive 间隔才写，减少锁竞争）
+	const accessUpdateInterval = 5 * time.Second
+	if time.Since(entry.LastAccess) > accessUpdateInterval {
+		c.mu.Lock()
+		if e, ok := c.entries[path]; ok && e == entry {
+			e.LastAccess = time.Now()
+			c.lruList.MoveToFront(e.element)
+		}
+		c.mu.Unlock()
+	}
+
 	// 近似 LRU: 不更新 LastAccess/LRU 位置，直接返回
 	// 精确 LRU 由 Set/Delete/evict 操作保证
 	return entry, true
